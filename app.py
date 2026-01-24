@@ -59,6 +59,10 @@ class CommandRunner(App):
         """Called when the app is mounted."""
         database.init_db()
 
+    def on_ready(self) -> None:
+        """Called when the app is ready."""
+        self.add_block(InfoBlock(f"--- {self.TITLE} v1.0 ---"))
+
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header()
