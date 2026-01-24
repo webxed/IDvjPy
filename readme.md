@@ -39,3 +39,4 @@ The application uses several command prefixes to unlock its features:
 | `? <tag>` | `? git`               | Shows a list of all commands saved with the specified tag.                |
 | `!`       | `! 1`                 | Executes the command corresponding to the number from the last `?` query.    |
 | `:`       | `:q` or `:w log.txt`  | Executes an application command (quit or write to file).                  |
+| `|`       | `| jq .`              | Pipes the `stdout` of the most recent command block as `stdin` to the specified command. |
