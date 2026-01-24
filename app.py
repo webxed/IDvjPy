@@ -196,13 +196,15 @@ class CommandRunner(App):
             return
             
         input_for_pipe = last_command_block.raw_stdout
-        self.run_command(pipe_command, stdin_data=input_for_pipe)
+        # Call handle_normal_command to ensure the pipe_command is added to session history
+        self.handle_normal_command(pipe_command, stdin_data=input_for_pipe)
             
-    def handle_normal_command(self, command: str):
+    def handle_normal_command(self, command: str, stdin_data: str = None):
+        """Handles a normal command execution."""
         if command not in self.session_history:
             self.session_history.append(command)
         self.session_history_pos = len(self.session_history)
-        self.run_command(command)
+        self.run_command(command, stdin_data) # Pass stdin_data along
 
     def action_history_prev(self) -> None:
         if not self.session_history: return
