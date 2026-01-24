@@ -44,9 +44,10 @@ class CommandRunner(App):
         ("pageup", "focus_previous", "Prev Block"),
         ("pagedown", "focus_next", "Next Block"),
         ("f5", "copy_block", "Copy Block"),
+        ("escape", "focus_input", "Focus Input"),
     ]
 
-    TITLE = "ivjpy_term"
+    TITLE = "IDvjPy_term"
 
     def __init__(self):
         super().__init__()
@@ -64,6 +65,10 @@ class CommandRunner(App):
         yield Input(placeholder="Enter command, #tag <cmd>, ? <tag>, or :q/:w", id="command-input")
         yield VerticalScroll(id="results-container")
         yield Footer()
+
+    def action_focus_input(self) -> None:
+        """Focus the main command input."""
+        self.query_one("#command-input", Input).focus()
 
     def add_block(self, block: Static):
         """Adds a new block widget to the results container."""
@@ -121,8 +126,9 @@ class CommandRunner(App):
             if len(parts) > 1:
                 filename = parts[1]
                 try:
-                    all_blocks = self.query(Static).filter("*:not(Input)")
-                    content_to_write = "\n\n---\n\n".join(b.text_content for b in all_blocks if hasattr(b, 'text_content'))
+                    # Query for the specific block types using a CSS selector string
+                    all_blocks = self.query("CommandBlock, InfoBlock")
+                    content_to_write = "\n\n---\n\n".join(block.text_content for block in all_blocks)
                     with open(filename, "w", encoding="utf-8") as f:
                         f.write(content_to_write)
                     self.add_block(InfoBlock(f"Log content written to '{filename}'"))

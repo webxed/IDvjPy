@@ -1,15 +1,15 @@
 ```
- _____  _      _  ____  _    _   ______                    _           
-|_   _|/ \    / |/ __ \| |  | | |  ____|                  | |          
-  | | / _ \  / /| |  | | |  | | | |__ __ _ _ __  _ __   ___| |          
-  | |/ ___ \/ / | |  | | |  | | |  __/ _` | '_ \| '_ \ / _ \ |          
- _| / /   \/ /  | |__| | |__| | | | | (_| | |_) | |_) |  __/ |          
-|____/_/   \/_/  \___\_\\____/  |_|  \__,_| .__/| .__/ \___|_|          
-   (idi v jopy terminal)                 | |   | |                      
-                                         |_|   |_|                      
+ ___ ____  _      _  ____  _    _   ______                    _
+|_ _|  _ \/ \    / |/ __ \| |  | | |  ____|                  | |
+ | || | |/ _ \  / /| |  | | |  | | | |__ __ _ _ __  _ __   ___| |
+ | || | |/ ___ \/ / | |  | | |  | | |  __/ _` | '_ \| '_ \ / _ \ |
+ | || |_|/ /   \/ /  | |__| | |__| | | | | (_| | |_) | |_) |  __/ |
+|___|____/_/   \/_/  \___\_\\____/  |_|  \__,_| .__/| .__/ \___|_|
+   (idi v jopy terminal)                     | |   | |
+                                             |_|   |_|
 ```
 
-## ivjpy_term
+## IDvjPy_term
 
 A custom terminal-like application for those who are tired of the old ways. Built with Python and the Textual TUI framework, it provides a simple, keyboard-driven interface for running shell commands and managing a persistent, tagged history of your favorite commands.
 
