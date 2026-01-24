@@ -61,7 +61,7 @@ class CommandRunner(App):
 
     def on_ready(self) -> None:
         """Called when the app is ready."""
-        self.add_block(InfoBlock(f"--- {self.TITLE} v1.0 ---"))
+        self.add_block(InfoBlock(f"--- {self.TITLE} v1.0.1 ---"))
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
