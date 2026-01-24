@@ -6,7 +6,7 @@ DB_FILE = "history.db"
 
 def get_db_connection():
     """Establishes a connection to the database."""
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(DB_FILE, timeout=10) # Wait up to 10 seconds if locked
     conn.row_factory = sqlite3.Row
     return conn
 

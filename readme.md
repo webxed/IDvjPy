@@ -1,17 +1,18 @@
 ```
-  _____       _        _______                  
- |  __ \     | |      |__   __|                 
- | |__) |   _| |_ ___    | | ___  _ __ ___ _ __ 
- |  ___/ | | | __/ _ \   | |/ _ \| '__/ _ \ '__|
- | |   | |_| | ||  __/   | | (_) | | |  __/ |   
- |_|    \__,_|\__\___|   |_|\___/|_|  \___|_|   
-                                               
-A pseudo-terminal for the discerning hacker.
+  _____                      _____                    _ _           _ 
+ |  __ \                    / ____|                  | (_)         | |
+ | |  | | ___  ___ ___  ___| (___   ___  _ __   __ _ | |_ _ __   __| |
+ | |  | |/ _ \/ __/ __|/ _ \\___ \ / _ \| '_ \ / _` || | | '_ \ / _` |
+ | |__| |  __/\__ \__ \  __/____) | (_) | | | | (_| || | | | | | (_| |
+ |_____/ \___||___/___/\___|_____/ \___/|_| |_|\__, ||_|_|_| |_|\__,_|
+                                               __/ |                
+                                              |___/                 
+v1.0
 ```
 
-## PyTerm Console
+## DevOps Terminal v1
 
-This is a custom terminal-like application built with Python and the Textual TUI framework. It provides a simple, keyboard-driven interface for running shell commands and managing a persistent, tagged history of your favorite commands.
+This is a custom terminal-like application built with Python and the Textual TUI framework. It provides a simple, keyboard-driven interface for running shell commands and managing a persistent, tagged history of your favorite commands, with a focus on DevOps workflows.
 
 ### Core Features
 

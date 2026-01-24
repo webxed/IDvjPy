@@ -29,6 +29,11 @@ class CommandRunner(App):
         ("f5", "copy_block", "Copy Block"),
     ]
 
+    TITLE = "DevOps Terminal v1" # <--- Add this line
+    
+
+    TITLE = "DevOps Terminal v1" # <--- Add this line
+
     def __init__(self):
         super().__init__()
         self.session_history = []
