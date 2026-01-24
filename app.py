@@ -133,7 +133,7 @@ class CommandRunner(App):
                     # Query for the specific block types using a CSS selector string
                     all_blocks = self.query("CommandBlock, InfoBlock")
                     content_to_write = "\n\n---\n\n".join(block.text_content for block in all_blocks)
-                    with open(filename, "w", encoding="utf-8") as f:
+                    with open(filename, "a", encoding="utf-8") as f: # Changed 'w' to 'a'
                         f.write(content_to_write)
                     self.add_block(InfoBlock(f"Log content written to '{filename}'"))
                 except Exception as e:
