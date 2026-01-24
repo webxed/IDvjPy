@@ -1,18 +1,17 @@
 ```
-  _____                      _____                    _ _           _ 
- |  __ \                    / ____|                  | (_)         | |
- | |  | | ___  ___ ___  ___| (___   ___  _ __   __ _ | |_ _ __   __| |
- | |  | |/ _ \/ __/ __|/ _ \\___ \ / _ \| '_ \ / _` || | | '_ \ / _` |
- | |__| |  __/\__ \__ \  __/____) | (_) | | | | (_| || | | | | | (_| |
- |_____/ \___||___/___/\___|_____/ \___/|_| |_|\__, ||_|_|_| |_|\__,_|
-                                               __/ |                
-                                              |___/                 
-v1.0
+ _____  _      _  ____  _    _   ______                    _           
+|_   _|/ \    / |/ __ \| |  | | |  ____|                  | |          
+  | | / _ \  / /| |  | | |  | | | |__ __ _ _ __  _ __   ___| |          
+  | |/ ___ \/ / | |  | | |  | | |  __/ _` | '_ \| '_ \ / _ \ |          
+ _| / /   \/ /  | |__| | |__| | | | | (_| | |_) | |_) |  __/ |          
+|____/_/   \/_/  \___\_\\____/  |_|  \__,_| .__/| .__/ \___|_|          
+   (idi v jopy terminal)                 | |   | |                      
+                                         |_|   |_|                      
 ```
 
-## DevOps Terminal v1
+## ivjpy_term
 
-This is a custom terminal-like application built with Python and the Textual TUI framework. It provides a simple, keyboard-driven interface for running shell commands and managing a persistent, tagged history of your favorite commands, with a focus on DevOps workflows.
+A custom terminal-like application for those who are tired of the old ways. Built with Python and the Textual TUI framework, it provides a simple, keyboard-driven interface for running shell commands and managing a persistent, tagged history of your favorite commands.
 
 ### Core Features
 

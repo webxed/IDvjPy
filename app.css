@@ -15,12 +15,12 @@ Input {
     /* Removed border to facilitate cleaner text selection */
 }
 
-CommandBlock {
+CommandBlock, InfoBlock {
     width: 100%;
     height: auto;
     padding: 0 1;
 }
 
-CommandBlock:focus {
+CommandBlock:focus, InfoBlock:focus {
     background: $primary-lighten-2;
 }
