@@ -1,0 +1,26 @@
+
+Screen {
+    layout: vertical;
+}
+
+Input {
+    dock: top;
+    height: 3;
+    border: heavy white;
+}
+
+#results-container {
+    width: 100%;
+    height: 1fr;
+    /* Removed border to facilitate cleaner text selection */
+}
+
+CommandBlock {
+    width: 100%;
+    height: auto;
+    padding: 0 1;
+}
+
+CommandBlock:focus {
+    background: $primary-lighten-2;
+}

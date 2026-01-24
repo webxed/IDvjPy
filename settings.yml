@@ -1,0 +1,2 @@
+# Maximum number of lines to keep in the output buffer.
+max_lines: 100000
