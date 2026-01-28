@@ -155,6 +155,8 @@ class CommandRunner(App):
         self.active_pipe_source: Optional[CommandBlock] = None
         # Словарь локальных переменных окружения (имеют приоритет над os.environ)
         self.local_env: Dict[str, str] = {}
+        # Словарь для хранения алиасов {alias: command}
+        self.aliases: Dict[str, str] = {}
 
     def on_mount(self) -> None:
         """
@@ -181,6 +183,7 @@ class CommandRunner(App):
 
         # 3. Загрузка переменных из файла .bashrc_term
         self.load_bashrc()
+        self.load_aliases()
 
     def load_bashrc(self) -> None:
         """
@@ -211,6 +214,35 @@ class CommandRunner(App):
         except Exception as e:
             # Если файл есть, но прочитать не удалось, сообщаем
             self.add_block(InfoBlock(f"Error loading {self.FILE_BASHRC}: {e}"))
+
+    def load_aliases(self) -> None:
+        """
+        Читает файл ~/.bashrc, парсит строки alias name='command'
+        и заполняет словарь self.aliases.
+        """
+        home_dir = os.path.expanduser("~")
+        alias_file = os.path.join(home_dir, self.FILE_BASH_ALIASES)
+
+        if not os.path.exists(alias_file):
+            return
+
+        try:
+            with open(alias_file, "r", encoding=self.ENCODING) as f:
+                for line in f:
+                    line = line.strip()
+                    # Ищем строки, начинающиеся с alias
+                    if line.startswith("alias ") and "=" in line:
+                        # Убираем "alias "
+                        alias_def = line[6:]
+                        # Разделяем на имя и значение (только по первому знаку =)
+                        parts = alias_def.split("=", 1)
+                        if len(parts) == 2:
+                            alias_name = parts[0].strip()
+                            # Очищаем значение от кавычек (одинарных или двойных)
+                            alias_value = parts[1].strip().strip('"').strip("'")
+                            self.aliases[alias_name] = alias_value
+        except Exception as e:
+            self.add_block(InfoBlock(f"Warning: Error loading aliases from {alias_file}: {e}"))
 
     def on_ready(self) -> None:
         """Приветственное сообщение после загрузки UI."""
@@ -568,6 +600,27 @@ class CommandRunner(App):
         
         return pattern.sub(replacer, command)
 
+    def _expand_aliases(self, command: str) -> str:
+        """
+        Заменяет алиасы в команде на их значения.
+        Работает с первым словом команды.
+        """
+        # Разбиваем команду на части, сохраняя кавычки
+        parts = command.strip().split(None, 1) if command.strip() else []
+        if not parts:
+            return command
+
+        first_word = parts[0]
+        # Проверяем, является ли первое слово алиасом
+        if first_word in self.aliases:
+            alias_value = self.aliases[first_word]
+            # Если есть остаток команды, добавляем его
+            if len(parts) > 1:
+                return f"{alias_value} {parts[1]}"
+            return alias_value
+
+        return command
+
     def _execute_in_thread(self, block: CommandBlock, command: str, stdin_data: Optional[str]) -> None:
         """
         Выполняет команду в отдельном потоке.
@@ -575,25 +628,12 @@ class CommandRunner(App):
         raw_stdout, raw_stderr, return_code = "", "", 0
         if command:
             try:
-                # Для работы алиасов нужно использовать интерактивный режим
-                # Подключаем ~/.bashrc и выполняем команду в bash -i -c
-                home_dir = os.path.expanduser("~")
-                alias_file = os.path.join(home_dir, self.FILE_BASH_ALIASES)
-
-                # Собираем полную команду для выполнения в интерактивном bash
-                # -i включает интерактивный режим (для алиасов)
-                # -c выполняет команду из строки
-                if os.path.exists(alias_file):
-                    full_command = f"source {alias_file} && {command}"
-                else:
-                    full_command = command
-
+                # Алиасы уже раскрыты в run_command через _expand_aliases
+                # Выполняем команду в bash
                 process = subprocess.run(
-                    ["bash", "-i", "-c", full_command],
-                    capture_output=True,
-                    text=True,
-                    encoding=self.ENCODING,
-                    errors='replace',
+                    command, shell=True, executable="/bin/bash",
+                    capture_output=True, text=True,
+                    encoding=self.ENCODING, errors='replace',
                     input=stdin_data,
                     timeout=self.COMMAND_TIMEOUT
                 )
@@ -618,6 +658,8 @@ class CommandRunner(App):
         
         # Шаг 1: Подставляем переменные в строку команды
         final_command = self._substitute_variables(command)
+        # Шаг 2: Раскрываем алиасы
+        final_command = self._expand_aliases(final_command)
         
         header = f"{timestamp} ({cwd}) $ {final_command}"
         
