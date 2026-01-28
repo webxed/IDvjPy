@@ -16,11 +16,21 @@ class CommandBlock(Static):
     """Виджет для отображения одной команды и её вывода."""
     
     def __init__(self, header: str, raw_stdout: str, raw_stderr: str, return_code: int, **kwargs):
+        """
+        Инициализация блока команды.
+        
+        Args:
+            header: Заголовок (время, директория, команда).
+            raw_stdout: Вывод команды.
+            raw_stderr: Ошибки команды.
+            return_code: Код возврата.
+        """
         self.header = header
         self.raw_stdout = raw_stdout
         self.raw_stderr = raw_stderr
         self.return_code = return_code
         
+        # Формируем строку, имитирующую результат subprocess.run
         display_output = (
             f"CompletedProcess(returncode={self.return_code}, "
             f"stdout='{self.raw_stdout}', stderr='{self.raw_stderr}')"
@@ -31,7 +41,10 @@ class CommandBlock(Static):
         self.can_focus = True
 
     def update_content(self, raw_stdout: str, raw_stderr: str, return_code: int) -> None:
-        """Обновляет содержимое блока после завершения выполнения."""
+        """
+        Обновляет содержимое блока после завершения выполнения команды в фоновом потоке.
+        Безопасно вызывается через call_from_thread.
+        """
         self.raw_stdout = raw_stdout
         self.raw_stderr = raw_stderr
         self.return_code = return_code
@@ -44,14 +57,23 @@ class CommandBlock(Static):
         self.update(final_content)
 
     def on_focus(self) -> None:
-        """Запоминает блок как активный источник для пайпинга."""
+        """
+        Событие получения фокуса.
+        Запоминает этот блок как активный источник для пайпинга.
+        """
         if hasattr(self.app, 'active_pipe_source'):
             self.app.active_pipe_source = self
 
 class InfoBlock(Static):
-    """Виджет для отображения информационных сообщений."""
+    """Виджет для отображения информационных сообщений (не от команд)."""
     
     def __init__(self, text_content: str, **kwargs):
+        """
+        Инициализация информационного блока.
+        
+        Args:
+            text_content: Текст для отображения.
+        """
         self.text_content = text_content
         super().__init__(text_content, **kwargs)
         self.can_focus = True
@@ -73,12 +95,12 @@ class CommandRunner(App):
     TITLE = "IDvjPy_term"
     VERSION = "v1.0.8" # Variables Support
 
-    # --- Константы ---
+    # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
     FILE_HISTORY = "history.txt"
     FILE_DATABASE = "history.db"
-    FILE_BASHRC = ".bashrc_term" # Файл для хранения переменных
-    FILE_BASH_ALIASES = ".bashrc" # Файл с алиасами системы
+    FILE_BASHRC = ".bashrc_term" # Файл для хранения локальных переменных
+    FILE_BASH_ALIASES = ".bashrc" # Системный файл алиасов
     
     ID_INPUT = "command-input"
     ID_RESULTS_CONTAINER = "results-container"
@@ -91,31 +113,37 @@ class CommandRunner(App):
     MSG_NO_FOCUS = "No command block focused."
     MSG_TIMEOUT = "Process timed out (likely waiting for interactive input). Process killed."
     
+    # Префиксы команд
     PREFIX_CMD = ":"
     PREFIX_TAG = "#"
     PREFIX_QUERY = "?"
     PREFIX_BANG = "!"
     PREFIX_PIPE = "|"
-    PREFIX_VAR = "$" # Префикс для работы с переменными
+    PREFIX_VAR = "$" # Новый префикс для переменных
     
     CMD_QUIT = "q"
     CMD_WRITE = "w"
     CMD_HISTORY = "h"
 
     def __init__(self):
+        """Инициализация состояния приложения."""
         super().__init__()
         self.session_history: List[str] = []
         self.session_history_pos: int = 0
+        # Словарь для хранения результатов поиска {ID: Command}
         self.last_query_results: Dict[int, str] = {}
         self.history_lines: int = 20
         self.db_file = self.FILE_DATABASE
         self.active_pipe_source: Optional[CommandBlock] = None
-        # Локальные переменные окружения (приоритет над ОС)
+        # Словарь локальных переменных окружения (имеют приоритет над os.environ)
         self.local_env: Dict[str, str] = {}
 
     def on_mount(self) -> None:
-        """Инициализация при старте: загрузка настроек, БД и переменных."""
-        # Загрузка настроек
+        """
+        Вызывается при старте приложения.
+        Загружает настройки, базу данных и переменные окружения.
+        """
+        # 1. Загрузка общих настроек
         try:
             with open(self.FILE_SETTINGS, "r", encoding=self.ENCODING) as f:
                 settings = yaml.safe_load(f)
@@ -126,23 +154,24 @@ class CommandRunner(App):
         except (FileNotFoundError, KeyError, yaml.YAMLError):
             pass
 
-        # Инициализация БД
+        # 2. Инициализация базы данных
         try:
             database.init_db(self.db_file)
         except Exception as e:
             self.sub_title = f"DB Error: {e}"
             self.set_timer(5, self.clear_subtitle)
 
-        # Загрузка переменных из .bashrc_term
+        # 3. Загрузка переменных из файла .bashrc_term
         self.load_bashrc()
 
     def load_bashrc(self) -> None:
         """
-        Читает .bashrc_term и заполняет словарь self.local_env.
+        Читает файл .bashrc_term, парсит строки export VAR="VAL"
+        и заполняет словарь self.local_env.
         Также обновляет os.environ для текущего процесса.
         """
+        # Создаем файл, если его нет
         if not os.path.exists(self.FILE_BASHRC):
-            # Если файла нет, создадим пустой
             with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f:
                 f.write("# Terminal-specific environment variables\n")
         
@@ -150,42 +179,52 @@ class CommandRunner(App):
             with open(self.FILE_BASHRC, "r", encoding=self.ENCODING) as f:
                 for line in f:
                     line = line.strip()
+                    # Ищем строки, начинающиеся с export и содержащие =
                     if line.startswith("export ") and "=" in line:
                         # Убираем "export "
                         assignment = line[7:]
-                        # Разделяем по первому знаку =
+                        # Разделяем на имя и значение (только по первому знаку =)
                         key, value = assignment.split("=", 1)
-                        # Убираем кавычки вокруг значения
+                        # Очищаем значение от кавычек
                         value = value.strip('"').strip("'")
                         self.local_env[key] = value
-                        # Обновляем среду текущего процесса, чтобы subprocess видел их по умолчанию
+                        # Добавляем в окружение процесса, чтобы subprocess видел их
                         os.environ[key] = value
         except Exception as e:
+            # Если файл есть, но прочитать не удалось, сообщаем
             self.add_block(InfoBlock(f"Error loading {self.FILE_BASHRC}: {e}"))
 
     def on_ready(self) -> None:
+        """Приветственное сообщение после загрузки UI."""
         self.add_block(InfoBlock(f"--- {self.TITLE} {self.VERSION} ---"))
 
     def compose(self) -> ComposeResult:
+        """Построение UI."""
         yield Header()
         yield Input(placeholder="Enter command, #tag, ?*, $VAR=val, or :q/:w", id=self.ID_INPUT)
         yield VerticalScroll(id=self.ID_RESULTS_CONTAINER)
         yield Footer()
 
     def action_focus_input(self) -> None:
+        """Переводит фокус в строку ввода."""
         self.query_one(f"#{self.ID_INPUT}", Input).focus()
 
     def add_block(self, block: Static) -> None:
+        """
+        Добавляет блок в UI, прокручивает вниз и возвращает фокус во ввод.
+        """
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
         container.mount(block)
-        block.focus()
+        block.focus() # Кратковременно фокусируем, чтобы обновить active_pipe_source
         self.query_one(f"#{self.ID_INPUT}", Input).focus()
         container.scroll_end()
 
     def clear_subtitle(self) -> None:
+        """Очищает подзаголовок (статус-бар)."""
         self.sub_title = ""
 
     def action_copy_block(self) -> None:
+        """Копирует содержимое сфокусированного блока в буфер обмена."""
         focused = self.focused
         if isinstance(focused, (CommandBlock, InfoBlock)):
             try:
@@ -200,6 +239,10 @@ class CommandRunner(App):
             self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
 
     def on_input_submitted(self, message: Input.Submitted) -> None:
+        """
+        Главный диспетчер команд.
+        Анализирует первый символ и перенаправляет выполнение.
+        """
         user_input = message.value.strip()
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
         input_widget.value = ""
@@ -209,6 +252,7 @@ class CommandRunner(App):
 
         self.log_to_history(user_input)
 
+        # Маршрутизация по префиксам
         if user_input.startswith(self.PREFIX_CMD):
             self.handle_colon_command(user_input)
         elif user_input.startswith(self.PREFIX_TAG):
@@ -225,6 +269,7 @@ class CommandRunner(App):
             self.handle_normal_command(user_input)
 
     def log_to_history(self, command: str) -> None:
+        """Записывает команду в файл history.txt, исключая спецкоманды."""
         prefixes = (self.PREFIX_CMD, self.PREFIX_QUERY, self.PREFIX_BANG, self.PREFIX_TAG, self.PREFIX_PIPE, self.PREFIX_VAR)
         if command.startswith(prefixes):
             return
@@ -245,6 +290,7 @@ class CommandRunner(App):
                 pass
 
     def handle_colon_command(self, user_input: str) -> None:
+        """Обработка команд управления (:q, :w, :h)."""
         parts = user_input[1:].split()
         if not parts: return
         command = parts[0]
@@ -279,7 +325,9 @@ class CommandRunner(App):
 
     def handle_variable_assignment(self, user_input: str) -> None:
         """
-        Обрабатывает создание/обновление переменной. Синтаксис: $VAR=VALUE.
+        Обработка создания/обновления переменных.
+        Синтаксис: $VAR_NAME=VALUE.
+        Записывает в .bashrc_term и обновляет self.local_env.
         """
         assignment = user_input[1:].strip()
         parts = assignment.split('=', 1)
@@ -289,7 +337,7 @@ class CommandRunner(App):
             var_name = var_name.strip()
             var_value = var_value.strip()
             
-            # Валидация имени переменной
+            # Простая валидация имени переменной
             if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', var_name):
                 self.add_block(InfoBlock(f"Error: Invalid variable name '{var_name}'."))
                 return
@@ -298,7 +346,7 @@ class CommandRunner(App):
             self.local_env[var_name] = var_value
             os.environ[var_name] = var_value
             
-            # Обновляем в файле
+            # Перезаписываем файл
             try:
                 lines = []
                 updated = False
@@ -308,11 +356,13 @@ class CommandRunner(App):
                 
                 with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f:
                     for line in lines:
+                        # Если переменная уже есть в файле, обновляем её строку
                         if line.startswith(f"export {var_name}="):
                             f.write(f'export {var_name}="{var_value}"\n')
                             updated = True
                         else:
                             f.write(line)
+                    # Если переменной не было, добавляем в конец
                     if not updated:
                         f.write(f'export {var_name}="{var_value}"\n')
                 
@@ -323,9 +373,15 @@ class CommandRunner(App):
             self.add_block(InfoBlock("Invalid syntax. Use: $VAR_NAME=VALUE"))
 
     def handle_save_command(self, user_input: str) -> None:
-        """Сохранение и удаление команд по тегу."""
+        """
+        Обработка сохранения и удаления команд по тегу.
+        #tag <cmd> - сохранить.
+        #tag- - удалить все по тегу.
+        #tag-ID - удалить конкретную команду.
+        """
         content = user_input[1:].strip()
         
+        # Проверяем на наличие дефиса (сигнал удаления)
         if '-' in content:
             parts = content.split('-', 1)
             tag = parts[0]
@@ -333,9 +389,11 @@ class CommandRunner(App):
             
             try:
                 if not identifier:
+                    # Случай: #deploy-
                     database.delete_commands_by_tag(self.db_file, tag)
                     self.add_block(InfoBlock(f"All commands with tag '{tag}' marked as deleted."))
                 elif identifier.isdigit():
+                    # Случай: #deploy-5
                     cmd_id = int(identifier)
                     database.delete_command_by_id(self.db_file, cmd_id)
                     self.add_block(InfoBlock(f"Command with ID {cmd_id} marked as deleted."))
@@ -345,6 +403,7 @@ class CommandRunner(App):
                 self.add_block(InfoBlock(f"Database error: {e}"))
             return
 
+        # Если это не удаление, значит сохранение
         parts = content.split(maxsplit=1)
         if len(parts) == 2:
             tag, command_to_save = parts
@@ -357,6 +416,12 @@ class CommandRunner(App):
             self.add_block(InfoBlock("Invalid syntax. Use: #tag <command>"))
 
     def handle_query_command(self, user_input: str) -> None:
+        """
+        Поиск команд в БД.
+        ? - список тегов.
+        ?* - все команды.
+        ?tag - команды по тегу.
+        """
         tag_part = user_input[1:].strip()
         self.last_query_results = {} 
         try:
@@ -366,6 +431,7 @@ class CommandRunner(App):
                 content += "\n\nType `? <tag>` to see commands or `?*` to see all."
                 self.add_block(InfoBlock(content))
             elif tag_part == '*':
+                # Вывод всех команд с группировкой по тегам
                 all_commands = database.get_all_commands_with_ids(self.db_file)
                 content = "All commands by tag:\n"
                 commands_by_tag = {}
@@ -376,6 +442,7 @@ class CommandRunner(App):
                     if tag not in commands_by_tag:
                         commands_by_tag[tag] = []
                     commands_by_tag[tag].append((cmd_id, cmd_text))
+                    # Заполняем словарь для быстрого выполнения через !
                     self.last_query_results[cmd_id] = cmd_text
                 
                 if not commands_by_tag:
@@ -388,6 +455,7 @@ class CommandRunner(App):
                 content += "\nUse `! <id>` to execute a command."
                 self.add_block(InfoBlock(content))
             else:
+                # Поиск по тегу
                 commands = database.get_commands_by_tag(self.db_file, tag_part)
                 content = f"Commands for tag '{tag_part}':\n"
                 if not commands:
@@ -402,6 +470,7 @@ class CommandRunner(App):
             self.add_block(InfoBlock(f"Database error: {e}"))
 
     def handle_bang_command(self, user_input: str) -> None:
+        """Выполнение команды по ID из последнего поиска (!<id>)."""
         command_part = user_input[1:].strip()
         if command_part.isdigit():
             cmd_id = int(command_part)
@@ -415,6 +484,10 @@ class CommandRunner(App):
             self.add_block(InfoBlock("Invalid syntax. Use: ! <id>"))
 
     def handle_pipe_command(self, user_input: str) -> None:
+        """
+        Обработка пайпинга.
+        Использует активный (выделенный) блок или последний блок.
+        """
         pipe_command = user_input[1:].strip()
         if not pipe_command:
             self.add_block(InfoBlock("Error: Pipe command cannot be empty."))
@@ -430,12 +503,14 @@ class CommandRunner(App):
         self.handle_normal_command(pipe_command, stdin_data=input_for_pipe)
             
     def handle_normal_command(self, command: str, stdin_data: Optional[str] = None) -> None:
+        """Обертка для выполнения обычной команды с обновлением истории."""
         if command not in self.session_history:
             self.session_history.append(command)
         self.session_history_pos = len(self.session_history)
         self.run_command(command, stdin_data)
 
     def action_history_prev(self) -> None:
+        """Навигация истории назад."""
         if not self.session_history: return
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
         if self.session_history_pos > 0:
@@ -444,6 +519,7 @@ class CommandRunner(App):
             input_widget.cursor_position = len(input_widget.value)
 
     def action_history_next(self) -> None:
+        """Навигация истории вперед."""
         if not self.session_history: return
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
         if self.session_history_pos < len(self.session_history) - 1:
@@ -457,33 +533,31 @@ class CommandRunner(App):
 
     def _substitute_variables(self, command: str) -> str:
         """
-        Заменяет переменные вида $VAR_NAME в команде на их значения.
-        Приоритет: Переменная приложения > Переменная ОС.
+        Заменяет переменные вида $VAR_NAME на значения.
+        Приоритет: self.local_env > os.environ.
         """
-        # Находим все вхождения $VAR_NAME
-        # Регулярное выражение ищет $, за которым следует имя переменной (буквы, цифры, подчеркивания)
-        # \b на конце гарантирует, что $VAR не заменит часть $VAR2
+        # Регулярное выражение ищет $NAME, где NAME - валидный идентификатор
         pattern = re.compile(r'\$([a-zA-Z_][a-zA-Z0-9_]*)\b')
         
         def replacer(match):
             var_name = match.group(1)
-            # 1. Проверяем локальные переменные приложения
             if var_name in self.local_env:
                 return self.local_env[var_name]
-            # 2. Проверяем переменные ОС
             if var_name in os.environ:
                 return os.environ[var_name]
-            # 3. Если не найдено, возвращаем как есть (или пустую строку, тут по желанию)
-            # Вернем как есть, чтобы пользователь увидел ошибку в shell, если переменной нет
+            # Если переменной нет нигде, оставляем $NAME как есть (чтобы shell сам вывел ошибку)
             return match.group(0)
         
         return pattern.sub(replacer, command)
 
     def _execute_in_thread(self, block: CommandBlock, command: str, stdin_data: Optional[str]) -> None:
+        """
+        Выполняет команду в отдельном потоке.
+        """
         raw_stdout, raw_stderr, return_code = "", "", 0
         if command:
             try:
-                # Поддержка bash aliases
+                # Подключаем алиасы из ~/.bashrc, если файл существует
                 home_dir = os.path.expanduser("~")
                 alias_file = os.path.join(home_dir, self.FILE_BASH_ALIASES)
                 if os.path.exists(alias_file):
@@ -506,10 +580,14 @@ class CommandRunner(App):
         self.call_from_thread(block.update_content, raw_stdout, raw_stderr, return_code)
 
     def run_command(self, command: str, stdin_data: Optional[str] = None) -> None:
+        """
+        Инициатор выполнения команды.
+        Подставляет переменные и запускает поток.
+        """
         timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         cwd = os.getcwd()
         
-        # Подстановка переменных перед выполнением
+        # Шаг 1: Подставляем переменные в строку команды
         final_command = self._substitute_variables(command)
         
         header = f"{timestamp} ({cwd}) $ {final_command}"
@@ -526,6 +604,7 @@ class CommandRunner(App):
         
         self.add_block(block)
         
+        # Запускаем в отдельном потоке, чтобы UI не завис
         thread = threading.Thread(
             target=self._execute_in_thread, 
             args=(block, final_command, stdin_data),
