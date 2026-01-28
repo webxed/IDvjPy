@@ -42,6 +42,7 @@ The application uses several command prefixes to unlock its features:
 | `:`       | `:q` or `:w log.txt`  | Executes an application command (quit or write to file).                  |
 | `:h [X]`    | `:h` or `:h 5`        | Shows the last X lines of command history from `history.txt`. If X is not specified, it defaults to the value of `history_lines` in `settings.yml`. |
 | `|`       | `| jq .`              | Pipes the `stdout` of the most recent command block as `stdin` to the specified command. |
+| `$`       | `$MY_VAR=hello`      | Creates or updates an environment variable in `.bashrc_term` and the current session. |
 
 ### Setup on Linux/Debian
 

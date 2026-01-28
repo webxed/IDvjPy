@@ -70,6 +70,7 @@ class CommandRunner(App):
     # Константы для путей к файлам
     FILE_SETTINGS = "settings.yml"
     FILE_HISTORY = "history.txt"
+    FILE_BASHRC = ".bashrc_term"
     
     # Константы для ID виджетов
     ID_INPUT = "command-input"
@@ -87,6 +88,7 @@ class CommandRunner(App):
     PREFIX_QUERY = "?"
     PREFIX_BANG = "!"
     PREFIX_PIPE = "|"
+    PREFIX_VAR = "$"
     
     # Внутренние команды (для префикса :)
     CMD_QUIT = "q"
@@ -104,15 +106,40 @@ class CommandRunner(App):
     def on_mount(self) -> None:
         """
         Вызывается при монтировании приложения.
-        Инициализирует базу данных и загружает настройки из файла YAML.
+        Инициализирует базу данных, загружает настройки и переменные окружения.
         """
         database.init_db()
+        # Загрузка настроек
         try:
             with open(self.FILE_SETTINGS, "r", encoding=self.ENCODING) as f:
                 settings = yaml.safe_load(f)
                 self.history_lines = settings.get(self.KEY_HISTORY_LINES, 20)
         except (FileNotFoundError, KeyError):
-            pass # Если файл настроек не найден или ключ отсутствует, используем значения по умолчанию
+            pass # Используем значения по умолчанию
+
+        # Создание и загрузка переменных окружения
+        if not os.path.exists(self.FILE_BASHRC):
+            with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f:
+                f.write("# Terminal-specific bashrc file\n")
+        
+        self.load_bashrc()
+    
+    def load_bashrc(self):
+        """Загружает переменные из .bashrc_term в текущее окружение."""
+        try:
+            with open(self.FILE_BASHRC, "r", encoding=self.ENCODING) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("export "):
+                        parts = line[7:].split('=', 1)
+                        if len(parts) == 2:
+                            key, value = parts
+                            # Удаляем кавычки, если они есть
+                            if value.startswith('"') and value.endswith('"'):
+                                value = value[1:-1]
+                            os.environ[key] = value
+        except FileNotFoundError:
+            self.add_block(InfoBlock(f"Warning: {self.FILE_BASHRC} not found."))
 
     def on_ready(self) -> None:
         """Вызывается когда приложение готово к работе. Выводит приветственное сообщение."""
@@ -189,8 +216,47 @@ class CommandRunner(App):
             self.handle_bang_command(user_input)
         elif user_input.startswith(self.PREFIX_PIPE):
             self.handle_pipe_command(user_input)
+        elif user_input.startswith(self.PREFIX_VAR):
+            self.handle_variable_assignment(user_input)
         else:
             self.handle_normal_command(user_input)
+
+    def handle_variable_assignment(self, user_input: str):
+        """
+        Обрабатывает присваивание переменных (синтаксис: $VAR_NAME=VALUE).
+        Сохраняет переменную в .bashrc_term и в текущем окружении.
+        """
+        assignment = user_input[1:].strip()
+        parts = assignment.split('=', 1)
+        if len(parts) == 2:
+            var_name, var_value = parts
+            
+            # Обновляем или добавляем переменную в .bashrc_term
+            try:
+                lines = []
+                var_found = False
+                if os.path.exists(self.FILE_BASHRC):
+                    with open(self.FILE_BASHRC, "r", encoding=self.ENCODING) as f:
+                        lines = f.readlines()
+                
+                with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f:
+                    for line in lines:
+                        if line.startswith(f"export {var_name}="):
+                            f.write(f'export {var_name}="{var_value}"\n')
+                            var_found = True
+                        else:
+                            f.write(line)
+                    if not var_found:
+                        f.write(f'export {var_name}="{var_value}"\n')
+                
+                # Устанавливаем переменную для текущей сессии
+                os.environ[var_name] = var_value
+                self.add_block(InfoBlock(f"Variable ${var_name} set to '{var_value}'"))
+
+            except Exception as e:
+                self.add_block(InfoBlock(f"Error setting variable: {e}"))
+        else:
+            self.add_block(InfoBlock("Invalid syntax. Use: $VAR_NAME=VALUE"))
 
     def log_to_history(self, command: str):
         """
@@ -378,7 +444,23 @@ class CommandRunner(App):
         """
         Непосредственный запуск shell команды через subprocess.
         Формирует заголовок, запускает процесс, обрабатывает вывод и создает CommandBlock.
+        Подставляет переменные окружения перед выполнением.
         """
+        
+        # Подстановка переменных окружения
+        expanded_command = ""
+        # Простое разделение по пробелам может быть недостаточно для сложных случаев,
+        # но для базовой подстановки переменных в аргументах этого хватит.
+        for part in command.split():
+            if part.startswith('$'):
+                var_name = part[1:]
+                # Используем os.environ.get для безопасного получения переменной
+                expanded_command += os.environ.get(var_name, "") + " "
+            else:
+                expanded_command += part + " "
+        
+        command = expanded_command.strip()
+
         timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         cwd = os.getcwd()
         header = f"{timestamp} ({cwd}) $ {command}"
