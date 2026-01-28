@@ -1,4 +1,4 @@
-# Authors: markovskiy.pavel, Gemini (Google)
+# Vibe-Authors: markovskiy.pavel & Gemini, GLM-4.7, CLAUDE
 """
 IDvjPy_term - Textual TUI terminal application.
 
@@ -575,15 +575,26 @@ class CommandRunner(App):
         raw_stdout, raw_stderr, return_code = "", "", 0
         if command:
             try:
-                # Подключаем алиасы из ~/.bashrc, если файл существует
+                # Для работы алиасов нужно использовать интерактивный режим
+                # Подключаем ~/.bashrc и выполняем команду в bash -i -c
                 home_dir = os.path.expanduser("~")
                 alias_file = os.path.join(home_dir, self.FILE_BASH_ALIASES)
+
+                # Собираем полную команду для выполнения в интерактивном bash
+                # -i включает интерактивный режим (для алиасов)
+                # -c выполняет команду из строки
                 if os.path.exists(alias_file):
-                    command = f"source {alias_file} && {command}"
+                    full_command = f"source {alias_file} && {command}"
+                else:
+                    full_command = command
 
                 process = subprocess.run(
-                    command, shell=True, executable="/bin/bash", capture_output=True, text=True,
-                    encoding=self.ENCODING, errors='replace', input=stdin_data,
+                    ["bash", "-i", "-c", full_command],
+                    capture_output=True,
+                    text=True,
+                    encoding=self.ENCODING,
+                    errors='replace',
+                    input=stdin_data,
                     timeout=self.COMMAND_TIMEOUT
                 )
                 raw_stdout = process.stdout.strip()
