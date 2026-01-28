@@ -5,6 +5,7 @@ import datetime
 import os
 import pyperclip
 import database
+import threading
 from typing import List, Optional
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Input, Static
@@ -18,17 +19,17 @@ class CommandBlock(Static):
         Инициализация блока команды.
         
         Args:
-            header: Заголовок с меткой времени и самой командой.
-            raw_stdout: Стандартный вывод команды.
-            raw_stderr: Стандартный вывод ошибок.
-            return_code: Код возврата процесса.
+            header: Заголовок (время, директория, команда).
+            raw_stdout: Вывод команды.
+            raw_stderr: Ошибки команды.
+            return_code: Код возврата.
         """
         self.header = header
         self.raw_stdout = raw_stdout
         self.raw_stderr = raw_stderr
         self.return_code = return_code
         
-        # Формируем строку вывода, имитирующую объект CompletedProcess
+        # Формируем строку, имитирующую результат subprocess.run
         display_output = (
             f"CompletedProcess(returncode={self.return_code}, "
             f"stdout='{self.raw_stdout}', stderr='{self.raw_stderr}')"
@@ -38,12 +39,29 @@ class CommandBlock(Static):
         super().__init__(self.text_content, **kwargs)
         self.can_focus = True
 
+    def update_content(self, raw_stdout: str, raw_stderr: str, return_code: int) -> None:
+        """
+        Обновляет содержимое блока после завершения выполнения команды в фоновом потоке.
+        Этот метод безопасно вызывается из другого потока через call_from_thread.
+        """
+        self.raw_stdout = raw_stdout
+        self.raw_stderr = raw_stderr
+        self.return_code = return_code
+        
+        display_output = (
+            f"CompletedProcess(returncode={self.return_code}, "
+            f"stdout='{self.raw_stdout}', stderr='{self.raw_stderr}')"
+        )
+        final_content = f"{self.header}\n{display_output}".rstrip() + "\n"
+        
+        # Используем метод update родительского класса для перерисовки
+        self.update(final_content)
+
     def on_focus(self) -> None:
         """
-        Вызывается, когда блок получает фокус.
-        Обновляет 'active_pipe_source' в приложении, чтобы пайп использовал этот блок.
+        Событие получения фокуса.
+        Запоминает этот блок как активный источник для пайпинга.
         """
-        # Проверяем наличие атрибута на случай, если виджет используется в другом контексте
         if hasattr(self.app, 'active_pipe_source'):
             self.app.active_pipe_source = self
 
@@ -51,18 +69,12 @@ class InfoBlock(Static):
     """Виджет для отображения информационных сообщений (не от команд)."""
     
     def __init__(self, text_content: str, **kwargs):
-        """
-        Инициализация информационного блока.
-        
-        Args:
-            text_content: Текст для отображения.
-        """
         self.text_content = text_content
         super().__init__(text_content, **kwargs)
         self.can_focus = True
 
 class CommandRunner(App):
-    """Textual приложение для запуска shell команд."""
+    """Textual приложение для запуска shell команд с защитой от зависания."""
 
     CSS_PATH = "app.css"
     BINDINGS = [
@@ -76,110 +88,97 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.0.9"
+    VERSION = "v1.0.5" # Timeout protection
 
-    # --- Конфигурация и константы ---
-    
-    # Файлы
+    # --- Константы ---
     FILE_SETTINGS = "settings.yml"
     FILE_HISTORY = "history.txt"
-    
-    # ID виджетов для Textual query selector
     ID_INPUT = "command-input"
     ID_RESULTS_CONTAINER = "results-container"
-    
-    # Настройки
     KEY_HISTORY_LINES = "history_lines"
     ENCODING = "utf-8"
-    TIMER_DELAY = 2  # Задержка в секундах для очистки сообщений
+    TIMER_DELAY = 2
     
-    # Сообщения пользователю
+    # Время ожидания команды (в секундах). 
+    # Если команда не завершится за это время, она будет убита (считается, что ждет ввода).
+    COMMAND_TIMEOUT = 10 
+    
     MSG_COPIED = "Copied to clipboard!"
     MSG_NO_FOCUS = "No command block focused."
+    MSG_TIMEOUT = "Process timed out (likely waiting for interactive input). Process killed."
     
-    # Префиксы команд
     PREFIX_CMD = ":"
     PREFIX_TAG = "#"
     PREFIX_QUERY = "?"
     PREFIX_BANG = "!"
     PREFIX_PIPE = "|"
     
-    # Внутренние команды (для префикса :)
     CMD_QUIT = "q"
     CMD_WRITE = "w"
     CMD_HISTORY = "h"
 
     def __init__(self):
-        """Инициализирует приложение и переменные состояния сессии."""
+        """Инициализация состояния приложения."""
         super().__init__()
-        self.session_history: List[str] = []       # История команд текущей сессии
-        self.session_history_pos: int = 0           # Текущая позиция в истории
-        self.last_query_results: List[str] = []    # Результаты последнего поиска по тегам
-        self.history_lines: int = 20               # Лимит строк истории
+        self.session_history: List[str] = []
+        self.session_history_pos: int = 0
+        self.last_query_results: List[str] = []
+        self.history_lines: int = 20
         
-        # Переменная для хранения блока, который выбран пользователем для пайпинга
+        # Хранит ссылку на блок, который пользователь выбрал для пайпинга
         self.active_pipe_source: Optional[CommandBlock] = None
 
     def on_mount(self) -> None:
-        """
-        Вызывается при старте приложения.
-        Загружает настройки из YAML файла и инициализирует БД.
-        """
+        """Настройка приложения при запуске."""
         try:
             database.init_db()
         except Exception as e:
             self.sub_title = f"DB Error: {e}"
             self.set_timer(5, self.clear_subtitle)
 
+        # Загрузка настроек, включая возможный кастомный таймаут
         try:
             with open(self.FILE_SETTINGS, "r", encoding=self.ENCODING) as f:
                 settings = yaml.safe_load(f)
                 if settings:
                     self.history_lines = settings.get(self.KEY_HISTORY_LINES, 20)
+                    self.COMMAND_TIMEOUT = settings.get("command_timeout", 10)
         except (FileNotFoundError, KeyError, yaml.YAMLError):
-            pass # Оставляем значения по умолчанию
+            pass
 
     def on_ready(self) -> None:
-        """Вызывается, когда UI полностью готов. Отображает приветствие."""
+        """Приветственное сообщение."""
         self.add_block(InfoBlock(f"--- {self.TITLE} {self.VERSION} ---"))
 
     def compose(self) -> ComposeResult:
-        """Создает структуру виджетов приложения."""
+        """Построение UI."""
         yield Header()
         yield Input(placeholder="Enter command, #tag <cmd>, ? <tag>, or :q/:w", id=self.ID_INPUT)
         yield VerticalScroll(id=self.ID_RESULTS_CONTAINER)
         yield Footer()
 
     def action_focus_input(self) -> None:
-        """Переводит фокус в строку ввода."""
+        """Фокус на поле ввода."""
         self.query_one(f"#{self.ID_INPUT}", Input).focus()
 
     def add_block(self, block: Static) -> None:
         """
-        Добавляет блок в контейнер, прокручивает вниз и возвращает фокус на ввод.
-        
-        Args:
-            block: Экземпляр CommandBlock или InfoBlock.
+        Добавляет блок в UI.
+        Важно: кратковременно передает фокус блоку, чтобы обновился active_pipe_source,
+        затем возвращает фокус в Input.
         """
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
         container.mount(block)
-        
-        # Кратковременно фокусируем новый блок.
-        # Это нужно для запуска on_focus (чтобы обновить active_pipe_source)
-        # и для визуального выделения при навигации.
         block.focus()
-        
-        # Сразу возвращаем фокус ввод, чтобы пользователь мог продолжать работу
         self.query_one(f"#{self.ID_INPUT}", Input).focus()
-        
         container.scroll_end()
 
     def clear_subtitle(self) -> None:
-        """Удаляет текст из подзаголовка (статус-бара)."""
+        """Очистка статусной строки."""
         self.sub_title = ""
 
     def action_copy_block(self) -> None:
-        """Копирует содержимое сфокусированного блока в буфер обмена."""
+        """Копирование содержимого блока в буфер обмена."""
         focused = self.focused
         if isinstance(focused, (CommandBlock, InfoBlock)):
             try:
@@ -194,10 +193,7 @@ class CommandRunner(App):
             self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
 
     def on_input_submitted(self, message: Input.Submitted) -> None:
-        """
-        Обработчик нажатия Enter в поле ввода.
-        Анализирует префикс и маршрутизирует команду.
-        """
+        """Главный диспетчер команд."""
         user_input = message.value.strip()
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
         input_widget.value = ""
@@ -207,7 +203,7 @@ class CommandRunner(App):
 
         self.log_to_history(user_input)
 
-        # Маршрутизация на основе префикса
+        # Маршрутизация по префиксам
         if user_input.startswith(self.PREFIX_CMD):
             self.handle_colon_command(user_input)
         elif user_input.startswith(self.PREFIX_TAG):
@@ -222,10 +218,7 @@ class CommandRunner(App):
             self.handle_normal_command(user_input)
 
     def log_to_history(self, command: str) -> None:
-        """
-        Записывает команду в файл history.txt.
-        Игнорирует служебные команды и дубликаты.
-        """
+        """Запись команды в файл истории (игнорируя спецкоманды и дубликаты)."""
         prefixes = (self.PREFIX_CMD, self.PREFIX_QUERY, self.PREFIX_BANG, self.PREFIX_TAG, self.PREFIX_PIPE)
         if command.startswith(prefixes):
             return
@@ -248,15 +241,13 @@ class CommandRunner(App):
                 pass
 
     def handle_colon_command(self, user_input: str) -> None:
-        """Обработчик команд управления (quit, write, history)."""
+        """Обработка метакоманд (:q, :w, :h)."""
         parts = user_input[1:].split()
         if not parts: return
         
         command = parts[0]
-        
         if command == self.CMD_QUIT:
             self.exit()
-            
         elif command == self.CMD_WRITE:
             if len(parts) > 1:
                 filename = parts[1]
@@ -270,7 +261,6 @@ class CommandRunner(App):
                     self.add_block(InfoBlock(f"Error writing to file: {e}"))
             else:
                 self.add_block(InfoBlock("Error: Filename required for :w command."))
-                
         elif command == self.CMD_HISTORY:
             try:
                 num_lines = int(parts[1]) if len(parts) > 1 else self.history_lines
@@ -286,10 +276,9 @@ class CommandRunner(App):
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
 
     def handle_save_command(self, user_input: str) -> None:
-        """Обработчик сохранения команды в базу по тегу (#tag <cmd>)."""
+        """Сохранение команды в БД."""
         content = user_input[1:].strip()
         parts = content.split(maxsplit=1)
-        
         if len(parts) == 2:
             tag, command_to_save = parts
             try:
@@ -301,10 +290,9 @@ class CommandRunner(App):
             self.add_block(InfoBlock("Invalid syntax. Use: #tag <command>"))
 
     def handle_query_command(self, user_input: str) -> None:
-        """Обработчик поиска команд (?<tag>)."""
+        """Поиск команд в БД."""
         tag_part = user_input[1:].strip()
         self.last_query_results = []
-        
         try:
             if not tag_part:
                 tags = database.get_all_tags()
@@ -325,7 +313,7 @@ class CommandRunner(App):
             self.add_block(InfoBlock(f"Database error: {e}"))
 
     def handle_bang_command(self, user_input: str) -> None:
-        """Обработчик выполнения команды из списка поиска (!<number>)."""
+        """Выполнение команды из результата поиска."""
         command_part = user_input[1:].strip()
         if command_part.isdigit():
             index = int(command_part) - 1
@@ -340,17 +328,16 @@ class CommandRunner(App):
 
     def handle_pipe_command(self, user_input: str) -> None:
         """
-        Обработчик пайпинга (конвейера) (|<command>).
-        Использует активный блок (выделенный пользователем) или последний созданный блок.
+        Обработка пайпинга (| cmd).
+        Логика выбора источника:
+        1. Если пользователь выделил блок навигацией (PageUp/PageDown), используем его.
+        2. Иначе используем самый последний выполненный блок.
         """
         pipe_command = user_input[1:].strip()
         if not pipe_command:
             self.add_block(InfoBlock("Error: Pipe command cannot be empty."))
             return
 
-        # Логика выбора источника данных:
-        # 1. Если пользователь явно выбрал блок (active_pipe_source не None) -> берем его.
-        # 2. Иначе (например, старт программы или после выполнения новой команды) -> берем последний блок.
         source_block = self.active_pipe_source if self.active_pipe_source else self.query(CommandBlock).last()
 
         if source_block is None:
@@ -361,14 +348,14 @@ class CommandRunner(App):
         self.handle_normal_command(pipe_command, stdin_data=input_for_pipe)
             
     def handle_normal_command(self, command: str, stdin_data: Optional[str] = None) -> None:
-        """Оболочка для выполнения обычной команды с обновлением истории."""
+        """Обертка для запуска команды (обновляет историю сессии)."""
         if command not in self.session_history:
             self.session_history.append(command)
         self.session_history_pos = len(self.session_history)
         self.run_command(command, stdin_data)
 
     def action_history_prev(self) -> None:
-        """Навигация истории: предыдущая команда."""
+        """Навигация по истории ввода (назад)."""
         if not self.session_history: return
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
         if self.session_history_pos > 0:
@@ -377,7 +364,7 @@ class CommandRunner(App):
             input_widget.cursor_position = len(input_widget.value)
 
     def action_history_next(self) -> None:
-        """Навигация истории: следующая команда."""
+        """Навигация по истории ввода (вперед)."""
         if not self.session_history: return
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
         if self.session_history_pos < len(self.session_history) - 1:
@@ -389,40 +376,75 @@ class CommandRunner(App):
             input_widget.value = ""
             input_widget.cursor_position = 0
 
+    def _execute_in_thread(self, block: CommandBlock, command: str, stdin_data: Optional[str]) -> None:
+        """
+        Функция, запускаемая в отдельном потоке.
+        
+        Это предотвращает "заморозку" интерфейса на время выполнения команды.
+        Также здесь реализована защита от команд, требующих интерактивного ввода.
+        """
+        raw_stdout, raw_stderr, return_code = "", "", 0
+        
+        if command:
+            try:
+                # Запуск процесса с тайм-аутом.
+                # subprocess.run с timeout=XX автоматически пошлет сигнал SIGKILL (или похожий)
+                # процессу, если он не завершится за указанное время.
+                process = subprocess.run(
+                    command, shell=True, capture_output=True, text=True,
+                    encoding=self.ENCODING, errors='replace', input=stdin_data,
+                    timeout=self.COMMAND_TIMEOUT 
+                )
+                raw_stdout = process.stdout.strip()
+                raw_stderr = process.stderr.strip()
+                return_code = process.returncode
+                
+            except subprocess.TimeoutExpired:
+                # Если время вышло, считаем, что команда зависла (ждет ввода).
+                # subprocess.run уже убил процесс, нам нужно просто сообщить об этом.
+                raw_stderr = f"{self.MSG_TIMEOUT}"
+                return_code = -124 # Стандартный код для тайм-аута
+                
+            except Exception as e:
+                # Другие ошибки (например, команда не найдена)
+                raw_stderr = str(e)
+                return_code = -1
+        
+        # call_from_thread — это механизм Textual для безопасного обновления UI
+        # из фонового потока. Прямой вызов block.update() может привести к падению.
+        self.call_from_thread(block.update_content, raw_stdout, raw_stderr, return_code)
+
     def run_command(self, command: str, stdin_data: Optional[str] = None) -> None:
         """
-        Выполняет shell команду через subprocess.
-        
-        Args:
-            command: Строка команды для выполнения.
-            stdin_data: Данные для передачи в стандартный ввод процесса.
+        Инициатор выполнения команды.
+        Создает блок UI сразу, чтобы дать пользователю обратную связь,
+        и запускает реальное выполнение в фоновом потоке.
         """
         timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         cwd = os.getcwd()
         header = f"{timestamp} ({cwd}) $ {command}"
         
-        raw_stdout, raw_stderr, return_code = "", "", 0
-        if command:
-            try:
-                # shell=True позволяет использовать пайпы и алиасы, но требует доверия к вводу
-                process = subprocess.run(
-                    command, shell=True, capture_output=True, text=True,
-                    encoding=self.ENCODING, errors='replace', input=stdin_data
-                )
-                raw_stdout = process.stdout.strip()
-                raw_stderr = process.stderr.strip()
-                return_code = process.returncode
-            except Exception as e:
-                raw_stderr = str(e)
-                return_code = -1
-        
-        new_block = CommandBlock(
+        # Сразу создаем блок со статусом "выполняется", чтобы UI не казался зависшим
+        initial_text = f"{header}\n[Executing...]\n(Waiting for output or timeout...)"
+        block = CommandBlock(
             header=header, 
-            raw_stdout=raw_stdout, 
-            raw_stderr=raw_stderr, 
-            return_code=return_code
+            raw_stdout="[Executing...]", 
+            raw_stderr="", 
+            return_code=0
         )
-        self.add_block(new_block)
+        block.text_content = initial_text
+        block.update(initial_text)
+        
+        self.add_block(block)
+        
+        # Запуск в отдельном потоке. daemon=True позволяет приложению закрыться,
+        # даже если этот поток все еще работает (хотя таймаут должен это предотвратить).
+        thread = threading.Thread(
+            target=self._execute_in_thread, 
+            args=(block, command, stdin_data),
+            daemon=True
+        )
+        thread.start()
         
 if __name__ == "__main__":
     app = CommandRunner()
