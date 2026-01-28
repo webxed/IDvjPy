@@ -5,7 +5,7 @@ import datetime
 import os
 import pyperclip
 import database
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Input, Static
 from textual.containers import VerticalScroll
@@ -38,6 +38,15 @@ class CommandBlock(Static):
         super().__init__(self.text_content, **kwargs)
         self.can_focus = True
 
+    def on_focus(self) -> None:
+        """
+        Вызывается, когда блок получает фокус.
+        Обновляет 'active_pipe_source' в приложении, чтобы пайп использовал этот блок.
+        """
+        # Проверяем наличие атрибута на случай, если виджет используется в другом контексте
+        if hasattr(self.app, 'active_pipe_source'):
+            self.app.active_pipe_source = self
+
 class InfoBlock(Static):
     """Виджет для отображения информационных сообщений (не от команд)."""
     
@@ -67,7 +76,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.0.4"
+    VERSION = "v1.0.9"
 
     # --- Конфигурация и константы ---
     
@@ -84,7 +93,7 @@ class CommandRunner(App):
     ENCODING = "utf-8"
     TIMER_DELAY = 2  # Задержка в секундах для очистки сообщений
     
-    # Соинщения пользователю
+    # Сообщения пользователю
     MSG_COPIED = "Copied to clipboard!"
     MSG_NO_FOCUS = "No command block focused."
     
@@ -107,6 +116,9 @@ class CommandRunner(App):
         self.session_history_pos: int = 0           # Текущая позиция в истории
         self.last_query_results: List[str] = []    # Результаты последнего поиска по тегам
         self.history_lines: int = 20               # Лимит строк истории
+        
+        # Переменная для хранения блока, который выбран пользователем для пайпинга
+        self.active_pipe_source: Optional[CommandBlock] = None
 
     def on_mount(self) -> None:
         """
@@ -152,9 +164,12 @@ class CommandRunner(App):
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
         container.mount(block)
         
-        # Кратковременно фокусируем новый блок, чтобы он считался "активным" для навигации/копирования
+        # Кратковременно фокусируем новый блок.
+        # Это нужно для запуска on_focus (чтобы обновить active_pipe_source)
+        # и для визуального выделения при навигации.
         block.focus()
-        # Сразу возвращаем фокус ввод, чтобы пользователь мог продолжить работу
+        
+        # Сразу возвращаем фокус ввод, чтобы пользователь мог продолжать работу
         self.query_one(f"#{self.ID_INPUT}", Input).focus()
         
         container.scroll_end()
@@ -324,18 +339,25 @@ class CommandRunner(App):
             self.add_block(InfoBlock("Invalid syntax. Use: ! <number>"))
 
     def handle_pipe_command(self, user_input: str) -> None:
-        """Обработчик пайпинга (конвейера) (|<command>)."""
+        """
+        Обработчик пайпинга (конвейера) (|<command>).
+        Использует активный блок (выделенный пользователем) или последний созданный блок.
+        """
         pipe_command = user_input[1:].strip()
         if not pipe_command:
             self.add_block(InfoBlock("Error: Pipe command cannot be empty."))
             return
-            
-        last_command_block = self.query(CommandBlock).last()
-        if last_command_block is None:
-            self.add_block(InfoBlock("Error: No previous command output to pipe from."))
+
+        # Логика выбора источника данных:
+        # 1. Если пользователь явно выбрал блок (active_pipe_source не None) -> берем его.
+        # 2. Иначе (например, старт программы или после выполнения новой команды) -> берем последний блок.
+        source_block = self.active_pipe_source if self.active_pipe_source else self.query(CommandBlock).last()
+
+        if source_block is None:
+            self.add_block(InfoBlock("Error: No command output available to pipe from."))
             return
             
-        input_for_pipe = last_command_block.raw_stdout
+        input_for_pipe = source_block.raw_stdout
         self.handle_normal_command(pipe_command, stdin_data=input_for_pipe)
             
     def handle_normal_command(self, command: str, stdin_data: Optional[str] = None) -> None:
