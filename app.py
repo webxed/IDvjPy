@@ -5,12 +5,14 @@ import datetime
 import os
 import pyperclip
 import database
+from typing import List, Optional, Dict, Any
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Input, Static
 from textual.containers import VerticalScroll
 
 class CommandBlock(Static):
     """Виджет для отображения одной команды и её вывода."""
+    
     def __init__(self, header: str, raw_stdout: str, raw_stderr: str, return_code: int, **kwargs):
         """
         Инициализация блока команды.
@@ -31,7 +33,6 @@ class CommandBlock(Static):
             f"CompletedProcess(returncode={self.return_code}, "
             f"stdout='{self.raw_stdout}', stderr='{self.raw_stderr}')"
         )
-        # Сохраняем полный текст для копирования и отображения
         self.text_content = f"{self.header}\n{display_output}".rstrip() + "\n"
         
         super().__init__(self.text_content, **kwargs)
@@ -39,6 +40,7 @@ class CommandBlock(Static):
 
 class InfoBlock(Static):
     """Виджет для отображения информационных сообщений (не от команд)."""
+    
     def __init__(self, text_content: str, **kwargs):
         """
         Инициализация информационного блока.
@@ -67,20 +69,24 @@ class CommandRunner(App):
     TITLE = "IDvjPy_term"
     VERSION = "v1.0.4"
 
-    # Константы для путей к файлам
+    # --- Конфигурация и константы ---
+    
+    # Файлы
     FILE_SETTINGS = "settings.yml"
     FILE_HISTORY = "history.txt"
-    FILE_BASHRC = ".bashrc_term"
     
-    # Константы для ID виджетов
+    # ID виджетов для Textual query selector
     ID_INPUT = "command-input"
     ID_RESULTS_CONTAINER = "results-container"
     
-    # Ключи настроек
+    # Настройки
     KEY_HISTORY_LINES = "history_lines"
-    
-    # Общие константы
     ENCODING = "utf-8"
+    TIMER_DELAY = 2  # Задержка в секундах для очистки сообщений
+    
+    # Соинщения пользователю
+    MSG_COPIED = "Copied to clipboard!"
+    MSG_NO_FOCUS = "No command block focused."
     
     # Префиксы команд
     PREFIX_CMD = ":"
@@ -88,7 +94,6 @@ class CommandRunner(App):
     PREFIX_QUERY = "?"
     PREFIX_BANG = "!"
     PREFIX_PIPE = "|"
-    PREFIX_VAR = "$"
     
     # Внутренние команды (для префикса :)
     CMD_QUIT = "q"
@@ -98,102 +103,85 @@ class CommandRunner(App):
     def __init__(self):
         """Инициализирует приложение и переменные состояния сессии."""
         super().__init__()
-        self.session_history = []       # История команд, введенных в текущей сессии
-        self.session_history_pos = 0    # Текущая позиция в истории сессии
-        self.last_query_results = []    # Результаты последнего поиска по тегам
-        self.history_lines = 20         # Количество строк истории для вывода по умолчанию
+        self.session_history: List[str] = []       # История команд текущей сессии
+        self.session_history_pos: int = 0           # Текущая позиция в истории
+        self.last_query_results: List[str] = []    # Результаты последнего поиска по тегам
+        self.history_lines: int = 20               # Лимит строк истории
 
     def on_mount(self) -> None:
         """
-        Вызывается при монтировании приложения.
-        Инициализирует базу данных, загружает настройки и переменные окружения.
+        Вызывается при старте приложения.
+        Загружает настройки из YAML файла и инициализирует БД.
         """
-        database.init_db()
-        # Загрузка настроек
+        try:
+            database.init_db()
+        except Exception as e:
+            self.sub_title = f"DB Error: {e}"
+            self.set_timer(5, self.clear_subtitle)
+
         try:
             with open(self.FILE_SETTINGS, "r", encoding=self.ENCODING) as f:
                 settings = yaml.safe_load(f)
-                self.history_lines = settings.get(self.KEY_HISTORY_LINES, 20)
-        except (FileNotFoundError, KeyError):
-            pass # Используем значения по умолчанию
-
-        # Создание и загрузка переменных окружения
-        if not os.path.exists(self.FILE_BASHRC):
-            with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f:
-                f.write("# Terminal-specific bashrc file\n")
-        
-        self.load_bashrc()
-    
-    def load_bashrc(self):
-        """Загружает переменные из .bashrc_term в текущее окружение."""
-        try:
-            with open(self.FILE_BASHRC, "r", encoding=self.ENCODING) as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("export "):
-                        parts = line[7:].split('=', 1)
-                        if len(parts) == 2:
-                            key, value = parts
-                            # Удаляем кавычки, если они есть
-                            if value.startswith('"') and value.endswith('"'):
-                                value = value[1:-1]
-                            os.environ[key] = value
-        except FileNotFoundError:
-            self.add_block(InfoBlock(f"Warning: {self.FILE_BASHRC} not found."))
+                if settings:
+                    self.history_lines = settings.get(self.KEY_HISTORY_LINES, 20)
+        except (FileNotFoundError, KeyError, yaml.YAMLError):
+            pass # Оставляем значения по умолчанию
 
     def on_ready(self) -> None:
-        """Вызывается когда приложение готово к работе. Выводит приветственное сообщение."""
+        """Вызывается, когда UI полностью готов. Отображает приветствие."""
         self.add_block(InfoBlock(f"--- {self.TITLE} {self.VERSION} ---"))
 
     def compose(self) -> ComposeResult:
-        """
-        Создает дочерние виджеты приложения (UI).
-        Определяет структуру: заголовок, поле ввода, контейнер для вывода, подвал.
-        """
+        """Создает структуру виджетов приложения."""
         yield Header()
         yield Input(placeholder="Enter command, #tag <cmd>, ? <tag>, or :q/:w", id=self.ID_INPUT)
         yield VerticalScroll(id=self.ID_RESULTS_CONTAINER)
         yield Footer()
 
     def action_focus_input(self) -> None:
-        """Устанавливает фокус на поле ввода команд."""
+        """Переводит фокус в строку ввода."""
         self.query_one(f"#{self.ID_INPUT}", Input).focus()
 
-    def add_block(self, block: Static):
+    def add_block(self, block: Static) -> None:
         """
-        Добавляет новый блок (CommandBlock или InfoBlock) в контейнер результатов.
-        Также автоматически прокручивает список вниз и возвращает фокус во ввод.
+        Добавляет блок в контейнер, прокручивает вниз и возвращает фокус на ввод.
+        
+        Args:
+            block: Экземпляр CommandBlock или InfoBlock.
         """
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
         container.mount(block)
-        # Кратковременно фокусируем блок (например, чтобы он появился в области видимости или для навигации)
+        
+        # Кратковременно фокусируем новый блок, чтобы он считался "активным" для навигации/копирования
         block.focus()
-        # Сразу возвращаем фокус в input, чтобы пользователь мог продолжить ввод
+        # Сразу возвращаем фокус ввод, чтобы пользователь мог продолжить работу
         self.query_one(f"#{self.ID_INPUT}", Input).focus()
+        
         container.scroll_end()
 
     def clear_subtitle(self) -> None:
-        """Очищает подзаголовок приложения (используется для временных сообщений)."""
+        """Удаляет текст из подзаголовка (статус-бара)."""
         self.sub_title = ""
 
     def action_copy_block(self) -> None:
-        """
-        Копирует содержимое текущего сфокусированного блока в буфер обмена.
-        Показывает временное уведомление в подзаголовке.
-        """
+        """Копирует содержимое сфокусированного блока в буфер обмена."""
         focused = self.focused
         if isinstance(focused, (CommandBlock, InfoBlock)):
-            pyperclip.copy(focused.text_content)
-            self.sub_title = "Copied to clipboard!"
-            self.set_timer(2, self.clear_subtitle)
+            try:
+                pyperclip.copy(focused.text_content)
+                self.sub_title = self.MSG_COPIED
+                self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+            except Exception:
+                self.sub_title = "Error copying to clipboard."
+                self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
         else:
-            self.sub_title = "No command block focused."
-            self.set_timer(2, self.clear_subtitle)
+            self.sub_title = self.MSG_NO_FOCUS
+            self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
 
     def on_input_submitted(self, message: Input.Submitted) -> None:
         """
-        Главный обработчик ввода. Вызывается при нажатии Enter.
-        Анализирует префикс команды и перенаправляет выполнение соответствующему обработчику.
+        Обработчик нажатия Enter в поле ввода.
+        Анализирует префикс и маршрутизирует команду.
         """
         user_input = message.value.strip()
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
@@ -202,10 +190,9 @@ class CommandRunner(App):
         if not user_input:
             return
 
-        # Логируем команду в файл истории (если это не спецкоманда)
         self.log_to_history(user_input)
 
-        # Роутинг команд на основе префикса
+        # Маршрутизация на основе префикса
         if user_input.startswith(self.PREFIX_CMD):
             self.handle_colon_command(user_input)
         elif user_input.startswith(self.PREFIX_TAG):
@@ -216,88 +203,49 @@ class CommandRunner(App):
             self.handle_bang_command(user_input)
         elif user_input.startswith(self.PREFIX_PIPE):
             self.handle_pipe_command(user_input)
-        elif user_input.startswith(self.PREFIX_VAR):
-            self.handle_variable_assignment(user_input)
         else:
             self.handle_normal_command(user_input)
 
-    def handle_variable_assignment(self, user_input: str):
+    def log_to_history(self, command: str) -> None:
         """
-        Обрабатывает присваивание переменных (синтаксис: $VAR_NAME=VALUE).
-        Сохраняет переменную в .bashrc_term и в текущем окружении.
+        Записывает команду в файл history.txt.
+        Игнорирует служебные команды и дубликаты.
         """
-        assignment = user_input[1:].strip()
-        parts = assignment.split('=', 1)
-        if len(parts) == 2:
-            var_name, var_value = parts
-            
-            # Обновляем или добавляем переменную в .bashrc_term
-            try:
-                lines = []
-                var_found = False
-                if os.path.exists(self.FILE_BASHRC):
-                    with open(self.FILE_BASHRC, "r", encoding=self.ENCODING) as f:
-                        lines = f.readlines()
-                
-                with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f:
-                    for line in lines:
-                        if line.startswith(f"export {var_name}="):
-                            f.write(f'export {var_name}="{var_value}"\n')
-                            var_found = True
-                        else:
-                            f.write(line)
-                    if not var_found:
-                        f.write(f'export {var_name}="{var_value}"\n')
-                
-                # Устанавливаем переменную для текущей сессии
-                os.environ[var_name] = var_value
-                self.add_block(InfoBlock(f"Variable ${var_name} set to '{var_value}'"))
-
-            except Exception as e:
-                self.add_block(InfoBlock(f"Error setting variable: {e}"))
-        else:
-            self.add_block(InfoBlock("Invalid syntax. Use: $VAR_NAME=VALUE"))
-
-    def log_to_history(self, command: str):
-        """
-        Добавляет команду в файл history.txt.
-        Пропускает команды, начинающиеся со спецсимволов, и дубликаты последней команды.
-        """
-        if command.startswith((self.PREFIX_CMD, self.PREFIX_QUERY, self.PREFIX_BANG, self.PREFIX_TAG, self.PREFIX_PIPE)):
+        prefixes = (self.PREFIX_CMD, self.PREFIX_QUERY, self.PREFIX_BANG, self.PREFIX_TAG, self.PREFIX_PIPE)
+        if command.startswith(prefixes):
             return
 
         last_command = None
         try:
-            with open(self.FILE_HISTORY, "r", encoding=self.ENCODING) as f:
-                lines = f.readlines()
-                if lines:
-                    last_command = lines[-1].strip()
-        except FileNotFoundError:
-            pass
+            if os.path.exists(self.FILE_HISTORY):
+                with open(self.FILE_HISTORY, "r", encoding=self.ENCODING) as f:
+                    lines = f.readlines()
+                    if lines:
+                        last_command = lines[-1].strip()
+        except IOError:
+            return
 
-        # Записываем только если команда отличается от последней записанной
         if command != last_command:
-            with open(self.FILE_HISTORY, "a", encoding=self.ENCODING) as f:
-                f.write(f"{command}\n")
+            try:
+                with open(self.FILE_HISTORY, "a", encoding=self.ENCODING) as f:
+                    f.write(f"{command}\n")
+            except IOError:
+                pass
 
-    def handle_colon_command(self, user_input: str):
-        """
-        Обрабатывает метакоманды (начинаются с :).
-        :q - выход
-        :w <filename> - запись логов в файл
-        :h [n] - показать историю из файла (последние n строк)
-        """
+    def handle_colon_command(self, user_input: str) -> None:
+        """Обработчик команд управления (quit, write, history)."""
         parts = user_input[1:].split()
         if not parts: return
         
         command = parts[0]
+        
         if command == self.CMD_QUIT:
             self.exit()
+            
         elif command == self.CMD_WRITE:
             if len(parts) > 1:
                 filename = parts[1]
                 try:
-                    # Собираем текст из всех блоков в контейнере
                     all_blocks = self.query("CommandBlock, InfoBlock")
                     content_to_write = "\n\n---\n\n".join(block.text_content for block in all_blocks)
                     with open(filename, "a", encoding=self.ENCODING) as f:
@@ -307,13 +255,12 @@ class CommandRunner(App):
                     self.add_block(InfoBlock(f"Error writing to file: {e}"))
             else:
                 self.add_block(InfoBlock("Error: Filename required for :w command."))
+                
         elif command == self.CMD_HISTORY:
             try:
-                # Определяем количество строк: аргумент или значение из настроек
                 num_lines = int(parts[1]) if len(parts) > 1 else self.history_lines
                 with open(self.FILE_HISTORY, "r", encoding=self.ENCODING) as f:
                     lines = f.readlines()
-                # Выводим последние n строк по отдельности
                 for line in lines[-num_lines:]:
                     self.add_block(InfoBlock(line.strip()))
             except FileNotFoundError:
@@ -323,55 +270,50 @@ class CommandRunner(App):
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
 
-    def handle_save_command(self, user_input: str):
-        """
-        Обрабатывает сохранение команды по тегу (синтаксис: #tag <command>).
-        Сохраняет в базу данных.
-        """
+    def handle_save_command(self, user_input: str) -> None:
+        """Обработчик сохранения команды в базу по тегу (#tag <cmd>)."""
         content = user_input[1:].strip()
         parts = content.split(maxsplit=1)
+        
         if len(parts) == 2:
             tag, command_to_save = parts
-            database.add_command(command_to_save, tag)
-            self.add_block(InfoBlock(f"Saved: '{command_to_save}' with tag '{tag}'"))
+            try:
+                database.add_command(command_to_save, tag)
+                self.add_block(InfoBlock(f"Saved: '{command_to_save}' with tag '{tag}'"))
+            except Exception as e:
+                self.add_block(InfoBlock(f"Database error: {e}"))
         else:
             self.add_block(InfoBlock("Invalid syntax. Use: #tag <command>"))
 
-    def handle_query_command(self, user_input: str):
-        """
-        Обрабатывает поиск команд по тегу (синтаксис: ?<tag>).
-        Без аргументов выводит список всех тегов.
-        """
+    def handle_query_command(self, user_input: str) -> None:
+        """Обработчик поиска команд (?<tag>)."""
         tag_part = user_input[1:].strip()
-        self.last_query_results = [] # Сбрасываем результаты предыдущего поиска
+        self.last_query_results = []
         
-        if not tag_part:
-            # Если тег не указан, выводим список доступных тегов
-            tags = database.get_all_tags()
-            content = "Available tags:\n" + ("\n".join(f"  - {tag}" for tag in tags) if tags else "  (None found)")
-            content += "\n\nType `? <tag>` to see commands."
-            self.add_block(InfoBlock(content))
-        else:
-            # Ищем команды по тегу
-            tag = tag_part
-            commands = database.get_commands_by_tag(tag)
-            content = f"Commands for tag '{tag}':\n"
-            if not commands:
-                content += "  (None found)"
+        try:
+            if not tag_part:
+                tags = database.get_all_tags()
+                content = "Available tags:\n" + ("\n".join(f"  - {tag}" for tag in tags) if tags else "  (None found)")
+                content += "\n\nType `? <tag>` to see commands."
+                self.add_block(InfoBlock(content))
             else:
-                self.last_query_results = commands # Сохраняем для выполнения через !
-                content += "\n".join(f"  [{i}] {cmd}" for i, cmd in enumerate(commands, 1))
-                content += "\n\nUse `! <number>` to execute."
-            self.add_block(InfoBlock(content))
+                commands = database.get_commands_by_tag(tag_part)
+                content = f"Commands for tag '{tag_part}':\n"
+                if not commands:
+                    content += "  (None found)"
+                else:
+                    self.last_query_results = commands
+                    content += "\n".join(f"  [{i}] {cmd}" for i, cmd in enumerate(commands, 1))
+                    content += "\n\nUse `! <number>` to execute."
+                self.add_block(InfoBlock(content))
+        except Exception as e:
+            self.add_block(InfoBlock(f"Database error: {e}"))
 
-    def handle_bang_command(self, user_input: str):
-        """
-        Обрабатывает выполнение команды из списка результатов поиска (синтаксис: !<number>).
-        Вставляет команду в поле ввода.
-        """
+    def handle_bang_command(self, user_input: str) -> None:
+        """Обработчик выполнения команды из списка поиска (!<number>)."""
         command_part = user_input[1:].strip()
         if command_part.isdigit():
-            index = int(command_part) - 1 # Преобразуем в 0-based индекс
+            index = int(command_part) - 1
             if 0 <= index < len(self.last_query_results):
                 input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
                 input_widget.value = self.last_query_results[index]
@@ -381,41 +323,30 @@ class CommandRunner(App):
         else:
             self.add_block(InfoBlock("Invalid syntax. Use: ! <number>"))
 
-    def handle_pipe_command(self, user_input: str):
-        """
-        Обрабатывает передачу вывода последней команды в новую команду (синтаксис: |<command>).
-        Stdout последнего CommandBlock передается как Stdin новой команды.
-        """
+    def handle_pipe_command(self, user_input: str) -> None:
+        """Обработчик пайпинга (конвейера) (|<command>)."""
         pipe_command = user_input[1:].strip()
         if not pipe_command:
             self.add_block(InfoBlock("Error: Pipe command cannot be empty."))
             return
             
-        # Ищем последний блок с результатом команды
         last_command_block = self.query(CommandBlock).last()
         if last_command_block is None:
             self.add_block(InfoBlock("Error: No previous command output to pipe from."))
             return
             
         input_for_pipe = last_command_block.raw_stdout
-        # Передаем данные в stdin новой команды и добавляем её в историю сессии
         self.handle_normal_command(pipe_command, stdin_data=input_for_pipe)
             
-    def handle_normal_command(self, command: str, stdin_data: str = None):
-        """
-        Обычный запуск команды.
-        Обновляет историю сессии и вызывает run_command.
-        """
+    def handle_normal_command(self, command: str, stdin_data: Optional[str] = None) -> None:
+        """Оболочка для выполнения обычной команды с обновлением истории."""
         if command not in self.session_history:
             self.session_history.append(command)
         self.session_history_pos = len(self.session_history)
         self.run_command(command, stdin_data)
 
     def action_history_prev(self) -> None:
-        """
-        Навигация по истории сессии вверх.
-        Заменяет содержимое поля ввода на предыдущую команду.
-        """
+        """Навигация истории: предыдущая команда."""
         if not self.session_history: return
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
         if self.session_history_pos > 0:
@@ -424,10 +355,7 @@ class CommandRunner(App):
             input_widget.cursor_position = len(input_widget.value)
 
     def action_history_next(self) -> None:
-        """
-        Навигация по истории сессии вниз.
-        Заменяет содержимое поля ввода на следующую команду или очищает его.
-        """
+        """Навигация истории: следующая команда."""
         if not self.session_history: return
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
         if self.session_history_pos < len(self.session_history) - 1:
@@ -435,32 +363,18 @@ class CommandRunner(App):
             input_widget.value = self.session_history[self.session_history_pos]
             input_widget.cursor_position = len(input_widget.value)
         else:
-            # Если мы в конце истории, сбрасываем позицию и очищаем поле
             self.session_history_pos = len(self.session_history)
             input_widget.value = ""
             input_widget.cursor_position = 0
 
-    def run_command(self, command: str, stdin_data: str = None) -> None:
+    def run_command(self, command: str, stdin_data: Optional[str] = None) -> None:
         """
-        Непосредственный запуск shell команды через subprocess.
-        Формирует заголовок, запускает процесс, обрабатывает вывод и создает CommandBlock.
-        Подставляет переменные окружения перед выполнением.
+        Выполняет shell команду через subprocess.
+        
+        Args:
+            command: Строка команды для выполнения.
+            stdin_data: Данные для передачи в стандартный ввод процесса.
         """
-        
-        # Подстановка переменных окружения
-        expanded_command = ""
-        # Простое разделение по пробелам может быть недостаточно для сложных случаев,
-        # но для базовой подстановки переменных в аргументах этого хватит.
-        for part in command.split():
-            if part.startswith('$'):
-                var_name = part[1:]
-                # Используем os.environ.get для безопасного получения переменной
-                expanded_command += os.environ.get(var_name, "") + " "
-            else:
-                expanded_command += part + " "
-        
-        command = expanded_command.strip()
-
         timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         cwd = os.getcwd()
         header = f"{timestamp} ({cwd}) $ {command}"
@@ -468,8 +382,7 @@ class CommandRunner(App):
         raw_stdout, raw_stderr, return_code = "", "", 0
         if command:
             try:
-                # Запуск процесса. capture_output=True перехватывает stdout/stderr.
-                # text=True возвращает строки вместо bytes.
+                # shell=True позволяет использовать пайпы и алиасы, но требует доверия к вводу
                 process = subprocess.run(
                     command, shell=True, capture_output=True, text=True,
                     encoding=self.ENCODING, errors='replace', input=stdin_data
@@ -481,7 +394,6 @@ class CommandRunner(App):
                 raw_stderr = str(e)
                 return_code = -1
         
-        # Создаем и отображаем блок с результатом
         new_block = CommandBlock(
             header=header, 
             raw_stdout=raw_stdout, 
