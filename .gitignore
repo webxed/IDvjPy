@@ -12,3 +12,6 @@ __pycache__/
 history.txt
 log*.txt
 *.json
+lib64
+lib
+bin
