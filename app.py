@@ -54,14 +54,21 @@ class CommandRunner(App):
         self.session_history = []
         self.session_history_pos = 0
         self.last_query_results = []
+        self.history_lines = 20
 
     def on_mount(self) -> None:
         """Called when the app is mounted."""
         database.init_db()
+        try:
+            with open("settings.yml", "r") as f:
+                settings = yaml.safe_load(f)
+                self.history_lines = settings.get("history_lines", 20)
+        except (FileNotFoundError, KeyError):
+            pass
 
     def on_ready(self) -> None:
         """Called when the app is ready."""
-        self.add_block(InfoBlock(f"--- {self.TITLE} v1.0.1 ---"))
+        self.add_block(InfoBlock(f"--- {self.TITLE} v1.0.4 ---"))
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -106,6 +113,8 @@ class CommandRunner(App):
         if not user_input:
             return
 
+        self.log_to_history(user_input)
+
         if user_input.startswith(':'):
             self.handle_colon_command(user_input)
         elif user_input.startswith('#'):
@@ -118,6 +127,25 @@ class CommandRunner(App):
             self.handle_pipe_command(user_input)
         else:
             self.handle_normal_command(user_input)
+
+    def log_to_history(self, command: str):
+        """Appends a command to the history.txt file, avoiding consecutive duplicates and special commands."""
+        if command.startswith((':', '?', '!', '#', '|')):
+            return
+
+        last_command = None
+        try:
+            with open("history.txt", "r", encoding="utf-8") as f:
+                # Read the last line if the file is not empty
+                lines = f.readlines()
+                if lines:
+                    last_command = lines[-1].strip()
+        except FileNotFoundError:
+            pass # File doesn't exist yet, so no last command
+
+        if command != last_command:
+            with open("history.txt", "a", encoding="utf-8") as f:
+                f.write(f"{command}\n")
 
     def handle_colon_command(self, user_input: str):
         parts = user_input[1:].split()
@@ -140,6 +168,17 @@ class CommandRunner(App):
                     self.add_block(InfoBlock(f"Error writing to file: {e}"))
             else:
                 self.add_block(InfoBlock("Error: Filename required for :w command."))
+        elif command == "h":
+            try:
+                num_lines = int(parts[1]) if len(parts) > 1 else self.history_lines
+                with open("history.txt", "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                for line in lines[-num_lines:]:
+                    self.add_block(InfoBlock(line.strip()))
+            except FileNotFoundError:
+                self.add_block(InfoBlock("history.txt not found."))
+            except Exception as e:
+                self.add_block(InfoBlock(f"Error reading history: {e}"))
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
 
@@ -178,7 +217,9 @@ class CommandRunner(App):
         if command_part.isdigit():
             index = int(command_part) - 1
             if 0 <= index < len(self.last_query_results):
-                self.handle_normal_command(self.last_query_results[index])
+                input_widget = self.query_one("#command-input", Input)
+                input_widget.value = self.last_query_results[index]
+                input_widget.cursor_position = len(input_widget.value)
             else:
                 self.add_block(InfoBlock("Error: Invalid number."))
         else:

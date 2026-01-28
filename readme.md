@@ -1,12 +1,13 @@
 ```
+```
  ___ ____  _      _  ____  _    _   ______                    _
 |_ _|  _ \/ \    / |/ __ \| |  | | |  ____|                  | |
  | || | |/ _ \  / /| |  | | |  | | | |__ __ _ _ __  _ __   ___| |
  | || | |/ ___ \/ / | |  | | |  | | |  __/ _` | '_ \| '_ \ / _ \ |
  | || |_|/ /   \/ /  | |__| | |__| | | | | (_| | |_) | |_) |  __/ |
-|___|____/_/   \/_/  \___\_\\____/  |_|  \__,_| .__/| .__/ \___|_|
+|___|____/_/   \_/  \___\_\\____/  |_|  \__,_| .__/| .__/ \___|_|
    (idi v jopy terminal)                     | |   | |
-                                             |_|   |_|
+                                             |_|   | |
 ```
 
 ## IDvjPy_term
@@ -39,4 +40,25 @@ The application uses several command prefixes to unlock its features:
 | `? <tag>` | `? git`               | Shows a list of all commands saved with the specified tag.                |
 | `!`       | `! 1`                 | Executes the command corresponding to the number from the last `?` query.    |
 | `:`       | `:q` or `:w log.txt`  | Executes an application command (quit or write to file).                  |
+| `:h [X]`    | `:h` or `:h 5`        | Shows the last X lines of command history from `history.txt`. If X is not specified, it defaults to the value of `history_lines` in `settings.yml`. |
 | `|`       | `| jq .`              | Pipes the `stdout` of the most recent command block as `stdin` to the specified command. |
+
+### Setup on Linux/Debian
+
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository_url>
+    cd Idivjopy
+    ```
+
+2.  **Run the setup script:**
+    ```bash
+    ./setup.sh
+    ```
+
+3.  **Run the application:**
+    ```bash
+    python app.py
+    ```
+
+```

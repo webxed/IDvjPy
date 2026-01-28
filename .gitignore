@@ -8,3 +8,7 @@ build/
 
 # Python cache
 __pycache__/
+
+history.txt
+log*.txt
+*.json
