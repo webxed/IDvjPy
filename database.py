@@ -1,4 +1,10 @@
 # Authors: markovskiy.pavel, Gemini (Google)
+"""
+Database module for IDvjPy_term.
+
+Provides SQLite operations for managing tagged command history,
+including adding, querying, and soft-deleting commands.
+"""
 import sqlite3
 import datetime
 

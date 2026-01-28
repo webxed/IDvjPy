@@ -1,7 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Create a virtual environment
-python -m venv .venv
+python3 -m venv .venv
 
 # Activate the virtual environment
 source .venv/bin/activate
@@ -9,7 +9,5 @@ source .venv/bin/activate
 # Install the dependencies
 pip install -r requirements.txt
 
-# Initialize the database
-python database.py
-
-echo "Setup complete. To run the application, use: python app.py"
+# Database is initialized automatically on first run
+echo "Setup complete. To run the application, use: python3 app.py"

@@ -1,16 +1,34 @@
 # Authors: markovskiy.pavel, Gemini (Google)
+"""
+IDvjPy_term - Textual TUI terminal application.
+
+A keyboard-driven terminal interface with persistent tagged command history.
+Supports command execution, variable management, and command tagging.
+
+Usage:
+    python app.py
+"""
 import subprocess
-import yaml
-import datetime
-import os
-import pyperclip
-import database
-import threading
-import re
-from typing import List, Optional, Dict
-from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Input, Static
-from textual.containers import VerticalScroll
+import sys
+
+# Check dependencies before importing
+try:
+    import yaml
+    import datetime
+    import os
+    import pyperclip
+    import database
+    import threading
+    import re
+    from typing import List, Optional, Dict
+    from textual.app import App, ComposeResult
+    from textual.widgets import Header, Footer, Input, Static
+    from textual.containers import VerticalScroll
+except ImportError as e:
+    print(f"Error: Missing dependency - {e}", file=sys.stderr)
+    print("Please install required dependencies:", file=sys.stderr)
+    print("  pip install -r requirements.txt", file=sys.stderr)
+    sys.exit(1)
 
 class CommandBlock(Static):
     """Виджет для отображения одной команды и её вывода."""
@@ -495,10 +513,10 @@ class CommandRunner(App):
 
         source_block = self.active_pipe_source if self.active_pipe_source else self.query(CommandBlock).last()
 
-        if source_block is None:
+        if source_block is None or not source_block.raw_stdout:
             self.add_block(InfoBlock("Error: No command output available to pipe from."))
             return
-            
+
         input_for_pipe = source_block.raw_stdout
         self.handle_normal_command(pipe_command, stdin_data=input_for_pipe)
             
@@ -564,16 +582,16 @@ class CommandRunner(App):
                     command = f"source {alias_file} && {command}"
 
                 process = subprocess.run(
-                    command, shell=True, capture_output=True, text=True,
+                    command, shell=True, executable="/bin/bash", capture_output=True, text=True,
                     encoding=self.ENCODING, errors='replace', input=stdin_data,
-                    timeout=self.COMMAND_TIMEOUT 
+                    timeout=self.COMMAND_TIMEOUT
                 )
                 raw_stdout = process.stdout.strip()
                 raw_stderr = process.stderr.strip()
                 return_code = process.returncode
             except subprocess.TimeoutExpired:
                 raw_stderr = f"{self.MSG_TIMEOUT}"
-                return_code = -124 
+                return_code = 124 
             except Exception as e:
                 raw_stderr = str(e)
                 return_code = -1
