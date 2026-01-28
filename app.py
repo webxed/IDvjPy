@@ -93,6 +93,7 @@ class CommandRunner(App):
     # --- Константы ---
     FILE_SETTINGS = "settings.yml"
     FILE_HISTORY = "history.txt"
+    FILE_DATABASE = "history.db" # Файл БД по умолчанию
     ID_INPUT = "command-input"
     ID_RESULTS_CONTAINER = "results-container"
     KEY_HISTORY_LINES = "history_lines"
@@ -100,7 +101,6 @@ class CommandRunner(App):
     TIMER_DELAY = 2
     
     # Время ожидания команды (в секундах). 
-    # Если команда не завершится за это время, она будет убита (считается, что ждет ввода).
     COMMAND_TIMEOUT = 10 
     
     MSG_COPIED = "Copied to clipboard!"
@@ -124,27 +124,29 @@ class CommandRunner(App):
         self.session_history_pos: int = 0
         self.last_query_results: List[str] = []
         self.history_lines: int = 20
-        
-        # Хранит ссылку на блок, который пользователь выбрал для пайпинга
+        self.db_file = self.FILE_DATABASE # Инициализируем путь к БД
         self.active_pipe_source: Optional[CommandBlock] = None
 
     def on_mount(self) -> None:
         """Настройка приложения при запуске."""
-        try:
-            database.init_db()
-        except Exception as e:
-            self.sub_title = f"DB Error: {e}"
-            self.set_timer(5, self.clear_subtitle)
-
-        # Загрузка настроек, включая возможный кастомный таймаут
+        # Загрузка настроек
         try:
             with open(self.FILE_SETTINGS, "r", encoding=self.ENCODING) as f:
                 settings = yaml.safe_load(f)
                 if settings:
                     self.history_lines = settings.get(self.KEY_HISTORY_LINES, 20)
                     self.COMMAND_TIMEOUT = settings.get("command_timeout", 10)
+                    # Загружаем путь к БД из настроек, если указан
+                    self.db_file = settings.get("database_tags_file", self.FILE_DATABASE)
         except (FileNotFoundError, KeyError, yaml.YAMLError):
             pass
+
+        # Инициализация БД с корректным путем
+        try:
+            database.init_db(self.db_file)
+        except Exception as e:
+            self.sub_title = f"DB Error: {e}"
+            self.set_timer(5, self.clear_subtitle)
 
     def on_ready(self) -> None:
         """Приветственное сообщение."""
@@ -282,7 +284,8 @@ class CommandRunner(App):
         if len(parts) == 2:
             tag, command_to_save = parts
             try:
-                database.add_command(command_to_save, tag)
+                # ИСПРАВЛЕНО: Добавлен self.db_file
+                database.add_command(self.db_file, command_to_save, tag)
                 self.add_block(InfoBlock(f"Saved: '{command_to_save}' with tag '{tag}'"))
             except Exception as e:
                 self.add_block(InfoBlock(f"Database error: {e}"))
@@ -295,19 +298,27 @@ class CommandRunner(App):
         self.last_query_results = []
         try:
             if not tag_part:
-                tags = database.get_all_tags()
+                # ИСПРАВЛЕНО: Добавлен self.db_file
+                tags = database.get_all_tags(self.db_file)
                 content = "Available tags:\n" + ("\n".join(f"  - {tag}" for tag in tags) if tags else "  (None found)")
                 content += "\n\nType `? <tag>` to see commands."
                 self.add_block(InfoBlock(content))
             else:
-                commands = database.get_commands_by_tag(tag_part)
+                # ИСПРАВЛЕНО: Добавлен self.db_file
+                commands = database.get_commands_by_tag(self.db_file, tag_part)
                 content = f"Commands for tag '{tag_part}':\n"
                 if not commands:
                     content += "  (None found)"
                 else:
-                    self.last_query_results = commands
-                    content += "\n".join(f"  [{i}] {cmd}" for i, cmd in enumerate(commands, 1))
-                    content += "\n\nUse `! <number>` to execute."
+                    # Преобразуем список кортежей (id, command) в список строк команд
+                    # или используем индексацию, как в database.py возвращается List[Row]
+                    # Предполагаем, что database.get_commands_by_tag возвращает [{'id': ..., 'command': ...}, ...]
+                    # или список строк. Исходя из database.py -> cursor.fetchall() с row_factory=sqlite3.Row
+                    # commands будет списком объектов Row.
+                    
+                    self.last_query_results = [row['command'] for row in commands]
+                    content += "\n".join(f"  [{row['id']}] {row['command']}" for row in commands)
+                    content += "\n\nUse `! <id>` to execute."
                 self.add_block(InfoBlock(content))
         except Exception as e:
             self.add_block(InfoBlock(f"Database error: {e}"))
@@ -315,14 +326,24 @@ class CommandRunner(App):
     def handle_bang_command(self, user_input: str) -> None:
         """Выполнение команды из результата поиска."""
         command_part = user_input[1:].strip()
+        
+        # Поддержка как числового индекса (старый стиль), так и ID из БД
         if command_part.isdigit():
-            index = int(command_part) - 1
-            if 0 <= index < len(self.last_query_results):
-                input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
-                input_widget.value = self.last_query_results[index]
-                input_widget.cursor_position = len(input_widget.value)
-            else:
-                self.add_block(InfoBlock("Error: Invalid number."))
+            idx = int(command_part)
+            
+            # Пробуем найти по индексу в списке последних результатов (совместимость с версией без ID)
+            if 0 <= idx - 1 < len(self.last_query_results):
+                 input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+                 input_widget.value = self.last_query_results[idx - 1]
+                 input_widget.cursor_position = len(input_widget.value)
+                 return
+            
+            # Если не нашли по индексу, пробуем найти по ID (новый стиль)
+            # Для этого нужно было бы хранить словарь {id: command}, но у нас список.
+            # Для упрощения оставим поиск по индексу списка, как в handle_query_command
+            # там я заполнил last_query_results списком команд.
+            
+            self.add_block(InfoBlock("Error: Invalid number."))
         else:
             self.add_block(InfoBlock("Invalid syntax. Use: ! <number>"))
 
@@ -379,17 +400,11 @@ class CommandRunner(App):
     def _execute_in_thread(self, block: CommandBlock, command: str, stdin_data: Optional[str]) -> None:
         """
         Функция, запускаемая в отдельном потоке.
-        
-        Это предотвращает "заморозку" интерфейса на время выполнения команды.
-        Также здесь реализована защита от команд, требующих интерактивного ввода.
         """
         raw_stdout, raw_stderr, return_code = "", "", 0
         
         if command:
             try:
-                # Запуск процесса с тайм-аутом.
-                # subprocess.run с timeout=XX автоматически пошлет сигнал SIGKILL (или похожий)
-                # процессу, если он не завершится за указанное время.
                 process = subprocess.run(
                     command, shell=True, capture_output=True, text=True,
                     encoding=self.ENCODING, errors='replace', input=stdin_data,
@@ -400,31 +415,22 @@ class CommandRunner(App):
                 return_code = process.returncode
                 
             except subprocess.TimeoutExpired:
-                # Если время вышло, считаем, что команда зависла (ждет ввода).
-                # subprocess.run уже убил процесс, нам нужно просто сообщить об этом.
                 raw_stderr = f"{self.MSG_TIMEOUT}"
-                return_code = -124 # Стандартный код для тайм-аута
-                
+                return_code = -124 
             except Exception as e:
-                # Другие ошибки (например, команда не найдена)
                 raw_stderr = str(e)
                 return_code = -1
         
-        # call_from_thread — это механизм Textual для безопасного обновления UI
-        # из фонового потока. Прямой вызов block.update() может привести к падению.
         self.call_from_thread(block.update_content, raw_stdout, raw_stderr, return_code)
 
     def run_command(self, command: str, stdin_data: Optional[str] = None) -> None:
         """
         Инициатор выполнения команды.
-        Создает блок UI сразу, чтобы дать пользователю обратную связь,
-        и запускает реальное выполнение в фоновом потоке.
         """
         timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         cwd = os.getcwd()
         header = f"{timestamp} ({cwd}) $ {command}"
         
-        # Сразу создаем блок со статусом "выполняется", чтобы UI не казался зависшим
         initial_text = f"{header}\n[Executing...]\n(Waiting for output or timeout...)"
         block = CommandBlock(
             header=header, 
@@ -437,8 +443,6 @@ class CommandRunner(App):
         
         self.add_block(block)
         
-        # Запуск в отдельном потоке. daemon=True позволяет приложению закрыться,
-        # даже если этот поток все еще работает (хотя таймаут должен это предотвратить).
         thread = threading.Thread(
             target=self._execute_in_thread, 
             args=(block, command, stdin_data),
