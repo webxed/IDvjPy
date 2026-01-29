@@ -111,7 +111,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.2" # Command comments with #tag=ID=<comment> syntax
+    VERSION = "v1.1.3" # Support tag[tid] format in !! command (mixed format support)
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -695,13 +695,16 @@ class CommandRunner(App):
     def handle_double_bang_command(self, user_input: str) -> None:
         """
         Сборка нескольких команд по ID с разделителями (!! id1;id2|id3&&id4).
+        Поддерживает форматы ID:
+        - Числовой: 1, 2, 3 (глобальный ID)
+        - Теговый: tag[1], deploy[2] (тег + локальный ID)
         Поддерживает разделители: пробел, ; | && & > <
         Вставляет собранную команду в строку ввода для выполнения.
         """
         command_part = user_input[2:].strip()  # Убираем "!!"
 
         if not command_part:
-            self.add_block(InfoBlock("Invalid syntax. Use: !! <id1>;<id2>|<id3>..."))
+            self.add_block(InfoBlock("Invalid syntax. Use: !! <id1>;<tag2>[<tid>]..."))
             return
 
         # Допустимые разделители (в порядке убывания длины для корректного парсинга)
@@ -744,20 +747,44 @@ class CommandRunner(App):
         if current_token:
             tokens.append(current_token)
 
-        # Проверяем, что все ID валидны
+        # Проверяем, что все ID валидны и получаем команды
         cmd_parts = []
         for token in tokens:
             if token in separators:
                 cmd_parts.append(token)
             else:
-                if not token.isdigit():
-                    self.add_block(InfoBlock(f"Error: Invalid ID '{token}'. Use: !! <id1>;<id2>..."))
+                # Поддержка двух форматов: числовой (!ID) и теговый (!tag[tid])
+                command_text = None
+
+                # Формат 1: Числовой ID (например: 1, 2, 3)
+                if token.isdigit():
+                    cmd_id = int(token)
+                    if cmd_id not in self.last_query_results:
+                        self.add_block(InfoBlock(f"Error: ID {cmd_id} not found in last query results."))
+                        return
+                    command_text = self.last_query_results[cmd_id]
+
+                # Формат 2: Теговый ID (например: deploy[1], test[2])
+                elif '[' in token and token.endswith(']'):
+                    try:
+                        tag, tid_part = token.split('[')
+                        tid = int(tid_part[:-1])  # Убираем ']'
+                        result = database.get_command_by_tid(self.db_file, tag, tid)
+                        if result:
+                            command_text = result['command']
+                        else:
+                            self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
+                            return
+                    except (ValueError, IndexError):
+                        self.add_block(InfoBlock(f"Error: Invalid ID format '{token}'. Use: !! <id1>;<tag2>[<tid>]..."))
+                        return
+
+                # Неверный формат
+                else:
+                    self.add_block(InfoBlock(f"Error: Invalid ID '{token}'. Use: !! <id1>;<tag2>[<tid>]..."))
                     return
-                cmd_id = int(token)
-                if cmd_id not in self.last_query_results:
-                    self.add_block(InfoBlock(f"Error: ID {cmd_id} not found in last query results."))
-                    return
-                cmd_parts.append(self.last_query_results[cmd_id])
+
+                cmd_parts.append(command_text)
 
         # Собираем итоговую команду с пробелами между частями
         final_command = " ".join(cmd_parts)
