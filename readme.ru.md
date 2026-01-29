@@ -79,7 +79,7 @@ python3 app.py
 
 ```
 ┌─────────────────────────────────────────┐
-│ IDvjPy_term v1.1.4         [Dark Mode] │  ← Header (F1: help)
+│ IDvjPy_term v1.1.5         [Dark Mode] │  ← Header (F1: help)
 ├─────────────────────────────────────────┤
 │ Enter command, #tag, ?*, !!, $VAR=val... │  ← Input field
 ├─────────────────────────────────────────┤
@@ -118,10 +118,21 @@ find . -name "*.py"
 
 Сохраняет команду в базу данных с указанным тегом.
 
+**v1.1.5+: Авто-раскрытие ссылок** — При сохранении команды, содержащей ссылки `!tag[tid]`, `!ID` или `!! ...`, эти ссылки автоматически раскрываются в реальные команды:
+
 ```bash
+# Простой пример
 #deploy systemctl restart nginx
 #backup rsync -av /data /backup
 #test python -m pytest tests/
+
+# Пример с авто-раскрытием ссылок (v1.1.5+)
+#deploy !deploy[2] && !deploy[3]
+# Сохранит как: "nginx -t && systemctl reload nginx"
+
+# Пример с !! (сборкой команд)
+#workflow !! dev[1];dev[3]&&prod[1]
+# Сохранит как: "vim app.py; python -m pytest && systemctl restart myapp"
 ```
 
 #### 3. Удаление по тегу (`#tag-` или `#tag-tid`)
@@ -552,9 +563,10 @@ sudo apt install xsel
 
 ## Версионирование
 
-Текущая версия: **v1.1.4** (Clear command :c for output frame)
+Текущая версия: **v1.1.5** (Auto-resolve command references)
 
 История версий:
+-   v1.1.5 — Авто-раскрытие ссылок `!tag[tid]`, `!ID` и `!! ...` при сохранении команд
 -   v1.1.4 — Команда `:c` для полной очистки нижнего фрейма со всеми блоками
 -   v1.1.3 — Поддержка формата `tag[tid]` в команде `!!` (смешанный формат: `!! 1;deploy[2]&&test[3]`)
 -   v1.1.2 — Комментарии к отдельным командам с форматом `#tag=ID=<comment>`

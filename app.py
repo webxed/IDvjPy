@@ -111,7 +111,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.4" # Add :c command to clear all blocks from output frame
+    VERSION = "v1.1.5" # Auto-resolve ! and !! references when saving commands
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -484,6 +484,102 @@ class CommandRunner(App):
         else:
             self.add_block(InfoBlock("Invalid syntax. Use: $VAR_NAME=VALUE"))
 
+    def _resolve_command_references(self, command: str) -> str:
+        """
+        Раскрывает ссылки на команды в строке (!tag[tid], !ID, !! ...).
+
+        Заменяет все вхождения:
+        - !tag[tid] на текст команды из БД
+        - !ID на текст команды из БД
+        - !! ... на результат сборки команд
+
+        Args:
+            command: Строка команды с возможными ссылками
+
+        Returns:
+            Строка команды с раскрытыми ссылками
+        """
+        result = command
+        resolved = True
+
+        # Раскрываем ссылки пока есть что раскрывать (максимум 10 итераций для защиты от циклов)
+        max_iterations = 10
+        iteration = 0
+
+        while resolved and iteration < max_iterations:
+            resolved = False
+            iteration += 1
+
+            # 1. Раскрываем !! (сборка команд)
+            import re
+            # Ищем !! с последующим содержанием до конца строки
+            double_bang_pattern = r'!!\s+(.+?)(?:\s*$|\s*(?=\||&&|\|\||;|$))'
+            double_bang_match = re.search(double_bang_pattern, result)
+
+            if double_bang_match:
+                try:
+                    bang_command = "!! " + double_bang_match.group(1).strip()
+                    # Временно сохраняем current input для восстановления
+                    old_input = self.query_one(f"#{self.ID_INPUT}", Input).value
+
+                    # Вызываем handle_double_bang_command
+                    self.handle_double_bang_command(bang_command)
+
+                    # Получаем результат из input
+                    resolved_part = self.query_one(f"#{self.ID_INPUT}", Input).value
+
+                    # Восстанавливаем input
+                    self.query_one(f"#{self.ID_INPUT}", Input).value = old_input
+
+                    # Заменяем !! ... на раскрытую команду
+                    result = result.replace(double_bang_match.group(0), resolved_part)
+                    resolved = True
+                    continue
+                except Exception:
+                    # Если не удалось раскрыть, пропускаем
+                    pass
+
+            # 2. Раскрываем !tag[tid] и !ID
+            # Ищем все вхождения !tag[tid] или !ID
+            single_bang_pattern = r'!([a-zA-Z_0-9]+)\[(\d+)\]|!(\d+)'
+            single_bang_matches = list(re.finditer(single_bang_pattern, result))
+
+            if single_bang_matches:
+                # Обрабатываем в обратном порядке, чтобы позиции не съезжали
+                for match in reversed(single_bang_matches):
+                    try:
+                        full_match = match.group(0)
+                        tag = match.group(1)
+                        tid_str = match.group(2)
+                        id_str = match.group(3)
+
+                        command_text = None
+
+                        # Формат !tag[tid]
+                        if tag and tid_str:
+                            tid = int(tid_str)
+                            db_result = database.get_command_by_tid(self.db_file, tag, tid)
+                            if db_result:
+                                command_text = db_result['command']
+                        # Формат !ID
+                        elif id_str:
+                            cmd_id = int(id_str)
+                            if cmd_id in self.last_query_results:
+                                command_text = self.last_query_results[cmd_id]
+                            else:
+                                db_result = database.get_command_by_global_id(self.db_file, cmd_id)
+                                if db_result:
+                                    command_text = db_result['command']
+
+                        if command_text:
+                            result = result[:match.start()] + command_text + result[match.end():]
+                            resolved = True
+                    except Exception:
+                        # Если не удалось раскрыть эту ссылку, пропускаем
+                        pass
+
+        return result
+
     def handle_save_command(self, user_input: str) -> None:
         """
         Обработка сохранения, удаления команд и комментариев.
@@ -574,9 +670,23 @@ class CommandRunner(App):
         parts = content.split(maxsplit=1)
         if len(parts) == 2:
             tag, command_to_save = parts
+
+            # v1.1.4+: Авто-раскрытие ссылок ! и !! в сохраняемой команде
+            # Это позволяет сохранять команды-ссылки, которые будут автоматически
+            # раскрываться в реальные команды при сохранении
+            original_command = command_to_save
+            resolved_command = self._resolve_command_references(command_to_save)
+
+            if resolved_command != original_command:
+                # Команда содержала ссылки, которые были раскрыты
+                command_to_save = resolved_command
+
             try:
                 tid = database.add_command(self.db_file, command_to_save, tag)
-                self.add_block(InfoBlock(f"Saved: '{command_to_save}' as {tag}[{tid}]"))
+                if resolved_command != original_command:
+                    self.add_block(InfoBlock(f"Saved: '{original_command}' → resolved to '{command_to_save}' as {tag}[{tid}]"))
+                else:
+                    self.add_block(InfoBlock(f"Saved: '{command_to_save}' as {tag}[{tid}]"))
             except Exception as e:
                 self.add_block(InfoBlock(f"Database error: {e}"))
         else:
