@@ -111,7 +111,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.3" # Support tag[tid] format in !! command (mixed format support)
+    VERSION = "v1.1.4" # Add :c command to clear all blocks from output frame
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -143,6 +143,7 @@ class CommandRunner(App):
     CMD_QUIT = "q"
     CMD_WRITE = "w"
     CMD_HISTORY = "h"
+    CMD_CLEAR = "c"
 
     def __init__(self):
         """Инициализация состояния приложения."""
@@ -297,6 +298,25 @@ class CommandRunner(App):
         """Переводит фокус в строку ввода."""
         self.query_one(f"#{self.ID_INPUT}", Input).focus()
 
+    def clear_all_blocks(self) -> None:
+        """
+        Очищает все блоки из контейнера вывода.
+
+        Удаляет все CommandBlock и InfoBlock из нижнего фрейма.
+        Используется командой :c для очистки экрана.
+        """
+        try:
+            # Получаем контейнер с результатами
+            results_container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+
+            # Удаляем все потомков (CommandBlock и InfoBlock)
+            for child in list(results_container.children):
+                results_container.remove_child(child)
+
+            self.add_block(InfoBlock("All blocks cleared."))
+        except Exception as e:
+            self.add_block(InfoBlock(f"Error clearing blocks: {e}"))
+
     def add_block(self, block: Static) -> None:
         """
         Добавляет блок в UI, прокручивает вниз и возвращает фокус во ввод.
@@ -380,7 +400,7 @@ class CommandRunner(App):
                 pass
 
     def handle_colon_command(self, user_input: str) -> None:
-        """Обработка команд управления (:q, :w, :h)."""
+        """Обработка команд управления (:q, :w, :h, :c)."""
         parts = user_input[1:].split()
         if not parts: return
         command = parts[0]
@@ -410,6 +430,8 @@ class CommandRunner(App):
                 self.add_block(InfoBlock(f"{self.FILE_HISTORY} not found."))
             except Exception as e:
                 self.add_block(InfoBlock(f"Error reading history: {e}"))
+        elif command == self.CMD_CLEAR:
+            self.clear_all_blocks()
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
 
