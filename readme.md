@@ -40,7 +40,7 @@ The application uses several command prefixes to unlock its features:
 | `#tag-ID` | `#git-1`              | Marks a specific command with the given ID as deleted.                    |
 | `?`       | `?`                   | Shows a list of all unique tags saved in the history database.            |
 | `? <tag>` | `? git`               | Shows a list of all commands saved with the specified tag.                |
-| `?*`      | `?*`                  | Shows all commands from the database, grouped by tag.                     |
+| `??`      | `??`                  | Shows all commands from the database, grouped by tag.                     |
 | `!`       | `! 1`                 | Executes the command corresponding to the number from the last `?` query.    |
 | `:`       | `:q` or `:w log.txt`  | Executes an application command (quit or write to file).                  |
 | `:h [X]`    | `:h` or `:h 5`        | Shows the last X lines of command history from `history.txt`. If X is not specified, it defaults to the value of `history_lines` in `settings.yml`. |

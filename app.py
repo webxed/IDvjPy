@@ -278,15 +278,14 @@ class CommandRunner(App):
         self.load_aliases()
 
         # 4. Автоматическая загрузка всех команд для работы !!
-        # Это позволяет использовать команду !! сразу после запуска без предварительного ?*
+        # Это позволяет использовать команду !! сразу после запуска без предварительного ??
         self._populate_query_results()
 
         # 5. Периодическая перезагрузка БД для актуальности при работе нескольких копий
         # Каждые DB_RELOAD_INTERVAL секунд обновляем last_query_results
         self.set_timer(
             self.DB_RELOAD_INTERVAL,
-            self._periodic_db_reload,
-            repeat=True  # Повторять бесконечно
+            self._periodic_db_reload
         )
 
     def _populate_query_results(self) -> None:
@@ -297,7 +296,7 @@ class CommandRunner(App):
         и заполняет словарь last_query_results всеми командами из базы данных.
 
         Преимущества:
-        - Команда !! работает сразу после запуска без необходимости выполнять ?*
+        - Команда !! работает сразу после запуска без необходимости выполнять ??
         - Улучшает UX: пользователь может сразу собирать команды по ID
 
         Структура last_query_results:
@@ -305,7 +304,7 @@ class CommandRunner(App):
         - Значение: текст команды (str)
 
         Если загрузка не удалась, словарь остается пустым, и пользователю нужно
-        будет выполнить ?* или ?tag перед использованием !!.
+        будет выполнить ?? или ?tag перед использованием !!.
         """
         try:
             # Получаем все активные команды из базы данных
@@ -349,6 +348,9 @@ class CommandRunner(App):
             # При ошибке просто пропускаем эту перезагрузку
             # Следующая попытка будет через DB_RELOAD_INTERVAL секунд
             pass
+        finally:
+            # Перезапускаем таймер для следующего цикла
+            self.set_timer(self.DB_RELOAD_INTERVAL, self._periodic_db_reload)
 
     def load_bashrc(self) -> None:
         """
@@ -445,7 +447,7 @@ class CommandRunner(App):
     def compose(self) -> ComposeResult:
         """Построение UI."""
         yield Header()
-        yield Input(placeholder="Enter command, #tag, ?*, !!, $VAR=val, or :q/:w", id=self.ID_INPUT)
+        yield Input(placeholder="Enter command, #tag, ??, !!, $VAR=val, or :q/:w", id=self.ID_INPUT)
         yield VerticalScroll(id=self.ID_RESULTS_CONTAINER)
         yield Footer()
 
@@ -506,6 +508,9 @@ class CommandRunner(App):
         """
         Главный диспетчер команд.
         Анализирует первый символ и перенаправляет выполнение.
+
+        v1.1.9+: Команды с операторами (&&, ||, ;, |) обрабатываются как обычные,
+        даже если начинаются с !. Это позволяет использовать ссылки в составных командах.
         """
         user_input = message.value.strip()
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
@@ -516,6 +521,11 @@ class CommandRunner(App):
 
         self.log_to_history(user_input)
 
+        # v1.1.9+: Проверяем, содержит ли команда shell-операторы
+        # Если да, то даже с ! в начале это обычная команда (для раскрытия ссылок)
+        import re
+        has_shell_operators = bool(re.search(r'[&|;]', user_input))
+
         # Маршрутизация по префиксам
         if user_input.startswith(self.PREFIX_CMD):
             self.handle_colon_command(user_input)
@@ -525,13 +535,15 @@ class CommandRunner(App):
             self.handle_query_command(user_input)
         elif user_input.startswith(self.PREFIX_DOUBLE_BANG):
             self.handle_double_bang_command(user_input)
-        elif user_input.startswith(self.PREFIX_BANG):
+        elif user_input.startswith(self.PREFIX_BANG) and not has_shell_operators:
+            # Только если нет операторов - это одиночная команда !tag[tid] или !ID
             self.handle_bang_command(user_input)
         elif user_input.startswith(self.PREFIX_PIPE):
             self.handle_pipe_command(user_input)
         elif user_input.startswith(self.PREFIX_VAR):
             self.handle_variable_assignment(user_input)
         else:
+            # Обычные команды, включая составные с !tag[tid] && !tag[tid]
             self.handle_normal_command(user_input)
 
     def log_to_history(self, command: str) -> None:
@@ -714,38 +726,32 @@ class CommandRunner(App):
             resolved = False
             iteration += 1
 
-            # 1. Раскрываем !! (сборка команд)
             import re
-            # Ищем !! с последующим содержанием до конца строки
-            double_bang_pattern = r'!!\s+(.+?)(?:\s*$|\s*(?=\||&&|\|\||;|$))'
-            double_bang_match = re.search(double_bang_pattern, result)
 
-            if double_bang_match:
+            # 1. Сначала проверяем, начинается ли строка с !! (важно для handle_bang_command)
+            if result.strip().startswith('!!'):
                 try:
-                    bang_command = "!! " + double_bang_match.group(1).strip()
-                    # Временно сохраняем current input для восстановления
-                    old_input = self.query_one(f"#{self.ID_INPUT}", Input).value
+                    # Извлекаем часть после !!
+                    double_bang_pattern = r'^!!\s+(.+)$'
+                    double_bang_match = re.match(double_bang_pattern, result.strip())
 
-                    # Вызываем handle_double_bang_command
-                    self.handle_double_bang_command(bang_command)
+                    if double_bang_match:
+                        # Собираем команду напрямую, без изменения input
+                        ids_part = double_bang_match.group(1).strip()
+                        resolved_cmd = self._assemble_command_from_ids(ids_part)
 
-                    # Получаем результат из input
-                    resolved_part = self.query_one(f"#{self.ID_INPUT}", Input).value
-
-                    # Восстанавливаем input
-                    self.query_one(f"#{self.ID_INPUT}", Input).value = old_input
-
-                    # Заменяем !! ... на раскрытую команду
-                    result = result.replace(double_bang_match.group(0), resolved_part)
-                    resolved = True
-                    continue
+                        if resolved_cmd:
+                            # Полностью заменяем результат
+                            result = resolved_cmd
+                            resolved = True
+                            continue
                 except Exception:
-                    # Если не удалось раскрыть, пропускаем
+                    # Если не удалось раскрыть, идем к шагу 2
                     pass
 
-            # 2. Раскрываем !tag[tid] и !ID
-            # Ищем все вхождения !tag[tid] или !ID
-            single_bang_pattern = r'!([a-zA-Z_0-9]+)\[(\d+)\]|!(\d+)'
+            # 2. Раскрываем !tag[tid] и !ID в середине/конце строки
+            # Ищем все вхождения !tag[tid] или !ID (исключаем !! через lookbehind)
+            single_bang_pattern = r'(?<!!)!([a-zA-Z_0-9]+)\[(\d+)\]|(?<!!)!(\d+)'
             single_bang_matches = list(re.finditer(single_bang_pattern, result))
 
             if single_bang_matches:
@@ -783,6 +789,81 @@ class CommandRunner(App):
                         pass
 
         return result
+
+    def _assemble_command_from_ids(self, ids_part: str) -> Optional[str]:
+        """
+        Собирает команду из списка ID с разделителями.
+        Используется для !! без изменения input.
+
+        Args:
+            ids_part: Строка с ID и разделителями, например "deploy[2] && deploy[3]"
+
+        Returns:
+            Собранная команда или None в случае ошибки
+        """
+        try:
+            import re
+
+            # Шаг 1: Находим все токены (tag[tid] или ID) и их позиции
+            token_pattern = r'[a-zA-Z_0-9]+\[\d+\]|\d+'
+            tokens = list(re.finditer(token_pattern, ids_part))
+
+            if not tokens:
+                return None
+
+            # Шаг 2: Получаем текст команд для каждого токена
+            parts = []
+            positions = []
+
+            for match in tokens:
+                token = match.group(0)
+                command_text = None
+
+                # Проверяем формат tag[tid]
+                tag_match = re.match(r'^([a-zA-Z_0-9]+)\[(\d+)\]$', token)
+                if tag_match:
+                    tag = tag_match.group(1)
+                    tid = int(tag_match.group(2))
+                    db_result = database.get_command_by_tid(self.db_file, tag, tid)
+                    if db_result:
+                        command_text = db_result['command']
+                # Проверяем формат ID (число)
+                elif token.isdigit():
+                    cmd_id = int(token)
+                    if cmd_id in self.last_query_results:
+                        command_text = self.last_query_results[cmd_id]
+                    else:
+                        db_result = database.get_command_by_global_id(self.db_file, cmd_id)
+                        if db_result:
+                            command_text = db_result['command']
+
+                if command_text is None:
+                    # Если хотя бы один ID не найден, возвращаем None
+                    return None
+
+                parts.append(command_text)
+                positions.append((match.start(), match.end()))
+
+            # Шаг 3: Собираем результат, сохраняя разделители из исходной строки
+            result = ''
+            last_end = 0
+
+            for i, (start, end) in enumerate(positions):
+                # Добавляем разделитель между токенами (если есть)
+                if i > 0:
+                    separator = ids_part[last_end:start].strip()
+                    if separator:
+                        result += ' ' + separator + ' '
+                    else:
+                        result += ' '
+
+                # Добавляем команду
+                result += parts[i]
+                last_end = end
+
+            return result.strip()
+        except Exception:
+            return None
 
     def handle_save_command(self, user_input: str) -> None:
         """
@@ -900,7 +981,7 @@ class CommandRunner(App):
         """
         Поиск команд в БД.
         ? - список тегов с комментариями.
-        ?* - все команды.
+        ?? - все команды.
         ?tag - команды по тегу.
         """
         tag_part = user_input[1:].strip()
@@ -922,10 +1003,10 @@ class CommandRunner(App):
                 else:
                     content += "  (None found)"
 
-                content += "\n\nType `? <tag>` to see commands or `?*` to see all."
+                content += "\n\nType `? <tag>` to see commands or `??` to see all."
                 content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
-            elif tag_part == '*':
+            elif tag_part == '?':
                 # Вывод всех команд с группировкой по тегам
                 all_commands = database.get_all_commands_with_ids(self.db_file)
                 content = "All commands by tag:\n"
@@ -993,8 +1074,13 @@ class CommandRunner(App):
         Поддерживает два формата:
         - !tag[tid] - по имени тега и локальному ID (новый)
         - !ID - по глобальному ID (старый, для обратной совместимости)
+
+        v1.1.9+: Если команда содержит ссылки, они автоматически раскрываются
+        перед вставкой в поле ввода для удобного выполнения.
         """
         command_part = user_input[1:].strip()
+
+        command_text = None
 
         # Проверяем новый формат: !tag[tid]
         if '[' in command_part and command_part.endswith(']'):
@@ -1007,26 +1093,38 @@ class CommandRunner(App):
                 result = database.get_command_by_tid(self.db_file, tag, tid)
                 if result:
                     command_text = result['command']
-                    input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
-                    input_widget.value = command_text
-                    input_widget.cursor_position = len(command_text)
                 else:
                     self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
+                    return
             except (ValueError, IndexError):
                 self.add_block(InfoBlock("Invalid syntax. Use: !<tag>[<tid>] or !<id>"))
+                return
         # Проверяем старый формат: !ID (цифра)
         elif command_part.isdigit():
             cmd_id = int(command_part)
             result = database.get_command_by_global_id(self.db_file, cmd_id)
             if result:
                 command_text = result['command']
-                input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
-                input_widget.value = command_text
-                input_widget.cursor_position = len(command_text)
             else:
                 self.add_block(InfoBlock(f"Error: Global ID {cmd_id} not found."))
+                return
         else:
             self.add_block(InfoBlock("Invalid syntax. Use: !<tag>[<tid>] or !<id>"))
+            return
+
+        # v1.1.9+: Если команда начинается с !!, раскрываем её сразу для удобства
+        # Это позволяет выполнять команды с !! одним нажатием Enter
+        if command_text.strip().startswith('!!'):
+            resolved = self._resolve_command_references(command_text)
+            # Вставляем раскрытую команду
+            input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+            input_widget.value = resolved
+            input_widget.cursor_position = len(resolved)
+        else:
+            # Для обычных команд просто вставляем без изменения
+            input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+            input_widget.value = command_text
+            input_widget.cursor_position = len(command_text)
 
     def handle_double_bang_command(self, user_input: str) -> None:
         """
@@ -1150,11 +1248,30 @@ class CommandRunner(App):
         self.handle_normal_command(pipe_command, stdin_data=input_for_pipe)
             
     def handle_normal_command(self, command: str, stdin_data: Optional[str] = None) -> None:
-        """Обертка для выполнения обычной команды с обновлением истории."""
+        """
+        Обертка для выполнения обычной команды с обновлением истории.
+
+        v1.1.9+: Автоматически раскрывает ссылки !tag[tid] и !ID перед выполнением.
+        Это позволяет выполнять команды, которые были сохранены с ссылками на другие команды.
+        """
+        # Проверяем, содержит ли команда ссылки !tag[tid] или !ID (но не !!)
+        import re
+        # Используем негативный lookbehind (?<!!) чтобы исключить !! из поиска
+        has_references = bool(re.search(r'(?<!!)!([a-zA-Z_0-9]+)\[(\d+)\]|(?<!!)!(\d+)', command))
+
+        final_command = command
+        if has_references:
+            # Раскрываем ссылки перед выполнением
+            original_command = command
+            final_command = self._resolve_command_references(command)
+            if final_command != original_command:
+                # Ссылки были раскрыты
+                pass  # Можно добавить логирование при необходимости
+
         if command not in self.session_history:
             self.session_history.append(command)
         self.session_history_pos = len(self.session_history)
-        self.run_command(command, stdin_data)
+        self.run_command(final_command, stdin_data)
 
     def action_history_prev(self) -> None:
         """Навигация истории назад."""
