@@ -816,31 +816,51 @@ class CommandRunner(App):
         # === Секция 1.3: Редактирование команд ===
         # Проверяем на наличие "+" после тега (редактирование)
         # Формат: #tag+ID (редактировать команду) или #tag+ (редактировать последнюю)
+        # Формат с заменой: #tag+ID новая_команда (сразу заменить команду)
         if '+' in content:
             parts = content.split('+', 1)
             tag = parts[0].strip()
-            identifier = parts[1].strip() if len(parts) > 1 else None
+            identifier_and_more = parts[1].strip() if len(parts) > 1 else None
 
             if not tag:
                 self.add_block(InfoBlock("Invalid syntax. Use: #tag+<ID> to edit command"))
                 return
 
             try:
-                if identifier and identifier.isdigit():
-                    # Редактирование конкретной команды: #deploy+2
-                    tid = int(identifier)
-                    result = database.get_command_by_tid(self.db_file, tag, tid)
-                    if result:
-                        command_text = result['command']
-                        # Вставляем команду в input для редактирования
-                        input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
-                        input_widget.value = f"#{tag} {command_text}"
-                        input_widget.cursor_position = len(f"#{tag} ") + len(command_text)
-                        input_widget.focus()
-                        self.add_block(InfoBlock(f"Editing {tag}[{tid}]. Edit and press Enter to save."))
+                # Проверяем, есть ли дополнительный текст после ID
+                if identifier_and_more:
+                    # Разделяем identifier и новую команду (если есть)
+                    id_parts = identifier_and_more.split(maxsplit=1)
+                    identifier = id_parts[0]
+                    new_command = id_parts[1].strip() if len(id_parts) > 1 else None
+
+                    if identifier.isdigit():
+                        tid = int(identifier)
+
+                        # Если указана новая команда - сразу обновляем
+                        if new_command:
+                            result = database.get_command_by_tid(self.db_file, tag, tid)
+                            if result:
+                                database.update_command_by_tid(self.db_file, tag, tid, new_command)
+                                self.add_block(InfoBlock(f"Updated {tag}[{tid}] to: '{new_command}'"))
+                            else:
+                                self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
+                        else:
+                            # Иначе загружаем в input для редактирования
+                            result = database.get_command_by_tid(self.db_file, tag, tid)
+                            if result:
+                                command_text = result['command']
+                                # Вставляем команду в input для редактирования
+                                input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+                                input_widget.value = f"#{tag} {command_text}"
+                                input_widget.cursor_position = len(f"#{tag} ") + len(command_text)
+                                input_widget.focus()
+                                self.add_block(InfoBlock(f"Editing {tag}[{tid}]. Edit and press Enter to save."))
+                            else:
+                                self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
                     else:
-                        self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
-                elif identifier is None or not identifier:
+                        self.add_block(InfoBlock("Invalid syntax. Use: #tag+<ID> or #tag+ to edit"))
+                else:
                     # Редактирование последней команды тега: #deploy+
                     # Получаем все команды тега и находим последнюю (по tid)
                     all_commands = database.get_commands_by_tag(self.db_file, tag)
@@ -859,8 +879,6 @@ class CommandRunner(App):
                         self.add_block(InfoBlock(f"Editing {tag}[{tid}] (last command). Edit and press Enter to save."))
                     else:
                         self.add_block(InfoBlock(f"Error: No active commands found for tag '{tag}'"))
-                else:
-                    self.add_block(InfoBlock("Invalid syntax. Use: #tag+<ID> or #tag+ to edit"))
             except Exception as e:
                 self.add_block(InfoBlock(f"Database error: {e}"))
             return

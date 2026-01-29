@@ -258,3 +258,26 @@ def get_command_comment(db_file: str, tag: str, tid: int) -> str:
     conn.close()
     return result['comment'] if result else ""
 
+def update_command_by_tid(db_file: str, tag: str, tid: int, new_command: str):
+    """
+    Updates the command text for a specific command by tag and tid.
+
+    Args:
+        db_file: Path to database file
+        tag: Tag name
+        tid: Tag-local ID
+        new_command: New command text
+
+    Returns:
+        True if command was updated, False if not found
+    """
+    conn = get_db_connection(db_file)
+    cursor = conn.execute(
+        "UPDATE commands SET command = ? WHERE tag = ? AND tid = ? AND deleted = 0",
+        (new_command, tag, tid)
+    )
+    conn.commit()
+    rows_updated = cursor.rowcount
+    conn.close()
+    return rows_updated > 0
+
