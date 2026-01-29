@@ -10,6 +10,31 @@ Usage:
 """
 import subprocess
 import sys
+import argparse
+
+# Parse command-line arguments BEFORE importing dependencies
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="IDvjPy_term - Textual TUI terminal application",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python app.py                    # Run with default instance name
+  python app.py --instance-name=user1  # Run with custom instance name
+        """
+    )
+    parser.add_argument(
+        '--instance-name',
+        type=str,
+        default='default',
+        help='Instance name for unique .bashrc_term file (default: default)'
+    )
+    return parser.parse_args()
+
+# Parse arguments first
+args = parse_arguments()
+INSTANCE_NAME = args.instance_name
 
 # Check dependencies before importing
 try:
@@ -20,6 +45,8 @@ try:
     import database_v2 as database
     import threading
     import re
+    import fcntl
+    import time
     from typing import List, Optional, Dict
     from textual.app import App, ComposeResult
     from textual.widgets import Header, Footer, Input, Static
@@ -29,6 +56,68 @@ except ImportError as e:
     print("Please install required dependencies:", file=sys.stderr)
     print("  pip install -r requirements.txt", file=sys.stderr)
     sys.exit(1)
+
+
+# ============================================================================
+# File Locking Utilities with Timeout
+# ============================================================================
+
+class FileLockTimeoutError(Exception):
+    """Raised when file lock cannot be acquired within timeout."""
+    pass
+
+
+def acquire_file_lock(file_obj, timeout_sec: int = 5) -> None:
+    """
+    Acquire exclusive lock on file with timeout.
+
+    Args:
+        file_obj: Open file object (must be opened in a mode that allows locking)
+        timeout_sec: Maximum time to wait for lock (default: 5 seconds)
+
+    Raises:
+        FileLockTimeoutError: If lock cannot be acquired within timeout
+        IOError: If locking operation fails
+    """
+    start_time = time.time()
+
+    while True:
+        try:
+            # Try to acquire exclusive lock (non-blocking)
+            fcntl.flock(file_obj.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return  # Lock acquired successfully
+        except IOError as e:
+            # Check if error is due to lock being held (EAGAIN on Linux, EACCES on some systems)
+            if e.errno in (errno.EAGAIN, errno.EACCES):
+                # Lock is held by another process
+                elapsed = time.time() - start_time
+                if elapsed >= timeout_sec:
+                    raise FileLockTimeoutError(
+                        f"Could not acquire file lock after {timeout_sec} seconds"
+                    )
+                # Wait a bit before retrying (100ms)
+                time.sleep(0.1)
+            else:
+                # Some other error occurred
+                raise
+
+
+def release_file_lock(file_obj) -> None:
+    """
+    Release exclusive lock on file.
+
+    Args:
+        file_obj: Open file object
+    """
+    try:
+        fcntl.flock(file_obj.fileno(), fcntl.LOCK_UN)
+    except IOError:
+        pass  # Lock was already released or file was closed
+
+
+# Need to import errno for error checking
+import errno
+
 
 class CommandBlock(Static):
     """Виджет для отображения одной команды и её вывода."""
@@ -111,21 +200,24 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.6" # Fix :c command to use correct Textual API (child.remove)
+    VERSION = "v1.1.7" # Add file locking and --instance-name support
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
     FILE_HISTORY = "history.txt"
     FILE_DATABASE = "history.db"
-    FILE_BASHRC = ".bashrc_term" # Файл для хранения локальных переменных
+    # FILE_BASHRC теперь уникален для каждого инстанса
+    FILE_BASHRC = f".bashrc_term_{INSTANCE_NAME}"  # Файл для хранения локальных переменных
     FILE_BASH_ALIASES = ".bashrc" # Системный файл алиасов
-    
+
     ID_INPUT = "command-input"
     ID_RESULTS_CONTAINER = "results-container"
     KEY_HISTORY_LINES = "history_lines"
     ENCODING = "utf-8"
     TIMER_DELAY = 2
-    COMMAND_TIMEOUT = 10 
+    COMMAND_TIMEOUT = 10
+    FILE_LOCK_TIMEOUT = 5  # Таймаут для получения блокировки файла (секунды)
+    DB_RELOAD_INTERVAL = 5  # Интервал перезагрузки БД для актуальности (секунды) 
     
     MSG_COPIED = "Copied to clipboard!"
     MSG_NO_FOCUS = "No command block focused."
@@ -191,6 +283,14 @@ class CommandRunner(App):
         # Это позволяет использовать команду !! сразу после запуска без предварительного ?*
         self._populate_query_results()
 
+        # 5. Периодическая перезагрузка БД для актуальности при работе нескольких копий
+        # Каждые DB_RELOAD_INTERVAL секунд обновляем last_query_results
+        self.set_timer(
+            self.DB_RELOAD_INTERVAL,
+            self._periodic_db_reload,
+            repeat=True  # Повторять бесконечно
+        )
+
     def _populate_query_results(self) -> None:
         """
         Загружает все команды из БД в last_query_results для работы !! команды.
@@ -224,32 +324,89 @@ class CommandRunner(App):
             # Пользователь увидит ошибку при попытке использовать !!
             self.last_query_results = {}
 
+    def _periodic_db_reload(self) -> None:
+        """
+        Периодическая перезагрузка last_query_results для актуальности.
+
+        Вызывается каждые DB_RELOAD_INTERVAL секунд для обновления кэша команд.
+        Это обеспечивает актуальность данных при работе нескольких копий приложения
+        с общей базой данных.
+
+        Не прерывает работу пользователя, выполняется тихо в фоне.
+        """
+        try:
+            # Получаем все активные команды из базы данных
+            all_commands = database.get_all_commands_with_ids(self.db_file)
+
+            # Обновляем словарь результатов (не очищая, чтобы не терять текущий контекст)
+            old_size = len(self.last_query_results)
+            for row in all_commands:
+                # row['id'] - глобальный уникальный ID
+                # row['command'] - текст команды для выполнения
+                self.last_query_results[row['id']] = row['command']
+
+            # Если количество команд изменилось, можно оповестить пользователя (опционально)
+            # Но пока делаем это тихо, чтобы не отвлекать
+        except Exception as e:
+            # При ошибке просто пропускаем эту перезагрузку
+            # Следующая попытка будет через DB_RELOAD_INTERVAL секунд
+            pass
+
     def load_bashrc(self) -> None:
         """
         Читает файл .bashrc_term, парсит строки export VAR="VAL"
         и заполняет словарь self.local_env.
         Также обновляет os.environ для текущего процесса.
+
+        Использует file locking для безопасного чтения при одновременной работе
+        нескольких копий приложения.
         """
-        # Создаем файл, если его нет
+        # Создаем файл, если его нет (с блокировкой)
         if not os.path.exists(self.FILE_BASHRC):
-            with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f:
-                f.write("# Terminal-specific environment variables\n")
-        
+            try:
+                with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f:
+                    acquire_file_lock(f, self.FILE_LOCK_TIMEOUT)
+                    f.write("# Terminal-specific environment variables\n")
+                    release_file_lock(f)
+            except FileLockTimeoutError:
+                # Если не можем получить блокировку при создании, это не критично
+                with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f:
+                    f.write("# Terminal-specific environment variables\n")
+            except Exception as e:
+                self.add_block(InfoBlock(f"Error creating {self.FILE_BASHRC}: {e}"))
+                return
+
         try:
             with open(self.FILE_BASHRC, "r", encoding=self.ENCODING) as f:
-                for line in f:
-                    line = line.strip()
-                    # Ищем строки, начинающиеся с export и содержащие =
-                    if line.startswith("export ") and "=" in line:
-                        # Убираем "export "
-                        assignment = line[7:]
-                        # Разделяем на имя и значение (только по первому знаку =)
-                        key, value = assignment.split("=", 1)
-                        # Очищаем значение от кавычек
-                        value = value.strip('"').strip("'")
-                        self.local_env[key] = value
-                        # Добавляем в окружение процесса, чтобы subprocess видел их
-                        os.environ[key] = value
+                # Пытаемся получить блокировку для чтения
+                try:
+                    acquire_file_lock(f, self.FILE_LOCK_TIMEOUT)
+                except FileLockTimeoutError:
+                    # Если не удалось получить блокировку, читаем без неё
+                    # (лучше прочитать без блокировки, чем вообще не прочитать)
+                    pass
+
+                try:
+                    for line in f:
+                        line = line.strip()
+                        # Ищем строки, начинающиеся с export и содержащие =
+                        if line.startswith("export ") and "=" in line:
+                            # Убираем "export "
+                            assignment = line[7:]
+                            # Разделяем на имя и значение (только по первому знаку =)
+                            key, value = assignment.split("=", 1)
+                            # Очищаем значение от кавычек
+                            value = value.strip('"').strip("'")
+                            self.local_env[key] = value
+                            # Добавляем в окружение процесса, чтобы subprocess видел их
+                            os.environ[key] = value
+                finally:
+                    # Всегда освобождаем блокировку, если получили её
+                    try:
+                        release_file_lock(f)
+                    except:
+                        pass
+
         except Exception as e:
             # Если файл есть, но прочитать не удалось, сообщаем
             self.add_block(InfoBlock(f"Error loading {self.FILE_BASHRC}: {e}"))
@@ -380,23 +537,50 @@ class CommandRunner(App):
             self.handle_normal_command(user_input)
 
     def log_to_history(self, command: str) -> None:
-        """Записывает команду в файл history.txt, исключая спецкоманды."""
+        """
+        Записывает команду в файл history.txt, исключая спецкоманды.
+
+        Использует file locking для безопасной записи при одновременной работе
+        нескольких копий приложения.
+        """
         prefixes = (self.PREFIX_CMD, self.PREFIX_QUERY, self.PREFIX_BANG, self.PREFIX_DOUBLE_BANG, self.PREFIX_TAG, self.PREFIX_PIPE, self.PREFIX_VAR)
         if command.startswith(prefixes):
             return
         last_command = None
         try:
             if os.path.exists(self.FILE_HISTORY):
-                with open(self.FILE_HISTORY, "r", encoding=self.ENCODING) as f:
-                    lines = f.readlines()
-                    if lines:
-                        last_command = lines[-1].strip()
+                try:
+                    with open(self.FILE_HISTORY, "r", encoding=self.ENCODING) as f:
+                        acquire_file_lock(f, self.FILE_LOCK_TIMEOUT)
+                        try:
+                            lines = f.readlines()
+                            if lines:
+                                last_command = lines[-1].strip()
+                        finally:
+                            release_file_lock(f)
+                except FileLockTimeoutError:
+                    # Если не получили блокировку для чтения, читаем без неё
+                    with open(self.FILE_HISTORY, "r", encoding=self.ENCODING) as f:
+                        lines = f.readlines()
+                        if lines:
+                            last_command = lines[-1].strip()
         except IOError:
             return
+
         if command != last_command:
             try:
                 with open(self.FILE_HISTORY, "a", encoding=self.ENCODING) as f:
-                    f.write(f"{command}\n")
+                    # Пытаемся получить блокировку для записи
+                    try:
+                        acquire_file_lock(f, self.FILE_LOCK_TIMEOUT)
+                        try:
+                            f.write(f"{command}\n")
+                        finally:
+                            release_file_lock(f)
+                    except FileLockTimeoutError:
+                        # Если не получили блокировку, пишем без неё
+                        # (лучше записать дубликат, чем потерять команду)
+                        f.write(f"{command}\n")
             except IOError:
                 pass
 
@@ -441,15 +625,18 @@ class CommandRunner(App):
         Обработка создания/обновления переменных.
         Синтаксис: $VAR_NAME=VALUE.
         Записывает в .bashrc_term и обновляет self.local_env.
+
+        Использует file locking для безопасной записи при одновременной работе
+        нескольких копий приложения.
         """
         assignment = user_input[1:].strip()
         parts = assignment.split('=', 1)
-        
+
         if len(parts) == 2:
             var_name, var_value = parts
             var_name = var_name.strip()
             var_value = var_value.strip()
-            
+
             # Простая валидация имени переменной
             if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', var_name):
                 self.add_block(InfoBlock(f"Error: Invalid variable name '{var_name}'."))
@@ -458,28 +645,46 @@ class CommandRunner(App):
             # Обновляем в памяти
             self.local_env[var_name] = var_value
             os.environ[var_name] = var_value
-            
-            # Перезаписываем файл
+
+            # Перезаписываем файл с блокировкой
             try:
                 lines = []
                 updated = False
+
+                # Читаем файл с блокировкой
                 if os.path.exists(self.FILE_BASHRC):
-                    with open(self.FILE_BASHRC, "r", encoding=self.ENCODING) as f:
-                        lines = f.readlines()
-                
-                with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f:
-                    for line in lines:
-                        # Если переменная уже есть в файле, обновляем её строку
-                        if line.startswith(f"export {var_name}="):
-                            f.write(f'export {var_name}="{var_value}"\n')
-                            updated = True
-                        else:
-                            f.write(line)
-                    # Если переменной не было, добавляем в конец
-                    if not updated:
-                        f.write(f'export {var_name}="{var_value}"\n')
-                
+                    try:
+                        with open(self.FILE_BASHRC, "r", encoding=self.ENCODING) as f_read:
+                            acquire_file_lock(f_read, self.FILE_LOCK_TIMEOUT)
+                            try:
+                                lines = f_read.readlines()
+                            finally:
+                                release_file_lock(f_read)
+                    except FileLockTimeoutError:
+                        # Если не получили блокировку для чтения, читаем без неё
+                        with open(self.FILE_BASHRC, "r", encoding=self.ENCODING) as f:
+                            lines = f.readlines()
+
+                # Пишем файл с блокировкой
+                with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f_write:
+                    acquire_file_lock(f_write, self.FILE_LOCK_TIMEOUT)
+                    try:
+                        for line in lines:
+                            # Если переменная уже есть в файле, обновляем её строку
+                            if line.startswith(f"export {var_name}="):
+                                f_write.write(f'export {var_name}="{var_value}"\n')
+                                updated = True
+                            else:
+                                f_write.write(line)
+                        # Если переменной не было, добавляем в конец
+                        if not updated:
+                            f_write.write(f'export {var_name}="{var_value}"\n')
+                    finally:
+                        release_file_lock(f_write)
+
                 self.add_block(InfoBlock(f"Variable ${var_name} set to '{var_value}'"))
+            except FileLockTimeoutError as e:
+                self.add_block(InfoBlock(f"Error: File is locked by another instance. {e}"))
             except Exception as e:
                 self.add_block(InfoBlock(f"Error setting variable: {e}"))
         else:
