@@ -111,7 +111,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.0.8" # Variables Support
+    VERSION = "v1.0.9" # Batch Commands with !!
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -136,6 +136,7 @@ class CommandRunner(App):
     PREFIX_TAG = "#"
     PREFIX_QUERY = "?"
     PREFIX_BANG = "!"
+    PREFIX_DOUBLE_BANG = "!!"
     PREFIX_PIPE = "|"
     PREFIX_VAR = "$" # Новый префикс для переменных
     
@@ -251,7 +252,7 @@ class CommandRunner(App):
     def compose(self) -> ComposeResult:
         """Построение UI."""
         yield Header()
-        yield Input(placeholder="Enter command, #tag, ?*, $VAR=val, or :q/:w", id=self.ID_INPUT)
+        yield Input(placeholder="Enter command, #tag, ?*, !!, $VAR=val, or :q/:w", id=self.ID_INPUT)
         yield VerticalScroll(id=self.ID_RESULTS_CONTAINER)
         yield Footer()
 
@@ -309,6 +310,8 @@ class CommandRunner(App):
             self.handle_save_command(user_input)
         elif user_input.startswith(self.PREFIX_QUERY):
             self.handle_query_command(user_input)
+        elif user_input.startswith(self.PREFIX_DOUBLE_BANG):
+            self.handle_double_bang_command(user_input)
         elif user_input.startswith(self.PREFIX_BANG):
             self.handle_bang_command(user_input)
         elif user_input.startswith(self.PREFIX_PIPE):
@@ -320,7 +323,7 @@ class CommandRunner(App):
 
     def log_to_history(self, command: str) -> None:
         """Записывает команду в файл history.txt, исключая спецкоманды."""
-        prefixes = (self.PREFIX_CMD, self.PREFIX_QUERY, self.PREFIX_BANG, self.PREFIX_TAG, self.PREFIX_PIPE, self.PREFIX_VAR)
+        prefixes = (self.PREFIX_CMD, self.PREFIX_QUERY, self.PREFIX_BANG, self.PREFIX_DOUBLE_BANG, self.PREFIX_TAG, self.PREFIX_PIPE, self.PREFIX_VAR)
         if command.startswith(prefixes):
             return
         last_command = None
@@ -532,6 +535,81 @@ class CommandRunner(App):
                 self.add_block(InfoBlock(f"Error: ID {cmd_id} not found in last query results."))
         else:
             self.add_block(InfoBlock("Invalid syntax. Use: ! <id>"))
+
+    def handle_double_bang_command(self, user_input: str) -> None:
+        """
+        Сборка нескольких команд по ID с разделителями (!! id1;id2|id3&&id4).
+        Поддерживает разделители: пробел, ; | && & > <
+        Вставляет собранную команду в строку ввода для выполнения.
+        """
+        command_part = user_input[2:].strip()  # Убираем "!!"
+
+        if not command_part:
+            self.add_block(InfoBlock("Invalid syntax. Use: !! <id1>;<id2>|<id3>..."))
+            return
+
+        # Допустимые разделители (в порядке убывания длины для корректного парсинга)
+        separators = ['&&', '||', ';', '|', '>', '<', '&']
+
+        # Парсим строку на токены
+        tokens = []
+        i = 0
+        current_token = ""
+
+        while i < len(command_part):
+            # Пропускаем пробелы (разделитель команд по умолчанию)
+            if command_part[i] == ' ':
+                if current_token:
+                    tokens.append(current_token)
+                    current_token = ""
+                i += 1
+                continue
+
+            # Проверяем разделители
+            matched_sep = None
+            for sep in separators:
+                if command_part[i:i+len(sep)] == sep:
+                    matched_sep = sep
+                    i += len(sep)
+                    break
+
+            if matched_sep:
+                # Сохраняем накопленный токен
+                if current_token:
+                    tokens.append(current_token)
+                    current_token = ""
+                # Добавляем разделитель
+                tokens.append(matched_sep)
+            else:
+                current_token += command_part[i]
+                i += 1
+
+        # Добавляем последний токен
+        if current_token:
+            tokens.append(current_token)
+
+        # Проверяем, что все ID валидны
+        cmd_parts = []
+        for token in tokens:
+            if token in separators:
+                cmd_parts.append(token)
+            else:
+                if not token.isdigit():
+                    self.add_block(InfoBlock(f"Error: Invalid ID '{token}'. Use: !! <id1>;<id2>..."))
+                    return
+                cmd_id = int(token)
+                if cmd_id not in self.last_query_results:
+                    self.add_block(InfoBlock(f"Error: ID {cmd_id} not found in last query results."))
+                    return
+                cmd_parts.append(self.last_query_results[cmd_id])
+
+        # Собираем итоговую команду с пробелами между частями
+        final_command = " ".join(cmd_parts)
+
+        # Вставляем в input как делает !
+        input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+        input_widget.value = final_command
+        input_widget.cursor_position = len(input_widget.value)
 
     def handle_pipe_command(self, user_input: str) -> None:
         """
