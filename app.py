@@ -111,7 +111,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.5" # Auto-resolve ! and !! references when saving commands
+    VERSION = "v1.1.6" # Fix :c command to use correct Textual API (child.remove)
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -309,9 +309,10 @@ class CommandRunner(App):
             # Получаем контейнер с результатами
             results_container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
 
-            # Удаляем все потомков (CommandBlock и InfoBlock)
+            # Удаляем всех потомков (CommandBlock и InfoBlock)
+            # В Textual нужно вызывать remove() на каждом потомке
             for child in list(results_container.children):
-                results_container.remove_child(child)
+                child.remove()
 
             self.add_block(InfoBlock("All blocks cleared."))
         except Exception as e:
