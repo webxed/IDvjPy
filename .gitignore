@@ -15,3 +15,5 @@ log*.txt
 lib64
 lib
 bin
+
+*_*.db
