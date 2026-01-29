@@ -450,7 +450,7 @@ class CommandRunner(App):
     def compose(self) -> ComposeResult:
         """Построение UI."""
         yield Header()
-        yield Input(placeholder="Enter command, #tag, ??, !!, $VAR=val, or :q/:w", id=self.ID_INPUT)
+        yield Input(placeholder="Enter command, #tag, #tag+, ??, !!, $VAR=val, or :q/:w", id=self.ID_INPUT)
         yield VerticalScroll(id=self.ID_RESULTS_CONTAINER)
         yield Footer()
 
@@ -749,20 +749,23 @@ class CommandRunner(App):
 
     def handle_save_command(self, user_input: str) -> None:
         """
-        Обработка сохранения, удаления команд и комментариев.
+        Обработка сохранения, удаления, редактирования команд и комментариев.
 
         Поддерживаемые форматы:
         - #tag <cmd>           - сохранить команду с тегом
         - #tag-                - удалить все команды с тегом
         - #tag-tid             - удалить конкретную команду по tid
+        - #tag+ID              - редактировать команду (v1.1.9+)
+        - #tag+                - редактировать последнюю команду тега (v1.1.9+)
         - #tag=comment         - установить комментарий к тегу
         - #tag=ID=comment      - установить комментарий к конкретной команде (v1.1.2+)
 
         Логика парсинга:
         1. Проверка на "=" с двумя знаками -> комментарий к команде
         2. Проверка на "=" с одним знаком -> комментарий к тегу
-        3. Проверка на "-" -> удаление команд
-        4. Иначе -> сохранение новой команды
+        3. Проверка на "+" -> редактирование команды
+        4. Проверка на "-" -> удаление команд
+        5. Иначе -> сохранение новой команды
         """
         content = user_input[1:].strip()
 
@@ -809,6 +812,58 @@ class CommandRunner(App):
                 except Exception as e:
                     self.add_block(InfoBlock(f"Database error: {e}"))
                 return
+
+        # === Секция 1.3: Редактирование команд ===
+        # Проверяем на наличие "+" после тега (редактирование)
+        # Формат: #tag+ID (редактировать команду) или #tag+ (редактировать последнюю)
+        if '+' in content:
+            parts = content.split('+', 1)
+            tag = parts[0].strip()
+            identifier = parts[1].strip() if len(parts) > 1 else None
+
+            if not tag:
+                self.add_block(InfoBlock("Invalid syntax. Use: #tag+<ID> to edit command"))
+                return
+
+            try:
+                if identifier and identifier.isdigit():
+                    # Редактирование конкретной команды: #deploy+2
+                    tid = int(identifier)
+                    result = database.get_command_by_tid(self.db_file, tag, tid)
+                    if result:
+                        command_text = result['command']
+                        # Вставляем команду в input для редактирования
+                        input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+                        input_widget.value = f"#{tag} {command_text}"
+                        input_widget.cursor_position = len(f"#{tag} ") + len(command_text)
+                        input_widget.focus()
+                        self.add_block(InfoBlock(f"Editing {tag}[{tid}]. Edit and press Enter to save."))
+                    else:
+                        self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
+                elif identifier is None or not identifier:
+                    # Редактирование последней команды тега: #deploy+
+                    # Получаем все команды тега и находим последнюю (по tid)
+                    all_commands = database.get_commands_by_tag(self.db_file, tag)
+                    active_commands = [cmd for cmd in all_commands if not cmd.get('deleted', False)]
+
+                    if active_commands:
+                        # Сортируем по tid убыванию и берем последнюю
+                        last_cmd = max(active_commands, key=lambda x: x['tid'])
+                        tid = last_cmd['tid']
+                        command_text = last_cmd['command']
+                        # Вставляем команду в input для редактирования
+                        input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+                        input_widget.value = f"#{tag} {command_text}"
+                        input_widget.cursor_position = len(f"#{tag} ") + len(command_text)
+                        input_widget.focus()
+                        self.add_block(InfoBlock(f"Editing {tag}[{tid}] (last command). Edit and press Enter to save."))
+                    else:
+                        self.add_block(InfoBlock(f"Error: No active commands found for tag '{tag}'"))
+                else:
+                    self.add_block(InfoBlock("Invalid syntax. Use: #tag+<ID> or #tag+ to edit"))
+            except Exception as e:
+                self.add_block(InfoBlock(f"Database error: {e}"))
+            return
 
         # === Секция 2: Обработка удаления команд ===
         # Проверяем на наличие дефиса (сигнал удаления)
