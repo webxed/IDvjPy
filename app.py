@@ -838,22 +838,11 @@ class CommandRunner(App):
         if len(parts) == 2:
             tag, command_to_save = parts
 
-            # v1.1.4+: Авто-раскрытие ссылок ! и !! в сохраняемой команде
-            # Это позволяет сохранять команды-ссылки, которые будут автоматически
-            # раскрываться в реальные команды при сохранении
-            original_command = command_to_save
-            resolved_command = self._resolve_command_references(command_to_save)
-
-            if resolved_command != original_command:
-                # Команда содержала ссылки, которые были раскрыты
-                command_to_save = resolved_command
-
+            # v1.1.9+: Сохраняем команду как есть, БЕЗ раскрытия ссылок
+            # Ссылки !tag[tid] и !ID будут раскрываться только при выполнении через !
             try:
                 tid = database.add_command(self.db_file, command_to_save, tag)
-                if resolved_command != original_command:
-                    self.add_block(InfoBlock(f"Saved: '{original_command}' → resolved to '{command_to_save}' as {tag}[{tid}]"))
-                else:
-                    self.add_block(InfoBlock(f"Saved: '{command_to_save}' as {tag}[{tid}]"))
+                self.add_block(InfoBlock(f"Saved: '{command_to_save}' as {tag}[{tid}]"))
             except Exception as e:
                 self.add_block(InfoBlock(f"Database error: {e}"))
         else:
