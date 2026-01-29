@@ -1,4 +1,4 @@
 # Maximum number of lines to keep in the output buffer.
 max_lines: 100000
 history_lines: 20
-database_tags_file: exeds_tags.db
+database_tags_file: history_v2.db

@@ -17,7 +17,7 @@ try:
     import datetime
     import os
     import pyperclip
-    import database
+    import database_v2 as database
     import threading
     import re
     from typing import List, Optional, Dict
@@ -111,7 +111,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.0.9" # Batch Commands with !!
+    VERSION = "v1.1.2" # Command comments with #tag=ID=<comment> syntax
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -185,6 +185,23 @@ class CommandRunner(App):
         # 3. Загрузка переменных из файла .bashrc_term
         self.load_bashrc()
         self.load_aliases()
+
+        # 4. Автоматическая загрузка всех команд для работы !!
+        self._populate_query_results()
+
+    def _populate_query_results(self) -> None:
+        """
+        Загружает все команды из БД в last_query_results для работы !! команды.
+        Выполняется автоматически при старте приложения.
+        """
+        try:
+            all_commands = database.get_all_commands_with_ids(self.db_file)
+            self.last_query_results = {}
+            for row in all_commands:
+                self.last_query_results[row['id']] = row['command']
+        except Exception as e:
+            # Если загрузить не удалось, просто оставляем пустым
+            self.last_query_results = {}
 
     def load_bashrc(self) -> None:
         """
@@ -427,19 +444,58 @@ class CommandRunner(App):
 
     def handle_save_command(self, user_input: str) -> None:
         """
-        Обработка сохранения и удаления команд по тегу.
-        #tag <cmd> - сохранить.
+        Обработка сохранения, удаления команд и комментариев.
+        #tag <cmd> - сохранить команду.
         #tag- - удалить все по тегу.
         #tag-ID - удалить конкретную команду.
+        #tag=comment - установить комментарий к тегу.
+        #tag=ID=comment - установить комментарий к конкретной команде.
         """
         content = user_input[1:].strip()
-        
+
+        # Проверяем на наличие "=" (комментарий к тегу или к команде)
+        if '=' in content and not content.startswith('-'):
+            # Проверяем, есть ли два "=" (комментарий к команде: #tag=ID=comment)
+            if content.count('=') >= 2:
+                parts = content.split('=', 2)
+                tag = parts[0].strip()
+                tid_str = parts[1].strip()
+                comment = parts[2].strip() if len(parts) > 2 else ""
+
+                if not tag or not tid_str.isdigit():
+                    self.add_block(InfoBlock("Invalid syntax. Use: #tag=ID=<comment>"))
+                    return
+
+                try:
+                    tid = int(tid_str)
+                    database.set_command_comment(self.db_file, tag, tid, comment)
+                    self.add_block(InfoBlock(f"Command {tag}[{tid}] comment set to: '{comment}'"))
+                except Exception as e:
+                    self.add_block(InfoBlock(f"Database error: {e}"))
+                return
+            else:
+                # Один "=" - комментарий к тегу: #tag=comment
+                parts = content.split('=', 1)
+                tag = parts[0].strip()
+                comment = parts[1].strip() if len(parts) > 1 else ""
+
+                if not tag:
+                    self.add_block(InfoBlock("Invalid syntax. Use: #tag=<comment>"))
+                    return
+
+                try:
+                    database.set_tag_comment(self.db_file, tag, comment)
+                    self.add_block(InfoBlock(f"Tag '{tag}' comment set to: '{comment}'"))
+                except Exception as e:
+                    self.add_block(InfoBlock(f"Database error: {e}"))
+                return
+
         # Проверяем на наличие дефиса (сигнал удаления)
         if '-' in content:
             parts = content.split('-', 1)
             tag = parts[0]
             identifier = parts[1]
-            
+
             try:
                 if not identifier:
                     # Случай: #deploy-
@@ -448,40 +504,54 @@ class CommandRunner(App):
                 elif identifier.isdigit():
                     # Случай: #deploy-5
                     cmd_id = int(identifier)
-                    database.delete_command_by_id(self.db_file, cmd_id)
-                    self.add_block(InfoBlock(f"Command with ID {cmd_id} marked as deleted."))
+                    database.delete_command_by_tid(self.db_file, tag, cmd_id)
+                    self.add_block(InfoBlock(f"Command {tag}[{cmd_id}] marked as deleted."))
                 else:
-                    self.add_block(InfoBlock("Invalid delete syntax. Use #tag- or #tag-ID"))
+                    self.add_block(InfoBlock("Invalid delete syntax. Use #tag- or #tag-tid"))
             except Exception as e:
                 self.add_block(InfoBlock(f"Database error: {e}"))
             return
 
-        # Если это не удаление, значит сохранение
+        # Если это не удаление и не комментарий, значит сохранение
         parts = content.split(maxsplit=1)
         if len(parts) == 2:
             tag, command_to_save = parts
             try:
-                database.add_command(self.db_file, command_to_save, tag)
-                self.add_block(InfoBlock(f"Saved: '{command_to_save}' with tag '{tag}'"))
+                tid = database.add_command(self.db_file, command_to_save, tag)
+                self.add_block(InfoBlock(f"Saved: '{command_to_save}' as {tag}[{tid}]"))
             except Exception as e:
                 self.add_block(InfoBlock(f"Database error: {e}"))
         else:
-            self.add_block(InfoBlock("Invalid syntax. Use: #tag <command>"))
+            self.add_block(InfoBlock("Invalid syntax. Use: #tag <command> or #tag=<comment>"))
 
     def handle_query_command(self, user_input: str) -> None:
         """
         Поиск команд в БД.
-        ? - список тегов.
+        ? - список тегов с комментариями.
         ?* - все команды.
         ?tag - команды по тегу.
         """
         tag_part = user_input[1:].strip()
-        self.last_query_results = {} 
+        self.last_query_results = {}
         try:
             if not tag_part:
                 tags = database.get_all_tags(self.db_file)
-                content = "Available tags:\n" + ("\n".join(f"  - {tag}" for tag in tags) if tags else "  (None found)")
+                tags_with_comments = database.get_all_tags_with_comments(self.db_file)
+                comments_dict = dict(tags_with_comments)
+
+                content = "Available tags:\n"
+                if tags:
+                    for tag in sorted(tags):
+                        comment = comments_dict.get(tag, "")
+                        if comment:
+                            content += f"  - {tag}: {comment}\n"
+                        else:
+                            content += f"  - {tag}\n"
+                else:
+                    content += "  (None found)"
+
                 content += "\n\nType `? <tag>` to see commands or `?*` to see all."
+                content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
             elif tag_part == '*':
                 # Вывод всех команд с группировкой по тегам
@@ -490,51 +560,101 @@ class CommandRunner(App):
                 commands_by_tag = {}
                 for row in all_commands:
                     tag = row['tag']
-                    cmd_id = row['id']
+                    global_id = row['id']
+                    tid = row['tid']
                     cmd_text = row['command']
+                    cmd_comment = row['comment'] if 'comment' in row.keys() else ''
                     if tag not in commands_by_tag:
                         commands_by_tag[tag] = []
-                    commands_by_tag[tag].append((cmd_id, cmd_text))
-                    # Заполняем словарь для быстрого выполнения через !
-                    self.last_query_results[cmd_id] = cmd_text
-                
+                    commands_by_tag[tag].append((global_id, tid, cmd_text, cmd_comment))
+                    # Сохраняем для быстрого доступа по глобальному ID
+                    self.last_query_results[global_id] = cmd_text
+
                 if not commands_by_tag:
                     content += "  (None found)"
                 else:
+                    # Получаем комментарии для всех тегов
+                    tags_with_comments = database.get_all_tags_with_comments(self.db_file)
+                    comments_dict = dict(tags_with_comments)
+
                     for tag, items in sorted(commands_by_tag.items()):
-                        content += f"\n- {tag}:\n"
-                        for cid, cmd in items:
-                            content += f"  [{cid}] {cmd}\n"
-                content += "\nUse `! <id>` to execute a command."
+                        comment = comments_dict.get(tag, "")
+                        if comment:
+                            content += f"\n- {tag} ({comment}):\n"
+                        else:
+                            content += f"\n- {tag}:\n"
+                        for gid, tid, cmd, cmd_comment in items:
+                            if cmd_comment:
+                                content += f"  [{gid}] {tag}[{tid}]  {cmd}  # {cmd_comment}\n"
+                            else:
+                                content += f"  [{gid}] {tag}[{tid}]  {cmd}\n"
+                content += "\nUse `!<tag>[<tid>]` or `!<id>` to execute a command."
+                content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
             else:
                 # Поиск по тегу
                 commands = database.get_commands_by_tag(self.db_file, tag_part)
-                content = f"Commands for tag '{tag_part}':\n"
+                comment = database.get_tag_comment(self.db_file, tag_part)
+                content = f"Commands for tag '{tag_part}'"
+                if comment:
+                    content += f" ({comment})"
+                content += ":\n"
                 if not commands:
                     content += "  (None found)"
                 else:
                     for row in commands:
                         self.last_query_results[row['id']] = row['command']
-                    content += "\n".join(f"  [{row['id']}] {row['command']}" for row in commands)
-                    content += "\n\nUse `! <id>` to execute."
+                    content += "\n".join(
+                        f"  [{row['id']}] {tag_part}[{row['tid']}]  {row['command']}" +
+                        (f"  # {row['comment']}" if 'comment' in row.keys() and row['comment'] else "")
+                        for row in commands
+                    )
+                    content += "\n\nUse `!{}[<tid>]` or `!<id>` to execute.".format(tag_part)
+                    content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
         except Exception as e:
             self.add_block(InfoBlock(f"Database error: {e}"))
 
     def handle_bang_command(self, user_input: str) -> None:
-        """Выполнение команды по ID из последнего поиска (!<id>)."""
+        """
+        Выполнение команды по ID.
+        Поддерживает два формата:
+        - !tag[tid] - по имени тега и локальному ID (новый)
+        - !ID - по глобальному ID (старый, для обратной совместимости)
+        """
         command_part = user_input[1:].strip()
-        if command_part.isdigit():
+
+        # Проверяем новый формат: !tag[tid]
+        if '[' in command_part and command_part.endswith(']'):
+            try:
+                # Парсим tag[tid]
+                tag, tid_part = command_part.split('[')
+                tid = int(tid_part[:-1])  # Убираем ']'
+
+                # Получаем команду из БД
+                result = database.get_command_by_tid(self.db_file, tag, tid)
+                if result:
+                    command_text = result['command']
+                    input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+                    input_widget.value = command_text
+                    input_widget.cursor_position = len(command_text)
+                else:
+                    self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
+            except (ValueError, IndexError):
+                self.add_block(InfoBlock("Invalid syntax. Use: !<tag>[<tid>] or !<id>"))
+        # Проверяем старый формат: !ID (цифра)
+        elif command_part.isdigit():
             cmd_id = int(command_part)
-            if cmd_id in self.last_query_results:
+            result = database.get_command_by_global_id(self.db_file, cmd_id)
+            if result:
+                command_text = result['command']
                 input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
-                input_widget.value = self.last_query_results[cmd_id]
-                input_widget.cursor_position = len(input_widget.value)
+                input_widget.value = command_text
+                input_widget.cursor_position = len(command_text)
             else:
-                self.add_block(InfoBlock(f"Error: ID {cmd_id} not found in last query results."))
+                self.add_block(InfoBlock(f"Error: Global ID {cmd_id} not found."))
         else:
-            self.add_block(InfoBlock("Invalid syntax. Use: ! <id>"))
+            self.add_block(InfoBlock("Invalid syntax. Use: !<tag>[<tid>] or !<id>"))
 
     def handle_double_bang_command(self, user_input: str) -> None:
         """
