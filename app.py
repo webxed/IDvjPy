@@ -983,19 +983,11 @@ class CommandRunner(App):
             self.add_block(InfoBlock("Invalid syntax. Use: !<tag>[<tid>] or !<id>"))
             return
 
-        # v1.1.9+: Если команда начинается с !!, раскрываем её сразу для удобства
-        # Это позволяет выполнять команды с !! одним нажатием Enter
-        if command_text.strip().startswith('!!'):
-            resolved = self._resolve_command_references(command_text)
-            # Вставляем раскрытую команду
-            input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
-            input_widget.value = resolved
-            input_widget.cursor_position = len(resolved)
-        else:
-            # Для обычных команд просто вставляем без изменения
-            input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
-            input_widget.value = command_text
-            input_widget.cursor_position = len(command_text)
+        # Вставляем команду в input БЕЗ раскрытия ссылок
+        # Раскрытие произойдёт автоматически в handle_normal_command при выполнении
+        input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+        input_widget.value = command_text
+        input_widget.cursor_position = len(command_text)
 
     def handle_double_bang_command(self, user_input: str) -> None:
         """
@@ -1123,12 +1115,12 @@ class CommandRunner(App):
         Обертка для выполнения обычной команды с обновлением истории.
 
         v1.1.9+: Автоматически раскрывает ссылки !tag[tid] и !ID перед выполнением.
-        Это позволяет выполнять команды, которые были сохранены с ссылками на другие команды.
+        Также раскрывает команды, начинающиеся с !!.
         """
-        # Проверяем, содержит ли команда ссылки !tag[tid] или !ID (но не !!)
+        # Проверяем, содержит ли команда ссылки (включая !!)
+        has_double_bang = command.strip().startswith('!!')
         import re
-        # Используем негативный lookbehind (?<!!) чтобы исключить !! из поиска
-        has_references = bool(re.search(r'(?<!!)!([a-zA-Z_0-9]+)\[(\d+)\]|(?<!!)!(\d+)', command))
+        has_references = has_double_bang or bool(re.search(r'(?<!!)!([a-zA-Z_0-9]+)\[(\d+)\]|(?<!!)!(\d+)', command))
 
         final_command = command
         if has_references:
