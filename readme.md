@@ -37,7 +37,9 @@ The application uses several command prefixes to unlock its features:
 | (none)    | `ls -l`               | Executes a standard shell command. Added to session history.              |
 | `#`       | `#git git status`     | Saves the command (`git status`) to the persistent history with a tag (`git`). |
 | `#tag-`   | `#git-`               | Marks all commands with the specified tag as deleted.                     |
-| `#tag-ID` | `#git-1`              | Marks a specific command with the given ID as deleted.                    |
+| `#tag-ID` | `#git-1`              | Marks a specific command by local ID as deleted.                           |
+| `#tag+ID`  | `#git+1`              | Edit a specific command by local ID (loads into input for editing).         |
+| `#tag+`   | `#git+`               | Edit the last command in the tag (highest local ID).                     |
 | `?`       | `?`                   | Shows a list of all unique tags saved in the history database.            |
 | `? <tag>` | `? git`               | Shows a list of all commands saved with the specified tag.                |
 | `??`      | `??`                  | Shows all commands from the database, grouped by tag.                     |

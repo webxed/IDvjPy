@@ -6,7 +6,8 @@ command_parser.py - Модуль для парсинга команд с под�
 - !ID - ссылка на команду по глобальному ID
 - !! tag[tid] operator tag[tid] - сборка команд с операторами
 
-v1.1.9-experimental - Альтернативная реализация парсера.
+v1.1.9 - Альтернативная реализация парсера (экспериментальная).
+Используйте command_parser_v2.py для продакшн-кода.
 """
 
 from typing import List, Tuple, Optional, Dict, Any
