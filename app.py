@@ -187,20 +187,40 @@ class CommandRunner(App):
         self.load_aliases()
 
         # 4. Автоматическая загрузка всех команд для работы !!
+        # Это позволяет использовать команду !! сразу после запуска без предварительного ?*
         self._populate_query_results()
 
     def _populate_query_results(self) -> None:
         """
         Загружает все команды из БД в last_query_results для работы !! команды.
-        Выполняется автоматически при старте приложения.
+
+        Этот метод вызывается автоматически при старте приложения в on_mount()
+        и заполняет словарь last_query_results всеми командами из базы данных.
+
+        Преимущества:
+        - Команда !! работает сразу после запуска без необходимости выполнять ?*
+        - Улучшает UX: пользователь может сразу собирать команды по ID
+
+        Структура last_query_results:
+        - Ключ: глобальный ID команды (int)
+        - Значение: текст команды (str)
+
+        Если загрузка не удалась, словарь остается пустым, и пользователю нужно
+        будет выполнить ?* или ?tag перед использованием !!.
         """
         try:
+            # Получаем все активные команды из базы данных
             all_commands = database.get_all_commands_with_ids(self.db_file)
+
+            # Очищаем и заполняем словарь результатов
             self.last_query_results = {}
             for row in all_commands:
+                # row['id'] - глобальный уникальный ID
+                # row['command'] - текст команды для выполнения
                 self.last_query_results[row['id']] = row['command']
         except Exception as e:
-            # Если загрузить не удалось, просто оставляем пустым
+            # Если база недоступна или есть ошибка, оставляем словарь пустым
+            # Пользователь увидит ошибку при попытке использовать !!
             self.last_query_results = {}
 
     def load_bashrc(self) -> None:
@@ -445,36 +465,51 @@ class CommandRunner(App):
     def handle_save_command(self, user_input: str) -> None:
         """
         Обработка сохранения, удаления команд и комментариев.
-        #tag <cmd> - сохранить команду.
-        #tag- - удалить все по тегу.
-        #tag-ID - удалить конкретную команду.
-        #tag=comment - установить комментарий к тегу.
-        #tag=ID=comment - установить комментарий к конкретной команде.
+
+        Поддерживаемые форматы:
+        - #tag <cmd>           - сохранить команду с тегом
+        - #tag-                - удалить все команды с тегом
+        - #tag-tid             - удалить конкретную команду по tid
+        - #tag=comment         - установить комментарий к тегу
+        - #tag=ID=comment      - установить комментарий к конкретной команде (v1.1.2+)
+
+        Логика парсинга:
+        1. Проверка на "=" с двумя знаками -> комментарий к команде
+        2. Проверка на "=" с одним знаком -> комментарий к тегу
+        3. Проверка на "-" -> удаление команд
+        4. Иначе -> сохранение новой команды
         """
         content = user_input[1:].strip()
 
+        # === Секция 1: Обработка комментариев ===
         # Проверяем на наличие "=" (комментарий к тегу или к команде)
         if '=' in content and not content.startswith('-'):
-            # Проверяем, есть ли два "=" (комментарий к команде: #tag=ID=comment)
+            # Подсекция 1.1: Комментарий к конкретной команде
+            # Формат: #tag=ID=comment (два знака "=")
             if content.count('=') >= 2:
+                # Парсим строку: tag=ID=comment -> [tag, ID, comment]
                 parts = content.split('=', 2)
                 tag = parts[0].strip()
                 tid_str = parts[1].strip()
                 comment = parts[2].strip() if len(parts) > 2 else ""
 
+                # Валидация: tag должен быть непустым, ID - числом
                 if not tag or not tid_str.isdigit():
                     self.add_block(InfoBlock("Invalid syntax. Use: #tag=ID=<comment>"))
                     return
 
                 try:
                     tid = int(tid_str)
+                    # Обновляем комментарий в БД
                     database.set_command_comment(self.db_file, tag, tid, comment)
                     self.add_block(InfoBlock(f"Command {tag}[{tid}] comment set to: '{comment}'"))
                 except Exception as e:
                     self.add_block(InfoBlock(f"Database error: {e}"))
                 return
+
+            # Подсекция 1.2: Комментарий к тегу
+            # Формат: #tag=comment (один знак "=")
             else:
-                # Один "=" - комментарий к тегу: #tag=comment
                 parts = content.split('=', 1)
                 tag = parts[0].strip()
                 comment = parts[1].strip() if len(parts) > 1 else ""
@@ -490,6 +525,7 @@ class CommandRunner(App):
                     self.add_block(InfoBlock(f"Database error: {e}"))
                 return
 
+        # === Секция 2: Обработка удаления команд ===
         # Проверяем на наличие дефиса (сигнал удаления)
         if '-' in content:
             parts = content.split('-', 1)
