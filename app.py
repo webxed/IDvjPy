@@ -45,8 +45,8 @@ try:
     import database_v2 as database
     import threading
     import re
-    import fcntl
     import time
+    import portalocker
     from typing import List, Optional, Dict
     from textual.app import App, ComposeResult
     from textual.widgets import Header, Footer, Input, Static
@@ -59,7 +59,7 @@ except ImportError as e:
 
 
 # ============================================================================
-# File Locking Utilities with Timeout
+# File Locking Utilities with Timeout (Cross-platform)
 # ============================================================================
 
 class FileLockTimeoutError(Exception):
@@ -69,7 +69,11 @@ class FileLockTimeoutError(Exception):
 
 def acquire_file_lock(file_obj, timeout_sec: int = 5) -> None:
     """
-    Acquire exclusive lock on file with timeout.
+    Acquire exclusive lock on file with timeout (cross-platform).
+
+    Uses portalocker for cross-platform file locking support:
+    - Linux/Unix: fcntl.flock()
+    - Windows: msvcrt.locking() or Win32 file locking
 
     Args:
         file_obj: Open file object (must be opened in a mode that allows locking)
@@ -84,39 +88,33 @@ def acquire_file_lock(file_obj, timeout_sec: int = 5) -> None:
     while True:
         try:
             # Try to acquire exclusive lock (non-blocking)
-            fcntl.flock(file_obj.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            portalocker.lock(file_obj, portalocker.LOCK_EX)
             return  # Lock acquired successfully
-        except IOError as e:
-            # Check if error is due to lock being held (EAGAIN on Linux, EACCES on some systems)
-            if e.errno in (errno.EAGAIN, errno.EACCES):
-                # Lock is held by another process
-                elapsed = time.time() - start_time
-                if elapsed >= timeout_sec:
-                    raise FileLockTimeoutError(
-                        f"Could not acquire file lock after {timeout_sec} seconds"
-                    )
-                # Wait a bit before retrying (100ms)
-                time.sleep(0.1)
-            else:
-                # Some other error occurred
-                raise
+        except portalocker.exceptions.LockException as e:
+            # Lock is held by another process
+            elapsed = time.time() - start_time
+            if elapsed >= timeout_sec:
+                raise FileLockTimeoutError(
+                    f"Could not acquire file lock after {timeout_sec} seconds"
+                )
+            # Wait a bit before retrying (100ms)
+            time.sleep(0.1)
+        except Exception as e:
+            # Some other error occurred
+            raise IOError(f"Failed to acquire file lock: {e}")
 
 
 def release_file_lock(file_obj) -> None:
     """
-    Release exclusive lock on file.
+    Release exclusive lock on file (cross-platform).
 
     Args:
         file_obj: Open file object
     """
     try:
-        fcntl.flock(file_obj.fileno(), fcntl.LOCK_UN)
-    except IOError:
+        portalocker.unlock(file_obj)
+    except Exception:
         pass  # Lock was already released or file was closed
-
-
-# Need to import errno for error checking
-import errno
 
 
 class CommandBlock(Static):
@@ -200,7 +198,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.7" # Add file locking and --instance-name support
+    VERSION = "v1.1.8" # Cross-platform file locking with portalocker
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
