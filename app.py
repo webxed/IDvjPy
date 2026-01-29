@@ -48,6 +48,7 @@ try:
     import time
     import portalocker
     from typing import List, Optional, Dict
+    from command_parser_v2 import CommandParser
     from textual.app import App, ComposeResult
     from textual.widgets import Header, Footer, Input, Static
     from textual.containers import VerticalScroll
@@ -249,6 +250,8 @@ class CommandRunner(App):
         self.local_env: Dict[str, str] = {}
         # Словарь для хранения алиасов {alias: command}
         self.aliases: Dict[str, str] = {}
+        # v1.1.9+: Парсер команд с поддержкой ссылок
+        self.command_parser = CommandParser()
 
     def on_mount(self) -> None:
         """
@@ -704,6 +707,8 @@ class CommandRunner(App):
         """
         Раскрывает ссылки на команды в строке (!tag[tid], !ID, !! ...).
 
+        v1.1.9+: Использует CommandParser для надежного разбора команд.
+
         Заменяет все вхождения:
         - !tag[tid] на текст команды из БД
         - !ID на текст команды из БД
@@ -715,155 +720,32 @@ class CommandRunner(App):
         Returns:
             Строка команды с раскрытыми ссылками
         """
-        result = command
-        resolved = True
+        # Парсим команду с помощью CommandParser
+        tokens = self.command_parser.parse(command)
 
-        # Раскрываем ссылки пока есть что раскрывать (максимум 10 итераций для защиты от циклов)
-        max_iterations = 10
-        iteration = 0
+        if not tokens:
+            return command
 
-        while resolved and iteration < max_iterations:
-            resolved = False
-            iteration += 1
-
-            import re
-
-            # 1. Сначала проверяем, начинается ли строка с !! (важно для handle_bang_command)
-            if result.strip().startswith('!!'):
-                try:
-                    # Извлекаем часть после !!
-                    double_bang_pattern = r'^!!\s+(.+)$'
-                    double_bang_match = re.match(double_bang_pattern, result.strip())
-
-                    if double_bang_match:
-                        # Собираем команду напрямую, без изменения input
-                        ids_part = double_bang_match.group(1).strip()
-                        resolved_cmd = self._assemble_command_from_ids(ids_part)
-
-                        if resolved_cmd:
-                            # Полностью заменяем результат
-                            result = resolved_cmd
-                            resolved = True
-                            continue
-                except Exception:
-                    # Если не удалось раскрыть, идем к шагу 2
-                    pass
-
-            # 2. Раскрываем !tag[tid] и !ID в середине/конце строки
-            # Ищем все вхождения !tag[tid] или !ID (исключаем !! через lookbehind)
-            single_bang_pattern = r'(?<!!)!([a-zA-Z_0-9]+)\[(\d+)\]|(?<!!)!(\d+)'
-            single_bang_matches = list(re.finditer(single_bang_pattern, result))
-
-            if single_bang_matches:
-                # Обрабатываем в обратном порядке, чтобы позиции не съезжали
-                for match in reversed(single_bang_matches):
-                    try:
-                        full_match = match.group(0)
-                        tag = match.group(1)
-                        tid_str = match.group(2)
-                        id_str = match.group(3)
-
-                        command_text = None
-
-                        # Формат !tag[tid]
-                        if tag and tid_str:
-                            tid = int(tid_str)
-                            db_result = database.get_command_by_tid(self.db_file, tag, tid)
-                            if db_result:
-                                command_text = db_result['command']
-                        # Формат !ID
-                        elif id_str:
-                            cmd_id = int(id_str)
-                            if cmd_id in self.last_query_results:
-                                command_text = self.last_query_results[cmd_id]
-                            else:
-                                db_result = database.get_command_by_global_id(self.db_file, cmd_id)
-                                if db_result:
-                                    command_text = db_result['command']
-
-                        if command_text:
-                            result = result[:match.start()] + command_text + result[match.end():]
-                            resolved = True
-                    except Exception:
-                        # Если не удалось раскрыть эту ссылку, пропускаем
-                        pass
-
-        return result
-
-    def _assemble_command_from_ids(self, ids_part: str) -> Optional[str]:
-        """
-        Собирает команду из списка ID с разделителями.
-        Используется для !! без изменения input.
-
-        Args:
-            ids_part: Строка с ID и разделителями, например "deploy[2] && deploy[3]"
-
-        Returns:
-            Собранная команда или None в случае ошибки
-        """
-        try:
-            import re
-
-            # Шаг 1: Находим все токены (tag[tid] или ID) и их позиции
-            token_pattern = r'[a-zA-Z_0-9]+\[\d+\]|\d+'
-            tokens = list(re.finditer(token_pattern, ids_part))
-
-            if not tokens:
-                return None
-
-            # Шаг 2: Получаем текст команд для каждого токена
-            parts = []
-            positions = []
-
-            for match in tokens:
-                token = match.group(0)
-                command_text = None
-
-                # Проверяем формат tag[tid]
-                tag_match = re.match(r'^([a-zA-Z_0-9]+)\[(\d+)\]$', token)
-                if tag_match:
-                    tag = tag_match.group(1)
-                    tid = int(tag_match.group(2))
-                    db_result = database.get_command_by_tid(self.db_file, tag, tid)
-                    if db_result:
-                        command_text = db_result['command']
-                # Проверяем формат ID (число)
-                elif token.isdigit():
-                    cmd_id = int(token)
-                    if cmd_id in self.last_query_results:
-                        command_text = self.last_query_results[cmd_id]
-                    else:
-                        db_result = database.get_command_by_global_id(self.db_file, cmd_id)
-                        if db_result:
-                            command_text = db_result['command']
-
-                if command_text is None:
-                    # Если хотя бы один ID не найден, возвращаем None
-                    return None
-
-                parts.append(command_text)
-                positions.append((match.start(), match.end()))
-
-            # Шаг 3: Собираем результат, сохраняя разделители из исходной строки
-            result = ''
-            last_end = 0
-
-            for i, (start, end) in enumerate(positions):
-                # Добавляем разделитель между токенами (если есть)
-                if i > 0:
-                    separator = ids_part[last_end:start].strip()
-                    if separator:
-                        result += ' ' + separator + ' '
-                    else:
-                        result += ' '
-
-                # Добавляем команду
-                result += parts[i]
-                last_end = end
-
-            return result.strip()
-        except Exception:
+        # Определяем функцию для получения команд из БД
+        def get_command(**kwargs) -> Optional[str]:
+            """Получает команду из БД по tag/tid или global_id."""
+            if 'tag' in kwargs and 'tid' in kwargs:
+                db_result = database.get_command_by_tid(
+                    self.db_file, kwargs['tag'], kwargs['tid']
+                )
+                return db_result['command'] if db_result else None
+            elif 'global_id' in kwargs:
+                cmd_id = kwargs['global_id']
+                if cmd_id in self.last_query_results:
+                    return self.last_query_results[cmd_id]
+                db_result = database.get_command_by_global_id(self.db_file, cmd_id)
+                return db_result['command'] if db_result else None
             return None
+
+        # Собираем команду, раскрывая ссылки
+        assembled = self.command_parser.assemble_command(tokens, get_command)
+
+        return assembled if assembled else command
 
     def handle_save_command(self, user_input: str) -> None:
         """
