@@ -12,9 +12,14 @@ __pycache__/
 history.txt
 log*.txt
 *.json
+*.csv
 lib64
 lib
 bin
 
 *_*.db
 todo.txt
+
+# Backups directory (keep contents but exclude from root patterns)
+!backups/*.json
+!backups/*.csv

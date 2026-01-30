@@ -2,3 +2,4 @@
 max_lines: 100000
 history_lines: 20
 database_tags_file: history_v2.db
+backup_dir: backups
