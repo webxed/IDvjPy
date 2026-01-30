@@ -524,9 +524,12 @@ class CommandRunner(App):
 
         self.log_to_history(user_input)
 
-        # v1.1.9+: Проверяем, содержит ли команда shell-операторы
-        # Если да, то даже с ! в начале это обычная команда (для раскрытия ссылок)
+        # v1.1.9+: Проверяем, содержит ли команда ссылки на другие команды
+        # Ссылки: !tag[tid] или !ID (но не !!)
         import re
+        has_command_refs = bool(re.search(r'(?<!!)!([a-zA-Z_0-9]+)\[(\d+)\]|(?<!!)!(\d+)', user_input))
+
+        # v1.1.9+: Проверяем, содержит ли команда shell-операторы
         has_shell_operators = bool(re.search(r'[&|;]', user_input))
 
         # Маршрутизация по префиксам
@@ -539,14 +542,27 @@ class CommandRunner(App):
         elif user_input.startswith(self.PREFIX_DOUBLE_BANG):
             self.handle_double_bang_command(user_input)
         elif user_input.startswith(self.PREFIX_BANG) and not has_shell_operators:
-            # Только если нет операторов - это одиночная команда !tag[tid] или !ID
+            # Одиночная команда !tag[tid] или !ID (без операторов)
             self.handle_bang_command(user_input)
         elif user_input.startswith(self.PREFIX_PIPE):
             self.handle_pipe_command(user_input)
         elif user_input.startswith(self.PREFIX_VAR):
             self.handle_variable_assignment(user_input)
+        elif has_command_refs:
+            # Команды с ссылками (!tag[tid] или !ID), даже с операторами
+            # Раскрываем ссылки и вставляем в input, НЕ выполняем
+            resolved_command = self._resolve_command_references(user_input)
+            if resolved_command and resolved_command != user_input:
+                # Ссылки были раскрыты - вставляем в input
+                input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+                input_widget.value = resolved_command
+                input_widget.cursor_position = len(resolved_command)
+                input_widget.focus()
+            else:
+                # Ошибка раскрытия или ссылки не найдены
+                self.handle_normal_command(user_input)
         else:
-            # Обычные команды, включая составные с !tag[tid] && !tag[tid]
+            # Обычные команды без ссылок
             self.handle_normal_command(user_input)
 
     def log_to_history(self, command: str) -> None:
