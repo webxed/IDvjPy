@@ -1048,11 +1048,12 @@ class CommandRunner(App):
                         else:
                             content += f"\n- {tag}:\n"
                         for gid, tid, cmd, cmd_comment in items:
+                            # Глобальный ID в угловых скобках с dim-стилем для менее яркого цвета
                             if cmd_comment:
-                                content += f"  [{gid}] {tag}[{tid}]  {cmd}  # {cmd_comment}\n"
+                                content += f"  [dim]<{gid}>[/] {tag}[{tid}]  {cmd}  # {cmd_comment}\n"
                             else:
-                                content += f"  [{gid}] {tag}[{tid}]  {cmd}\n"
-                content += "\nUse `!<tag>[<tid>]` or `!<id>` to execute a command."
+                                content += f"  [dim]<{gid}>[/] {tag}[{tid}]  {cmd}\n"
+                content += "\nUse `!<tag>[<tid>]` or `!<<id>>` to execute a command."
                 content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
             else:
@@ -1069,11 +1070,11 @@ class CommandRunner(App):
                     for row in commands:
                         self.last_query_results[row['id']] = row['command']
                     content += "\n".join(
-                        f"  [{row['id']}] {tag_part}[{row['tid']}]  {row['command']}" +
+                        f"  [dim]<{row['id']}>[/] {tag_part}[{row['tid']}]  {row['command']}" +
                         (f"  # {row['comment']}" if 'comment' in row.keys() and row['comment'] else "")
                         for row in commands
                     )
-                    content += "\n\nUse `!{}[<tid>]` or `!<id>` to execute.".format(tag_part)
+                    content += "\n\nUse `!{}[<tid>]` or `!<<id>>` to execute.".format(tag_part)
                     content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
         except Exception as e:
