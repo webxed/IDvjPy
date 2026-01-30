@@ -577,8 +577,8 @@ class CommandRunner(App):
         """
         import re
         # Удаляем все теги разметки Textual
-        # Шаблон для тегов: [tag] и [/tag]
-        pattern = r'\[/?[\w\-=]+\]'
+        # Шаблон захватывает: [tag], [/], [/tag], [link]text[/link]
+        pattern = r'\[\/?\w*\]'
         return re.sub(pattern, '', text)
 
     def action_copy_block(self) -> None:
