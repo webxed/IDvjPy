@@ -24,3 +24,16 @@ CommandBlock, InfoBlock {
 CommandBlock:focus, InfoBlock:focus {
     background: $primary-lighten-2;
 }
+
+/* Стили для кликабельных ссылок на команды */
+.link {
+    text-style: bold;
+    color: $accent;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.link:hover {
+    background: $accent-lighten-2;
+    text-style: bold underline;
+}

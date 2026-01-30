@@ -51,7 +51,7 @@ try:
     from command_parser_v2 import CommandParser
     from textual.app import App, ComposeResult
     from textual.widgets import Header, Footer, Input, Static
-    from textual.containers import VerticalScroll
+    from textual.containers import VerticalScroll, Vertical
 except ImportError as e:
     print(f"Error: Missing dependency - {e}", file=sys.stderr)
     print("Please install required dependencies:", file=sys.stderr)
@@ -169,6 +169,33 @@ class CommandBlock(Static):
         """
         if hasattr(self.app, 'active_pipe_source'):
             self.app.active_pipe_source = self
+
+class ClickableCommand(Static):
+    """Кликабельный виджет для отображения команды с возможностью клика."""
+
+    def __init__(self, command_ref: str, tag: str, tid: int, **kwargs):
+        """
+        Инициализация кликабельной команды.
+
+        Args:
+            command_ref: Ссылка на команду (например, "!deploy[2]")
+            tag: Имя тега
+            tid: Локальный ID
+        """
+        self.command_ref = command_ref
+        self.tag = tag
+        self.tid = tid
+        super().__init__(command_ref, **kwargs)
+
+    def on_click(self, event) -> None:
+        """Обработчик клика - вставляет команду в input."""
+        app = self.app
+        if hasattr(app, 'query_one'):
+            input_widget = app.query_one(f"#{app.ID_INPUT}", Input)
+            input_widget.value = self.command_ref
+            input_widget.cursor_position = len(self.command_ref)
+            input_widget.focus()
+        return False
 
 class InfoBlock(Static):
     """Виджет для отображения информационных сообщений (не от команд)."""
@@ -483,6 +510,13 @@ class CommandRunner(App):
     def action_focus_input(self) -> None:
         """Переводит фокус в строку ввода."""
         self.query_one(f"#{self.ID_INPUT}", Input).focus()
+
+    def action_insert_command(self, command: str) -> None:
+        """Вставляет команду в строку ввода и переносит фокус."""
+        input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+        input_widget.value = command
+        input_widget.cursor_position = len(command)
+        input_widget.focus()
 
     def clear_all_blocks(self) -> None:
         """
@@ -1015,6 +1049,7 @@ class CommandRunner(App):
                     content += "  (None found)"
 
                 content += "\n\nType `? <tag>` to see commands or `??` to see all."
+                content += "\n💡 Tip: Click on [bold]tag[tid][/bold] commands to insert them into input."
                 content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
             elif tag_part == '?':
@@ -1049,11 +1084,14 @@ class CommandRunner(App):
                             content += f"\n- {tag}:\n"
                         for gid, tid, cmd, cmd_comment in items:
                             # Глобальный ID в угловых скобках с dim-стилем для менее яркого цвета
+                            # tag[tid] - кликабельная ссылка
+                            cmd_link = f"!{tag}[{tid}]"
                             if cmd_comment:
-                                content += f"  [dim]<{gid}>[/] {tag}[{tid}]  {cmd}  # {cmd_comment}\n"
+                                content += f"  [dim]<{gid}>[/] [link=@action_insert_command('{cmd_link}')]{tag}[{tid}][/link]  {cmd}  # {cmd_comment}\n"
                             else:
-                                content += f"  [dim]<{gid}>[/] {tag}[{tid}]  {cmd}\n"
+                                content += f"  [dim]<{gid}>[/] [link=@action_insert_command('{cmd_link}')]{tag}[{tid}][/link]  {cmd}\n"
                 content += "\nUse `!<tag>[<tid>]` or `!<<id>>` to execute a command."
+                content += "\n💡 Click on [bold]tag[tid][/bold] to insert into input."
                 content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
             else:
@@ -1069,12 +1107,14 @@ class CommandRunner(App):
                 else:
                     for row in commands:
                         self.last_query_results[row['id']] = row['command']
-                    content += "\n".join(
-                        f"  [dim]<{row['id']}>[/] {tag_part}[{row['tid']}]  {row['command']}" +
-                        (f"  # {row['comment']}" if 'comment' in row.keys() and row['comment'] else "")
-                        for row in commands
-                    )
+                    lines = []
+                    for row in commands:
+                        cmd_link = f"!{tag_part}[{row['tid']}]"
+                        comment_part = f"  # {row['comment']}" if 'comment' in row.keys() and row['comment'] else ""
+                        lines.append(f"  [dim]<{row['id']}>[/] [link=@action_insert_command('{cmd_link}')]{tag_part}[{row['tid']}][/link]  {row['command']}{comment_part}")
+                    content += "\n".join(lines)
                     content += "\n\nUse `!{}[<tid>]` or `!<<id>>` to execute.".format(tag_part)
+                    content += "\n💡 Click on [bold]{}[tid][/bold] to insert into input.".format(tag_part)
                     content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
         except Exception as e:
