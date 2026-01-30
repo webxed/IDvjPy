@@ -567,7 +567,9 @@ class CommandRunner(App):
         """
         Удаляет теги форматирования Textual из текста.
 
-        Удаляет теги вида: [dim], [/], [bold], [/bold], [link], [/link] и т.д.
+        Удаляет только известные теги: [dim], [/], [bold], [/bold], [italic], [/italic],
+        [underline], [/underline], [strike], [/strike], [code], [/code] и т.д.
+        НЕ трогает содержимое в квадратных скобках: <1>, [1], deploy[tid] и т.д.
 
         Args:
             text: Текст с тегами форматирования
@@ -576,9 +578,12 @@ class CommandRunner(App):
             Текст без тегов форматирования
         """
         import re
-        # Удаляем все теги разметки Textual
-        # Шаблон захватывает: [tag], [/], [/tag], [link]text[/link]
-        pattern = r'\[\/?\w*\]'
+        # Список известных тегов форматирования Textual
+        formatting_tags = ['dim', 'bold', 'italic', 'underline', 'strike', 'code',
+                          'link', 'inverse', 'on', 'off']
+
+        # Создаем паттерн для удаления: [tag], [/tag] или [/]
+        pattern = r'\[(?:\/)?(?:' + '|'.join(formatting_tags) + r')\]|\[\/\]'
         return re.sub(pattern, '', text)
 
     def action_copy_block(self) -> None:
