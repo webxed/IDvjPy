@@ -552,15 +552,36 @@ class CommandRunner(App):
             # Команды с ссылками (!tag[tid] или !ID), даже с операторами
             # Раскрываем ссылки и вставляем в input, НЕ выполняем
             resolved_command = self._resolve_command_references(user_input)
-            if resolved_command and resolved_command != user_input:
+            if resolved_command:
                 # Ссылки были раскрыты - вставляем в input
                 input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
                 input_widget.value = resolved_command
                 input_widget.cursor_position = len(resolved_command)
                 input_widget.focus()
+                return  # Важно: не выполняем команду
             else:
-                # Ошибка раскрытия или ссылки не найдены
-                self.handle_normal_command(user_input)
+                # Ошибка раскрытия - показываем сообщение пользователю
+                # Пытаемся определить, какие именно команды не найдены
+                import re
+                not_found = []
+                # Ищем все !tag[tid] ссылки
+                for match in re.finditer(r'!([a-zA-Z_0-9]+)\[(\d+)\]', user_input):
+                    tag, tid = match.group(1), int(match.group(2))
+                    result = database.get_command_by_tid(self.db_file, tag, tid)
+                    if not result:
+                        not_found.append(f"{tag}[{tid}]")
+                # Ищем все !ID ссылки (которые не !! в начале)
+                for match in re.finditer(r'(?<!!)!(\d+)', user_input):
+                    gid = int(match.group(1))
+                    result = database.get_command_by_global_id(self.db_file, gid)
+                    if not result:
+                        not_found.append(f"!{gid}")
+
+                if not_found:
+                    self.add_block(InfoBlock(f"Error: Commands not found: {', '.join(not_found)}"))
+                else:
+                    self.add_block(InfoBlock("Error: Unable to resolve command references."))
+                return
         else:
             # Обычные команды без ссылок
             self.handle_normal_command(user_input)
@@ -734,13 +755,13 @@ class CommandRunner(App):
             command: Строка команды с возможными ссылками
 
         Returns:
-            Строка команды с раскрытыми ссылками
+            Строка команды с раскрытыми ссылками или None при ошибке
         """
         # Парсим команду с помощью CommandParser
         tokens = self.command_parser.parse(command)
 
         if not tokens:
-            return command
+            return None
 
         # Определяем функцию для получения команд из БД
         def get_command(**kwargs) -> Optional[str]:
@@ -752,16 +773,20 @@ class CommandRunner(App):
                 return db_result['command'] if db_result else None
             elif 'global_id' in kwargs:
                 cmd_id = kwargs['global_id']
+                # Сначала проверяем в last_query_results (от команды ?)
                 if cmd_id in self.last_query_results:
                     return self.last_query_results[cmd_id]
+                # Если нет, ищем в БД по глобальному ID
                 db_result = database.get_command_by_global_id(self.db_file, cmd_id)
-                return db_result['command'] if db_result else None
+                if db_result:
+                    return db_result['command']
+                return None
             return None
 
         # Собираем команду, раскрывая ссылки
         assembled = self.command_parser.assemble_command(tokens, get_command)
 
-        return assembled if assembled else command
+        return assembled
 
     def handle_save_command(self, user_input: str) -> None:
         """
@@ -1203,27 +1228,13 @@ class CommandRunner(App):
         """
         Обертка для выполнения обычной команды с обновлением истории.
 
-        v1.1.9+: Автоматически раскрывает ссылки !tag[tid] и !ID перед выполнением.
-        Также раскрывает команды, начинающиеся с !!.
+        v1.1.9+: Раскрытие ссылок !tag[tid] и !ID происходит в on_input_submitted,
+        поэтому здесь мы просто выполняем уже раскрытую команду.
         """
-        # Проверяем, содержит ли команда ссылки (включая !!)
-        has_double_bang = command.strip().startswith('!!')
-        import re
-        has_references = has_double_bang or bool(re.search(r'(?<!!)!([a-zA-Z_0-9]+)\[(\d+)\]|(?<!!)!(\d+)', command))
-
-        final_command = command
-        if has_references:
-            # Раскрываем ссылки перед выполнением
-            original_command = command
-            final_command = self._resolve_command_references(command)
-            if final_command != original_command:
-                # Ссылки были раскрыты
-                pass  # Можно добавить логирование при необходимости
-
         if command not in self.session_history:
             self.session_history.append(command)
         self.session_history_pos = len(self.session_history)
-        self.run_command(final_command, stdin_data)
+        self.run_command(command, stdin_data)
 
     def action_history_prev(self) -> None:
         """Навигация истории назад."""
