@@ -226,7 +226,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.8" # Cross-platform file locking with portalocker
+    VERSION = "v1.1.9" # Fix clickable commands with lookup table approach
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
