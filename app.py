@@ -511,12 +511,22 @@ class CommandRunner(App):
         """Переводит фокус в строку ввода."""
         self.query_one(f"#{self.ID_INPUT}", Input).focus()
 
-    def action_insert_command(self, command: str) -> None:
-        """Вставляет команду в строку ввода и переносит фокус."""
-        input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
-        input_widget.value = command
-        input_widget.cursor_position = len(command)
-        input_widget.focus()
+    # Словарь для хранения команд, доступных для клика
+    _clickable_commands: Dict[str, str] = {}
+
+    def action_insert_command(self, command_key: str) -> None:
+        """
+        Вставляет команду в строку ввода по ключу.
+
+        Args:
+            command_key: Ключ команды в словаре _clickable_commands
+        """
+        command = self._clickable_commands.get(command_key, "")
+        if command:
+            input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+            input_widget.value = command
+            input_widget.cursor_position = len(command)
+            input_widget.focus()
 
     def clear_all_blocks(self) -> None:
         """
@@ -1031,6 +1041,9 @@ class CommandRunner(App):
         """
         tag_part = user_input[1:].strip()
         self.last_query_results = {}
+        # Очищаем словарь кликабельных команд перед новым запросом
+        self._clickable_commands = {}
+
         try:
             if not tag_part:
                 tags = database.get_all_tags(self.db_file)
@@ -1085,11 +1098,14 @@ class CommandRunner(App):
                         for gid, tid, cmd, cmd_comment in items:
                             # Глобальный ID в угловых скобках с dim-стилем для менее яркого цвета
                             # tag[tid] - кликабельная ссылка
-                            cmd_link = f"!{tag}[{tid}]"
+                            cmd_ref = f"!{tag}[{tid}]"
+                            cmd_key = f"{tag}_{tid}"
+                            # Сохраняем команду в словаре для клика
+                            self._clickable_commands[cmd_key] = cmd_ref
                             if cmd_comment:
-                                content += f"  [dim]<{gid}>[/] [link=@action_insert_command('{cmd_link}')]{tag}[{tid}][/link]  {cmd}  # {cmd_comment}\n"
+                                content += f"  [dim]<{gid}>[/] [link=@action_insert_command({cmd_key})]{tag}[{tid}][/link]  {cmd}  # {cmd_comment}\n"
                             else:
-                                content += f"  [dim]<{gid}>[/] [link=@action_insert_command('{cmd_link}')]{tag}[{tid}][/link]  {cmd}\n"
+                                content += f"  [dim]<{gid}>[/] [link=@action_insert_command({cmd_key})]{tag}[{tid}][/link]  {cmd}\n"
                 content += "\nUse `!<tag>[<tid>]` or `!<<id>>` to execute a command."
                 content += "\n💡 Click on [bold]tag[tid][/bold] to insert into input."
                 content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
@@ -1109,9 +1125,12 @@ class CommandRunner(App):
                         self.last_query_results[row['id']] = row['command']
                     lines = []
                     for row in commands:
-                        cmd_link = f"!{tag_part}[{row['tid']}]"
+                        cmd_ref = f"!{tag_part}[{row['tid']}]"
+                        cmd_key = f"{tag_part}_{row['tid']}"
+                        # Сохраняем команду в словаре для клика
+                        self._clickable_commands[cmd_key] = cmd_ref
                         comment_part = f"  # {row['comment']}" if 'comment' in row.keys() and row['comment'] else ""
-                        lines.append(f"  [dim]<{row['id']}>[/] [link=@action_insert_command('{cmd_link}')]{tag_part}[{row['tid']}][/link]  {row['command']}{comment_part}")
+                        lines.append(f"  [dim]<{row['id']}>[/] [link=@action_insert_command({cmd_key})]{tag_part}[{row['tid']}][/link]  {row['command']}{comment_part}")
                     content += "\n".join(lines)
                     content += "\n\nUse `!{}[<tid>]` or `!<<id>>` to execute.".format(tag_part)
                     content += "\n💡 Click on [bold]{}[tid][/bold] to insert into input.".format(tag_part)
