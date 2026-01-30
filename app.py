@@ -563,12 +563,32 @@ class CommandRunner(App):
         """Очищает подзаголовок (статус-бар)."""
         self.sub_title = ""
 
+    def _strip_formatting_tags(self, text: str) -> str:
+        """
+        Удаляет теги форматирования Textual из текста.
+
+        Удаляет теги вида: [dim], [/], [bold], [/bold], [link], [/link] и т.д.
+
+        Args:
+            text: Текст с тегами форматирования
+
+        Returns:
+            Текст без тегов форматирования
+        """
+        import re
+        # Удаляем все теги разметки Textual
+        # Шаблон для тегов: [tag] и [/tag]
+        pattern = r'\[/?[\w\-=]+\]'
+        return re.sub(pattern, '', text)
+
     def action_copy_block(self) -> None:
         """Копирует содержимое сфокусированного блока в буфер обмена."""
         focused = self.focused
         if isinstance(focused, (CommandBlock, InfoBlock)):
             try:
-                pyperclip.copy(focused.text_content)
+                # Удаляем теги форматирования перед копированием
+                clean_text = self._strip_formatting_tags(focused.text_content)
+                pyperclip.copy(clean_text)
                 self.sub_title = self.MSG_COPIED
                 self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
             except Exception:
@@ -717,7 +737,10 @@ class CommandRunner(App):
                 filename = parts[1]
                 try:
                     all_blocks = self.query("CommandBlock, InfoBlock")
-                    content_to_write = "\n\n---\n\n".join(block.text_content for block in all_blocks)
+                    # Удаляем теги форматирования перед записью
+                    content_to_write = "\n\n---\n\n".join(
+                        self._strip_formatting_tags(block.text_content) for block in all_blocks
+                    )
                     with open(filename, "a", encoding=self.ENCODING) as f:
                         f.write(content_to_write)
                     self.add_block(InfoBlock(f"Log content written to '{filename}'"))
