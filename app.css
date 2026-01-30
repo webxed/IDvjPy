@@ -29,11 +29,10 @@ CommandBlock:focus, InfoBlock:focus {
 .link {
     text-style: bold;
     color: $accent;
-    cursor: pointer;
-    text-decoration: underline;
+    background: $primary-lighten-3;
 }
 
 .link:hover {
     background: $accent-lighten-2;
-    text-style: bold underline;
+    text-style: bold;
 }
