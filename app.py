@@ -141,7 +141,7 @@ class CommandBlock(Static):
             f"CompletedProcess(returncode={self.return_code}, "
             f"stdout='{self.raw_stdout}', stderr='{self.raw_stderr}')"
         )
-        self.text_content = f"{self.header}\n{display_output}".rstrip() + "\n"
+        self.text_content = f"{self.header}\n{display_output}".rstrip() + "\n\n"
         
         super().__init__(self.text_content, **kwargs)
         self.can_focus = True
@@ -159,7 +159,7 @@ class CommandBlock(Static):
             f"CompletedProcess(returncode={self.return_code}, "
             f"stdout='{self.raw_stdout}', stderr='{self.raw_stderr}')"
         )
-        final_content = f"{self.header}\n{display_output}".rstrip() + "\n"
+        final_content = f"{self.header}\n{display_output}".rstrip() + "\n\n"
         self.update(final_content)
 
     def on_focus(self) -> None:
@@ -172,16 +172,16 @@ class CommandBlock(Static):
 
 class InfoBlock(Static):
     """Виджет для отображения информационных сообщений (не от команд)."""
-    
+
     def __init__(self, text_content: str, **kwargs):
         """
         Инициализация информационного блока.
-        
+
         Args:
             text_content: Текст для отображения.
         """
-        self.text_content = text_content
-        super().__init__(text_content, **kwargs)
+        self.text_content = text_content.rstrip() + "\n\n"
+        super().__init__(self.text_content, **kwargs)
         self.can_focus = True
 
 class CommandRunner(App):
@@ -275,6 +275,18 @@ class CommandRunner(App):
         except Exception as e:
             self.sub_title = f"DB Error: {e}"
             self.set_timer(5, self.clear_subtitle)
+
+        # 2.5. Миграция .bashrc_term -> .bashrc_term_{INSTANCE_NAME} для обратной совместимости
+        if INSTANCE_NAME != "default":
+            # Если существует старый .bashrc_term и нет нового с суффиксом, копируем
+            if os.path.exists(".bashrc_term") and not os.path.exists(self.FILE_BASHRC):
+                try:
+                    import shutil
+                    shutil.copy(".bashrc_term", self.FILE_BASHRC)
+                    self.add_block(InfoBlock(f"Migrated .bashrc_term -> {self.FILE_BASHRC}"))
+                    self.set_timer(3, self.clear_subtitle)
+                except Exception as e:
+                    pass  # Ошибка миграции не критична
 
         # 3. Загрузка переменных из файла .bashrc_term
         self.load_bashrc()
@@ -380,35 +392,49 @@ class CommandRunner(App):
                 return
 
         try:
-            with open(self.FILE_BASHRC, "r", encoding=self.ENCODING) as f:
-                # Пытаемся получить блокировку для чтения
-                try:
-                    acquire_file_lock(f, self.FILE_LOCK_TIMEOUT)
-                except FileLockTimeoutError:
-                    # Если не удалось получить блокировку, читаем без неё
-                    # (лучше прочитать без блокировки, чем вообще не прочитать)
-                    pass
+            # Пытаемся прочитать из файлов по порядку
+            # Приоритет: .bashrc_term_{INSTANCE_NAME}, затем .bashrc_term (для обратной совместимости)
+            bashrc_files = [self.FILE_BASHRC]
+            if self.FILE_BASHRC != ".bashrc_term" and os.path.exists(".bashrc_term"):
+                bashrc_files.append(".bashrc_term")
 
-                try:
-                    for line in f:
-                        line = line.strip()
-                        # Ищем строки, начинающиеся с export и содержащие =
-                        if line.startswith("export ") and "=" in line:
-                            # Убираем "export "
-                            assignment = line[7:]
-                            # Разделяем на имя и значение (только по первому знаку =)
-                            key, value = assignment.split("=", 1)
-                            # Очищаем значение от кавычек
-                            value = value.strip('"').strip("'")
-                            self.local_env[key] = value
-                            # Добавляем в окружение процесса, чтобы subprocess видел их
-                            os.environ[key] = value
-                finally:
-                    # Всегда освобождаем блокировку, если получили её
+            for bashrc_file in bashrc_files:
+                if not os.path.exists(bashrc_file):
+                    continue
+
+                with open(bashrc_file, "r", encoding=self.ENCODING) as f:
+                    # Пытаемся получить блокировку для чтения
                     try:
-                        release_file_lock(f)
-                    except:
+                        acquire_file_lock(f, self.FILE_LOCK_TIMEOUT)
+                    except FileLockTimeoutError:
+                        # Если не удалось получить блокировку, читаем без неё
+                        # (лучше прочитать без блокировки, чем вообще не прочитать)
                         pass
+
+                    try:
+                        for line in f:
+                            line = line.strip()
+                            # Ищем строки, начинающиеся с export и содержащие =
+                            if line.startswith("export ") and "=" in line:
+                                # Убираем "export "
+                                assignment = line[7:]
+                                # Разделяем на имя и значение (только по первому знаку =)
+                                key, value = assignment.split("=", 1)
+                                # Очищаем значение от кавычек
+                                value = value.strip('"').strip("'")
+                                self.local_env[key] = value
+                                # Добавляем в окружение процесса, чтобы subprocess видел их
+                                os.environ[key] = value
+                    finally:
+                        # Всегда освобождаем блокировку, если получили её
+                        try:
+                            release_file_lock(f)
+                        except:
+                            pass
+
+                # Если нашли файл и прочитали переменные, выходим (приоритет первому файлу)
+                if self.local_env:
+                    break
 
         except Exception as e:
             # Если файл есть, но прочитать не удалось, сообщаем
