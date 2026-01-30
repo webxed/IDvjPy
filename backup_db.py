@@ -245,6 +245,7 @@ def import_db(db_file: str, input_file: str, mode: str = 'merge',
     # Import commands
     for cmd_data in commands:
         try:
+            cmd_id = cmd_data.get('id')
             tag = cmd_data.get('tag')
             tid = cmd_data.get('tid')
             command = cmd_data.get('command')
@@ -278,20 +279,40 @@ def import_db(db_file: str, input_file: str, mode: str = 'merge',
                     tid = new_tid
                     tid_conflicts += 1
 
-            # Insert command (ignore constraint violations if tid exists)
+            # Insert command with original ID to preserve global IDs
             try:
                 conn.execute(
-                    """INSERT INTO commands (tag, tid, command, timestamp, deleted, comment)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
-                    (tag, tid, command, timestamp, deleted, comment)
+                    """INSERT INTO commands (id, tag, tid, command, timestamp, deleted, comment)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (cmd_id, tag, tid, command, timestamp, deleted, comment)
                 )
                 imported += 1
             except sqlite3.IntegrityError:
-                # UNIQUE constraint failed - tag+tid already exists
-                if preserve_tid and mode == 'merge':
-                    skipped += 1
+                # UNIQUE constraint failed - id or tag+tid already exists
+                # If id conflict exists, try updating instead
+                if cmd_id:
+                    cursor = conn.execute(
+                        "SELECT id FROM commands WHERE id = ?",
+                        (cmd_id,)
+                    )
+                    if cursor.fetchone():
+                        # Update existing record by id
+                        conn.execute(
+                            """UPDATE commands SET tag = ?, tid = ?, command = ?, timestamp = ?, deleted = ?, comment = ?
+                               WHERE id = ?""",
+                            (tag, tid, command, timestamp, deleted, comment, cmd_id)
+                        )
+                        updated += 1
+                    else:
+                        if preserve_tid and mode == 'merge':
+                            skipped += 1
+                        else:
+                            errors += 1
                 else:
-                    errors += 1
+                    if preserve_tid and mode == 'merge':
+                        skipped += 1
+                    else:
+                        errors += 1
 
         except Exception as e:
             print(f"✗ Error importing command: {e}", file=sys.stderr)
