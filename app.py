@@ -1099,7 +1099,7 @@ class CommandRunner(App):
                                 content += f"  [dim]<{gid}>[/] [bold]{tag}[{tid}][/bold]  {cmd}  # {cmd_comment}\n"
                             else:
                                 content += f"  [dim]<{gid}>[/] [bold]{tag}[{tid}][/bold]  {cmd}\n"
-                content += "\nUse `!<tag>[<tid>]` or `!<<id>>` to execute a command."
+                content += "\nUse `!tag[tid]` or `!ID` to execute a command."
                 content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
             else:
@@ -1120,7 +1120,7 @@ class CommandRunner(App):
                         comment_part = f"  # {row['comment']}" if 'comment' in row.keys() and row['comment'] else ""
                         lines.append(f"  [dim]<{row['id']}>[/] [bold]{tag_part}[{row['tid']}][/bold]  {row['command']}{comment_part}")
                     content += "\n".join(lines)
-                    content += "\n\nUse `!{}[<tid>]` or `!<<id>>` to execute.".format(tag_part)
+                    content += "\n\nUse `!{}[<tid>]` or `!ID` to execute.".format(tag_part)
                     content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
         except Exception as e:
@@ -1155,7 +1155,7 @@ class CommandRunner(App):
                     self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
                     return
             except (ValueError, IndexError):
-                self.add_block(InfoBlock("Invalid syntax. Use: !<tag>[<tid>] or !<id>"))
+                self.add_block(InfoBlock("Invalid syntax. Use: !tag[tid] or !ID"))
                 return
         # Проверяем старый формат: !ID (цифра)
         elif command_part.isdigit():
@@ -1167,7 +1167,7 @@ class CommandRunner(App):
                 self.add_block(InfoBlock(f"Error: Global ID {cmd_id} not found."))
                 return
         else:
-            self.add_block(InfoBlock("Invalid syntax. Use: !<tag>[<tid>] or !<id>"))
+            self.add_block(InfoBlock("Invalid syntax. Use: !tag[tid] or !ID"))
             return
 
         # Вставляем команду в input БЕЗ раскрытия ссылок
