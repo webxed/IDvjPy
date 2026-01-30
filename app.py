@@ -173,19 +173,16 @@ class CommandBlock(Static):
 class ClickableCommand(Static):
     """Кликабельный виджет для отображения команды с возможностью клика."""
 
-    def __init__(self, command_ref: str, tag: str, tid: int, **kwargs):
+    def __init__(self, command_ref: str, display_text: str, **kwargs):
         """
         Инициализация кликабельной команды.
 
         Args:
             command_ref: Ссылка на команду (например, "!deploy[2]")
-            tag: Имя тега
-            tid: Локальный ID
+            display_text: Отображаемый текст (например, "deploy[2]")
         """
         self.command_ref = command_ref
-        self.tag = tag
-        self.tid = tid
-        super().__init__(command_ref, **kwargs)
+        super().__init__(display_text, **kwargs)
 
     def on_click(self, event) -> None:
         """Обработчик клика - вставляет команду в input."""
@@ -208,6 +205,27 @@ class InfoBlock(Static):
             text_content: Текст для отображения.
         """
         self.text_content = text_content.rstrip() + "\n\n"
+        super().__init__(self.text_content, **kwargs)
+        self.can_focus = True
+
+
+class QueryResultsBlock(Static):
+    """
+    Виджет для отображения результатов запроса с кликабельными командами.
+
+    Отображает команды в формате:
+    <global_id> tag[tid]  command_text
+    где tag[tid] является кликабельным.
+    """
+
+    def __init__(self, content: str, **kwargs):
+        """
+        Инициализация блока результатов запроса.
+
+        Args:
+            content: Текст для отображения (без кликабельных элементов).
+        """
+        self.text_content = content.rstrip() + "\n\n"
         super().__init__(self.text_content, **kwargs)
         self.can_focus = True
 
@@ -510,23 +528,6 @@ class CommandRunner(App):
     def action_focus_input(self) -> None:
         """Переводит фокус в строку ввода."""
         self.query_one(f"#{self.ID_INPUT}", Input).focus()
-
-    # Словарь для хранения команд, доступных для клика
-    _clickable_commands: Dict[str, str] = {}
-
-    def action_insert_command(self, command_key: str) -> None:
-        """
-        Вставляет команду в строку ввода по ключу.
-
-        Args:
-            command_key: Ключ команды в словаре _clickable_commands
-        """
-        command = self._clickable_commands.get(command_key, "")
-        if command:
-            input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
-            input_widget.value = command
-            input_widget.cursor_position = len(command)
-            input_widget.focus()
 
     def clear_all_blocks(self) -> None:
         """
@@ -1041,8 +1042,6 @@ class CommandRunner(App):
         """
         tag_part = user_input[1:].strip()
         self.last_query_results = {}
-        # Очищаем словарь кликабельных команд перед новым запросом
-        self._clickable_commands = {}
 
         try:
             if not tag_part:
@@ -1062,7 +1061,6 @@ class CommandRunner(App):
                     content += "  (None found)"
 
                 content += "\n\nType `? <tag>` to see commands or `??` to see all."
-                content += "\n💡 Tip: Click on [bold]tag[tid][/bold] commands to insert them into input."
                 content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
             elif tag_part == '?':
@@ -1097,17 +1095,11 @@ class CommandRunner(App):
                             content += f"\n- {tag}:\n"
                         for gid, tid, cmd, cmd_comment in items:
                             # Глобальный ID в угловых скобках с dim-стилем для менее яркого цвета
-                            # tag[tid] - кликабельная ссылка
-                            cmd_ref = f"!{tag}[{tid}]"
-                            cmd_key = f"{tag}_{tid}"
-                            # Сохраняем команду в словаре для клика
-                            self._clickable_commands[cmd_key] = cmd_ref
                             if cmd_comment:
-                                content += f"  [dim]<{gid}>[/] [link=@action_insert_command({cmd_key})]{tag}[{tid}][/link]  {cmd}  # {cmd_comment}\n"
+                                content += f"  [dim]<{gid}>[/] [bold]{tag}[{tid}][/bold]  {cmd}  # {cmd_comment}\n"
                             else:
-                                content += f"  [dim]<{gid}>[/] [link=@action_insert_command({cmd_key})]{tag}[{tid}][/link]  {cmd}\n"
+                                content += f"  [dim]<{gid}>[/] [bold]{tag}[{tid}][/bold]  {cmd}\n"
                 content += "\nUse `!<tag>[<tid>]` or `!<<id>>` to execute a command."
-                content += "\n💡 Click on [bold]tag[tid][/bold] to insert into input."
                 content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
             else:
@@ -1125,15 +1117,10 @@ class CommandRunner(App):
                         self.last_query_results[row['id']] = row['command']
                     lines = []
                     for row in commands:
-                        cmd_ref = f"!{tag_part}[{row['tid']}]"
-                        cmd_key = f"{tag_part}_{row['tid']}"
-                        # Сохраняем команду в словаре для клика
-                        self._clickable_commands[cmd_key] = cmd_ref
                         comment_part = f"  # {row['comment']}" if 'comment' in row.keys() and row['comment'] else ""
-                        lines.append(f"  [dim]<{row['id']}>[/] [link=@action_insert_command({cmd_key})]{tag_part}[{row['tid']}][/link]  {row['command']}{comment_part}")
+                        lines.append(f"  [dim]<{row['id']}>[/] [bold]{tag_part}[{row['tid']}][/bold]  {row['command']}{comment_part}")
                     content += "\n".join(lines)
                     content += "\n\nUse `!{}[<tid>]` or `!<<id>>` to execute.".format(tag_part)
-                    content += "\n💡 Click on [bold]{}[tid][/bold] to insert into input.".format(tag_part)
                     content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
         except Exception as e:
