@@ -1172,17 +1172,14 @@ class CommandRunner(App):
 
         command_text = None
         additional_text = ""
+        import re
 
-        # Проверяем новый формат: !tag[tid]
-        if '[' in command_part and command_part.endswith(']'):
+        # Проверяем новый формат: !tag[tid] (с опциональным дополнительным текстом)
+        tag_match = re.match(r'^([a-zA-Z_0-9]+)\[(\d+)\]', command_part)
+        if tag_match:
             try:
-                # Находим закрывающую скобку
-                closing_bracket = command_part.index(']')
-
-                # Парсим tag[tid]
-                tag_part = command_part[:closing_bracket + 1]
-                tag, tid_part = tag_part.split('[')
-                tid = int(tid_part[:-1])  # Убираем ']'
+                tag = tag_match.group(1)
+                tid = int(tag_match.group(2))
 
                 # Получаем команду из БД
                 result = database.get_command_by_tid(self.db_file, tag, tid)
@@ -1193,8 +1190,9 @@ class CommandRunner(App):
                     return
 
                 # Извлекаем дополнительный текст после ]
-                if closing_bracket + 1 < len(command_part):
-                    additional_text = command_part[closing_bracket + 1:].strip()
+                match_end = tag_match.end()
+                if match_end < len(command_part):
+                    additional_text = command_part[match_end:].strip()
 
             except (ValueError, IndexError):
                 self.add_block(InfoBlock("Invalid syntax. Use: !tag[tid] or !ID"))
@@ -1202,7 +1200,6 @@ class CommandRunner(App):
         # Проверяем старый формат: !ID (цифра)
         else:
             # Извлекаем числовой ID из начала строки
-            import re
             match = re.match(r'^(\d+)', command_part)
             if match:
                 cmd_id = int(match.group(1))
