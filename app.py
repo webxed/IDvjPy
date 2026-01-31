@@ -244,7 +244,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.10" # Support additional text after tag references (!tag[tid] $VAR)
+    VERSION = "v1.1.11" # Add ?tag[tid] command to show resolved command preview
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -1067,9 +1067,39 @@ class CommandRunner(App):
         ? - список тегов с комментариями.
         ?? - все команды.
         ?tag - команды по тегу.
+        ?tag[tid] - показать полную раскрытую команду (v1.1.11+)
         """
         tag_part = user_input[1:].strip()
         self.last_query_results = {}
+
+        # v1.1.11+: Проверка на формат ?tag[tid] для показа раскрытой команды
+        import re
+        tag_tid_match = re.match(r'^([a-zA-Z_0-9]+)\[(\d+)\]$', tag_part)
+        if tag_tid_match:
+            tag = tag_tid_match.group(1)
+            tid = int(tag_tid_match.group(2))
+
+            try:
+                result = database.get_command_by_tid(self.db_file, tag, tid)
+                if result:
+                    original_command = result['command']
+                    # Раскрываем ссылки в команде
+                    resolved_command = self._resolve_command_references(original_command)
+
+                    if resolved_command is None:
+                        # Ошибка при раскрытии ссылок
+                        self.add_block(InfoBlock(f"[bold]Original command:[/bold]\n{original_command}\n\n[dim]Error: Could not resolve command references.[/dim]"))
+                    elif resolved_command == original_command:
+                        # Ссылок не было
+                        self.add_block(InfoBlock(f"[bold]Command:[/bold]\n{original_command}\n\n[dim]No references to resolve.[/dim]"))
+                    else:
+                        # Ссылки были раскрыты
+                        self.add_block(InfoBlock(f"[bold]Original command:[/bold]\n{original_command}\n\n[bold]Resolved command:[/bold]\n{resolved_command}"))
+                else:
+                    self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
+            except Exception as e:
+                self.add_block(InfoBlock(f"Database error: {e}"))
+            return
 
         try:
             if not tag_part:
