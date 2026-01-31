@@ -244,7 +244,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.11" # Add ?tag[tid] command to show resolved command preview
+    VERSION = "v1.1.12" # Add recursive resolution preview for ?tag[tid] command
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -887,6 +887,42 @@ class CommandRunner(App):
 
         return assembled
 
+    def _resolve_command_with_steps(self, command: str) -> list:
+        """
+        Раскрывает ссылки пошагово, возвращая все этапы преобразования.
+
+        Показывает полную цепочку раскрытия ссылок:
+        - Шаг 1: исходная команда
+        - Шаг 2: после первого раскрытия ссылок
+        - Шаг N: финальная полностью раскрытая команда
+
+        Args:
+            command: Исходная команда с возможными ссылками
+
+        Returns:
+            Список всех этапов раскрытия или пустой список при ошибке
+        """
+        steps = [command]
+        max_iterations = 100  # Защита от бесконечных циклов
+        iteration = 0
+
+        while iteration < max_iterations:
+            iteration += 1
+            # Раскрываем ссылки в текущем шаге
+            resolved = self._resolve_command_references(steps[-1])
+
+            if resolved is None:
+                # Ошибка при раскрытии
+                return []
+
+            if resolved == steps[-1]:
+                # Ссылок больше нет - завершаем
+                break
+
+            steps.append(resolved)
+
+        return steps
+
     def handle_save_command(self, user_input: str) -> None:
         """
         Обработка сохранения, удаления, редактирования команд и комментариев.
@@ -1083,18 +1119,26 @@ class CommandRunner(App):
                 result = database.get_command_by_tid(self.db_file, tag, tid)
                 if result:
                     original_command = result['command']
-                    # Раскрываем ссылки в команде
-                    resolved_command = self._resolve_command_references(original_command)
+                    # Раскрываем ссылки пошагово с показом всех этапов
+                    resolution_steps = self._resolve_command_with_steps(original_command)
 
-                    if resolved_command is None:
+                    if not resolution_steps:
                         # Ошибка при раскрытии ссылок
                         self.add_block(InfoBlock(f"[bold]Original command:[/bold]\n{original_command}\n\n[dim]Error: Could not resolve command references.[/dim]"))
-                    elif resolved_command == original_command:
+                    elif len(resolution_steps) == 1:
                         # Ссылок не было
                         self.add_block(InfoBlock(f"[bold]Command:[/bold]\n{original_command}\n\n[dim]No references to resolve.[/dim]"))
                     else:
-                        # Ссылки были раскрыты
-                        self.add_block(InfoBlock(f"[bold]Original command:[/bold]\n{original_command}\n\n[bold]Resolved command:[/bold]\n{resolved_command}"))
+                        # Ссылки были раскрыты - показываем все шаги
+                        content_lines = []
+                        for i, step_command in enumerate(resolution_steps, 1):
+                            if i == 1:
+                                content_lines.append(f"[bold]Step {i} (Original):[/bold]\n{step_command}")
+                            elif i == len(resolution_steps):
+                                content_lines.append(f"\n[bold]Step {i} (Final):[/bold]\n{step_command}")
+                            else:
+                                content_lines.append(f"\n[bold]Step {i}:[/bold]\n{step_command}")
+                        self.add_block(InfoBlock("\n".join(content_lines)))
                 else:
                     self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
             except Exception as e:
