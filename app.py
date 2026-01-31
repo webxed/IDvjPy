@@ -244,7 +244,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.9" # Fix clickable commands with lookup table approach
+    VERSION = "v1.1.10" # Support additional text after tag references (!tag[tid] $VAR)
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -1163,16 +1163,25 @@ class CommandRunner(App):
 
         v1.1.9+: Если команда содержит ссылки, они автоматически раскрываются
         перед вставкой в поле ввода для удобного выполнения.
+
+        v1.1.10+: Поддержка дополнительного текста после ссылки:
+        - !tag[tid] $MYVAR - загрузит команду и добавит переменную
+        - !tag[tid] --option=value - загрузит команду и добавит опцию
         """
         command_part = user_input[1:].strip()
 
         command_text = None
+        additional_text = ""
 
         # Проверяем новый формат: !tag[tid]
         if '[' in command_part and command_part.endswith(']'):
             try:
+                # Находим закрывающую скобку
+                closing_bracket = command_part.index(']')
+
                 # Парсим tag[tid]
-                tag, tid_part = command_part.split('[')
+                tag_part = command_part[:closing_bracket + 1]
+                tag, tid_part = tag_part.split('[')
                 tid = int(tid_part[:-1])  # Убираем ']'
 
                 # Получаем команду из БД
@@ -1182,21 +1191,39 @@ class CommandRunner(App):
                 else:
                     self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
                     return
+
+                # Извлекаем дополнительный текст после ]
+                if closing_bracket + 1 < len(command_part):
+                    additional_text = command_part[closing_bracket + 1:].strip()
+
             except (ValueError, IndexError):
                 self.add_block(InfoBlock("Invalid syntax. Use: !tag[tid] or !ID"))
                 return
         # Проверяем старый формат: !ID (цифра)
-        elif command_part.isdigit():
-            cmd_id = int(command_part)
-            result = database.get_command_by_global_id(self.db_file, cmd_id)
-            if result:
-                command_text = result['command']
-            else:
-                self.add_block(InfoBlock(f"Error: Global ID {cmd_id} not found."))
-                return
         else:
-            self.add_block(InfoBlock("Invalid syntax. Use: !tag[tid] or !ID"))
-            return
+            # Извлекаем числовой ID из начала строки
+            import re
+            match = re.match(r'^(\d+)', command_part)
+            if match:
+                cmd_id = int(match.group(1))
+                result = database.get_command_by_global_id(self.db_file, cmd_id)
+                if result:
+                    command_text = result['command']
+                else:
+                    self.add_block(InfoBlock(f"Error: Global ID {cmd_id} not found."))
+                    return
+
+                # Извлекаем дополнительный текст после ID
+                if len(match.group(1)) < len(command_part):
+                    additional_text = command_part[len(match.group(1)):].strip()
+            else:
+                self.add_block(InfoBlock("Invalid syntax. Use: !tag[tid] or !ID"))
+                return
+
+        # Собираем полную команду с дополнительным текстом
+        if additional_text:
+            # Добавляем пробел между командой и дополнительным текстом
+            command_text = f"{command_text} {additional_text}"
 
         # Вставляем команду в input БЕЗ раскрытия ссылок
         # Раскрытие произойдёт автоматически в handle_normal_command при выполнении
