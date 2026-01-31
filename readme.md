@@ -49,6 +49,28 @@ The application uses several command prefixes to unlock its features:
 | `|`       | `| jq .`              | Pipes the `stdout` of the most recent command block as `stdin` to the specified command. |
 | `$`       | `$MY_VAR=hello`      | Creates or updates an environment variable in `.bashrc_term` and the current session. |
 
+### Tag Execution with Variables (v1.1.10+)
+
+You can append additional text, options, or variables after tag references:
+
+```bash
+# Save a base command
+#deploy nginx -t
+
+# Execute with additional parameters
+!deploy[1] --config=/etc/nginx/test.conf    # → nginx -t --config=/etc/nginx/test.conf
+
+# Using variables
+$CONF_FILE=/etc/nginx/prod.conf
+!deploy[1] --config=$CONF_FILE              # → nginx -t --config=/etc/nginx/prod.conf
+
+# Works with global IDs too
+!5 --verbose                                 # Loads command ID 5 and appends --verbose
+
+# Multiple arguments
+!deploy[2] && echo "Deployment completed"
+```
+
 ### Setup on Linux/Debian
 
 1.  **Clone the repository:**
