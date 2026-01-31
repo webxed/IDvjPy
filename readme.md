@@ -71,24 +71,29 @@ $CONF_FILE=/etc/nginx/prod.conf
 !deploy[2] && echo "Deployment completed"
 ```
 
-### Command Preview with Reference Resolution (v1.1.11+)
+### Command Preview with Reference Resolution (v1.1.12+)
 
-You can preview how command references will be resolved before execution:
+Preview all intermediate resolution steps when commands contain nested references:
 
 ```bash
-# If command deploy[2] contains references:
-# deploy[2] = "!deploy[1] && echo 'done'"
+# If commands are chained:
+# deploy[3] = "!deploy[2] && echo 'step 3'"
+# deploy[2] = "!deploy[1] && echo 'step 2'"
+# deploy[1] = "systemctl restart nginx"
 
-?deploy[2]
+?deploy[3]
 # Output:
-# Original command:
-# !deploy[1] && echo 'done'
+# Step 1 (Original):
+# !deploy[2] && echo 'step 3'
 #
-# Resolved command:
-# systemctl restart nginx && echo 'done'
+# Step 2:
+# !deploy[1] && echo 'step 2' && echo 'step 3'
+#
+# Step 3 (Final):
+# systemctl restart nginx && echo 'step 2' && echo 'step 3'
 ```
 
-This shows how all `!tag[tid]`, `!ID`, and `!!` references will be expanded.
+This shows the complete transformation chain when executing commands with nested `!tag[tid]`, `!ID`, and `!!` references.
 
 ### Setup on Linux/Debian
 
