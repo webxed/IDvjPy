@@ -71,6 +71,25 @@ $CONF_FILE=/etc/nginx/prod.conf
 !deploy[2] && echo "Deployment completed"
 ```
 
+### Command Preview with Reference Resolution (v1.1.11+)
+
+You can preview how command references will be resolved before execution:
+
+```bash
+# If command deploy[2] contains references:
+# deploy[2] = "!deploy[1] && echo 'done'"
+
+?deploy[2]
+# Output:
+# Original command:
+# !deploy[1] && echo 'done'
+#
+# Resolved command:
+# systemctl restart nginx && echo 'done'
+```
+
+This shows how all `!tag[tid]`, `!ID`, and `!!` references will be expanded.
+
 ### Setup on Linux/Debian
 
 1.  **Clone the repository:**
