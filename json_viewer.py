@@ -52,7 +52,17 @@ class JSONViewer(ModalScreen):
     def action_cursor_child(self) -> None:
         """Перейти к первому дочернему узлу."""
         tree = self.query_one(Tree)
-        tree.action_cursor_child()
+        cursor = tree.cursor_node
+        if cursor:
+            # Раскрываем узел если свернут
+            if not cursor.is_expanded:
+                cursor.expand()
+            # Переходим к первому потомку
+            if cursor.children:
+                tree.cursor = cursor.children[0]
+            else:
+                # Если нет потомков, пробуем перейти к следующему соседу
+                tree.action_cursor_next_sibling()
 
     def action_toggle_expand(self) -> None:
         """Переключает состояние раскрытия текущего узла."""
