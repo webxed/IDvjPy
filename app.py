@@ -244,11 +244,12 @@ class CommandRunner(App):
         ("pageup", "focus_previous", "Prev Block"),
         ("pagedown", "focus_next", "Next Block"),
         ("f5", "copy_block", "Copy Block"),
+        ("f3", "open_json_viewer", "JSON Viewer"),
         ("escape", "focus_input", "Focus Input"),
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.13" # Add JSON viewer (:json command) with jq path copy
+    VERSION = "v1.1.13" # Add JSON viewer (:json command/F3) with jq path copy
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -628,6 +629,40 @@ class CommandRunner(App):
                 self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
         else:
             self.sub_title = self.MSG_NO_FOCUS
+            self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+
+    def action_open_json_viewer(self) -> None:
+        """
+        Открывает JSON viewer для последнего блока (F3).
+        Работает аналогично команде :json.
+        """
+        all_blocks = self.query("CommandBlock, InfoBlock")
+        if all_blocks:
+            # Берём последний блок
+            last_block = list(all_blocks)[-1]
+
+            # Извлекаем JSON
+            try:
+                # Для CommandBlock используем raw_stdout, для InfoBlock - text_content
+                if isinstance(last_block, CommandBlock):
+                    text_to_parse = last_block.raw_stdout
+                else:
+                    text_to_parse = self._strip_formatting_tags(last_block.text_content)
+
+                json_data = self._extract_json(text_to_parse)
+
+                if json_data is not None:
+                    self.push_screen(JSONViewer(json_data))
+                    self.sub_title = "JSON viewer opened! Press Escape to close."
+                    self.set_timer(2, self.clear_subtitle)
+                else:
+                    self.sub_title = "No valid JSON found in last block."
+                    self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+            except Exception as e:
+                self.sub_title = f"Error parsing JSON: {e}"
+                self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+        else:
+            self.sub_title = "No blocks found."
             self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
 
     def _extract_json(self, text: str) -> Optional[dict]:
