@@ -123,7 +123,15 @@ class JSONViewer(ModalScreen):
 
             for key, value in data.items():
                 new_node = node.add("")
-                new_node._jq_path = path_parts + [f".{key}"] if path_parts else [f".{key}"]
+                # Проверяем, является ли ключ валидным идентификатором
+                if str(key).isidentifier():
+                    # Ключ - валидный идентификатор (только буквы, цифры, _)
+                    jq_part = f".{key}"
+                else:
+                    # Ключ содержит спецсимволы - берём в квадратные скобки с экранированием
+                    import json
+                    jq_part = f"[{json.dumps(key)}]"
+                new_node._jq_path = path_parts + [jq_part] if path_parts else [jq_part]
                 self._add_json_to_node(new_node, value, new_node._jq_path)
 
         elif isinstance(data, list):
