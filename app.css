@@ -36,3 +36,12 @@ CommandBlock:focus, InfoBlock:focus {
     background: $accent-lighten-2;
     text-style: bold;
 }
+
+/* Стили для JSON Viewer */
+JSONViewer {
+    layout: vertical;
+}
+
+JSONViewer Tree {
+    height: 1fr;
+}

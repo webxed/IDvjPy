@@ -41,6 +41,7 @@ try:
     import yaml
     import datetime
     import os
+    import json
     import pyperclip
     import database_v2 as database
     import threading
@@ -50,7 +51,11 @@ try:
     from typing import List, Optional, Dict
     from command_parser_v2 import CommandParser
     from textual.app import App, ComposeResult
-    from textual.widgets import Header, Footer, Input, Static
+    from textual.widgets import Header, Footer, Input, Static, Tree
+    from textual.widgets.tree import TreeNode
+    from textual.screen import ModalScreen
+    from rich.text import Text
+    from rich.highlighter import ReprHighlighter
     from textual.containers import VerticalScroll, Vertical
 except ImportError as e:
     print(f"Error: Missing dependency - {e}", file=sys.stderr)
@@ -229,6 +234,127 @@ class QueryResultsBlock(Static):
         super().__init__(self.text_content, **kwargs)
         self.can_focus = True
 
+
+class JSONViewer(ModalScreen):
+    """
+    Modal screen для просмотра JSON в виде дерева.
+
+    Позволяет:
+    - Просматривать JSON структуру в виде дерева
+    - Выбирать элементы и копировать jq-путь по Enter
+    - Закрывать по Escape
+    """
+
+    BINDINGS = [
+        ("escape", "close_screen", "Close"),
+        ("q", "close_screen", "Close"),
+    ]
+
+    def action_close_screen(self) -> None:
+        """Закрывает текущий экран."""
+        self.app.pop_screen()
+
+    def __init__(self, json_data: dict, **kwargs):
+        """
+        Инициализация JSON viewer.
+
+        Args:
+            json_data: Распаршенные JSON данные (dict/list)
+        """
+        super().__init__(**kwargs)
+        self.json_data = json_data
+        self.highlighter = ReprHighlighter()
+
+    def compose(self) -> ComposeResult:
+        """Создание UI."""
+        yield Header()
+        yield Tree("JSON Root")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        """Загрузка JSON в дерево при открытии."""
+        tree = self.query_one(Tree)
+        tree.root.expand()
+        self._add_json_to_node(tree.root, self.json_data, [])
+
+    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        """
+        Обработчик выбора узла дерева (Enter или двойной клик).
+        Копирует jq-путь выбранного узла и закрывает viewer.
+        """
+        node = event.node
+        if hasattr(node, "_jq_path"):
+            # Генерируем jq-путь
+            jq_path = "".join(node._jq_path)
+
+            # Убираем ведущую точку если есть (для корректного jq)
+            if jq_path.startswith("."):
+                jq_path = "." + jq_path[1:] if jq_path != "." else "."
+
+            # Возвращаемся в основное приложение
+            self.app.pop_screen()
+
+            # Добавляем блок с jq-путем в основной фрейм
+            if hasattr(self.app, 'add_block'):
+                self.app.add_block(InfoBlock(f"[bold]jq path:[/bold] {jq_path}"))
+                # Также копируем в буфер обмена для удобства
+                try:
+                    pyperclip.copy(jq_path)
+                    self.app.sub_title = f"jq path copied: {jq_path}"
+                    self.app.set_timer(3, self.app.clear_subtitle)
+                except Exception:
+                    pass
+
+    def _add_json_to_node(self, node: TreeNode, data, path_parts: list) -> None:
+        """
+        Рекурсивно добавляет JSON данные в узел дерева.
+
+        Args:
+            node: Узел дерева
+            data: JSON данные
+            path_parts: Части пути к текущему узлу (для генерации jq-пути)
+        """
+        if isinstance(data, dict):
+            if not path_parts:  # Корневой узел
+                node.set_label(Text("{} [bold]JSON Root[/bold]"))
+            else:
+                node.set_label(Text(f"{{}} [bold]{path_parts[-1]}[/bold]"))
+
+            for key, value in data.items():
+                new_node = node.add("")
+                new_node._jq_path = path_parts + [f".{key}"] if path_parts else [f".{key}"]
+                self._add_json_to_node(new_node, value, new_node._jq_path)
+
+        elif isinstance(data, list):
+            if not path_parts:  # Корневой узел
+                node.set_label(Text("[] [bold]JSON Root[/bold]"))
+            else:
+                node.set_label(Text(f"[] [bold]{path_parts[-1]}[/bold]"))
+
+            for index, value in enumerate(data):
+                new_node = node.add("")
+                new_node._jq_path = path_parts + [f"[{index}]"] if path_parts else [f"[{index}]"]
+                self._add_json_to_node(new_node, value, new_node._jq_path)
+
+        else:
+            # Листовой узел (значение)
+            node.allow_expand = False
+
+            if path_parts:
+                # Формируем метку с именем и значением
+                label = Text.assemble(
+                    Text.from_markup(f"[b]{path_parts[-1]}[/b]="),
+                    self.highlighter(repr(data))
+                )
+                node.set_label(label)
+                # Сохраняем jq-путь для этого узла
+                node._jq_path = path_parts
+            else:
+                # Корневое скалярное значение
+                node.set_label(Text(repr(data)))
+                node._jq_path = ["."]
+
+
 class CommandRunner(App):
     """Textual приложение для запуска shell команд с поддержкой переменных."""
 
@@ -244,7 +370,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.12" # Add recursive resolution preview for ?tag[tid] command
+    VERSION = "v1.1.13" # Add JSON viewer (:json command) with jq path copy
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -280,6 +406,7 @@ class CommandRunner(App):
     CMD_WRITE = "w"
     CMD_HISTORY = "h"
     CMD_CLEAR = "c"
+    CMD_JSON = "json"
 
     def __init__(self):
         """Инициализация состояния приложения."""
@@ -589,9 +716,31 @@ class CommandRunner(App):
     def action_copy_block(self) -> None:
         """Копирует содержимое сфокусированного блока в буфер обмена."""
         focused = self.focused
-        if isinstance(focused, (CommandBlock, InfoBlock)):
+        if isinstance(focused, CommandBlock):
             try:
-                # Удаляем теги форматирования перед копированием
+                # Для CommandBlock копируем только raw_stdout без заголовка и CompletedProcess
+                text_to_copy = focused.raw_stdout
+
+                # Удаляем служебные сообщения, если они есть
+                lines_to_remove = [
+                    "[Executing...]",
+                    "(Waiting for output or timeout...)"
+                ]
+                for line in lines_to_remove:
+                    text_to_copy = text_to_copy.replace(line, "")
+
+                # Удаляем лишние переводы строк
+                text_to_copy = text_to_copy.strip()
+
+                pyperclip.copy(text_to_copy)
+                self.sub_title = self.MSG_COPIED
+                self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+            except Exception:
+                self.sub_title = "Error copying to clipboard."
+                self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+        elif isinstance(focused, InfoBlock):
+            try:
+                # Для InfoBlock копируем весь текст
                 clean_text = self._strip_formatting_tags(focused.text_content)
                 pyperclip.copy(clean_text)
                 self.sub_title = self.MSG_COPIED
@@ -602,6 +751,97 @@ class CommandRunner(App):
         else:
             self.sub_title = self.MSG_NO_FOCUS
             self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+
+    def _extract_json(self, text: str) -> Optional[dict]:
+        """
+        Извлекает JSON из текста.
+
+        Пытается найти и распарсить JSON в тексте. Поскольку вывод команды
+        может содержать дополнительный текст (например, временную метку),
+        ищем первый валидный JSON объект.
+
+        Args:
+            text: Текст для поиска JSON
+
+        Returns:
+            Распаршенные JSON данные или None если не найден
+        """
+        import json
+
+        # Сначала пробуем распарсить весь текст как есть
+        try:
+            return json.loads(text.strip())
+        except json.JSONDecodeError:
+            pass
+
+        # Если не получилось, ищем JSON в тексте
+        # Находим первую открывающую скобку { или [
+        first_brace_pos = -1
+        for i, char in enumerate(text):
+            if char in '{[':
+                first_brace_pos = i
+                break
+
+        if first_brace_pos == -1:
+            return None
+
+        # Находим соответствующую закрывающую скобку
+        bracket_count = 0
+        start_char = text[first_brace_pos]
+        end_char = '}' if start_char == '{' else ']'
+
+        in_string = False
+        escape_next = False
+
+        for i in range(first_brace_pos, len(text)):
+            char = text[i]
+
+            if escape_next:
+                escape_next = False
+                continue
+
+            if char == '\\':
+                escape_next = True
+                continue
+
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+
+            if not in_string:
+                if char == start_char:
+                    bracket_count += 1
+                elif char == end_char:
+                    bracket_count -= 1
+                    if bracket_count == 0:
+                        # Нашли конец JSON
+                        json_text = text[first_brace_pos:i+1]
+                        try:
+                            return json.loads(json_text)
+                        except json.JSONDecodeError:
+                            # Если не получилось парсить, продолжаем поиск
+                            break
+
+        # Если не получилось с точным подсчётом, пробуем более простой подход
+        # Ищем строки, начинающиеся с { или [
+        lines = text.split('\n')
+        for i, line in enumerate(lines):
+            line_stripped = line.strip()
+            if line_stripped.startswith('{') or line_stripped.startswith('['):
+                # Собираем от этой строки до конца
+                candidate = '\n'.join(lines[i:])
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    # Пробуем добавлять строки по одной
+                    for j in range(i + 1, len(lines) + 1):
+                        candidate = '\n'.join(lines[i:j])
+                        try:
+                            return json.loads(candidate)
+                        except json.JSONDecodeError:
+                            continue
+
+        return None
 
     def on_input_submitted(self, message: Input.Submitted) -> None:
         """
@@ -766,6 +1006,33 @@ class CommandRunner(App):
                 self.add_block(InfoBlock(f"Error reading history: {e}"))
         elif command == self.CMD_CLEAR:
             self.clear_all_blocks()
+        elif command == self.CMD_JSON:
+            # Открываем JSON viewer для последнего блока
+            all_blocks = self.query("CommandBlock, InfoBlock")
+            if all_blocks:
+                # Берём последний блок
+                last_block = list(all_blocks)[-1]
+
+                # Извлекаем JSON
+                try:
+                    # Для CommandBlock используем raw_stdout, для InfoBlock - text_content
+                    if isinstance(last_block, CommandBlock):
+                        text_to_parse = last_block.raw_stdout
+                    else:
+                        text_to_parse = self._strip_formatting_tags(last_block.text_content)
+
+                    json_data = self._extract_json(text_to_parse)
+
+                    if json_data is not None:
+                        self.push_screen(JSONViewer(json_data))
+                        self.sub_title = "JSON viewer opened! Press Escape to close."
+                        self.set_timer(2, self.clear_subtitle)
+                    else:
+                        self.add_block(InfoBlock("No valid JSON found in last block."))
+                except Exception as e:
+                    self.add_block(InfoBlock(f"Error parsing JSON: {e}"))
+            else:
+                self.add_block(InfoBlock("[bold]ERROR:[/bold] No blocks found."))
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
 

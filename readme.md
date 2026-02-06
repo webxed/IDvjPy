@@ -95,6 +95,28 @@ Preview all intermediate resolution steps when commands contain nested reference
 
 This shows the complete transformation chain when executing commands with nested `!tag[tid]`, `!ID`, and `!!` references.
 
+### JSON Viewer (v1.1.13+)
+
+View JSON output in a navigable tree structure:
+
+```bash
+# Run a command that outputs JSON
+echo '{"users": [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]}'
+
+# Focus the output block and press F3
+# A tree view will open showing the JSON structure
+
+# Navigate to any element and press Enter
+# The jq path will be copied to the bottom frame:
+# jq path: .users[0].name
+```
+
+**Features:**
+- Press `F3` on any command block to open JSON viewer
+- Navigate the JSON tree with arrow keys
+- Press `Enter` on any element to copy its jq path
+- Press `Escape` to close the viewer
+
 ### Setup on Linux/Debian
 
 1.  **Clone the repository:**
