@@ -76,6 +76,7 @@ class JSONViewer(ModalScreen):
         tree = self.query_one(Tree)
         tree.root.expand()
         self._add_json_to_node(tree.root, self.json_data, [])
+        tree.focus()  # Устанавливаем фокус на дерево для работы навигации
 
     def _add_json_to_node(self, node, data, path_parts: list) -> None:
         """
