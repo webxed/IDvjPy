@@ -117,9 +117,9 @@ class JSONViewer(ModalScreen):
         """
         if isinstance(data, dict):
             if not path_parts:  # Корневой узел
-                node.set_label(Text("{} [bold]JSON Root[/bold]"))
+                node.set_label(Text.from_markup("{} [bold]JSON Root[/bold]"))
             else:
-                node.set_label(Text(f"{{}} [bold]{path_parts[-1]}[/bold]"))
+                node.set_label(Text.from_markup(f"{{}} [bold]{path_parts[-1]}[/bold]"))
 
             for key, value in data.items():
                 new_node = node.add("")
@@ -128,9 +128,9 @@ class JSONViewer(ModalScreen):
 
         elif isinstance(data, list):
             if not path_parts:  # Корневой узел
-                node.set_label(Text("[] [bold]JSON Root[/bold]"))
+                node.set_label(Text.from_markup("[] [bold]JSON Root[/bold]"))
             else:
-                node.set_label(Text(f"[] [bold]{path_parts[-1]}[/bold]"))
+                node.set_label(Text.from_markup(f"[] [bold]{path_parts[-1]}[/bold]"))
 
             for index, value in enumerate(data):
                 new_node = node.add("")
@@ -152,7 +152,7 @@ class JSONViewer(ModalScreen):
                 node._jq_path = path_parts
             else:
                 # Корневое скалярное значение
-                node.set_label(Text(repr(data)))
+                node.set_label(Text.from_markup(repr(data)))
                 node._jq_path = ["."]
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
