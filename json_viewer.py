@@ -67,9 +67,7 @@ class JSONViewer(ModalScreen):
 
     def compose(self) -> ComposeResult:
         """Создание UI."""
-        yield Header()
         yield Tree("JSON Root")
-        yield Footer()
 
     def on_mount(self) -> None:
         """Загрузка JSON в дерево при открытии."""
