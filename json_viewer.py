@@ -26,7 +26,33 @@ class JSONViewer(ModalScreen):
     BINDINGS = [
         ("escape", "close_screen", "Close"),
         ("q", "close_screen", "Close"),
+        ("up", "tree.cursor_up", "Previous node"),
+        ("down", "tree.cursor_down", "Next node"),
+        ("left", "tree.cursor_parent", "Parent node"),
+        ("right", "tree.cursor_child", "First child"),
+        ("space", "toggle_expand", "Expand/Collapse"),
+        ("enter", "select_node", "Copy jq path"),
     ]
+
+    def action_toggle_expand(self) -> None:
+        """Переключает состояние раскрытия текущего узла."""
+        tree = self.query_one(Tree)
+        if tree.cursor_node:
+            if tree.cursor_node.is_expanded:
+                tree.cursor_node.collapse()
+            else:
+                tree.cursor_node.expand()
+
+    def action_select_node(self) -> None:
+        """Выбирает текущий узел и копирует jq-путь."""
+        tree = self.query_one(Tree)
+        if tree.cursor_node:
+            # Эмулируем событие выбора узла
+            class FakeEvent:
+                def __init__(self, node):
+                    self.node = node
+
+            self.on_tree_node_selected(FakeEvent(tree.cursor_node))
 
     def __init__(self, json_data: dict, **kwargs):
         """
