@@ -756,6 +756,57 @@ class CommandRunner(App):
 
         return None
 
+    def _open_json_file(self, filename: str) -> None:
+        """
+        Открывает JSON viewer для указанного файла.
+
+        Args:
+            filename: Путь к JSON файлу
+        """
+        import json
+        try:
+            with open(filename, "r", encoding=self.ENCODING) as f:
+                json_data = json.load(f)
+
+            self.push_screen(JSONViewer(json_data))
+            self.sub_title = f"JSON viewer opened: {filename}"
+            self.set_timer(2, self.clear_subtitle)
+
+        except FileNotFoundError:
+            self.add_block(InfoBlock(f"Error: File '{filename}' not found."))
+        except json.JSONDecodeError as e:
+            self.add_block(InfoBlock(f"Error: Invalid JSON in '{filename}': {e}"))
+        except Exception as e:
+            self.add_block(InfoBlock(f"Error reading file '{filename}': {e}"))
+
+    def _open_json_from_last_block(self) -> None:
+        """Открывает JSON viewer для последнего блока."""
+        all_blocks = self.query("CommandBlock, InfoBlock")
+        if all_blocks:
+            # Берём последний блок
+            last_block = list(all_blocks)[-1]
+
+            # Извлекаем JSON
+            try:
+                # Для CommandBlock используем raw_stdout, для InfoBlock - text_content
+                if isinstance(last_block, CommandBlock):
+                    text_to_parse = last_block.raw_stdout
+                else:
+                    text_to_parse = self._strip_formatting_tags(last_block.text_content)
+
+                json_data = self._extract_json(text_to_parse)
+
+                if json_data is not None:
+                    self.push_screen(JSONViewer(json_data))
+                    self.sub_title = "JSON viewer opened! Press Escape to close."
+                    self.set_timer(2, self.clear_subtitle)
+                else:
+                    self.add_block(InfoBlock("No valid JSON found in last block."))
+            except Exception as e:
+                self.add_block(InfoBlock(f"Error parsing JSON: {e}"))
+        else:
+            self.add_block(InfoBlock("[bold]ERROR:[/bold] No blocks found."))
+
     def on_input_submitted(self, message: Input.Submitted) -> None:
         """
         Главный диспетчер команд.
@@ -920,32 +971,14 @@ class CommandRunner(App):
         elif command == self.CMD_CLEAR:
             self.clear_all_blocks()
         elif command == self.CMD_JSON:
-            # Открываем JSON viewer для последнего блока
-            all_blocks = self.query("CommandBlock, InfoBlock")
-            if all_blocks:
-                # Берём последний блок
-                last_block = list(all_blocks)[-1]
-
-                # Извлекаем JSON
-                try:
-                    # Для CommandBlock используем raw_stdout, для InfoBlock - text_content
-                    if isinstance(last_block, CommandBlock):
-                        text_to_parse = last_block.raw_stdout
-                    else:
-                        text_to_parse = self._strip_formatting_tags(last_block.text_content)
-
-                    json_data = self._extract_json(text_to_parse)
-
-                    if json_data is not None:
-                        self.push_screen(JSONViewer(json_data))
-                        self.sub_title = "JSON viewer opened! Press Escape to close."
-                        self.set_timer(2, self.clear_subtitle)
-                    else:
-                        self.add_block(InfoBlock("No valid JSON found in last block."))
-                except Exception as e:
-                    self.add_block(InfoBlock(f"Error parsing JSON: {e}"))
+            # Открываем JSON viewer
+            if len(parts) > 1:
+                # Режим с аргументом: открываем JSON из файла
+                filename = parts[1]
+                self._open_json_file(filename)
             else:
-                self.add_block(InfoBlock("[bold]ERROR:[/bold] No blocks found."))
+                # Режим без аргументов: открываем JSON из последнего блока
+                self._open_json_from_last_block()
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
 
