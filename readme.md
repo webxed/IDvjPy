@@ -46,6 +46,7 @@ The application uses several command prefixes to unlock its features:
 | `!`       | `! 1`                 | Executes the command corresponding to the number from the last `?` query.    |
 | `:`       | `:q` or `:w log.txt`  | Executes an application command (quit or write to file).                  |
 | `:h [X]`    | `:h` or `:h 5`        | Shows the last X lines of command history from `history.txt`. If X is not specified, it defaults to the value of `history_lines` in `settings.yml`. |
+| `:json <file>` | `:json data.json` | Opens JSON file in tree viewer with lazy loading. Also works with F3 on command blocks that output JSON. |
 | `|`       | `| jq .`              | Pipes the `stdout` of the most recent command block as `stdin` to the specified command. |
 | `$`       | `$MY_VAR=hello`      | Creates or updates an environment variable in `.bashrc_term` and the current session. |
 
@@ -97,25 +98,44 @@ This shows the complete transformation chain when executing commands with nested
 
 ### JSON Viewer (v1.1.13+)
 
-View JSON output in a navigable tree structure:
+View JSON output in a navigable tree structure with lazy loading for large files:
 
 ```bash
-# Run a command that outputs JSON
+# View JSON from command output
 echo '{"users": [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]}'
-
 # Focus the output block and press F3
-# A tree view will open showing the JSON structure
 
-# Navigate to any element and press Enter
-# The jq path will be copied to the bottom frame:
-# jq path: .users[0].name
+# Open JSON files directly
+:json k8sdesc.json
+
+# Navigate the tree and press Enter to copy jq path
+# The path is automatically wrapped in single quotes for bash:
+# jq '.users[0].name'
+
+# Use the copied path immediately
+jq '.users[0].name' < data.json
 ```
 
 **Features:**
-- Press `F3` on any command block to open JSON viewer
-- Navigate the JSON tree with arrow keys
-- Press `Enter` on any element to copy its jq path
-- Press `Escape` to close the viewer
+- **Lazy Loading**: Large JSON files open instantly - only the first level is loaded, children load on-demand when you expand nodes
+- **Smart Navigation**:
+  - `↑↓` - Navigate between nodes
+  - `←→` - Collapse/expand and move to parent/first child
+  - `Space` - Toggle expand/collapse
+  - `Enter` - Copy jq path and close viewer
+  - `Escape` or `q` - Close viewer
+- **Bracket Notation**: Keys with special characters (dots, slashes, quotes) are automatically escaped using proper bracket notation
+- **Clipboard Integration**: JQ paths are wrapped in single quotes when copied, ready for immediate use in bash commands
+
+**JQ Path Examples:**
+```
+.users[0].name                    - Simple access
+.items[0].metadata.annotations["checksum/config-envs"]  - Special chars handled
+```
+
+**Performance:**
+- Small files (< 1MB): Opens instantly
+- Large files (> 3MB with 60k+ lines): Opens instantly with lazy loading
 
 ### Setup on Linux/Debian
 
