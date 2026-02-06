@@ -26,13 +26,33 @@ class JSONViewer(ModalScreen):
     BINDINGS = [
         ("escape", "close_screen", "Close"),
         ("q", "close_screen", "Close"),
-        ("up", "tree.cursor_up", "Previous node"),
-        ("down", "tree.cursor_down", "Next node"),
-        ("left", "tree.cursor_parent", "Parent node"),
-        ("right", "tree.cursor_child", "First child"),
+        ("up", "cursor_up", "Previous node"),
+        ("down", "cursor_down", "Next node"),
+        ("left", "cursor_parent", "Parent node"),
+        ("right", "cursor_child", "First child"),
         ("space", "toggle_expand", "Expand/Collapse"),
         ("enter", "select_node", "Copy jq path"),
     ]
+
+    def action_cursor_up(self) -> None:
+        """Переместить курсор на предыдущий узел."""
+        tree = self.query_one(Tree)
+        tree.action_cursor_up()
+
+    def action_cursor_down(self) -> None:
+        """Переместить курсор на следующий узел."""
+        tree = self.query_one(Tree)
+        tree.action_cursor_down()
+
+    def action_cursor_parent(self) -> None:
+        """Перейти к родительскому узлу."""
+        tree = self.query_one(Tree)
+        tree.action_cursor_parent()
+
+    def action_cursor_child(self) -> None:
+        """Перейти к первому дочернему узлу."""
+        tree = self.query_one(Tree)
+        tree.action_cursor_child()
 
     def action_toggle_expand(self) -> None:
         """Переключает состояние раскрытия текущего узла."""
