@@ -251,10 +251,6 @@ class JSONViewer(ModalScreen):
             elif not jq_path:
                 jq_path = "."
 
-            # Отладка: записываем в файл
-            with open('/tmp/jq_path_debug.log', 'a') as f:
-                f.write(f"jq_path: {repr(jq_path)}\n")
-
             # Возвращаемся в основное приложение
             self.app.pop_screen()
 
@@ -272,16 +268,8 @@ class JSONViewer(ModalScreen):
                     clipboard_path = f"'{jq_path}'"
                     pyperclip.copy(clipboard_path)
                     self.app.sub_title = f"jq path copied: {clipboard_path}"
-
-                    # Отладка: проверяем что скопировано
-                    import pyperclip
-                    clipboard_content = pyperclip.paste()
-                    with open('/tmp/jq_path_debug.log', 'a') as f:
-                        f.write(f"jq_path: {repr(jq_path)}\n")
-                        f.write(f"clipboard: {repr(clipboard_content)}\n")
-                except Exception as e:
-                    with open('/tmp/jq_path_debug.log', 'a') as f:
-                        f.write(f"error: {e}\n")
+                except Exception:
+                    pass
 
     def action_close_screen(self) -> None:
         """Закрывает текущий экран."""
