@@ -271,7 +271,7 @@ class CommandRunner(App):
     
     MSG_COPIED = "Copied to clipboard!"
     MSG_NO_FOCUS = "No command block focused."
-    MSG_TIMEOUT = "Process timed out (likely waiting for interactive input). Process killed."
+    MSG_TIMEOUT = "Process timed out ({sec}s). Killed."
     
     # Префиксы команд
     PREFIX_CMD = ":"
@@ -1728,25 +1728,29 @@ class CommandRunner(App):
     def _execute_in_thread(self, block: CommandBlock, command: str, stdin_data: Optional[str]) -> None:
         """
         Выполняет команду в отдельном потоке.
+        Таймаут отключается при command_timeout: 0 в settings.yml.
         """
         raw_stdout, raw_stderr, return_code = "", "", 0
         if command:
             try:
-                # Алиасы уже раскрыты в run_command через _expand_aliases
-                # Выполняем команду в bash
-                process = subprocess.run(
-                    command, shell=True, executable="/bin/bash",
-                    capture_output=True, text=True,
-                    encoding=self.ENCODING, errors='replace',
+                kwargs = dict(
+                    shell=True,
+                    executable="/bin/bash",
+                    capture_output=True,
+                    text=True,
+                    encoding=self.ENCODING,
+                    errors="replace",
                     input=stdin_data,
-                    timeout=self.COMMAND_TIMEOUT
                 )
+                if self.COMMAND_TIMEOUT and self.COMMAND_TIMEOUT > 0:
+                    kwargs["timeout"] = self.COMMAND_TIMEOUT
+                process = subprocess.run(command, **kwargs)
                 raw_stdout = process.stdout.strip()
                 raw_stderr = process.stderr.strip()
                 return_code = process.returncode
             except subprocess.TimeoutExpired:
-                raw_stderr = f"{self.MSG_TIMEOUT}"
-                return_code = 124 
+                raw_stderr = self.MSG_TIMEOUT.format(sec=self.COMMAND_TIMEOUT)
+                return_code = 124
             except Exception as e:
                 raw_stderr = str(e)
                 return_code = -1
