@@ -176,6 +176,20 @@ def get_all_commands_with_ids(db_file: str):
     conn.close()
     return commands
 
+
+def get_commands_by_prefix(db_file: str, prefix: str):
+    """
+    Returns distinct command strings that start with prefix (for Tab completion).
+    """
+    conn = get_db_connection(db_file)
+    cursor = conn.execute(
+        "SELECT DISTINCT command FROM commands WHERE deleted = 0 AND command LIKE ? ORDER BY command",
+        (prefix + "%",)
+    )
+    result = [row["command"] for row in cursor.fetchall()]
+    conn.close()
+    return result
+
 def set_tag_comment(db_file: str, tag: str, comment: str):
     """
     Sets or updates the comment for a tag.

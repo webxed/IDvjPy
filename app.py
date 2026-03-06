@@ -50,6 +50,7 @@ try:
     import portalocker
     from typing import List, Optional, Dict
     from command_parser_v2 import CommandParser
+    from textual import events
     from textual.app import App, ComposeResult
     from textual.binding import Binding
     from textual.widgets import Header, Footer, Input, Static
@@ -213,6 +214,26 @@ class InfoBlock(Static):
         self.can_focus = True
 
 
+class CommandInput(Input):
+    """Поле ввода с автодополнением по Tab из БД и истории сессии (как в PowerShell)."""
+
+    def on_key(self, event: events.Key) -> None:
+        if event.key != "tab" and "tab" not in getattr(event, "aliases", []):
+            super().on_key(event)
+            return
+        app = self.app
+        if not hasattr(app, "get_tab_completion"):
+            super().on_key(event)
+            return
+        completed = app.get_tab_completion(self.value)
+        if completed is not None:
+            self.value = completed
+            self.cursor_position = len(completed)
+            event.prevent_default()
+        else:
+            super().on_key(event)
+
+
 class QueryResultsBlock(Static):
     """
     Виджет для отображения результатов запроса с кликабельными командами.
@@ -304,6 +325,49 @@ class CommandRunner(App):
         self.aliases: Dict[str, str] = {}
         # v1.1.9+: Парсер команд с поддержкой ссылок
         self.command_parser = CommandParser()
+        # Состояние для Tab-автодополнения (цикл по нескольким совпадениям)
+        self._completion_prefix: str = ""
+        self._completion_index: int = -1
+
+    def _longest_common_prefix(self, strings: List[str]) -> str:
+        """Общий префикс списка строк (для автодополнения при нескольких совпадениях)."""
+        if not strings:
+            return ""
+        for i, chars in enumerate(zip(*strings)):
+            if len(set(chars)) != 1:
+                return strings[0][:i]
+        return strings[0][: min(len(s) for s in strings)]
+
+    def get_tab_completion(self, prefix: str) -> Optional[str]:
+        """
+        Подсказка по Tab: команды из БД и истории сессии по префиксу.
+        Одно совпадение — подставляется целиком; несколько — цикл по совпадениям.
+        """
+        prefix = prefix.strip()
+        if not prefix:
+            return None
+        candidates: List[str] = []
+        try:
+            from_db = database.get_commands_by_prefix(self.db_file, prefix)
+            candidates.extend(from_db)
+        except Exception:
+            pass
+        for cmd in self.session_history:
+            if cmd.strip().startswith(prefix):
+                candidates.append(cmd.strip())
+        candidates = sorted(set(candidates))
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            self._completion_prefix = ""
+            self._completion_index = -1
+            return candidates[0]
+        if prefix != self._completion_prefix:
+            self._completion_prefix = prefix
+            self._completion_index = 0
+        else:
+            self._completion_index += 1
+        return candidates[self._completion_index % len(candidates)]
 
     def on_mount(self) -> None:
         """
@@ -528,7 +592,7 @@ class CommandRunner(App):
     def compose(self) -> ComposeResult:
         """Построение UI."""
         yield Header()
-        yield Input(placeholder="Enter command, #tag, #tag+, ??, !!, $VAR=val, or :q/:w", id=self.ID_INPUT)
+        yield CommandInput(placeholder="Enter command, Tab=complete from DB/history", id=self.ID_INPUT)
         yield VerticalScroll(id=self.ID_RESULTS_CONTAINER)
         yield Footer()
 
