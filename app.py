@@ -51,6 +51,7 @@ try:
     from typing import List, Optional, Dict
     from command_parser_v2 import CommandParser
     from textual.app import App, ComposeResult
+    from textual.binding import Binding
     from textual.widgets import Header, Footer, Input, Static
     from rich.text import Text
     from textual.containers import VerticalScroll, Vertical
@@ -239,8 +240,8 @@ class CommandRunner(App):
     CSS_PATH = "app.css"
     BINDINGS = [
         ("d", "toggle_dark", "Toggle dark mode"),
-        ("up", "history_prev", "Previous command"),
-        ("down", "history_next", "Next command"),
+        Binding("up", "history_prev", "Previous command", priority=True),
+        Binding("down", "history_next", "Next command", priority=True),
         ("pageup", "focus_previous", "Prev Block"),
         ("pagedown", "focus_next", "Next Block"),
         ("f5", "copy_block", "Copy Block"),
@@ -555,15 +556,29 @@ class CommandRunner(App):
         except Exception as e:
             self.add_block(InfoBlock(f"Error clearing blocks: {e}"))
 
+    def _scroll_results_end(self) -> None:
+        """Прокрутить контейнер результатов вниз. Вызов после refresh даёт корректный layout."""
+        container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+        container.scroll_end()
+
     def add_block(self, block: Static) -> None:
         """
         Добавляет блок в UI, прокручивает вниз и возвращает фокус во ввод.
+        Прокрутка выполняется после refresh; повторная прокрутка после второго refresh
+        нужна при первом запуске, когда виртуальный размер контейнера ещё не окончателен.
         """
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
         container.mount(block)
-        block.focus() # Кратковременно фокусируем, чтобы обновить active_pipe_source
+        block.focus()  # Кратковременно фокусируем, чтобы обновить active_pipe_source
         self.query_one(f"#{self.ID_INPUT}", Input).focus()
-        container.scroll_end()
+
+        # Двойная прокрутка после refresh: при первом запуске один refresh недостаточен для
+        # финального virtual size контейнера; вторая прокрутка доводит скролл до конца.
+        def scroll_then_repeat() -> None:
+            self._scroll_results_end()
+            self.call_after_refresh(self._scroll_results_end)
+
+        self.call_after_refresh(scroll_then_repeat)
 
     def clear_subtitle(self) -> None:
         """Очищает подзаголовок (статус-бар)."""
