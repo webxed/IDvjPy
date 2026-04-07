@@ -1,1 +1,2 @@
 # Terminal-specific environment variables
+export NS="markovskiy"
