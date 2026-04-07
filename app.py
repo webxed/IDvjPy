@@ -329,8 +329,11 @@ class CommandInput(Input):
                 event.prevent_default()
                 return
 
-    def on_changed(self, event) -> None:
-        """При изменении текста — показать/скрыть подсказки."""
+    def _watch_value(self, value: str) -> None:
+        """Вызывается при изменении value (reactive watcher)."""
+        # Сначала вызываем родительский метод
+        super()._watch_value(value)
+        # Затем показываем подсказки
         self.call_after_refresh(self._show_completions)
 
     def _show_completions(self) -> None:
