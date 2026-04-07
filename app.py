@@ -310,11 +310,11 @@ class CommandInput(Input):
         if self._completion_list.is_visible():
             if event.key == "down":
                 self._completion_list.next_item()
-                event.prevent_default()
+                event.stop()
                 return
             elif event.key == "up":
                 self._completion_list.prev_item()
-                event.prevent_default()
+                event.stop()
                 return
             elif event.key == "tab" or event.key == "enter":
                 selected = self._completion_list.get_selected()
@@ -322,11 +322,11 @@ class CommandInput(Input):
                     self.value = selected
                     self.cursor_position = len(selected)
                     self._completion_list.hide()
-                    event.prevent_default()
+                    event.stop()
                 return
             elif event.key == "escape":
                 self._completion_list.hide()
-                event.prevent_default()
+                event.stop()
                 return
 
     def _watch_value(self, value: str) -> None:
