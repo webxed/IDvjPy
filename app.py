@@ -297,11 +297,9 @@ class CommandInput(Input):
         super().__init__(**kwargs)
         self._completion_list: Optional[CompletionList] = None
 
-    def on_mount(self) -> None:
-        """Создать виджет подсказок после монтирования."""
-        self._completion_list = CompletionList()
-        # Монтируем после Header, но перед results
-        self.screen.mount(self._completion_list, after=self.screen.query_one("Header"))
+    def set_completion_list(self, completion_list: 'CompletionList') -> None:
+        """Привязать список подсказок (вызывается из App.on_mount)."""
+        self._completion_list = completion_list
 
     def on_key(self, event: events.Key) -> None:
         """Обработка клавиш для автодополнения."""
@@ -472,6 +470,10 @@ class CommandRunner(App):
         Вызывается при старте приложения.
         Загружает настройки, базу данных и переменные окружения.
         """
+        # 0. Привязать список подсказок к полю ввода
+        cmd_input = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        cmd_input.set_completion_list(self._completion_list)
+
         # 1. Загрузка общих настроек
         try:
             with open(self.FILE_SETTINGS, "r", encoding=self.ENCODING) as f:
@@ -690,7 +692,9 @@ class CommandRunner(App):
     def compose(self) -> ComposeResult:
         """Построение UI."""
         yield Header()
-        yield CommandInput(placeholder="Enter command, Tab=complete from DB/history", id=self.ID_INPUT)
+        self._completion_list = CompletionList()
+        yield self._completion_list
+        yield CommandInput(placeholder="Enter command (type 2+ chars for completion)", id=self.ID_INPUT)
         yield VerticalScroll(id=self.ID_RESULTS_CONTAINER)
         yield Footer()
 
