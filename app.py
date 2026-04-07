@@ -331,10 +331,6 @@ class CommandInput(Input):
                 event.prevent_default()
                 return
 
-        # Показываем подсказки при вводе (минимум 2 символа)
-        # Срабатывает и на backspace для обновления списка
-            self.call_after_refresh(self._show_completions)
-
     def on_changed(self, event) -> None:
         """При изменении текста — показать/скрыть подсказки."""
         self.call_after_refresh(self._show_completions)
