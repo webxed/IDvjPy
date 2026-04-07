@@ -296,6 +296,7 @@ class CommandInput(Input):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._completion_list: Optional[CompletionList] = None
+        self._applying_completion: bool = False  # Флаг: применяем completion
 
     def set_completion_list(self, completion_list: 'CompletionList') -> None:
         """Привязать список подсказок (вызывается из App.on_mount)."""
@@ -319,6 +320,7 @@ class CommandInput(Input):
             elif event.key == "tab" or event.key == "enter":
                 selected = self._completion_list.get_selected()
                 if selected:
+                    self._applying_completion = True  # Устанавливаем флаг
                     self.value = selected
                     self.cursor_position = len(selected)
                     self._completion_list.hide()
@@ -333,6 +335,10 @@ class CommandInput(Input):
         """Вызывается при изменении value (reactive watcher)."""
         # Сначала вызываем родительский метод
         super()._watch_value(value)
+        # Не показываем подсказки если применяем completion
+        if self._applying_completion:
+            self._applying_completion = False
+            return
         # Затем показываем подсказки
         self.call_after_refresh(self._show_completions)
 
