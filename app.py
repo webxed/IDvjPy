@@ -219,7 +219,6 @@ class CompletionList(Static):
 
     DEFAULT_CSS = """
     CompletionList {
-        dock: top;
         layer: overlay;
         background: $surface;
         border: heavy $accent;
@@ -230,6 +229,7 @@ class CompletionList(Static):
         overflow: hidden;
         padding: 0 1;
         display: none;
+        offset-y: 3;  /* Сместить ниже input */
     }
     CompletionList .selected {
         background: $accent;
@@ -383,8 +383,8 @@ class CommandRunner(App):
     CSS_PATH = "app.css"
     BINDINGS = [
         ("d", "toggle_dark", "Toggle dark mode"),
-        Binding("up", "history_prev", "Previous command", priority=True),
-        Binding("down", "history_next", "Next command", priority=True),
+        Binding("up", "history_prev", "Previous command", priority=False),
+        Binding("down", "history_next", "Next command", priority=False),
         ("pageup", "focus_previous", "Prev Block"),
         ("pagedown", "focus_next", "Next Block"),
         ("f5", "copy_block", "Copy Block"),
