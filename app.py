@@ -218,20 +218,17 @@ class CommandInput(Input):
     """Поле ввода с автодополнением по Tab из БД и истории сессии (как в PowerShell)."""
 
     def on_key(self, event: events.Key) -> None:
-        if event.key != "tab" and "tab" not in getattr(event, "aliases", []):
-            super().on_key(event)
-            return
+        is_tab = event.key == "tab" or "tab" in getattr(event, "aliases", [])
+        if not is_tab:
+            return  # не Tab — не перехватываем, обработается стандартно
         app = self.app
         if not hasattr(app, "get_tab_completion"):
-            super().on_key(event)
             return
         completed = app.get_tab_completion(self.value)
         if completed is not None:
             self.value = completed
             self.cursor_position = len(completed)
             event.prevent_default()
-        else:
-            super().on_key(event)
 
 
 class QueryResultsBlock(Static):
