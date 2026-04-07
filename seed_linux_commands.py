@@ -23,19 +23,28 @@ FILE_SETTINGS = "settings.yml"
 ENCODING = "utf-8"
 DEFAULT_DB = "history_v2.db"
 
-# Tag comments for ? listing
+# Порядок тегов: процессы → файлы → сеть → kubectl
 TAG_COMMENTS = {
+    "proc": "Процессы",
     "file": "Файлы и каталоги",
     "net": "Сеть",
-    "proc": "Процессы",
-    "sys": "Система",
-    "find": "Поиск",
-    "archive": "Архивы",
-    "text": "Текст и потоки",
+    "kube": "Kubernetes (kubectl + tsh)",
 }
 
-# Ordered commands per tag (tid = 1-based index). See LINUX_COMMANDS.md.
+# Команды по тегам (tid = 1, 2, 3…). Порядок тегов: proc, file, net, kube.
 SEED_COMMANDS = {
+    "proc": [
+        "ps aux",
+        "top",
+        "htop",
+        "kill",
+        "killall",
+        "pkill",
+        "nohup",
+        "jobs",
+        "fg",
+        "bg",
+    ],
     "file": [
         "ls -la",
         "cp -r src dest",
@@ -60,59 +69,26 @@ SEED_COMMANDS = {
         "ip addr",
         "ip route",
     ],
-    "proc": [
-        "ps aux",
-        "top",
-        "htop",
-        "kill",
-        "killall",
-        "pkill",
-        "nohup",
-        "jobs",
-        "fg",
-        "bg",
-    ],
-    "sys": [
-        "uname -a",
-        "uptime",
-        "free -h",
-        "df -h",
-        "date",
-        "whoami",
-        "id",
-        "env",
-        "systemctl status",
-        "journalctl -xe",
-    ],
-    "find": [
-        'find . -name "*.py"',
-        "find . -type f -mtime -7",
-        "find . -type d",
-        "locate",
-        "which",
-        "whereis",
-    ],
-    "archive": [
-        "tar -xvf",
-        "tar -cvf",
-        "tar -xzvf",
-        "tar -czvf",
-        "gzip",
-        "gunzip",
-        "zip -r",
-        "unzip",
-    ],
-    "text": [
-        "grep -r",
-        "grep -E",
-        "sed -i",
-        "awk",
-        "sort",
-        "uniq",
-        "wc -l",
-        "cut",
-        "tr",
-        "xargs",
+    "kube": [
+        "tsh kube login CLUSTER",
+        "kubectl config get-contexts",
+        "kubectl config current-context",
+        "kubectl cluster-info",
+        "kubectl get ns",
+        "kubectl get all -n $NS",
+        "kubectl get pods -n $NS",
+        "kubectl describe pod POD -n $NS",
+        "kubectl logs POD -n $NS",
+        "kubectl logs -f POD -n $NS",
+        "kubectl exec -it POD -n $NS -- sh",
+        "kubectl get deploy -n $NS",
+        "kubectl describe deploy DEPLOY -n $NS",
+        "kubectl rollout status deploy/DEPLOY -n $NS",
+        "kubectl rollout restart deploy/DEPLOY -n $NS",
+        "kubectl get svc -n $NS",
+        "kubectl port-forward svc/SVC 8080:80 -n $NS",
+        "kubectl apply -f FILE.yaml -n $NS",
+        "kubectl delete -f FILE.yaml -n $NS",
     ],
 }
 
