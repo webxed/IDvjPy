@@ -214,21 +214,149 @@ class InfoBlock(Static):
         self.can_focus = True
 
 
+class CompletionList(Static):
+    """Выпадающий список подсказок для автодополнения."""
+
+    DEFAULT_CSS = """
+    CompletionList {
+        dock: top;
+        layer: overlay;
+        background: $surface;
+        border: heavy $accent;
+        width: auto;
+        max-width: 80;
+        height: auto;
+        max-height: 12;
+        overflow: hidden;
+        padding: 0 1;
+        display: none;
+    }
+    CompletionList .selected {
+        background: $accent;
+        color: $text;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.candidates: List[str] = []
+        self.selected_index: int = 0
+
+    def update_candidates(self, candidates: List[str]) -> None:
+        """Обновить список кандидатов."""
+        self.candidates = candidates[:10]  # max 10 items
+        self.selected_index = 0
+        if self.candidates:
+            self._render_list()
+            self.styles.display = "block"
+        else:
+            self.styles.display = "none"
+
+    def _render_list(self) -> None:
+        """Отрисовать список."""
+        lines = []
+        for i, cmd in enumerate(self.candidates):
+            if i == self.selected_index:
+                lines.append(f"[bold reverse] {cmd} [/bold reverse]")
+            else:
+                lines.append(f" {cmd}")
+        self.update("\n".join(lines))
+
+    def next_item(self) -> None:
+        """Следующий элемент."""
+        if self.candidates:
+            self.selected_index = (self.selected_index + 1) % len(self.candidates)
+            self._render_list()
+
+    def prev_item(self) -> None:
+        """Предыдущий элемент."""
+        if self.candidates:
+            self.selected_index = (self.selected_index - 1) % len(self.candidates)
+            self._render_list()
+
+    def get_selected(self) -> Optional[str]:
+        """Получить выбранный элемент."""
+        if self.candidates and 0 <= self.selected_index < len(self.candidates):
+            return self.candidates[self.selected_index]
+        return None
+
+    def is_visible(self) -> bool:
+        """Видим ли список."""
+        return bool(self.candidates)
+
+    def hide(self) -> None:
+        """Скрыть список."""
+        self.candidates = []
+        self.styles.display = "none"
+
+
 class CommandInput(Input):
-    """Поле ввода с автодополнением по Tab из БД и истории сессии (как в PowerShell)."""
+    """Поле ввода с автодополнением по Tab из БД и истории сессии."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._completion_list: Optional[CompletionList] = None
+
+    def on_mount(self) -> None:
+        """Создать виджет подсказок после монтирования."""
+        self._completion_list = CompletionList()
+        # Монтируем после Header, но перед results
+        self.screen.mount(self._completion_list, after=self.screen.query_one("Header"))
 
     def on_key(self, event: events.Key) -> None:
-        is_tab = event.key == "tab" or "tab" in getattr(event, "aliases", [])
-        if not is_tab:
-            return  # не Tab — не перехватываем, обработается стандартно
-        app = self.app
-        if not hasattr(app, "get_tab_completion"):
+        """Обработка клавиш для автодополнения."""
+        if not self._completion_list:
             return
-        completed = app.get_tab_completion(self.value)
-        if completed is not None:
-            self.value = completed
-            self.cursor_position = len(completed)
-            event.prevent_default()
+
+        # Навигация по списку
+        if self._completion_list.is_visible():
+            if event.key == "down":
+                self._completion_list.next_item()
+                event.prevent_default()
+                return
+            elif event.key == "up":
+                self._completion_list.prev_item()
+                event.prevent_default()
+                return
+            elif event.key == "tab" or event.key == "enter":
+                selected = self._completion_list.get_selected()
+                if selected:
+                    self.value = selected
+                    self.cursor_position = len(selected)
+                    self._completion_list.hide()
+                    event.prevent_default()
+                return
+            elif event.key == "escape":
+                self._completion_list.hide()
+                event.prevent_default()
+                return
+
+        # Показываем подсказки при вводе (минимум 2 символа)
+        # Срабатывает и на backspace для обновления списка
+            self.call_after_refresh(self._show_completions)
+
+    def on_changed(self, event) -> None:
+        """При изменении текста — показать/скрыть подсказки."""
+        self.call_after_refresh(self._show_completions)
+
+    def _show_completions(self) -> None:
+        """Показать подсказки."""
+        if not self._completion_list:
+            return
+        app = self.app
+        if not hasattr(app, "get_completion_candidates"):
+            return
+
+        prefix = self.value.strip()
+        if len(prefix) < 2:
+            self._completion_list.hide()
+            return
+
+        candidates = app.get_completion_candidates(prefix)
+        if candidates:
+            self._completion_list.update_candidates(candidates)
+        else:
+            self._completion_list.hide()
 
 
 class QueryResultsBlock(Static):
@@ -268,7 +396,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.13" # Add JSON viewer (:json command/F3) with jq path copy
+    VERSION = "v1.1.14" # Dropdown completion list (↓↑ navigate, Tab apply, Esc hide)
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -322,27 +450,15 @@ class CommandRunner(App):
         self.aliases: Dict[str, str] = {}
         # v1.1.9+: Парсер команд с поддержкой ссылок
         self.command_parser = CommandParser()
-        # Состояние для Tab-автодополнения (цикл по нескольким совпадениям)
-        self._completion_prefix: str = ""
-        self._completion_index: int = -1
 
-    def _longest_common_prefix(self, strings: List[str]) -> str:
-        """Общий префикс списка строк (для автодополнения при нескольких совпадениях)."""
-        if not strings:
-            return ""
-        for i, chars in enumerate(zip(*strings)):
-            if len(set(chars)) != 1:
-                return strings[0][:i]
-        return strings[0][: min(len(s) for s in strings)]
-
-    def get_tab_completion(self, prefix: str) -> Optional[str]:
+    def get_completion_candidates(self, prefix: str) -> List[str]:
         """
-        Подсказка по Tab: команды из БД и истории сессии по префиксу.
-        Одно совпадение — подставляется целиком; несколько — цикл по совпадениям.
+        Возвращает список команд из БД и истории сессии по префиксу.
+        Для выпадающего списка подсказок.
         """
         prefix = prefix.strip()
         if not prefix:
-            return None
+            return []
         candidates: List[str] = []
         try:
             from_db = database.get_commands_by_prefix(self.db_file, prefix)
@@ -352,19 +468,8 @@ class CommandRunner(App):
         for cmd in self.session_history:
             if cmd.strip().startswith(prefix):
                 candidates.append(cmd.strip())
-        candidates = sorted(set(candidates))
-        if not candidates:
-            return None
-        if len(candidates) == 1:
-            self._completion_prefix = ""
-            self._completion_index = -1
-            return candidates[0]
-        if prefix != self._completion_prefix:
-            self._completion_prefix = prefix
-            self._completion_index = 0
-        else:
-            self._completion_index += 1
-        return candidates[self._completion_index % len(candidates)]
+        # Уникальные, отсортированные, максимум 20
+        return sorted(set(candidates))[:20]
 
     def on_mount(self) -> None:
         """
