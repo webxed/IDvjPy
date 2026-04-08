@@ -357,6 +357,10 @@ class CommandInput(Input):
 
         candidates = app.get_completion_candidates(prefix)
         if candidates:
+            # Если точное совпадение — не показываем (команда уже выбрана, пользователь добавляет аргументы)
+            if len(candidates) == 1 and candidates[0] == prefix:
+                self._completion_list.hide()
+                return
             self._completion_list.update_candidates(candidates)
         else:
             self._completion_list.hide()
