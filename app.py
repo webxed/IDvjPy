@@ -419,6 +419,8 @@ class CommandRunner(App):
         ("f3", "open_json_viewer", "JSON Viewer"),
         ("escape", "focus_input", "Focus Input"),
         Binding("space", "toggle_block_collapse", "Collapse", show=False),
+        Binding("left", "collapse_block", "← Collapse", show=False),
+        Binding("right", "expand_block", "→ Expand", show=False),
     ]
 
     TITLE = "IDvjPy_term"
@@ -860,6 +862,18 @@ class CommandRunner(App):
         else:
             self.sub_title = self.MSG_NO_FOCUS
             self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+
+    def action_collapse_block(self) -> None:
+        """Сворачивает сфокусированный блок (стрелка влево)."""
+        focused = self.focused
+        if isinstance(focused, CommandBlock) and not focused.collapsed:
+            focused.toggle_collapse()
+
+    def action_expand_block(self) -> None:
+        """Разворачивает сфокусированный блок (стрелка вправо)."""
+        focused = self.focused
+        if isinstance(focused, CommandBlock) and focused.collapsed:
+            focused.toggle_collapse()
 
     def action_open_json_viewer(self) -> None:
         """
