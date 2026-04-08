@@ -140,6 +140,7 @@ class CommandBlock(Static):
         self.raw_stdout = raw_stdout
         self.raw_stderr = raw_stderr
         self.return_code = return_code
+        self.collapsed = False
 
         # Формируем отображаемый контент
         self.text_content = self._format_output()
@@ -148,6 +149,11 @@ class CommandBlock(Static):
 
     def _format_output(self) -> str:
         """Форматирует вывод команды."""
+        if self.collapsed:
+            # Свернутый вид — только заголовок
+            indicator = "[dim]▶[/dim]"
+            return f"{indicator} {self.header}\n"
+
         parts = [self.header]
 
         # Основной вывод
@@ -163,6 +169,15 @@ class CommandBlock(Static):
             parts.append(f"[bold yellow]Exit code: {self.return_code}[/bold yellow]")
 
         return "\n".join(parts) + "\n\n"
+
+    def toggle_collapse(self) -> None:
+        """Переключает состояние сворачивания."""
+        self.collapsed = not self.collapsed
+        self.update(self._format_output())
+
+    def on_click(self, event) -> None:
+        """Клик по блоку — сворачивает/разворачивает."""
+        self.toggle_collapse()
 
     def update_content(self, raw_stdout: str, raw_stderr: str, return_code: int) -> None:
         """
@@ -407,6 +422,7 @@ class CommandRunner(App):
         ("f5", "copy_block", "Copy Block"),
         ("f3", "open_json_viewer", "JSON Viewer"),
         ("escape", "focus_input", "Focus Input"),
+        Binding("space", "toggle_block_collapse", "Collapse", show=False),
     ]
 
     TITLE = "IDvjPy_term"
@@ -837,6 +853,12 @@ class CommandRunner(App):
             except Exception:
                 self.sub_title = "Error copying to clipboard."
                 self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+
+    def action_toggle_block_collapse(self) -> None:
+        """Сворачивает/разворачивает сфокусированный блок."""
+        focused = self.focused
+        if isinstance(focused, CommandBlock):
+            focused.toggle_collapse()
         else:
             self.sub_title = self.MSG_NO_FOCUS
             self.set_timer(self.TIMER_DELAY, self.clear_subtitle)

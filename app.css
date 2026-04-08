@@ -19,10 +19,17 @@ CommandBlock, InfoBlock {
     width: 100%;
     height: auto;
     padding: 0 1;
+    text-size: 0.9;  /* уменьшенный шрифт */
 }
 
 CommandBlock:focus, InfoBlock:focus {
-    background: $primary-lighten-2;
+    background: $primary-darken-1;  /* менее яркий цвет выделения */
+}
+
+/* Свернутый блок */
+CommandBlock.collapsed {
+    height: 1;
+    overflow: hidden;
 }
 
 /* Стили для кликабельных ссылок на команды */
