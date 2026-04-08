@@ -173,7 +173,14 @@ class CommandBlock(Static):
     def toggle_collapse(self) -> None:
         """Переключает состояние сворачивания."""
         self.collapsed = not self.collapsed
-        self.update(self._format_output())
+        try:
+            self.update(self._format_output())
+        except Exception:
+            # При очень большом выводе может быть ошибка рендеринга
+            # В этом случае оставляем блок свернутым
+            if not self.collapsed:
+                self.collapsed = True
+                self.update(f"[dim]▶[/dim] {self.header}\n[yellow](Output too large to display)[/yellow]\n")
 
     def update_content(self, raw_stdout: str, raw_stderr: str, return_code: int) -> None:
         """
