@@ -126,6 +126,8 @@ def release_file_lock(file_obj) -> None:
 class CommandBlock(Static):
     """Виджет для отображения одной команды и её вывода."""
 
+    MAX_DISPLAY_LINES = 500  # Максимум строк для отображения
+
     def __init__(self, header: str, raw_stdout: str, raw_stderr: str, return_code: int, **kwargs):
         """
         Инициализация блока команды.
@@ -141,11 +143,22 @@ class CommandBlock(Static):
         self.raw_stderr = raw_stderr
         self.return_code = return_code
         self.collapsed = False
+        self._truncated = False  # Флаг: вывод был обрезан
 
         # Формируем отображаемый контент
         self.text_content = self._format_output()
         super().__init__(self.text_content, **kwargs)
         self.can_focus = True
+
+    def _truncate_output(self, text: str) -> str:
+        """Обрезает вывод до MAX_DISPLAY_LINES."""
+        lines = text.split('\n')
+        if len(lines) <= self.MAX_DISPLAY_LINES:
+            return text
+        self._truncated = True
+        # Показываем последние строки (более релевантны)
+        truncated = '\n'.join(lines[-self.MAX_DISPLAY_LINES:])
+        return f"[dim](...{len(lines) - self.MAX_DISPLAY_LINES} lines truncated, F5 to copy full output)[/dim]\n{truncated}"
 
     def _format_output(self) -> str:
         """Форматирует вывод команды."""
@@ -156,9 +169,10 @@ class CommandBlock(Static):
 
         parts = [self.header]
 
-        # Основной вывод
+        # Основной вывод (с обрезкой если нужно)
         if self.raw_stdout:
-            parts.append(self.raw_stdout.rstrip())
+            stdout_display = self._truncate_output(self.raw_stdout.rstrip())
+            parts.append(stdout_display)
 
         # Stderr внизу с подсветкой ошибки
         if self.raw_stderr and self.raw_stderr.strip():
@@ -190,6 +204,7 @@ class CommandBlock(Static):
         self.raw_stdout = raw_stdout
         self.raw_stderr = raw_stderr
         self.return_code = return_code
+        self._truncated = False  # Сброс флага при обновлении
         self.update(self._format_output())
 
     def on_focus(self) -> None:
@@ -436,7 +451,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.14" # Dropdown completion list (↓↑ navigate, Tab apply, Esc hide)
+    VERSION = "v1.1.16" # Truncate large output (max 500 lines), F5 copies full
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
