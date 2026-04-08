@@ -19,7 +19,6 @@ CommandBlock, InfoBlock {
     width: 100%;
     height: auto;
     padding: 0 1;
-    text-size: 0.9;  /* уменьшенный шрифт */
 }
 
 CommandBlock:focus, InfoBlock:focus {
