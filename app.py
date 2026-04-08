@@ -126,7 +126,7 @@ def release_file_lock(file_obj) -> None:
 class CommandBlock(Static):
     """Виджет для отображения одной команды и её вывода."""
 
-    MAX_DISPLAY_LINES = 500  # Максимум строк для отображения
+    MAX_DISPLAY_LINES = 50  # Максимум строк для отображения
 
     def __init__(self, header: str, raw_stdout: str, raw_stderr: str, return_code: int, **kwargs):
         """
