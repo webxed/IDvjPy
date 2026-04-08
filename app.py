@@ -125,11 +125,11 @@ def release_file_lock(file_obj) -> None:
 
 class CommandBlock(Static):
     """Виджет для отображения одной команды и её вывода."""
-    
+
     def __init__(self, header: str, raw_stdout: str, raw_stderr: str, return_code: int, **kwargs):
         """
         Инициализация блока команды.
-        
+
         Args:
             header: Заголовок (время, директория, команда).
             raw_stdout: Вывод команды.
@@ -140,16 +140,29 @@ class CommandBlock(Static):
         self.raw_stdout = raw_stdout
         self.raw_stderr = raw_stderr
         self.return_code = return_code
-        
-        # Формируем строку, имитирующую результат subprocess.run
-        display_output = (
-            f"CompletedProcess(returncode={self.return_code}, "
-            f"stdout='{self.raw_stdout}', stderr='{self.raw_stderr}')"
-        )
-        self.text_content = f"{self.header}\n{display_output}".rstrip() + "\n\n"
-        
+
+        # Формируем отображаемый контент
+        self.text_content = self._format_output()
         super().__init__(self.text_content, **kwargs)
         self.can_focus = True
+
+    def _format_output(self) -> str:
+        """Форматирует вывод команды."""
+        parts = [self.header]
+
+        # Основной вывод
+        if self.raw_stdout:
+            parts.append(self.raw_stdout.rstrip())
+
+        # Stderr внизу с подсветкой ошибки
+        if self.raw_stderr and self.raw_stderr.strip():
+            parts.append(f"[bold red]STDERR:[/bold red]\n{self.raw_stderr.rstrip()}")
+
+        # Return code если != 0
+        if self.return_code != 0:
+            parts.append(f"[bold yellow]Exit code: {self.return_code}[/bold yellow]")
+
+        return "\n".join(parts) + "\n\n"
 
     def update_content(self, raw_stdout: str, raw_stderr: str, return_code: int) -> None:
         """
@@ -159,13 +172,7 @@ class CommandBlock(Static):
         self.raw_stdout = raw_stdout
         self.raw_stderr = raw_stderr
         self.return_code = return_code
-        
-        display_output = (
-            f"CompletedProcess(returncode={self.return_code}, "
-            f"stdout='{self.raw_stdout}', stderr='{self.raw_stderr}')"
-        )
-        final_content = f"{self.header}\n{display_output}".rstrip() + "\n\n"
-        self.update(final_content)
+        self.update(self._format_output())
 
     def on_focus(self) -> None:
         """
