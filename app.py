@@ -478,6 +478,15 @@ class CommandRunner(App):
         # Уникальные, отсортированные, максимум 20
         return sorted(set(candidates))[:20]
 
+    def on_key(self, event: events.Key) -> None:
+        """Перехват клавиш для автофокуса на поле ввода."""
+        # Если нажата печатаемая клавиша и фокус не на input — переводим фокус
+        if event.is_printable:
+            input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+            if not input_widget.has_focus:
+                input_widget.focus()
+                # Клавиша обработается input'ом автоматически
+
     def on_mount(self) -> None:
         """
         Вызывается при старте приложения.
