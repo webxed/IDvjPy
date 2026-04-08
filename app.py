@@ -537,6 +537,16 @@ class CommandRunner(App):
                 input_widget.focus()
                 # Клавиша обработается input'ом автоматически
 
+    def on_mouse_scroll_down(self, event) -> None:
+        """Скролл вниз всегда идёт в контейнер вывода."""
+        container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+        container.scroll_relative(1)
+
+    def on_mouse_scroll_up(self, event) -> None:
+        """Скролл вверх всегда идёт в контейнер вывода."""
+        container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+        container.scroll_relative(-1)
+
     def on_mount(self) -> None:
         """
         Вызывается при старте приложения.
@@ -1920,18 +1930,22 @@ class CommandRunner(App):
         self.run_command(command, stdin_data)
 
     def action_history_prev(self) -> None:
-        """Навигация истории назад."""
-        if not self.session_history: return
+        """Навигация истории назад (только если фокус на input)."""
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+        if not input_widget.has_focus:
+            return  # Не перехватываем если фокус на контейнере вывода
+        if not self.session_history: return
         if self.session_history_pos > 0:
             self.session_history_pos -= 1
             input_widget.value = self.session_history[self.session_history_pos]
             input_widget.cursor_position = len(input_widget.value)
 
     def action_history_next(self) -> None:
-        """Навигация истории вперед."""
-        if not self.session_history: return
+        """Навигация истории вперед (только если фокус на input)."""
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+        if not input_widget.has_focus:
+            return  # Не перехватываем если фокус на контейнере вывода
+        if not self.session_history: return
         if self.session_history_pos < len(self.session_history) - 1:
             self.session_history_pos += 1
             input_widget.value = self.session_history[self.session_history_pos]
