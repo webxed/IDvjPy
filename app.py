@@ -175,10 +175,6 @@ class CommandBlock(Static):
         self.collapsed = not self.collapsed
         self.update(self._format_output())
 
-    def on_click(self, event) -> None:
-        """Клик по блоку — сворачивает/разворачивает."""
-        self.toggle_collapse()
-
     def update_content(self, raw_stdout: str, raw_stderr: str, return_code: int) -> None:
         """
         Обновляет содержимое блока после завершения выполнения команды в фоновом потоке.
@@ -504,7 +500,9 @@ class CommandRunner(App):
     def on_key(self, event: events.Key) -> None:
         """Перехват клавиш для автофокуса на поле ввода."""
         # Если нажата печатаемая клавиша и фокус не на input — переводим фокус
-        if event.is_printable:
+        # Но не перехватываем если фокус на CommandBlock (для сворачивания Space)
+        focused = self.focused
+        if event.is_printable and not isinstance(focused, CommandBlock):
             input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
             if not input_widget.has_focus:
                 input_widget.focus()
