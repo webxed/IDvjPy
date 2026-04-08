@@ -325,6 +325,11 @@ class CommandInput(Input):
         if not self._completion_list:
             return
 
+        # Tab на пустой строке не должен переводить фокус
+        if event.key == "tab" and not self.value.strip():
+            event.stop()
+            return
+
         # Навигация по списку
         if self._completion_list.is_visible():
             if event.key == "down":
