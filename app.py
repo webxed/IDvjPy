@@ -66,6 +66,26 @@ except ImportError as e:
 
 
 # ============================================================================
+# Pre-compiled Regex Patterns (Performance Optimization)
+# ============================================================================
+
+RE_ANSI_TAGS = re.compile(r'\x1b\[[0-9;]*m')
+RE_RICH_TAGS = re.compile(r'\[/?[^\]]*\]')
+RE_VAR_SUBST = re.compile(r'\$([a-zA-Z_][a-zA-Z0-9_]*)\b')
+RE_COMMAND_REFS = re.compile(r'(?<!!)!([a-zA-Z_0-9]+)\[(\d+)\]|(?<!!)!(\d+)')
+RE_SHELL_OPERATORS = re.compile(r'[&|;]')
+RE_VAR_NAME = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+RE_TAG_TID = re.compile(r'^([a-zA-Z_0-9]+)\[(\d+)\]$')
+RE_TAG_MATCH = re.compile(r'^([a-zA-Z_0-9]+)\[(\d+)\]')
+RE_DIGIT_MATCH = re.compile(r'^(\d+)')
+RE_FORMATTING_TAGS = re.compile(
+    r'\[(?:\/)?(?:dim|bold|italic|underline|strike|code|link|inverse|on|off)\]|\[\/\]'
+)
+RE_TAG_TID_FIND = re.compile(r'!([a-zA-Z_0-9]+)\[(\d+)\]')
+RE_GID_FIND = re.compile(r'(?<!!)!(\d+)')
+
+
+# ============================================================================
 # File Locking Utilities with Timeout (Cross-platform)
 # ============================================================================
 
@@ -851,14 +871,7 @@ class CommandRunner(App):
         Returns:
             Текст без тегов форматирования
         """
-        import re
-        # Список известных тегов форматирования Textual
-        formatting_tags = ['dim', 'bold', 'italic', 'underline', 'strike', 'code',
-                          'link', 'inverse', 'on', 'off']
-
-        # Создаем паттерн для удаления: [tag], [/tag] или [/]
-        pattern = r'\[(?:\/)?(?:' + '|'.join(formatting_tags) + r')\]|\[\/\]'
-        return re.sub(pattern, '', text)
+        return RE_FORMATTING_TAGS.sub('', text)
 
     def action_copy_block(self) -> None:
         """Копирует содержимое сфокусированного блока в буфер обмена."""
@@ -1112,11 +1125,10 @@ class CommandRunner(App):
 
         # v1.1.9+: Проверяем, содержит ли команда ссылки на другие команды
         # Ссылки: !tag[tid] или !ID (но не !!)
-        import re
-        has_command_refs = bool(re.search(r'(?<!!)!([a-zA-Z_0-9]+)\[(\d+)\]|(?<!!)!(\d+)', user_input))
+        has_command_refs = bool(RE_COMMAND_REFS.search(user_input))
 
         # v1.1.9+: Проверяем, содержит ли команда shell-операторы
-        has_shell_operators = bool(re.search(r'[&|;]', user_input))
+        has_shell_operators = bool(RE_SHELL_OPERATORS.search(user_input))
 
         # Маршрутизация по префиксам
         if user_input.startswith(self.PREFIX_CMD):
@@ -1148,16 +1160,15 @@ class CommandRunner(App):
             else:
                 # Ошибка раскрытия - показываем сообщение пользователю
                 # Пытаемся определить, какие именно команды не найдены
-                import re
                 not_found = []
                 # Ищем все !tag[tid] ссылки
-                for match in re.finditer(r'!([a-zA-Z_0-9]+)\[(\d+)\]', user_input):
+                for match in RE_TAG_TID_FIND.finditer(user_input):
                     tag, tid = match.group(1), int(match.group(2))
                     result = database.get_command_by_tid(self.db_file, tag, tid)
                     if not result:
                         not_found.append(f"{tag}[{tid}]")
                 # Ищем все !ID ссылки (которые не !! в начале)
-                for match in re.finditer(r'(?<!!)!(\d+)', user_input):
+                for match in RE_GID_FIND.finditer(user_input):
                     gid = int(match.group(1))
                     result = database.get_command_by_global_id(self.db_file, gid)
                     if not result:
@@ -1562,7 +1573,7 @@ class CommandRunner(App):
             var_value = var_value.strip()
 
             # Простая валидация имени переменной
-            if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', var_name):
+            if not RE_VAR_NAME.match(var_name):
                 self.add_block(InfoBlock(f"Error: Invalid variable name '{var_name}'."))
                 return
 
@@ -1884,8 +1895,7 @@ class CommandRunner(App):
         self.last_query_results = {}
 
         # v1.1.11+: Проверка на формат ?tag[tid] для показа раскрытой команды
-        import re
-        tag_tid_match = re.match(r'^([a-zA-Z_0-9]+)\[(\d+)\]$', tag_part)
+        tag_tid_match = RE_TAG_TID.match(tag_part)
         if tag_tid_match:
             tag = tag_tid_match.group(1)
             tid = int(tag_tid_match.group(2))
@@ -2021,10 +2031,9 @@ class CommandRunner(App):
 
         command_text = None
         additional_text = ""
-        import re
 
         # Проверяем новый формат: !tag[tid] (с опциональным дополнительным текстом)
-        tag_match = re.match(r'^([a-zA-Z_0-9]+)\[(\d+)\]', command_part)
+        tag_match = RE_TAG_MATCH.match(command_part)
         if tag_match:
             try:
                 tag = tag_match.group(1)
@@ -2049,7 +2058,7 @@ class CommandRunner(App):
         # Проверяем старый формат: !ID (цифра)
         else:
             # Извлекаем числовой ID из начала строки
-            match = re.match(r'^(\d+)', command_part)
+            match = RE_DIGIT_MATCH.match(command_part)
             if match:
                 cmd_id = int(match.group(1))
                 result = database.get_command_by_global_id(self.db_file, cmd_id)
@@ -2241,9 +2250,6 @@ class CommandRunner(App):
         Заменяет переменные вида $VAR_NAME на значения.
         Приоритет: self.local_env > os.environ.
         """
-        # Регулярное выражение ищет $NAME, где NAME - валидный идентификатор
-        pattern = re.compile(r'\$([a-zA-Z_][a-zA-Z0-9_]*)\b')
-        
         def replacer(match):
             var_name = match.group(1)
             if var_name in self.local_env:
@@ -2252,8 +2258,8 @@ class CommandRunner(App):
                 return os.environ[var_name]
             # Если переменной нет нигде, оставляем $NAME как есть (чтобы shell сам вывел ошибку)
             return match.group(0)
-        
-        return pattern.sub(replacer, command)
+
+        return RE_VAR_SUBST.sub(replacer, command)
 
     def _expand_aliases(self, command: str) -> str:
         """
