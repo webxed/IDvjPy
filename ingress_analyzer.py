@@ -200,9 +200,12 @@ class IngressAnalyzer:
         except Exception as e:
             return False, f"Installation error: {e}"
 
-    def list_ingresses(self) -> List[IngressInfo]:
+    def list_ingresses(self, namespace: Optional[str] = None) -> List[IngressInfo]:
         """
-        Get all ingresses across all namespaces.
+        Get ingresses.
+
+        Args:
+            namespace: Specific namespace or None for all namespaces
 
         Returns:
             List of IngressInfo objects
@@ -210,10 +213,17 @@ class IngressAnalyzer:
         Raises:
             KubectlError: If kubectl command fails
         """
-        returncode, stdout, stderr = self._run_kubectl(
-            ["get", "ingress", "--all-namespaces"],
-            json_output=True
-        )
+        if namespace:
+            returncode, stdout, stderr = self._run_kubectl(
+                ["get", "ingress"],
+                namespace=namespace,
+                json_output=True
+            )
+        else:
+            returncode, stdout, stderr = self._run_kubectl(
+                ["get", "ingress", "--all-namespaces"],
+                json_output=True
+            )
 
         if returncode != 0:
             raise KubectlError(f"Failed to list ingresses: {stderr}")

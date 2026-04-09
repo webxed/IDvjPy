@@ -1295,7 +1295,8 @@ class CommandRunner(App):
         subcommand = parts[0] if parts else ""
 
         if subcommand == "list":
-            self._list_ingresses()
+            namespace = self._extract_namespace_from_args(parts)
+            self._list_ingresses(namespace)
         elif subcommand == "analyze":
             name = parts[1] if len(parts) > 1 else None
             namespace = self._extract_namespace_from_args(parts)
@@ -1328,11 +1329,12 @@ class CommandRunner(App):
         help_text = """[bold]Kubernetes Ingress Analyzer[/bold]
 
 [bold]Usage:[/bold]
-  :i list                    - List all ingresses
-  :i analyze <name>          - Analyze ingress
-  :i analyze <name> -n <ns>  - Analyze ingress in namespace
-  :i check <service>         - Check service endpoints
-  :i check <service> -n <ns> - Check service in namespace
+  :i list                   - List all ingresses
+  :i list -n <namespace>    - List ingresses in namespace
+  :i analyze <name>         - Analyze ingress
+  :i analyze <name> -n <ns> - Analyze ingress in namespace
+  :i check <service>        - Check service endpoints
+  :i check <service> -n <ns>- Check service in namespace
 
 [bold]Analysis includes:[/bold]
   • Ingress configuration (hosts, paths, TLS)
@@ -1346,33 +1348,39 @@ class CommandRunner(App):
 """
         self.add_block(InfoBlock(help_text))
 
-    def _list_ingresses(self) -> None:
-        """List all ingresses."""
+    def _list_ingresses(self, namespace: Optional[str] = None) -> None:
+        """List ingresses in namespace or all namespaces."""
+        ns_display = namespace or "all namespaces"
         def worker():
             try:
-                ingresses = self.ingress_analyzer.list_ingresses()
-                self.call_from_thread(self._display_ingress_list, ingresses)
+                ingresses = self.ingress_analyzer.list_ingresses(namespace)
+                self.call_from_thread(self._display_ingress_list, ingresses, namespace)
             except Exception as e:
                 self.call_from_thread(
                     self.add_block,
                     InfoBlock(f"[red]Error listing ingresses:[/red] {e}")
                 )
 
-        self.add_block(InfoBlock("[dim]Listing ingresses...[/dim]"))
+        self.add_block(InfoBlock(f"[dim]Listing ingresses in {ns_display}...[/dim]"))
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
 
-    def _display_ingress_list(self, ingresses) -> None:
+    def _display_ingress_list(self, ingresses, namespace: Optional[str] = None) -> None:
         """Display list of ingresses."""
+        ns_display = namespace or "all namespaces"
         if not ingresses:
-            self.add_block(InfoBlock("[yellow]No ingresses found.[/yellow]"))
+            self.add_block(InfoBlock(f"[yellow]No ingresses found in '{ns_display}'.[/yellow]"))
             return
 
-        lines = [f"[bold]Found {len(ingresses)} ingresses:[/bold]\n"]
+        lines = [f"[bold]Found {len(ingresses)} ingresses in '{ns_display}':[/bold]\n"]
         for ing in ingresses:
             hosts = ", ".join(ing.hosts) if ing.hosts else "*"
             paths_count = len(ing.paths)
-            lines.append(f"  [cyan]{ing.name}[/cyan] ({ing.namespace}) → {hosts} ({paths_count} paths)")
+            # Show namespace only if listing all namespaces
+            if namespace:
+                lines.append(f"  [cyan]{ing.name}[/cyan] → {hosts} ({paths_count} paths)")
+            else:
+                lines.append(f"  [cyan]{ing.name}[/cyan] ({ing.namespace}) → {hosts} ({paths_count} paths)")
 
         lines.append("\n[dim]Use :i analyze <name> -n <namespace> to analyze[/dim]")
         self.add_block(InfoBlock("\n".join(lines)))
