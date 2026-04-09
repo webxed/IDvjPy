@@ -490,6 +490,7 @@ class CommandRunner(App):
     CMD_CLEAR = "c"
     CMD_JSON = "json"
     CMD_INGRESS = "i"
+    CMD_HELP = "?"
 
     def __init__(self):
         """Инициализация состояния приложения."""
@@ -1267,6 +1268,8 @@ class CommandRunner(App):
         elif command == self.CMD_INGRESS:
             # Kubernetes Ingress Analyzer
             self.handle_ingress_command(user_input[2:].strip())
+        elif command == self.CMD_HELP:
+            self._show_main_help()
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
 
@@ -1331,6 +1334,48 @@ class CommandRunner(App):
         except ValueError:
             pass
         return None
+
+    def _show_main_help(self) -> None:
+        """Show main help for all commands."""
+        help_text = """[bold]IDvjPy_term - Commands Help[/bold]
+
+[bold]Application Commands (prefix :)[/bold]
+  :?          - Show this help
+  :q          - Quit application
+  :w <file>   - Write output to file
+  :h [N]      - Show shell history (default: 20 lines)
+  :c          - Clear all output blocks
+  :json       - Open JSON viewer (from last block)
+  :json <file>- Open JSON file in viewer
+  :i          - Kubernetes Ingress Analyzer (see :i for details)
+
+[bold]Kubernetes Commands (prefix :i)[/bold]
+  :i list             - List all ingresses
+  :i list -n <ns>     - List ingresses in namespace
+  :i ns <namespace>   - Describe namespace (JSON viewer)
+  :i analyze <name>   - Analyze ingress
+  :i check <service>  - Check service endpoints
+
+[bold]Command Prefixes[/bold]
+  (none)     - Execute shell command
+  #<tag>     - Save command to database with tag
+  ?          - Query database (? all, ?<tag>, ?? grouped)
+  !N         - Execute command by ID from last query
+  |<cmd>     - Pipe focused block output to command
+  $VAR=val   - Set environment variable
+
+[bold]Navigation[/bold]
+  ↑/↓        - Command history (when input focused)
+  PgUp/PgDn  - Navigate output blocks
+  Space      - Toggle block collapse
+  F3         - Open focused block in JSON viewer
+  F5         - Copy full output to clipboard
+
+[bold]Variables[/bold]
+  Use $VAR in commands for variable substitution
+  Example: $NS=markovskiy → :i ns $NS
+"""
+        self.add_block(InfoBlock(help_text))
 
     def _show_ingress_help(self) -> None:
         """Show ingress command help."""
