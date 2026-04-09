@@ -1297,6 +1297,12 @@ class CommandRunner(App):
         if subcommand == "list":
             namespace = self._extract_namespace_from_args(parts)
             self._list_ingresses(namespace)
+        elif subcommand == "ns":
+            namespace = parts[1] if len(parts) > 1 else None
+            if namespace:
+                self._describe_namespace(namespace)
+            else:
+                self.add_block(InfoBlock("[yellow]Usage: :i ns <namespace>[/yellow]"))
         elif subcommand == "analyze":
             name = parts[1] if len(parts) > 1 else None
             namespace = self._extract_namespace_from_args(parts)
@@ -1315,11 +1321,13 @@ class CommandRunner(App):
             self.add_block(InfoBlock(f"Unknown ingress subcommand: '{subcommand}'"))
 
     def _extract_namespace_from_args(self, parts: List[str]) -> Optional[str]:
-        """Extract -n <namespace> from command arguments."""
+        """Extract -n <namespace> from command arguments and substitute variables."""
         try:
             n_index = parts.index("-n")
             if n_index + 1 < len(parts):
-                return parts[n_index + 1]
+                namespace = parts[n_index + 1]
+                # Substitute variables like $NS
+                return self._substitute_variables(namespace)
         except ValueError:
             pass
         return None
@@ -1331,6 +1339,7 @@ class CommandRunner(App):
 [bold]Usage:[/bold]
   :i list                   - List all ingresses
   :i list -n <namespace>    - List ingresses in namespace
+  :i ns <namespace>         - Describe namespace (JSON viewer)
   :i analyze <name>         - Analyze ingress
   :i analyze <name> -n <ns> - Analyze ingress in namespace
   :i check <service>        - Check service endpoints
@@ -1451,6 +1460,44 @@ class CommandRunner(App):
             lines.append("  [yellow]No endpoints found[/yellow]")
 
         self.add_block(InfoBlock("\n".join(lines)))
+
+    def _describe_namespace(self, namespace: str) -> None:
+        """Describe namespace and open in JSON viewer."""
+        # Substitute variables in namespace
+        namespace = self._substitute_variables(namespace)
+
+        def worker():
+            try:
+                result = subprocess.run(
+                    ["kubectl", "get", "namespace", namespace, "-o", "json"],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if result.returncode == 0:
+                    data = json.loads(result.stdout)
+                    self.call_from_thread(self._show_namespace_json, data)
+                else:
+                    self.call_from_thread(
+                        self.add_block,
+                        InfoBlock(f"[red]Error:[/red] {result.stderr}")
+                    )
+            except Exception as e:
+                self.call_from_thread(
+                    self.add_block,
+                    InfoBlock(f"[red]Error describing namespace:[/red] {e}")
+                )
+
+        self.add_block(InfoBlock(f"[dim]Getting namespace '{namespace}'...[/dim]"))
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+    def _show_namespace_json(self, data: Dict) -> None:
+        """Show namespace data in JSON viewer."""
+        name = data.get("metadata", {}).get("name", "unknown")
+        status = data.get("status", {}).get("phase", "unknown")
+        self.add_block(InfoBlock(f"[green]Namespace:[/green] {name} ({status})"))
+        self.push_screen(JSONViewer(data))
 
     def handle_variable_assignment(self, user_input: str) -> None:
         """

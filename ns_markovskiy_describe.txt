@@ -1,0 +1,24 @@
+Name:         markovskiy
+Labels:       env=dev
+              inventory.wildberries.ru/namespace.maintainers=unknown
+              inventory.wildberries.ru/namespace.owner=markovskiy.pavel
+              inventory.wildberries.ru/rm.service.id=unknown
+              kubernetes.io/metadata.name=markovskiy
+              last_applied_commit_sha=47916a0c846c0c056690476594570d79f475b7a5
+              last_applied_merge_request_id=44880
+              project_path=devops-tst
+              subproject_path=markovskiy
+              vector.dev/exclude=false
+              vector.dev/security_soc=false
+Annotations:  inventory.wildberries.ru/namespace.maintainers: unknown
+Status:       Active
+
+Resource Quotas
+  Name:          compute-resources
+  Resource       Used  Hard
+  --------       ---   ---
+  limits.cpu     0     2
+  limits.memory  0     2Gi
+  pods           0     6
+
+No LimitRange resource.
