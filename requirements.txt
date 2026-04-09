@@ -14,3 +14,4 @@ setuptools==80.10.1
 textual==7.3.0
 typing_extensions==4.15.0
 uc-micro-py==1.0.3
+crossplane>=3.0.0

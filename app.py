@@ -57,6 +57,7 @@ try:
     from rich.text import Text
     from textual.containers import VerticalScroll, Vertical
     from json_viewer import JSONViewer
+    from ingress_analyzer import IngressAnalyzer
 except ImportError as e:
     print(f"Error: Missing dependency - {e}", file=sys.stderr)
     print("Please install required dependencies:", file=sys.stderr)
@@ -488,6 +489,7 @@ class CommandRunner(App):
     CMD_HISTORY = "h"
     CMD_CLEAR = "c"
     CMD_JSON = "json"
+    CMD_INGRESS = "i"
 
     def __init__(self):
         """Инициализация состояния приложения."""
@@ -505,6 +507,8 @@ class CommandRunner(App):
         self.aliases: Dict[str, str] = {}
         # v1.1.9+: Парсер команд с поддержкой ссылок
         self.command_parser = CommandParser()
+        # Kubernetes Ingress Analyzer
+        self.ingress_analyzer: Optional[IngressAnalyzer] = None
 
     def get_completion_candidates(self, prefix: str) -> List[str]:
         """
@@ -1260,8 +1264,185 @@ class CommandRunner(App):
             else:
                 # Режим без аргументов: открываем JSON из последнего блока
                 self._open_json_from_last_block()
+        elif command == self.CMD_INGRESS:
+            # Kubernetes Ingress Analyzer
+            self.handle_ingress_command(user_input[2:].strip())
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
+
+    def handle_ingress_command(self, args: str) -> None:
+        """
+        Handle Kubernetes Ingress analysis commands.
+
+        Formats:
+            :i                  - Show help
+            :i list             - List all ingresses
+            :i analyze <name>   - Analyze specific ingress
+            :i analyze <name> -n <ns>  - Analyze in namespace
+            :i check <svc>      - Check service endpoints
+        """
+        if not args:
+            self._show_ingress_help()
+            return
+
+        # Lazy initialize analyzer
+        if self.ingress_analyzer is None:
+            self.ingress_analyzer = IngressAnalyzer(
+                timeout=self.COMMAND_TIMEOUT * 3 if self.COMMAND_TIMEOUT else 90
+            )
+
+        parts = args.split()
+        subcommand = parts[0] if parts else ""
+
+        if subcommand == "list":
+            self._list_ingresses()
+        elif subcommand == "analyze":
+            name = parts[1] if len(parts) > 1 else None
+            namespace = self._extract_namespace_from_args(parts)
+            if name:
+                self._analyze_ingress(name, namespace)
+            else:
+                self.add_block(InfoBlock("[yellow]Usage: :i analyze <name> [-n <namespace>][/yellow]"))
+        elif subcommand == "check":
+            service = parts[1] if len(parts) > 1 else None
+            namespace = self._extract_namespace_from_args(parts)
+            if service:
+                self._check_service_endpoints(service, namespace)
+            else:
+                self.add_block(InfoBlock("[yellow]Usage: :i check <service> [-n <namespace>][/yellow]"))
+        else:
+            self.add_block(InfoBlock(f"Unknown ingress subcommand: '{subcommand}'"))
+
+    def _extract_namespace_from_args(self, parts: List[str]) -> Optional[str]:
+        """Extract -n <namespace> from command arguments."""
+        try:
+            n_index = parts.index("-n")
+            if n_index + 1 < len(parts):
+                return parts[n_index + 1]
+        except ValueError:
+            pass
+        return None
+
+    def _show_ingress_help(self) -> None:
+        """Show ingress command help."""
+        help_text = """[bold]Kubernetes Ingress Analyzer[/bold]
+
+[bold]Usage:[/bold]
+  :i list                    - List all ingresses
+  :i analyze <name>          - Analyze ingress
+  :i analyze <name> -n <ns>  - Analyze ingress in namespace
+  :i check <service>         - Check service endpoints
+  :i check <service> -n <ns> - Check service in namespace
+
+[bold]Analysis includes:[/bold]
+  • Ingress configuration (hosts, paths, TLS)
+  • Nginx config from controller (via crossplane)
+  • Service and endpoint health
+  • Path-to-service mapping
+
+[bold]Prerequisites:[/bold]
+  • kubectl configured with cluster access
+  • crossplane: pip install crossplane
+"""
+        self.add_block(InfoBlock(help_text))
+
+    def _list_ingresses(self) -> None:
+        """List all ingresses."""
+        def worker():
+            try:
+                ingresses = self.ingress_analyzer.list_ingresses()
+                self.call_from_thread(self._display_ingress_list, ingresses)
+            except Exception as e:
+                self.call_from_thread(
+                    self.add_block,
+                    InfoBlock(f"[red]Error listing ingresses:[/red] {e}")
+                )
+
+        self.add_block(InfoBlock("[dim]Listing ingresses...[/dim]"))
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+    def _display_ingress_list(self, ingresses) -> None:
+        """Display list of ingresses."""
+        if not ingresses:
+            self.add_block(InfoBlock("[yellow]No ingresses found.[/yellow]"))
+            return
+
+        lines = [f"[bold]Found {len(ingresses)} ingresses:[/bold]\n"]
+        for ing in ingresses:
+            hosts = ", ".join(ing.hosts) if ing.hosts else "*"
+            paths_count = len(ing.paths)
+            lines.append(f"  [cyan]{ing.name}[/cyan] ({ing.namespace}) → {hosts} ({paths_count} paths)")
+
+        lines.append("\n[dim]Use :i analyze <name> -n <namespace> to analyze[/dim]")
+        self.add_block(InfoBlock("\n".join(lines)))
+
+    def _analyze_ingress(self, name: str, namespace: Optional[str] = None) -> None:
+        """Analyze specific ingress."""
+        ns_display = namespace or "default"
+
+        def worker():
+            try:
+                analysis = self.ingress_analyzer.analyze_ingress(name, namespace)
+                self.call_from_thread(self._display_ingress_analysis, analysis)
+            except Exception as e:
+                self.call_from_thread(
+                    self.add_block,
+                    InfoBlock(f"[red]Analysis failed:[/red] {e}")
+                )
+
+        self.add_block(InfoBlock(f"[dim]Analyzing ingress '{name}' in '{ns_display}'...[/dim]"))
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+    def _display_ingress_analysis(self, analysis: Dict) -> None:
+        """Display ingress analysis results."""
+        from ingress_analyzer import format_analysis_summary
+
+        # Show summary as InfoBlock
+        summary = format_analysis_summary(analysis)
+        self.add_block(InfoBlock(summary))
+
+        # Open JSON viewer for detailed view
+        self.push_screen(JSONViewer(analysis))
+
+    def _check_service_endpoints(self, service: str, namespace: Optional[str] = None) -> None:
+        """Check service endpoints."""
+        ns_display = namespace or "default"
+
+        def worker():
+            try:
+                svc_info = self.ingress_analyzer.check_service_endpoints(service, namespace)
+                self.call_from_thread(self._display_service_info, svc_info)
+            except Exception as e:
+                self.call_from_thread(
+                    self.add_block,
+                    InfoBlock(f"[red]Error checking service:[/red] {e}")
+                )
+
+        self.add_block(InfoBlock(f"[dim]Checking service '{service}' in '{ns_display}'...[/dim]"))
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+    def _display_service_info(self, svc_info) -> None:
+        """Display service endpoint information."""
+        lines = [
+            f"[bold]Service: {svc_info.name}[/bold] (namespace: {svc_info.namespace})",
+            f"Type: {svc_info.type}",
+            f"Selector: {svc_info.selector or 'none'}",
+            "",
+            f"[bold]Endpoints:[/bold] {svc_info.healthy_endpoints}/{svc_info.total_endpoints} healthy",
+        ]
+
+        if svc_info.endpoints:
+            for ep in svc_info.endpoints:
+                status = "✓" if ep.ready else "✗"
+                pod = f" ({ep.pod_name})" if ep.pod_name else ""
+                lines.append(f"  {status} {ep.ip}:{ep.port}{pod}")
+        else:
+            lines.append("  [yellow]No endpoints found[/yellow]")
+
+        self.add_block(InfoBlock("\n".join(lines)))
 
     def handle_variable_assignment(self, user_input: str) -> None:
         """
