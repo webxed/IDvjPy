@@ -417,7 +417,8 @@ class CommandInput(Input):
             return
 
         prefix = self.value.strip()
-        if len(prefix) < 2:
+        is_path_context = hasattr(app, "_is_path_context") and app._is_path_context(self.value)
+        if len(prefix) < 2 and not is_path_context:
             self._completion_list.hide()
             return
 
@@ -465,6 +466,8 @@ class CommandRunner(App):
         ("pagedown", "focus_next", "Next Block"),
         ("f5", "copy_block", "Copy Block"),
         ("f3", "open_json_viewer", "JSON Viewer"),
+        Binding("shift+insert", "paste_clipboard", "Paste", show=False),
+        Binding("ctrl+v", "paste_clipboard", "Paste", show=False),
         ("escape", "focus_input", "Focus Input"),
         Binding("space", "toggle_block_collapse", "Collapse", show=False),
         Binding("left", "collapse_block", "← Collapse", show=False),
@@ -531,13 +534,78 @@ class CommandRunner(App):
         # Kubernetes Ingress Analyzer
         self.ingress_analyzer: Optional[IngressAnalyzer] = None
 
+    def _extract_path_token(self, text: str) -> str:
+        """Возвращает последний токен для path completion."""
+        if not text:
+            return ""
+        if text.endswith(" "):
+            return ""
+        parts = text.split()
+        return parts[-1] if parts else text
+
+    def _is_path_context(self, text: str) -> bool:
+        """
+        Проверяет, что ввод находится в path-контексте:
+        - есть хотя бы один аргумент после команды, либо
+        - последний токен явно похож на путь.
+        """
+        stripped = text.rstrip()
+        if not stripped:
+            return False
+
+        parts = stripped.split()
+        if len(parts) >= 2:
+            return True
+
+        token = self._extract_path_token(stripped)
+        return token.startswith(("./", "../", "/", "~")) or token in (".", "..", "~")
+
+    def _get_file_completion_candidates(self, text: str) -> List[str]:
+        """Подсказки файлов/директорий для текущей директории (включая скрытые)."""
+        if not self._is_path_context(text):
+            return []
+
+        token = self._extract_path_token(text)
+        if not token:
+            token = ""
+
+        if token.startswith("~"):
+            expanded = os.path.expanduser(token)
+        else:
+            expanded = token
+
+        parent = os.path.dirname(expanded) or "."
+        base_prefix = os.path.basename(expanded)
+
+        try:
+            entries = os.listdir(parent)
+        except Exception:
+            return []
+
+        suggestions: List[str] = []
+        for name in entries:
+            if base_prefix and not name.startswith(base_prefix):
+                continue
+            full_path = os.path.join(parent, name)
+            candidate_path = os.path.join(parent, name) if parent != "." else name
+            if token.startswith("~"):
+                home = os.path.expanduser("~")
+                if candidate_path.startswith(home):
+                    candidate_path = "~" + candidate_path[len(home):]
+            if os.path.isdir(full_path):
+                candidate_path += "/"
+            suggestions.append(candidate_path)
+
+        return sorted(suggestions)
+
     def get_completion_candidates(self, prefix: str) -> List[str]:
         """
         Возвращает список команд из БД и истории сессии по префиксу.
         Для выпадающего списка подсказок.
         """
+        raw_prefix = prefix
         prefix = prefix.strip()
-        if not prefix:
+        if not raw_prefix:
             return []
         candidates: List[str] = []
         try:
@@ -548,11 +616,19 @@ class CommandRunner(App):
         for cmd in self.session_history:
             if cmd.strip().startswith(prefix):
                 candidates.append(cmd.strip())
+        # Подсказки по файлам текущей директории (path-context).
+        candidates.extend(self._get_file_completion_candidates(raw_prefix))
         # Уникальные, отсортированные, максимум 20
         return sorted(set(candidates))[:20]
 
     def on_key(self, event: events.Key) -> None:
         """Перехват клавиш для автофокуса на поле ввода."""
+        # Явная вставка из буфера для терминалов, где Shift+Insert ловится нестабильно.
+        if event.key in ("shift+insert", "ctrl+v"):
+            self.action_paste_clipboard()
+            event.stop()
+            return
+
         # Если нажата печатаемая клавиша и фокус не на input — переводим фокус
         # Но не перехватываем если фокус на CommandBlock (для сворачивания Space)
         focused = self.focused
@@ -561,6 +637,24 @@ class CommandRunner(App):
             if not input_widget.has_focus:
                 input_widget.focus()
                 # Клавиша обработается input'ом автоматически
+
+    def action_paste_clipboard(self) -> None:
+        """Вставляет текст из буфера обмена в command input."""
+        try:
+            clip = pyperclip.paste()
+        except Exception:
+            return
+
+        if clip is None:
+            return
+
+        input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+        input_widget.focus()
+
+        pos = input_widget.cursor_position
+        current = input_widget.value or ""
+        input_widget.value = current[:pos] + clip + current[pos:]
+        input_widget.cursor_position = pos + len(clip)
 
     def on_mouse_scroll_down(self, event) -> None:
         """Скролл вниз всегда идёт в контейнер вывода."""

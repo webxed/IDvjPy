@@ -2,15 +2,19 @@
 JSON Viewer Module
 
 Provides modal screen for viewing JSON data as interactive tree structure.
-Supports jq path copying and navigation.
+Supports jq path copying, filtering, and match navigation.
 """
 
-from textual.screen import ModalScreen
-from textual.widgets import Tree, Header, Footer
-from textual.app import ComposeResult
-from rich.text import Text
-from rich.highlighter import ReprHighlighter
+import json
+import os
+from typing import Any, List
+
 import pyperclip
+from rich.highlighter import ReprHighlighter
+from rich.text import Text
+from textual.app import ComposeResult
+from textual.screen import ModalScreen
+from textual.widgets import Input, Tree
 
 
 class JSONViewer(ModalScreen):
@@ -19,6 +23,8 @@ class JSONViewer(ModalScreen):
 
     Позволяет:
     - Просматривать JSON структуру в виде дерева
+    - Фильтровать по ключам, значениям и jq-path
+    - Переходить по совпадениям (next/prev)
     - Выбирать элементы и копировать jq-путь по Enter
     - Закрывать по Escape или q
     """
@@ -26,6 +32,12 @@ class JSONViewer(ModalScreen):
     BINDINGS = [
         ("escape", "close_screen", "Close"),
         ("q", "close_screen", "Close"),
+        ("/", "focus_search", "Search"),
+        ("ctrl+f", "focus_search", "Search"),
+        ("f6", "next_match", "Next match"),
+        ("shift+f6", "prev_match", "Prev match"),
+        ("n", "next_match", "Next match"),
+        ("N", "prev_match", "Prev match"),
         ("up", "cursor_up", "Previous node"),
         ("down", "cursor_down", "Next node"),
         ("left", "cursor_parent", "Parent node"),
@@ -34,243 +46,221 @@ class JSONViewer(ModalScreen):
         ("enter", "select_node", "Copy jq path"),
     ]
 
-    def action_cursor_up(self) -> None:
-        """Переместить курсор на предыдущий узел."""
+    def __init__(self, json_data: dict, **kwargs):
+        super().__init__(**kwargs)
+        self.json_data = json_data
+        self.highlighter = ReprHighlighter()
+        self.search_query = ""
+        self.match_nodes: List[Any] = []
+        self.current_match_index = -1
+        self.total_nodes = 0
+
+    def compose(self) -> ComposeResult:
+        yield Input(placeholder="Search keys, values, jq path...", id="json-search")
+        yield Tree("JSON Root")
+
+    def on_mount(self) -> None:
+        search_input = self.query_one("#json-search", Input)
+        search_input.value = ""
+        self._render_tree()
+        self.query_one(Tree).focus()
+
+        if self.total_nodes > 5000:
+            self.app.sub_title = (
+                f"Large JSON: {self.total_nodes} nodes loaded. "
+                "All branches are expanded."
+            )
+        else:
+            self.app.sub_title = "JSON viewer opened. Press / to search."
+
+    def _json_to_display_text(self, data: Any) -> str:
+        if isinstance(data, str):
+            return data
+        return repr(data)
+
+    def _make_node_label(self, key_name: str, data: Any) -> Text:
+        if isinstance(data, dict):
+            return Text.from_markup(f"{{}} [bold]{key_name}[/bold] ({len(data)} keys)")
+        if isinstance(data, list):
+            return Text.from_markup(f"[] [bold]{key_name}[/bold] ({len(data)} items)")
+        return Text.assemble(
+            Text.from_markup(f"[b]{key_name}[/b]="),
+            self.highlighter(repr(data)),
+        )
+
+    def _path_parts_to_jq_path(self, path_parts: List[str]) -> str:
+        jq_path = "".join(path_parts)
+        if jq_path and not jq_path.startswith("."):
+            jq_path = "." + jq_path
+        elif not jq_path:
+            jq_path = "."
+        return jq_path
+
+    def _matches_query(self, key_name: str, data: Any, jq_path: str) -> bool:
+        if not self.search_query:
+            return True
+        blob = f"{key_name} {self._json_to_display_text(data)} {jq_path}".lower()
+        return self.search_query in blob
+
+    def _collect_children(self, data: Any, path_parts: List[str]) -> List[tuple]:
+        children: List[tuple] = []
+        if isinstance(data, dict):
+            for child_key, child_value in data.items():
+                if str(child_key).isidentifier():
+                    jq_part = f".{child_key}"
+                else:
+                    jq_part = f"[{json.dumps(child_key)}]"
+                child_path = path_parts + [jq_part] if path_parts else [jq_part]
+                children.append((str(child_key), child_value, child_path))
+        elif isinstance(data, list):
+            for idx, child_value in enumerate(data):
+                child_path = path_parts + [f"[{idx}]"] if path_parts else [f"[{idx}]"]
+                children.append((f"[{idx}]", child_value, child_path))
+        return children
+
+    def _node_or_descendant_matches(self, key_name: str, data: Any, path_parts: List[str]) -> bool:
+        jq_path = self._path_parts_to_jq_path(path_parts)
+        if self._matches_query(key_name, data, jq_path):
+            return True
+        for child_key, child_value, child_path in self._collect_children(data, path_parts):
+            if self._node_or_descendant_matches(child_key, child_value, child_path):
+                return True
+        return False
+
+    def _build_tree_filtered(self, parent_node: Any, key_name: str, data: Any, path_parts: List[str]) -> None:
+        if self.search_query and not self._node_or_descendant_matches(key_name, data, path_parts):
+            return
+
+        node = parent_node.add("")
+        node.set_label(self._make_node_label(key_name, data))
+        node._jq_path = path_parts
+        node._jq_path_str = self._path_parts_to_jq_path(path_parts)
+        self.total_nodes += 1
+
+        direct_match = self._matches_query(key_name, data, node._jq_path_str)
+        if self.search_query and direct_match:
+            self.match_nodes.append(node)
+
+        for child_key, child_value, child_path in self._collect_children(data, path_parts):
+            self._build_tree_filtered(node, child_key, child_value, child_path)
+
+        if isinstance(data, (dict, list)):
+            node.expand()
+        else:
+            node.allow_expand = False
+
+    def _render_tree(self) -> None:
         tree = self.query_one(Tree)
-        tree.action_cursor_up()
+        tree.clear()
+        self.match_nodes = []
+        self.current_match_index = -1
+        self.total_nodes = 0
+
+        root = tree.root
+        self._build_tree_filtered(root, "JSON Root", self.json_data, [])
+        root.expand()
+
+        if root.children:
+            tree.cursor = root.children[0]
+
+        if self.match_nodes:
+            self.current_match_index = 0
+            tree.cursor = self.match_nodes[0]
+            self.app.sub_title = f"Search matches: 1/{len(self.match_nodes)}"
+        elif self.search_query:
+            self.app.sub_title = "Search matches: 0/0"
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id != "json-search":
+            return
+        self.search_query = event.value.strip().lower()
+        self._render_tree()
+
+    def action_focus_search(self) -> None:
+        search_input = self.query_one("#json-search", Input)
+        search_input.focus()
+        search_input.cursor_position = len(search_input.value)
+
+    def action_next_match(self) -> None:
+        if not self.match_nodes:
+            self.app.sub_title = "Search matches: 0/0"
+            return
+        self.current_match_index = (self.current_match_index + 1) % len(self.match_nodes)
+        self.query_one(Tree).cursor = self.match_nodes[self.current_match_index]
+        self.app.sub_title = f"Search matches: {self.current_match_index + 1}/{len(self.match_nodes)}"
+
+    def action_prev_match(self) -> None:
+        if not self.match_nodes:
+            self.app.sub_title = "Search matches: 0/0"
+            return
+        self.current_match_index = (self.current_match_index - 1) % len(self.match_nodes)
+        self.query_one(Tree).cursor = self.match_nodes[self.current_match_index]
+        self.app.sub_title = f"Search matches: {self.current_match_index + 1}/{len(self.match_nodes)}"
+
+    def action_cursor_up(self) -> None:
+        if self.query_one("#json-search", Input).has_focus:
+            return
+        self.query_one(Tree).action_cursor_up()
 
     def action_cursor_down(self) -> None:
-        """Переместить курсор на следующий узел."""
-        tree = self.query_one(Tree)
-        tree.action_cursor_down()
+        if self.query_one("#json-search", Input).has_focus:
+            return
+        self.query_one(Tree).action_cursor_down()
 
     def action_cursor_parent(self) -> None:
-        """Перейти к родительскому узлу."""
-        tree = self.query_one(Tree)
-        tree.action_cursor_parent()
+        if self.query_one("#json-search", Input).has_focus:
+            return
+        self.query_one(Tree).action_cursor_parent()
 
     def action_cursor_child(self) -> None:
-        """Перейти к первому дочернему узлу."""
-        tree = self.query_one(Tree)
-        cursor = tree.cursor_node
-        if cursor:
-            # Листовой узел - переходим к следующему соседу
-            if not cursor.allow_expand:
-                tree.action_cursor_next_sibling()
-                return
-
-            # Если узел еще не загружен, загружаем детей
-            if hasattr(cursor, "_lazy_data"):
-                self._load_children(cursor, cursor._lazy_data, cursor._jq_path)
-                delattr(cursor, "_lazy_data")
-
-            # Раскрываем узел если свернут
-            if not cursor.is_expanded:
-                cursor.expand()
-
-            # Переходим к первому потомку
-            if cursor.children:
-                first_child = cursor.children[0]
-                if not hasattr(first_child, "_is_placeholder"):
-                    tree.cursor = first_child
+        if self.query_one("#json-search", Input).has_focus:
+            return
+        self.query_one(Tree).action_cursor_child()
 
     def action_toggle_expand(self) -> None:
-        """Переключает состояние раскрытия текущего узла."""
+        if self.query_one("#json-search", Input).has_focus:
+            return
         tree = self.query_one(Tree)
         if tree.cursor_node:
-            cursor = tree.cursor_node
-            if cursor.is_expanded:
-                cursor.collapse()
+            if tree.cursor_node.is_expanded:
+                tree.cursor_node.collapse()
             else:
-                # Если узел еще не загружен, загружаем детей перед раскрытием
-                if hasattr(cursor, "_lazy_data"):
-                    self._load_children(cursor, cursor._lazy_data, cursor._jq_path)
-                    delattr(cursor, "_lazy_data")
-                cursor.expand()
+                tree.cursor_node.expand()
 
     def action_select_node(self) -> None:
-        """Выбирает текущий узел и копирует jq-путь."""
+        if self.query_one("#json-search", Input).has_focus:
+            return
         tree = self.query_one(Tree)
         if tree.cursor_node:
-            # Эмулируем событие выбора узла
             class FakeEvent:
                 def __init__(self, node):
                     self.node = node
 
             self.on_tree_node_selected(FakeEvent(tree.cursor_node))
 
-    def __init__(self, json_data: dict, **kwargs):
-        """
-        Инициализация JSON viewer.
-
-        Args:
-            json_data: Распаршенные JSON данные (dict/list)
-        """
-        super().__init__(**kwargs)
-        self.json_data = json_data
-        self.highlighter = ReprHighlighter()
-
-    def compose(self) -> ComposeResult:
-        """Создание UI."""
-        yield Tree("JSON Root")
-
-    def on_mount(self) -> None:
-        """Загрузка JSON в дерево при открытии."""
-        tree = self.query_one(Tree)
-        # Ленивая загрузка - только первый уровень
-        self._add_json_to_node(tree.root, self.json_data, [])
-        # Вручную загружаем первый уровень (для root)
-        if hasattr(tree.root, "_lazy_data"):
-            self._load_children(tree.root, tree.root._lazy_data, tree.root._jq_path)
-            delattr(tree.root, "_lazy_data")
-        # Раскрываем корневой узел чтобы показать первый уровень
-        tree.root.expand()
-        tree.focus()  # Устанавливаем фокус на дерево для работы навигации
-
-    def on_tree_node_expanded(self, event: Tree.NodeExpanded) -> None:
-        """Загружает дочерние элементы при раскрытии узла (ленивая загрузка)."""
-        node = event.node
-        # Загружаем детей только если есть _lazy_data (еще не загружены)
-        if hasattr(node, "_lazy_data") and node._lazy_data is not None:
-            self._load_children(node, node._lazy_data, node._jq_path)
-            # После загрузки удаляем _lazy_data (это маркер что дети загружены)
-            delattr(node, "_lazy_data")
-
-    def _add_json_to_node(self, node, data, path_parts: list) -> None:
-        """
-        Добавляет JSON данные в узел дерева (без рекурсии для вложенных структур).
-
-        Args:
-            node: Узел дерева
-            data: JSON данные
-            path_parts: Части пути к текущему узлу (для генерации jq-пути)
-        """
-        if isinstance(data, dict):
-            if not path_parts:  # Корневой узел
-                node.set_label(Text.from_markup(f"{{}} [bold]JSON Root[/bold] ({len(data)} keys)"))
-                node._jq_path = []  # Пустой путь для корня
-            else:
-                node.set_label(Text.from_markup(f"{{}} [bold]{path_parts[-1]}[/bold] ({len(data)} keys)"))
-                # Важно: сохраняем jq_path для вложенных узлов!
-                node._jq_path = path_parts
-
-            # Сохраняем данные для ленивой загрузки (НЕ устанавливаем _lazy_loaded)
-            node._lazy_data = data
-            # НЕ устанавливаем node._lazy_loaded - проверка будет через hasattr
-
-            # Добавляем пустой placeholder для индикатора раскрытия
-            placeholder = node.add("...")
-            placeholder._is_placeholder = True
-
-        elif isinstance(data, list):
-            if not path_parts:  # Корневой узел
-                node.set_label(Text.from_markup(f"[] [bold]JSON Root[/bold] ({len(data)} items)"))
-                node._jq_path = []  # Пустой путь для корня
-            else:
-                node.set_label(Text.from_markup(f"[] [bold]{path_parts[-1]}[/bold] ({len(data)} items)"))
-                # Важно: сохраняем jq_path для вложенных узлов!
-                node._jq_path = path_parts
-
-            # Сохраняем данные для ленивой загрузки (НЕ устанавливаем _lazy_loaded)
-            node._lazy_data = data
-            # НЕ устанавливаем node._lazy_loaded - проверка будет через hasattr
-
-            # Добавляем пустой placeholder для индикатора раскрытия
-            placeholder = node.add("...")
-            placeholder._is_placeholder = True
-
-        else:
-            # Листовой узел (значение) - загружаем сразу
-            node.allow_expand = False
-            # НЕ устанавливаем _lazy_loaded для листовых узлов
-
-            if path_parts:
-                # Формируем метку с именем и значением
-                label = Text.assemble(
-                    Text.from_markup(f"[b]{path_parts[-1]}[/b]="),
-                    self.highlighter(repr(data))
-                )
-                node.set_label(label)
-                # Сохраняем jq-путь для этого узла
-                node._jq_path = path_parts
-            else:
-                # Корневое скалярное значение
-                node.set_label(Text.from_markup(repr(data)))
-                node._jq_path = []  # Пустой путь для корня
-
-    def _load_children(self, node, data, path_parts: list) -> None:
-        """
-        Загружает дочерние элементы для узла (вызывается при раскрытии).
-
-        Args:
-            node: Родительский узел
-            data: JSON данные
-            path_parts: Части пути к текущему узлу
-        """
-        # Убедимся что path_parts не None
-        if path_parts is None:
-            path_parts = []
-
-        # Удаляем placeholder если есть
-        for child in list(node.children):
-            if hasattr(child, "_is_placeholder"):
-                child.remove()
-
-        if isinstance(data, dict):
-            for key, value in data.items():
-                new_node = node.add("")
-                # Проверяем, является ли ключ валидным идентификатором
-                if str(key).isidentifier():
-                    jq_part = f".{key}"
-                else:
-                    import json
-                    jq_part = f"[{json.dumps(key)}]"
-                new_node._jq_path = path_parts + [jq_part] if path_parts else [jq_part]
-                # Рекурсивно добавляем только метку, дети загрузятся при раскрытии
-                self._add_json_to_node(new_node, value, new_node._jq_path)
-
-        elif isinstance(data, list):
-            for index, value in enumerate(data):
-                new_node = node.add("")
-                new_node._jq_path = path_parts + [f"[{index}]"] if path_parts else [f"[{index}]"]
-                self._add_json_to_node(new_node, value, new_node._jq_path)
-
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
-        """
-        Обработчик выбора узла дерева (Enter или двойной клик).
-        Копирует jq-путь выбранного узла и закрывает viewer.
-        """
         node = event.node
         if hasattr(node, "_jq_path"):
-            # Генерируем jq-путь
-            jq_path = "".join(node._jq_path)
+            jq_path = self._path_parts_to_jq_path(node._jq_path)
 
-            # Добавляем ведущую точку если путь не пустой
-            if jq_path and not jq_path.startswith("."):
-                jq_path = "." + jq_path
-            elif not jq_path:
-                jq_path = "."
-
-            # Возвращаемся в основное приложение
             self.app.pop_screen()
 
-            # Добавляем блок с jq-путем в основной фрейм
-            if hasattr(self.app, 'add_block'):
-                # Импортируем InfoBlock здесь, чтобы избежать циклического импорта
+            if hasattr(self.app, "add_block"):
                 from app import InfoBlock
 
-                # Показываем путь в блоке (без кавычек для читаемости)
                 self.app.add_block(InfoBlock(f"[bold]jq path:[/bold] {jq_path}"))
 
-                # Копируем в буфер обмена с одинарными кавычками для удобства использования в bash
+                # Делаем путь доступным в шаблонах команд как $JSON.
+                if hasattr(self.app, "local_env"):
+                    self.app.local_env["JSON"] = jq_path
+                os.environ["JSON"] = jq_path
+
                 try:
-                    # Оборачиваем в одинарные кавычки для прямого использования в bash
                     clipboard_path = f"'{jq_path}'"
                     pyperclip.copy(clipboard_path)
-                    self.app.sub_title = f"jq path copied: {clipboard_path}"
+                    self.app.sub_title = f"jq path copied: {clipboard_path}; $JSON set"
                 except Exception:
                     pass
 
     def action_close_screen(self) -> None:
-        """Закрывает текущий экран."""
         self.app.pop_screen()

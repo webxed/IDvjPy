@@ -8,6 +8,8 @@ Terminal TUI app (Textual framework) for running shell commands with tagged hist
 ### Tab-Completion System
 - Dropdown list with arrow key navigation
 - Prefix-based suggestions from database
+- Path-aware file/directory suggestions from current working directory
+- Includes hidden entries (`.*`) and marks directories with `/`
 - Enter inserts command, doesn't execute
 
 ### Output Formatting
@@ -35,6 +37,14 @@ Terminal TUI app (Textual framework) for running shell commands with tagged hist
 - `$VAR` pattern in arguments
 - Uses vars from `$ VAR=val` command
 - Example: `:i list -n $NS`
+- JSON Viewer sets `$JSON` on node selection (`Enter`)
+
+### JSON Viewer Improvements
+- Full tree expansion on open
+- Live text filtering by key/value/jq path
+- Next/prev match navigation (`F6`/`Shift+F6`, `n`/`N`)
+- Search focus shortcuts (`/`, `Ctrl+F`)
+- `Enter` copies jq path and sets `$JSON`
 
 ### Performance Optimizations
 - Pre-compiled regex patterns at module level
@@ -46,6 +56,7 @@ Terminal TUI app (Textual framework) for running shell commands with tagged hist
 - Auto-focus input on keypress
 - Mouse scroll on results container
 - Less bright selection highlight
+- Stable clipboard paste in input (`Shift+Insert`, `Ctrl+V`)
 
 ## Files
 | File | Purpose |
@@ -71,5 +82,5 @@ Terminal TUI app (Textual framework) for running shell commands with tagged hist
 | `$` | Set env variable |
 
 ## Session Stats
-- 24+ commits
-- Version: v1.1.17+
+- 28+ commits
+- Version: v1.1.18+
