@@ -20,7 +20,24 @@ Terminal TUI app (Textual framework) for running shell commands with tagged hist
 - Left/Right arrows for navigation
 - Mouse click focuses without collapsing
 
-### Performance
+### Kubernetes Ingress Analyzer (`:i`)
+- `:i list [-n NAMESPACE]` - List ingresses
+- `:i analyze INGRESS_NAME [-n NS]` - Analyze ingress
+- `:i ns [NAMESPACE]` - Namespace info in JSON viewer
+- Uses crossplane for nginx config parsing
+- Shows paths, upstreams, service endpoints
+
+### Help System
+- `:?` - Main help with all commands
+- Per-command help: `:h`, `:i`, etc.
+
+### Variable Substitution
+- `$VAR` pattern in arguments
+- Uses vars from `$ VAR=val` command
+- Example: `:i list -n $NS`
+
+### Performance Optimizations
+- Pre-compiled regex patterns at module level
 - MAX_DISPLAY_LINES = 50 (truncation)
 - Lazy loading for JSON viewer
 - F5 copies full output to clipboard
@@ -35,6 +52,7 @@ Terminal TUI app (Textual framework) for running shell commands with tagged hist
 |------|---------|
 | app.py | Main TUI application |
 | database.py | SQLite operations |
+| ingress_analyzer.py | K8s ingress analysis |
 | json_viewer.py | JSON tree viewer modal |
 | app.css | Textual styling |
 | settings.yml | Configuration |
@@ -47,9 +65,11 @@ Terminal TUI app (Textual framework) for running shell commands with tagged hist
 | `?` | Query database |
 | `! N` | Execute by ID |
 | `:` | App commands (`:q`, `:h`) |
+| `:i` | Ingress analyzer |
+| `:?` | Main help |
 | `|` | Pipe from focused block |
 | `$` | Set env variable |
 
 ## Session Stats
-- 23 commits
-- Version: v1.1.16
+- 24+ commits
+- Version: v1.1.17+

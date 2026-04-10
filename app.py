@@ -1309,7 +1309,11 @@ class CommandRunner(App):
         subcommand = parts[0] if parts else ""
 
         if subcommand == "list":
-            namespace = self._extract_namespace_from_args(parts)
+            try:
+                namespace = self._extract_namespace_from_args(parts)
+            except ValueError as e:
+                self.add_block(InfoBlock(f"[yellow]{e}[/yellow]"))
+                return
             self._list_ingresses(namespace)
         elif subcommand == "ns":
             namespace = parts[1] if len(parts) > 1 else None
@@ -1319,14 +1323,22 @@ class CommandRunner(App):
                 self.add_block(InfoBlock("[yellow]Usage: :i ns <namespace>[/yellow]"))
         elif subcommand == "analyze":
             name = parts[1] if len(parts) > 1 else None
-            namespace = self._extract_namespace_from_args(parts)
+            try:
+                namespace = self._extract_namespace_from_args(parts)
+            except ValueError as e:
+                self.add_block(InfoBlock(f"[yellow]{e}[/yellow]"))
+                return
             if name:
                 self._analyze_ingress(name, namespace)
             else:
                 self.add_block(InfoBlock("[yellow]Usage: :i analyze <name> [-n <namespace>][/yellow]"))
         elif subcommand == "check":
             service = parts[1] if len(parts) > 1 else None
-            namespace = self._extract_namespace_from_args(parts)
+            try:
+                namespace = self._extract_namespace_from_args(parts)
+            except ValueError as e:
+                self.add_block(InfoBlock(f"[yellow]{e}[/yellow]"))
+                return
             if service:
                 self._check_service_endpoints(service, namespace)
             else:
@@ -1334,17 +1346,39 @@ class CommandRunner(App):
         else:
             self.add_block(InfoBlock(f"Unknown ingress subcommand: '{subcommand}'"))
 
-    def _extract_namespace_from_args(self, parts: List[str]) -> Optional[str]:
-        """Extract -n <namespace> from command arguments and substitute variables."""
+    def _extract_namespace_from_args(self, parts: List[str], save_to_var: bool = True) -> Optional[str]:
+        """
+        Extract -n <namespace> from command arguments and substitute variables.
+
+        Args:
+            parts: Command parts
+            save_to_var: If True, save namespace to $NS variable
+
+        Returns:
+            Namespace string or None
+
+        Raises:
+            ValueError: If -n flag is present without a namespace value
+        """
         try:
             n_index = parts.index("-n")
             if n_index + 1 < len(parts):
                 namespace = parts[n_index + 1]
+                if namespace.startswith("-"):
+                    raise ValueError("Missing namespace after -n. Usage: -n <namespace>")
                 # Substitute variables like $NS
-                return self._substitute_variables(namespace)
+                namespace = self._substitute_variables(namespace)
+                # Save to $NS variable for subsequent commands
+                if save_to_var and namespace:
+                    self.local_env["NS"] = namespace
+                    os.environ["NS"] = namespace
+                return namespace
+            raise ValueError("Missing namespace after -n. Usage: -n <namespace>")
         except ValueError:
-            pass
-        return None
+            if "-n" in parts:
+                raise
+        # Fallback to $NS if set and -n not specified
+        return self.local_env.get("NS") or os.environ.get("NS")
 
     def _show_main_help(self) -> None:
         """Show main help for all commands."""
@@ -1384,7 +1418,7 @@ class CommandRunner(App):
 
 [bold]Variables[/bold]
   Use $VAR in commands for variable substitution
-  Example: $NS=markovskiy → :i ns $NS
+  $NS is auto-set when using -n in :i commands
 """
         self.add_block(InfoBlock(help_text))
 
@@ -1393,13 +1427,17 @@ class CommandRunner(App):
         help_text = """[bold]Kubernetes Ingress Analyzer[/bold]
 
 [bold]Usage:[/bold]
-  :i list                   - List all ingresses
-  :i list -n <namespace>    - List ingresses in namespace
+  :i list                   - List ingresses (uses $NS if set)
+  :i list -n <namespace>    - List in namespace (saves to $NS)
   :i ns <namespace>         - Describe namespace (JSON viewer)
-  :i analyze <name>         - Analyze ingress
-  :i analyze <name> -n <ns> - Analyze ingress in namespace
-  :i check <service>        - Check service endpoints
-  :i check <service> -n <ns>- Check service in namespace
+  :i analyze <name>         - Analyze ingress (uses $NS if set)
+  :i analyze <name> -n <ns> - Analyze in namespace (saves to $NS)
+  :i check <service>        - Check service endpoints (uses $NS)
+  :i check <service> -n <ns>- Check in namespace (saves to $NS)
+
+[bold]Namespace persistence:[/bold]
+  When -n is specified, namespace is saved to $NS variable.
+  Subsequent commands without -n will use $NS automatically.
 
 [bold]Analysis includes:[/bold]
   • Ingress configuration (hosts, paths, TLS)
