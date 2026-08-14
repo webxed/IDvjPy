@@ -215,7 +215,14 @@ class JSONViewer(ModalScreen):
     def action_cursor_child(self) -> None:
         if self.query_one("#json-search", Input).has_focus:
             return
-        self.query_one(Tree).action_cursor_child()
+        tree = self.query_one(Tree)
+        node = tree.cursor_node
+        if not node:
+            return
+        if node.allow_expand and not node.is_expanded:
+            node.expand()
+        if node.children:
+            tree.cursor = node.children[0]
 
     def action_toggle_expand(self) -> None:
         if self.query_one("#json-search", Input).has_focus:
@@ -243,7 +250,10 @@ class JSONViewer(ModalScreen):
         if hasattr(node, "_jq_path"):
             jq_path = self._path_parts_to_jq_path(node._jq_path)
 
-            self.app.pop_screen()
+            # Защита от гонки событий: узел мог сгенерировать повторный select
+            # после того, как modal уже закрыт.
+            if self.app.screen is self:
+                self.app.pop_screen()
 
             if hasattr(self.app, "add_block"):
                 from app import InfoBlock
@@ -263,4 +273,5 @@ class JSONViewer(ModalScreen):
                     pass
 
     def action_close_screen(self) -> None:
-        self.app.pop_screen()
+        if self.app.screen is self:
+            self.app.pop_screen()

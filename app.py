@@ -32,9 +32,9 @@ Examples:
     )
     return parser.parse_args()
 
-# Parse arguments first
-args = parse_arguments()
-INSTANCE_NAME = args.instance_name
+# Default instance name. CLI --instance-name is applied only in __main__,
+# so the app module can be imported by tests without argparse fighting pytest.
+INSTANCE_NAME = "default"
 
 # Check dependencies before importing
 try:
@@ -48,12 +48,13 @@ try:
     import re
     import time
     import portalocker
-    from typing import List, Optional, Dict
+    from typing import Any, List, Optional, Dict
     from command_parser_v2 import CommandParser
     from textual import events
     from textual.app import App, ComposeResult
     from textual.binding import Binding
     from textual.widgets import Header, Footer, Input, Static
+    from rich.markup import escape
     from rich.text import Text
     from textual.containers import VerticalScroll, Vertical
     from json_viewer import JSONViewer
@@ -146,8 +147,7 @@ def release_file_lock(file_obj) -> None:
 
 class CommandBlock(Static):
     """Виджет для отображения одной команды и её вывода."""
-
-    MAX_DISPLAY_LINES = 50  # Максимум строк для отображения
+    MAX_DISPLAY_LINES = 300  # Безопасный лимит для рендера в UI
 
     def __init__(self, header: str, raw_stdout: str, raw_stderr: str, return_code: int, **kwargs):
         """
@@ -165,26 +165,40 @@ class CommandBlock(Static):
         self.return_code = return_code
         self.collapsed = False
         self._truncated = False  # Флаг: вывод был обрезан
+        self.pending = True  # True пока не пришёл результат из потока (run_command)
 
         # Формируем отображаемый контент
         self.text_content = self._format_output()
         super().__init__(self.text_content, **kwargs)
         self.can_focus = True
 
+    def _simple_mode(self) -> bool:
+        """Плоский текст без Rich-тегов — удобнее выделять и копировать строки в терминале."""
+        app = getattr(self, "app", None)
+        return bool(app and getattr(app, "simple_output_mode", False))
+
     def _truncate_output(self, text: str) -> str:
-        """Обрезает вывод до MAX_DISPLAY_LINES."""
+        """
+        Обрезает вывод для стабильного рендера UI, сохраняя полный raw_stdout.
+        Показывает последние строки (обычно самые релевантные).
+        """
         lines = text.split('\n')
         if len(lines) <= self.MAX_DISPLAY_LINES:
+            self._truncated = False
             return text
         self._truncated = True
-        # Показываем последние строки (более релевантны)
         truncated = '\n'.join(lines[-self.MAX_DISPLAY_LINES:])
-        return f"[dim](...{len(lines) - self.MAX_DISPLAY_LINES} lines truncated, F5 to copy full output)[/dim]\n{truncated}"
+        hidden = len(lines) - self.MAX_DISPLAY_LINES
+        if self._simple_mode():
+            return f"(...{hidden} lines truncated for UI stability, F5 copies full output)\n{truncated}"
+        return f"[dim](...{hidden} lines truncated for UI stability, F5 copies full output)[/dim]\n{truncated}"
 
     def _format_output(self) -> str:
         """Форматирует вывод команды."""
         if self.collapsed:
             # Свернутый вид — только заголовок
+            if self._simple_mode():
+                return f"▶ {self.header}\n"
             indicator = "[dim]▶[/dim]"
             return f"{indicator} {self.header}\n"
 
@@ -197,11 +211,17 @@ class CommandBlock(Static):
 
         # Stderr внизу с подсветкой ошибки
         if self.raw_stderr and self.raw_stderr.strip():
-            parts.append(f"[bold red]STDERR:[/bold red]\n{self.raw_stderr.rstrip()}")
+            if self._simple_mode():
+                parts.append(f"STDERR:\n{self.raw_stderr.rstrip()}")
+            else:
+                parts.append(f"[bold red]STDERR:[/bold red]\n{self.raw_stderr.rstrip()}")
 
         # Return code если != 0
         if self.return_code != 0:
-            parts.append(f"[bold yellow]Exit code: {self.return_code}[/bold yellow]")
+            if self._simple_mode():
+                parts.append(f"Exit code: {self.return_code}")
+            else:
+                parts.append(f"[bold yellow]Exit code: {self.return_code}[/bold yellow]")
 
         return "\n".join(parts) + "\n\n"
 
@@ -215,7 +235,10 @@ class CommandBlock(Static):
             # В этом случае оставляем блок свернутым
             if not self.collapsed:
                 self.collapsed = True
-                self.update(f"[dim]▶[/dim] {self.header}\n[yellow](Output too large to display)[/yellow]\n")
+                if self._simple_mode():
+                    self.update(f"▶ {self.header}\n(Output too large to display)\n")
+                else:
+                    self.update(f"[dim]▶[/dim] {self.header}\n[yellow](Output too large to display)[/yellow]\n")
 
     def update_content(self, raw_stdout: str, raw_stderr: str, return_code: int) -> None:
         """
@@ -226,6 +249,7 @@ class CommandBlock(Static):
         self.raw_stderr = raw_stderr
         self.return_code = return_code
         self._truncated = False  # Сброс флага при обновлении
+        self.pending = False
         self.update(self._format_output())
 
     def on_focus(self) -> None:
@@ -278,6 +302,8 @@ class InfoBlock(Static):
 class CompletionList(Static):
     """Выпадающий список подсказок для автодополнения."""
 
+    MAX_VISIBLE_ITEMS = 16
+
     DEFAULT_CSS = """
     CompletionList {
         layer: overlay;
@@ -286,7 +312,7 @@ class CompletionList(Static):
         width: auto;
         max-width: 80;
         height: auto;
-        max-height: 12;
+        max-height: 20;
         overflow: hidden;
         padding: 0 1;
         display: none;
@@ -300,14 +326,20 @@ class CompletionList(Static):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.all_candidates: List[str] = []
         self.candidates: List[str] = []
+        self.window_start: int = 0
         self.selected_index: int = 0
+        self.total_candidates: int = 0
 
     def update_candidates(self, candidates: List[str]) -> None:
         """Обновить список кандидатов."""
-        self.candidates = candidates[:10]  # max 10 items
+        self.total_candidates = len(candidates)
+        self.all_candidates = candidates
+        self.window_start = 0
         self.selected_index = 0
-        if self.candidates:
+        self.candidates = self.all_candidates[:self.MAX_VISIBLE_ITEMS]
+        if self.all_candidates:
             self._render_list()
             self.styles.display = "block"
         else:
@@ -315,39 +347,59 @@ class CompletionList(Static):
 
     def _render_list(self) -> None:
         """Отрисовать список."""
+        window_end = self.window_start + self.MAX_VISIBLE_ITEMS
+        self.candidates = self.all_candidates[self.window_start:window_end]
+
         lines = []
         for i, cmd in enumerate(self.candidates):
-            if i == self.selected_index:
-                lines.append(f"[bold reverse] {cmd} [/bold reverse]")
+            global_index = self.window_start + i
+            safe = escape(cmd)
+            if global_index == self.selected_index:
+                lines.append(f"[bold reverse] {safe} [/bold reverse]")
             else:
-                lines.append(f" {cmd}")
+                lines.append(f" {safe}")
+
+        remaining = self.total_candidates - window_end
+        if remaining > 0:
+            lines.append(f"[dim] ... and {remaining} more (keep typing to narrow)[/dim]")
         self.update("\n".join(lines))
 
     def next_item(self) -> None:
         """Следующий элемент."""
-        if self.candidates:
-            self.selected_index = (self.selected_index + 1) % len(self.candidates)
+        if self.all_candidates:
+            self.selected_index = (self.selected_index + 1) % len(self.all_candidates)
+            if self.selected_index < self.window_start:
+                self.window_start = self.selected_index
+            elif self.selected_index >= self.window_start + self.MAX_VISIBLE_ITEMS:
+                self.window_start = self.selected_index - self.MAX_VISIBLE_ITEMS + 1
             self._render_list()
 
     def prev_item(self) -> None:
         """Предыдущий элемент."""
-        if self.candidates:
-            self.selected_index = (self.selected_index - 1) % len(self.candidates)
+        if self.all_candidates:
+            self.selected_index = (self.selected_index - 1) % len(self.all_candidates)
+            if self.selected_index < self.window_start:
+                self.window_start = self.selected_index
+            elif self.selected_index >= self.window_start + self.MAX_VISIBLE_ITEMS:
+                self.window_start = self.selected_index - self.MAX_VISIBLE_ITEMS + 1
             self._render_list()
 
     def get_selected(self) -> Optional[str]:
         """Получить выбранный элемент."""
-        if self.candidates and 0 <= self.selected_index < len(self.candidates):
-            return self.candidates[self.selected_index]
+        if self.all_candidates and 0 <= self.selected_index < len(self.all_candidates):
+            return self.all_candidates[self.selected_index]
         return None
 
     def is_visible(self) -> bool:
         """Видим ли список."""
-        return bool(self.candidates)
+        return bool(self.all_candidates)
 
     def hide(self) -> None:
         """Скрыть список."""
+        self.all_candidates = []
         self.candidates = []
+        self.window_start = 0
+        self.total_candidates = 0
         self.styles.display = "none"
 
 
@@ -362,6 +414,32 @@ class CommandInput(Input):
     def set_completion_list(self, completion_list: 'CompletionList') -> None:
         """Привязать список подсказок (вызывается из App.on_mount)."""
         self._completion_list = completion_list
+
+    def _apply_selected_completion(self, selected: str) -> bool:
+        """
+        Применяет выбранное автодополнение.
+        В path-контексте заменяет только текущий токен, а не всю строку.
+        Возвращает True, если нужно сразу показать подсказки снова.
+        """
+        app = self.app
+        is_path_context = hasattr(app, "_is_path_context") and app._is_path_context(self.value)
+
+        self._applying_completion = True
+        if not is_path_context:
+            self.value = selected
+            self.cursor_position = len(selected)
+            return False
+
+        current = self.value
+        pos = self.cursor_position
+        start = current.rfind(" ", 0, pos) + 1
+        end = current.find(" ", pos)
+        if end == -1:
+            end = len(current)
+
+        self.value = current[:start] + selected + current[end:]
+        self.cursor_position = start + len(selected)
+        return selected.endswith("/")
 
     def on_key(self, event: events.Key) -> None:
         """Обработка клавиш для автодополнения."""
@@ -386,10 +464,12 @@ class CommandInput(Input):
             elif event.key == "tab" or event.key == "enter":
                 selected = self._completion_list.get_selected()
                 if selected:
-                    self._applying_completion = True  # Устанавливаем флаг
-                    self.value = selected
-                    self.cursor_position = len(selected)
+                    reopen = self._apply_selected_completion(selected)
                     self._completion_list.hide()
+                    if reopen:
+                        # Углубление в директорию: сразу показываем следующий уровень.
+                        self._applying_completion = False
+                        self.call_after_refresh(self._show_completions)
                     event.stop()
                 return
             elif event.key == "escape":
@@ -416,21 +496,36 @@ class CommandInput(Input):
         if not hasattr(app, "get_completion_candidates"):
             return
 
-        prefix = self.value.strip()
+        raw_value = self.value
+        prefix = raw_value.strip()
         is_path_context = hasattr(app, "_is_path_context") and app._is_path_context(self.value)
         if len(prefix) < 2 and not is_path_context:
             self._completion_list.hide()
             return
 
-        candidates = app.get_completion_candidates(prefix)
+        candidates = app.get_completion_candidates(raw_value)
         if candidates:
             # Если точное совпадение — не показываем (команда уже выбрана, пользователь добавляет аргументы)
-            if len(candidates) == 1 and candidates[0] == prefix:
+            # В path-контексте не скрываем, чтобы можно было сразу углубляться в следующий уровень.
+            if len(candidates) == 1 and candidates[0] == prefix and not is_path_context:
                 self._completion_list.hide()
                 return
             self._completion_list.update_candidates(candidates)
         else:
             self._completion_list.hide()
+
+    def on_mouse_scroll_down(self, event: events.MouseScrollDown) -> None:
+        """Колесо над полем ввода — прокрутка области вывода команд (не истории сессии)."""
+        app = self.app
+        container = app.query_one(f"#{app.ID_RESULTS_CONTAINER}", VerticalScroll)
+        container.scroll_relative(1)
+        event.stop()
+
+    def on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
+        app = self.app
+        container = app.query_one(f"#{app.ID_RESULTS_CONTAINER}", VerticalScroll)
+        container.scroll_relative(-1)
+        event.stop()
 
 
 class QueryResultsBlock(Static):
@@ -465,6 +560,7 @@ class CommandRunner(App):
         ("pageup", "focus_previous", "Prev Block"),
         ("pagedown", "focus_next", "Next Block"),
         ("f5", "copy_block", "Copy Block"),
+        ("f6", "toggle_simple_output", "Simple output"),
         ("f3", "open_json_viewer", "JSON Viewer"),
         Binding("shift+insert", "paste_clipboard", "Paste", show=False),
         Binding("ctrl+v", "paste_clipboard", "Paste", show=False),
@@ -475,7 +571,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.16" # Truncate large output (max 500 lines), F5 copies full
+    VERSION = "v1.1.18"  # terminal_mouse: false — выделение мышью в терминале
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -525,6 +621,7 @@ class CommandRunner(App):
         self.history_lines: int = 20
         self.db_file = self.FILE_DATABASE
         self.active_pipe_source: Optional[CommandBlock] = None
+        self.simple_output_mode: bool = False
         # Словарь локальных переменных окружения (имеют приоритет над os.environ)
         self.local_env: Dict[str, str] = {}
         # Словарь для хранения алиасов {alias: command}
@@ -577,21 +674,50 @@ class CommandRunner(App):
         parent = os.path.dirname(expanded) or "."
         base_prefix = os.path.basename(expanded)
 
+        list_parent = parent
+        list_base_prefix = base_prefix
         try:
-            entries = os.listdir(parent)
+            entries = os.listdir(list_parent)
         except Exception:
-            return []
+            # Fallback на ближайшую существующую директорию при быстром вводе.
+            if "/" not in token and "\\" not in token:
+                return []
+            probe = expanded.rstrip("/")
+            resolved = False
+            while probe:
+                candidate_parent = os.path.dirname(probe) or "."
+                candidate_base = os.path.basename(probe)
+                try:
+                    entries = os.listdir(candidate_parent)
+                    list_parent = candidate_parent
+                    list_base_prefix = candidate_base
+                    resolved = True
+                    break
+                except Exception:
+                    next_probe = candidate_parent.rstrip("/")
+                    if next_probe == probe:
+                        break
+                    probe = next_probe
+            if not resolved:
+                return []
 
         suggestions: List[str] = []
         for name in entries:
-            if base_prefix and not name.startswith(base_prefix):
+            if list_base_prefix and not name.startswith(list_base_prefix):
                 continue
-            full_path = os.path.join(parent, name)
-            candidate_path = os.path.join(parent, name) if parent != "." else name
+            full_path = os.path.join(list_parent, name)
+            candidate_path = os.path.join(list_parent, name) if list_parent != "." else name
             if token.startswith("~"):
                 home = os.path.expanduser("~")
                 if candidate_path.startswith(home):
                     candidate_path = "~" + candidate_path[len(home):]
+            # Сохраняем явный пользовательский префикс пути в подсказке.
+            elif token.startswith("./") and not candidate_path.startswith("./"):
+                candidate_path = f"./{candidate_path}"
+            elif token.startswith("../") and not candidate_path.startswith("../"):
+                candidate_path = f"../{candidate_path}"
+            elif token.startswith("/"):
+                candidate_path = full_path
             if os.path.isdir(full_path):
                 candidate_path += "/"
             suggestions.append(candidate_path)
@@ -966,6 +1092,28 @@ class CommandRunner(App):
             Текст без тегов форматирования
         """
         return RE_FORMATTING_TAGS.sub('', text)
+
+    def _pending_block_display(self, block: "CommandBlock") -> str:
+        """Текст «команда выполняется» до прихода update_content из потока."""
+        if self.simple_output_mode:
+            return f"{block.header}\nExecuting...\n(Waiting for output or timeout...)\n"
+        return f"{block.header}\n[Executing...]\n(Waiting for output or timeout...)"
+
+    def action_toggle_simple_output(self) -> None:
+        """Переключает плоский вид журнала (без разметки) — проще копировать строки мышью."""
+        self.simple_output_mode = not self.simple_output_mode
+        try:
+            for block in self.query(CommandBlock):
+                if getattr(block, "pending", False):
+                    block.update(self._pending_block_display(block))
+                else:
+                    block.update(block._format_output())
+        except Exception:
+            pass
+        self.sub_title = (
+            "Simple output: on (F6)" if self.simple_output_mode else "Simple output: off (F6)"
+        )
+        self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
 
     def action_copy_block(self) -> None:
         """Копирует содержимое сфокусированного блока в буфер обмена."""
@@ -1863,109 +2011,61 @@ class CommandRunner(App):
         """
         content = user_input[1:].strip()
 
-        # === Секция 1: Обработка комментариев ===
-        # Проверяем на наличие "=" (комментарий к тегу или к команде)
-        if '=' in content and not content.startswith('-'):
-            # Подсекция 1.1: Комментарий к конкретной команде
-            # Формат: #tag=ID=comment (два знака "=")
-            if content.count('=') >= 2:
-                # Парсим строку: tag=ID=comment -> [tag, ID, comment]
-                parts = content.split('=', 2)
-                tag = parts[0].strip()
-                tid_str = parts[1].strip()
-                comment = parts[2].strip() if len(parts) > 2 else ""
-
-                # Валидация: tag должен быть непустым, ID - числом
-                if not tag or not tid_str.isdigit():
-                    self.add_block(InfoBlock("Invalid syntax. Use: #tag=ID=<comment>"))
-                    return
-
-                try:
-                    tid = int(tid_str)
-                    # Обновляем комментарий в БД
-                    database.set_command_comment(self.db_file, tag, tid, comment)
-                    self.add_block(InfoBlock(f"Command {tag}[{tid}] comment set to: '{comment}'"))
-                except Exception as e:
-                    self.add_block(InfoBlock(f"Database error: {e}"))
-                return
-
-            # Подсекция 1.2: Комментарий к тегу
-            # Формат: #tag=comment (один знак "=")
-            else:
-                parts = content.split('=', 1)
-                tag = parts[0].strip()
-                comment = parts[1].strip() if len(parts) > 1 else ""
-
-                if not tag:
-                    self.add_block(InfoBlock("Invalid syntax. Use: #tag=<comment>"))
-                    return
-
-                try:
-                    database.set_tag_comment(self.db_file, tag, comment)
-                    self.add_block(InfoBlock(f"Tag '{tag}' comment set to: '{comment}'"))
-                except Exception as e:
-                    self.add_block(InfoBlock(f"Database error: {e}"))
-                return
-
-        # === Секция 1.3: Редактирование команд ===
-        # Проверяем на наличие "+" после тега (редактирование)
-        # Формат: #tag+ID (редактировать команду) или #tag+ (редактировать последнюю)
-        # Формат с заменой: #tag+ID новая_команда (сразу заменить команду)
-        if '+' in content:
-            parts = content.split('+', 1)
-            tag = parts[0].strip()
-            identifier_and_more = parts[1].strip() if len(parts) > 1 else None
-
-            if not tag:
-                self.add_block(InfoBlock("Invalid syntax. Use: #tag+<ID> to edit command"))
-                return
-
+        # Формат: #tag=ID=comment
+        m = re.match(r"^([a-zA-Z_0-9]+)=(\d+)=(.*)$", content)
+        if m:
+            tag, tid_str, comment = m.groups()
             try:
-                # Проверяем, есть ли дополнительный текст после ID
-                if identifier_and_more:
-                    # Разделяем identifier и новую команду (если есть)
-                    id_parts = identifier_and_more.split(maxsplit=1)
-                    identifier = id_parts[0]
-                    new_command = id_parts[1].strip() if len(id_parts) > 1 else None
+                tid = int(tid_str)
+                database.set_command_comment(self.db_file, tag, tid, comment.strip())
+                self.add_block(InfoBlock(f"Command {tag}[{tid}] comment set to: '{comment.strip()}'"))
+            except Exception as e:
+                self.add_block(InfoBlock(f"Database error: {e}"))
+            return
 
-                    if identifier.isdigit():
-                        tid = int(identifier)
+        # Формат: #tag=comment
+        m = re.match(r"^([a-zA-Z_0-9]+)=(.*)$", content)
+        if m:
+            tag, comment = m.groups()
+            try:
+                database.set_tag_comment(self.db_file, tag, comment.strip())
+                self.add_block(InfoBlock(f"Tag '{tag}' comment set to: '{comment.strip()}'"))
+            except Exception as e:
+                self.add_block(InfoBlock(f"Database error: {e}"))
+            return
 
-                        # Если указана новая команда - сразу обновляем
-                        if new_command:
-                            result = database.get_command_by_tid(self.db_file, tag, tid)
-                            if result:
-                                database.update_command_by_tid(self.db_file, tag, tid, new_command)
-                                self.add_block(InfoBlock(f"Updated {tag}[{tid}] to: '{new_command}'"))
-                            else:
-                                self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
+        # Формат: #tag+ID [new_command] или #tag+
+        m = re.match(r"^([a-zA-Z_0-9]+)\+(\d+)?(?:\s+(.*))?$", content)
+        if m:
+            tag, tid_str, new_command = m.groups()
+            try:
+                if tid_str:
+                    tid = int(tid_str)
+                    if new_command:
+                        result = database.get_command_by_tid(self.db_file, tag, tid)
+                        if result:
+                            database.update_command_by_tid(self.db_file, tag, tid, new_command.strip())
+                            self.add_block(InfoBlock(f"Updated {tag}[{tid}] to: '{new_command.strip()}'"))
                         else:
-                            # Иначе загружаем в input для редактирования
-                            result = database.get_command_by_tid(self.db_file, tag, tid)
-                            if result:
-                                command_text = result['command']
-                                # Вставляем команду в input для редактирования
-                                input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
-                                input_widget.value = f"#{tag} {command_text}"
-                                input_widget.cursor_position = len(f"#{tag} ") + len(command_text)
-                                input_widget.focus()
-                                self.add_block(InfoBlock(f"Editing {tag}[{tid}]. Edit and press Enter to save."))
-                            else:
-                                self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
+                            self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
                     else:
-                        self.add_block(InfoBlock("Invalid syntax. Use: #tag+<ID> or #tag+ to edit"))
+                        result = database.get_command_by_tid(self.db_file, tag, tid)
+                        if result:
+                            command_text = result['command']
+                            input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+                            input_widget.value = f"#{tag} {command_text}"
+                            input_widget.cursor_position = len(f"#{tag} ") + len(command_text)
+                            input_widget.focus()
+                            self.add_block(InfoBlock(f"Editing {tag}[{tid}]. Edit and press Enter to save."))
+                        else:
+                            self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
                 else:
-                    # Редактирование последней команды тега: #deploy+
-                    # Получаем все команды тега и находим последнюю (по tid)
                     all_commands = database.get_commands_by_tag(self.db_file, tag)
                     active_commands = [cmd for cmd in all_commands if not cmd.get('deleted', False)]
-
                     if active_commands:
-                        # Сортируем по tid убыванию и берем последнюю
                         last_cmd = max(active_commands, key=lambda x: x['tid'])
                         tid = last_cmd['tid']
                         command_text = last_cmd['command']
-                        # Вставляем команду в input для редактирования
                         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
                         input_widget.value = f"#{tag} {command_text}"
                         input_widget.cursor_position = len(f"#{tag} ") + len(command_text)
@@ -1977,25 +2077,18 @@ class CommandRunner(App):
                 self.add_block(InfoBlock(f"Database error: {e}"))
             return
 
-        # === Секция 2: Обработка удаления команд ===
-        # Проверяем на наличие дефиса (сигнал удаления)
-        if '-' in content:
-            parts = content.split('-', 1)
-            tag = parts[0]
-            identifier = parts[1]
-
+        # Формат удаления только строго #tag- или #tag-<tid>
+        m = re.match(r"^([a-zA-Z_0-9]+)-(\d*)$", content)
+        if m:
+            tag, identifier = m.groups()
             try:
                 if not identifier:
-                    # Случай: #deploy-
                     database.delete_commands_by_tag(self.db_file, tag)
                     self.add_block(InfoBlock(f"All commands with tag '{tag}' marked as deleted."))
-                elif identifier.isdigit():
-                    # Случай: #deploy-5
+                else:
                     cmd_id = int(identifier)
                     database.delete_command_by_tid(self.db_file, tag, cmd_id)
                     self.add_block(InfoBlock(f"Command {tag}[{cmd_id}] marked as deleted."))
-                else:
-                    self.add_block(InfoBlock("Invalid delete syntax. Use #tag- or #tag-tid"))
             except Exception as e:
                 self.add_block(InfoBlock(f"Database error: {e}"))
             return
@@ -2459,14 +2552,14 @@ class CommandRunner(App):
         final_command = self._expand_aliases(final_command)
         
         header = f"{timestamp} ({cwd}) $ {final_command}"
-        
-        initial_text = f"{header}\n[Executing...]\n(Waiting for output or timeout...)"
+
         block = CommandBlock(
-            header=header, 
-            raw_stdout="[Executing...]", 
-            raw_stderr="", 
-            return_code=0
+            header=header,
+            raw_stdout="[Executing...]",
+            raw_stderr="",
+            return_code=0,
         )
+        initial_text = self._pending_block_display(block)
         block.text_content = initial_text
         block.update(initial_text)
         
@@ -2479,7 +2572,32 @@ class CommandRunner(App):
             daemon=True
         )
         thread.start()
-        
+
+    def _settings_terminal_mouse(self) -> bool:
+        """
+        Включает протокол xterm-mouse в драйвере Textual.
+
+        True — колесо и клики обрабатывает приложение (как раньше).
+        False — терминал снова может выделять текст мышью; прокрутка журнала: PgUp/PgDn.
+        Если ключа нет в settings.yml, остаётся True (обратная совместимость).
+        """
+        try:
+            with open(self.FILE_SETTINGS, "r", encoding=self.ENCODING) as f:
+                settings = yaml.safe_load(f)
+            if isinstance(settings, dict) and "terminal_mouse" in settings:
+                return bool(settings["terminal_mouse"])
+        except Exception:
+            pass
+        return True
+
+    def run(self, **kwargs: Any) -> Any:
+        if "mouse" not in kwargs:
+            kwargs["mouse"] = self._settings_terminal_mouse()
+        return super().run(**kwargs)
+
 if __name__ == "__main__":
+    args = parse_arguments()
+    INSTANCE_NAME = args.instance_name
+    CommandRunner.FILE_BASHRC = f".bashrc_term_{INSTANCE_NAME}"
     app = CommandRunner()
     app.run()
