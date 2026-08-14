@@ -51,6 +51,9 @@ async def test_open_json_file_expands_tree_and_sets_json_var(isolated_home):
         assert "jq path" in last_info(app).text_content
         assert "JSON" in app.local_env
         assert app.local_env["JSON"].startswith(".")
+        draft = input_widget(app).value
+        assert draft.startswith("jq ") or draft.startswith("| jq ")
+        assert app.local_env["JSON"] in draft
 
 
 async def test_json_search_filters_nodes(isolated_home):
@@ -94,16 +97,53 @@ async def test_json_right_arrow_does_not_crash(isolated_home):
 async def test_f3_opens_viewer_from_command_output(isolated_home):
     import json
 
-    (isolated_home / "sample.json").write_text(json.dumps(SAMPLE), encoding="utf-8")
+    (isolated_home / "sample.json").write_text(
+        json.dumps(SAMPLE, indent=2), encoding="utf-8"
+    )
     app = CommandRunner()
     async with app.run_test(size=(120, 40)) as pilot:
         await submit(pilot, "cat sample.json")
         await wait_command_done(app)
+        await pilot.press("tab")  # как пользователь: фокус на блок вывода
+        await pilot.pause()
         await pilot.press("f3")
-        await wait_json_viewer(app)
+        viewer = await wait_json_viewer(app)
+        tree = viewer.query_one(Tree)
+        assert tree.root.children
+        labels = [child.label.plain for child in tree.root.children]
+        assert any("JSON Root" in label for label in labels)
+        nested = tree.root.children[0]
+        assert nested.is_expanded
+        child_labels = [c.label.plain for c in nested.children]
+        assert any("spec" in label for label in child_labels)
         await pilot.press("q")
         await pilot.pause()
         assert not isinstance(app.screen, JSONViewer)
+
+
+async def test_f3_tree_with_bracket_keys_and_array_root(isolated_home):
+    import json
+
+    payload = [{"foo[bar]": {"n": 1}}, {"x": [1, 2]}]
+    (isolated_home / "test.json").write_text(
+        json.dumps(payload, indent=2), encoding="utf-8"
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "cat test.json")
+        block = await wait_command_done(app)
+        assert "foo[bar]" in block.raw_stdout
+        await pilot.press("tab")
+        await pilot.pause()
+        await pilot.press("f3")
+        viewer = await wait_json_viewer(app)
+        tree = viewer.query_one(Tree)
+        assert tree.root.children
+        wrapper = tree.root.children[0]
+        assert wrapper.is_expanded
+        assert wrapper.children, "tree was empty after F3 on cat test.json"
+        assert any("[0]" in c.label.plain for c in wrapper.children)
+        await pilot.press("q")
 
 
 async def test_json_var_usable_in_command(isolated_home):

@@ -43,10 +43,10 @@ class JSONViewer(ModalScreen):
         ("left", "cursor_parent", "Parent node"),
         ("right", "cursor_child", "First child"),
         ("space", "toggle_expand", "Expand/Collapse"),
-        ("enter", "select_node", "Copy jq path"),
+        ("enter", "select_node", "jq into input"),
     ]
 
-    def __init__(self, json_data: dict, **kwargs):
+    def __init__(self, json_data: Any, **kwargs):
         super().__init__(**kwargs)
         self.json_data = json_data
         self.highlighter = ReprHighlighter()
@@ -79,14 +79,19 @@ class JSONViewer(ModalScreen):
         return repr(data)
 
     def _make_node_label(self, key_name: str, data: Any) -> Text:
+        # Не from_markup: ключи JSON часто содержат [, ], [/] и ломают Rich.
+        key = Text(str(key_name), style="bold")
         if isinstance(data, dict):
-            return Text.from_markup(f"{{}} [bold]{key_name}[/bold] ({len(data)} keys)")
+            label = Text("{} ")
+            label.append_text(key)
+            label.append(f" ({len(data)} keys)")
+            return label
         if isinstance(data, list):
-            return Text.from_markup(f"[] [bold]{key_name}[/bold] ({len(data)} items)")
-        return Text.assemble(
-            Text.from_markup(f"[b]{key_name}[/b]="),
-            self.highlighter(repr(data)),
-        )
+            label = Text("[] ")
+            label.append_text(key)
+            label.append(f" ({len(data)} items)")
+            return label
+        return Text.assemble(key, "=", self.highlighter(repr(data)))
 
     def _path_parts_to_jq_path(self, path_parts: List[str]) -> str:
         jq_path = "".join(path_parts)
@@ -131,7 +136,10 @@ class JSONViewer(ModalScreen):
         if self.search_query and not self._node_or_descendant_matches(key_name, data, path_parts):
             return
 
-        node = parent_node.add("")
+        node = parent_node.add(
+            "",
+            expand=isinstance(data, (dict, list)),
+        )
         node.set_label(self._make_node_label(key_name, data))
         node._jq_path = path_parts
         node._jq_path_str = self._path_parts_to_jq_path(path_parts)
@@ -144,10 +152,16 @@ class JSONViewer(ModalScreen):
         for child_key, child_value, child_path in self._collect_children(data, path_parts):
             self._build_tree_filtered(node, child_key, child_value, child_path)
 
-        if isinstance(data, (dict, list)):
-            node.expand()
-        else:
+        if not isinstance(data, (dict, list)):
             node.allow_expand = False
+
+    def _move_cursor(self, tree: Tree, node: Any) -> None:
+        if node is None:
+            return
+        try:
+            tree.move_cursor(node)
+        except Exception:
+            pass
 
     def _render_tree(self) -> None:
         tree = self.query_one(Tree)
@@ -157,15 +171,22 @@ class JSONViewer(ModalScreen):
         self.total_nodes = 0
 
         root = tree.root
-        self._build_tree_filtered(root, "JSON Root", self.json_data, [])
+        try:
+            self._build_tree_filtered(root, "JSON Root", self.json_data, [])
+        except Exception as e:
+            err = root.add(f"Error building tree: {e}")
+            err.allow_expand = False
         root.expand()
+        for child in root.children:
+            if getattr(child, "allow_expand", False):
+                child.expand()
 
         if root.children:
-            tree.cursor = root.children[0]
+            self._move_cursor(tree, root.children[0])
 
         if self.match_nodes:
             self.current_match_index = 0
-            tree.cursor = self.match_nodes[0]
+            self._move_cursor(tree, self.match_nodes[0])
             self.app.sub_title = f"Search matches: 1/{len(self.match_nodes)}"
         elif self.search_query:
             self.app.sub_title = "Search matches: 0/0"
@@ -186,7 +207,7 @@ class JSONViewer(ModalScreen):
             self.app.sub_title = "Search matches: 0/0"
             return
         self.current_match_index = (self.current_match_index + 1) % len(self.match_nodes)
-        self.query_one(Tree).cursor = self.match_nodes[self.current_match_index]
+        self._move_cursor(self.query_one(Tree), self.match_nodes[self.current_match_index])
         self.app.sub_title = f"Search matches: {self.current_match_index + 1}/{len(self.match_nodes)}"
 
     def action_prev_match(self) -> None:
@@ -194,7 +215,7 @@ class JSONViewer(ModalScreen):
             self.app.sub_title = "Search matches: 0/0"
             return
         self.current_match_index = (self.current_match_index - 1) % len(self.match_nodes)
-        self.query_one(Tree).cursor = self.match_nodes[self.current_match_index]
+        self._move_cursor(self.query_one(Tree), self.match_nodes[self.current_match_index])
         self.app.sub_title = f"Search matches: {self.current_match_index + 1}/{len(self.match_nodes)}"
 
     def action_cursor_up(self) -> None:
@@ -222,7 +243,7 @@ class JSONViewer(ModalScreen):
         if node.allow_expand and not node.is_expanded:
             node.expand()
         if node.children:
-            tree.cursor = node.children[0]
+            self._move_cursor(tree, node.children[0])
 
     def action_toggle_expand(self) -> None:
         if self.query_one("#json-search", Input).has_focus:
@@ -260,17 +281,31 @@ class JSONViewer(ModalScreen):
 
                 self.app.add_block(InfoBlock(f"[bold]jq path:[/bold] {jq_path}"))
 
-                # Делаем путь доступным в шаблонах команд как $JSON.
+                # Путь доступен как $JSON и сразу как черновик во вводе.
                 if hasattr(self.app, "local_env"):
                     self.app.local_env["JSON"] = jq_path
                 os.environ["JSON"] = jq_path
 
+                quoted = "'" + jq_path.replace("'", "'\\''") + "'"
+                pipe = getattr(self.app, "active_pipe_source", None)
+                has_pipe = (
+                    pipe is not None
+                    and getattr(pipe, "raw_stdout", None)
+                    and not str(pipe.raw_stdout).startswith("[Executing...]")
+                )
+                draft = f"| jq {quoted}" if has_pipe else f"jq {quoted}"
+                if hasattr(self.app, "set_input_draft"):
+                    self.app.set_input_draft(draft)
+
                 try:
                     clipboard_path = f"'{jq_path}'"
-                    pyperclip.copy(clipboard_path)
-                    self.app.sub_title = f"jq path copied: {clipboard_path}; $JSON set"
+                    if hasattr(self.app, "copy_text"):
+                        self.app.copy_text(clipboard_path)
+                    else:
+                        pyperclip.copy(clipboard_path)
+                    self.app.sub_title = f"jq draft: {draft}; $JSON set"
                 except Exception:
-                    pass
+                    self.app.sub_title = f"jq draft: {draft}; $JSON set"
 
     def action_close_screen(self) -> None:
         if self.app.screen is self:

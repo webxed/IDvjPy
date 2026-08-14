@@ -71,6 +71,25 @@ async def test_variable_assignment_and_substitution(isolated_home):
         assert "bar-test" in block.raw_stdout
 
 
+async def test_echo_myvar_from_legacy_bashrc_term(isolated_home):
+    """`.bashrc_term` с MYVAR не должен теряться из‑за `.bashrc_term_default` с NS."""
+    (isolated_home / ".bashrc_term").write_text(
+        '# Terminal-specific bashrc file\nexport MYVAR="1"\n',
+        encoding="utf-8",
+    )
+    (isolated_home / ".bashrc_term_default").write_text(
+        '# Terminal-specific environment variables\nexport NS="markovskiy"\n',
+        encoding="utf-8",
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        assert app.local_env.get("MYVAR") == "1"
+        assert app.local_env.get("NS") == "markovskiy"
+        await submit(pilot, "echo $MYVAR")
+        block = await wait_command_done(app)
+        assert "1" in block.raw_stdout
+
+
 async def test_colon_clear_and_quit(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(120, 40)) as pilot:

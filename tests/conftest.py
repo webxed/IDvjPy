@@ -30,6 +30,16 @@ def isolated_home(tmp_path, monkeypatch):
     clip = {"text": ""}
     monkeypatch.setattr("pyperclip.copy", lambda text: clip.update(text=text or ""))
     monkeypatch.setattr("pyperclip.paste", lambda: clip["text"])
+
+    linux_clip = {"clipboard": b"", "primary": b""}
+
+    def fake_linux(selection, data=None):
+        if data is not None:
+            linux_clip[selection] = data
+            return b""
+        return linux_clip.get(selection) or None
+
+    monkeypatch.setattr("app._linux_clipboard_cmd", fake_linux)
     return tmp_path
 
 
@@ -55,7 +65,8 @@ async def type_keys(pilot, text: str) -> None:
 async def submit(pilot, text: str) -> None:
     """Фокус на input → очистить → набор → скрыть completion → Enter.
 
-    Enter при открытом списке подсказок вставляет кандидата и не отправляет команду.
+    Enter при открытом списке подсказок вставляет *другого* кандидата.
+    Если выбран уже введённый путь (`ls ~/`), Enter выполняет команду.
     """
     await pilot.press("escape")
     inp = pilot.app.query_one("#command-input", CommandInput)

@@ -86,6 +86,101 @@ RE_TAG_TID_FIND = re.compile(r'!([a-zA-Z_0-9]+)\[(\d+)\]')
 RE_GID_FIND = re.compile(r'(?<!!)!(\d+)')
 
 
+def _linux_clipboard_cmd(selection: str, data: Optional[bytes] = None) -> Optional[bytes]:
+    """Чтение/запись X11/Wayland буферов. selection: clipboard | primary."""
+    writers_readers = []
+    if selection == "primary":
+        writers_readers = [
+            (["xclip", "-selection", "primary"], ["xclip", "-selection", "primary", "-o"]),
+            (["xsel", "--primary", "--input"], ["xsel", "--primary", "--output"]),
+            (["wl-copy", "--primary"], ["wl-paste", "--primary", "-n"]),
+        ]
+    else:
+        writers_readers = [
+            (["xclip", "-selection", "clipboard"], ["xclip", "-selection", "clipboard", "-o"]),
+            (["xsel", "--clipboard", "--input"], ["xsel", "--clipboard", "--output"]),
+            (["wl-copy"], ["wl-paste", "-n"]),
+        ]
+    if data is not None:
+        for write_cmd, _read_cmd in writers_readers:
+            try:
+                completed = subprocess.run(
+                    write_cmd,
+                    input=data,
+                    capture_output=True,
+                    timeout=0.4,
+                    check=False,
+                )
+                if completed.returncode == 0:
+                    return b""
+            except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+                continue
+        return None
+    for _write_cmd, read_cmd in writers_readers:
+        try:
+            completed = subprocess.run(
+                read_cmd,
+                capture_output=True,
+                timeout=0.4,
+                check=False,
+            )
+            if completed.returncode == 0:
+                return completed.stdout
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            continue
+    return None
+
+
+def copy_text_to_clipboards(text: str, app: Optional["CommandRunner"] = None) -> None:
+    """
+    Копирует текст во все буферы, которые читает терминал:
+    Textual (Ctrl+V в Input), OSC 52, CLIPBOARD и PRIMARY (Shift+Insert).
+    """
+    payload = text if text is not None else ""
+    if app is not None:
+        try:
+            app.copy_to_clipboard(payload)
+        except Exception:
+            pass
+        try:
+            driver = getattr(app, "_driver", None)
+            if driver is not None:
+                import base64
+                b64 = base64.b64encode(payload.encode("utf-8")).decode("ascii")
+                driver.write(f"\x1b]52;p;{b64}\a")
+        except Exception:
+            pass
+    try:
+        pyperclip.copy(payload)
+    except Exception:
+        pass
+    encoded = payload.encode("utf-8")
+    _linux_clipboard_cmd("clipboard", encoded)
+    _linux_clipboard_cmd("primary", encoded)
+
+
+def paste_text_from_clipboards(app: Optional["CommandRunner"] = None) -> str:
+    """Сначала системный CLIPBOARD/PRIMARY, затем внутренний буфер Textual."""
+    try:
+        clip = pyperclip.paste() or ""
+        if clip:
+            return clip
+    except Exception:
+        pass
+    for selection in ("clipboard", "primary"):
+        raw = _linux_clipboard_cmd(selection)
+        if raw:
+            try:
+                decoded = raw.decode("utf-8", errors="replace")
+            except Exception:
+                continue
+            if decoded:
+                return decoded
+    if app is not None:
+        return getattr(app, "clipboard", None) or ""
+    return ""
+
+
 # ============================================================================
 # File Locking Utilities with Timeout (Cross-platform)
 # ============================================================================
@@ -145,9 +240,264 @@ def release_file_lock(file_obj) -> None:
         pass  # Lock was already released or file was closed
 
 
-class CommandBlock(Static):
+class LineNavigable:
+    """Построчный курсор: F7/Enter включают; Enter копирует и уходит во ввод; Shift+Enter дописывает во ввод."""
+
+    def _nav_plain_text(self) -> str:
+        return ""
+
+    def _nav_lines(self) -> List[str]:
+        text = self._nav_plain_text()
+        if text.endswith("\n"):
+            text = text[:-1]
+        return text.split("\n") if text else [""]
+
+    def _visible_line_index(self, lines: List[str]) -> int:
+        try:
+            container = self.app.query_one("#results-container", VerticalScroll)
+            block_y = int(getattr(self, "virtual_region", self.region).y)
+            rel = int(container.scroll_y) - block_y
+            return max(0, min(len(lines) - 1, rel))
+        except Exception:
+            return 0
+
+    def _paint_line_cursor(self) -> None:
+        lines = self._nav_lines()
+        idx = getattr(self, "line_index", None)
+        if idx is None or not (0 <= idx < len(lines)):
+            self.update(self._nav_plain_text())
+            return
+        painted = list(lines)
+        painted[idx] = f"[reverse]{painted[idx]}[/reverse]"
+        suffix = "\n" if self._nav_plain_text().endswith("\n") else ""
+        self.update("\n".join(painted) + suffix)
+
+    def _scroll_cursor_into_view(self) -> None:
+        idx = getattr(self, "line_index", None)
+        if idx is None:
+            return
+        try:
+            container = self.app.query_one("#results-container", VerticalScroll)
+            block_y = int(getattr(self, "virtual_region", self.region).y)
+            y = block_y + int(idx)
+            top = int(container.scroll_y)
+            height = max(1, int(container.size.height))
+            if y < top:
+                container.scroll_to(y=y, animate=False)
+            elif y >= top + height:
+                container.scroll_to(y=max(0, y - height + 1), animate=False)
+        except Exception:
+            pass
+
+    def enter_line_nav(self) -> None:
+        """Включить режим курсора по строкам."""
+        self.line_nav_active = True
+        try:
+            self.add_class("line-nav")
+        except Exception:
+            pass
+        lines = self._nav_lines()
+        if getattr(self, "line_index", None) is None:
+            self.line_index = self._visible_line_index(lines)
+        else:
+            self.line_index = max(0, min(self.line_index, max(0, len(lines) - 1)))
+        self._paint_line_cursor()
+        self._scroll_cursor_into_view()
+        app = getattr(self, "app", None)
+        if app is not None:
+            app.sub_title = "Line cursor: on (Enter copy+input, Shift+Enter append; F7/Esc off)"
+            try:
+                app.set_timer(app.TIMER_DELAY, app.clear_subtitle)
+            except Exception:
+                pass
+
+    def exit_line_nav(self, notify: bool = True) -> None:
+        """Выключить режим курсора по строкам."""
+        was_on = getattr(self, "line_nav_active", False)
+        self.line_nav_active = False
+        self.line_index = None
+        try:
+            self.remove_class("line-nav")
+        except Exception:
+            pass
+        try:
+            self.update(self._nav_plain_text())
+        except Exception:
+            pass
+        app = getattr(self, "app", None)
+        if notify and was_on and app is not None:
+            app.sub_title = "Line cursor: off"
+            try:
+                app.set_timer(app.TIMER_DELAY, app.clear_subtitle)
+            except Exception:
+                pass
+
+    def toggle_line_nav(self) -> None:
+        if getattr(self, "line_nav_active", False):
+            self.exit_line_nav()
+        else:
+            self.enter_line_nav()
+
+    def _plain_copy_line(self, line: str) -> str:
+        text = line.replace("[reverse]", "").replace("[/reverse]", "")
+        app = getattr(self, "app", None)
+        if app is not None and hasattr(app, "_strip_formatting_tags"):
+            text = app._strip_formatting_tags(text)
+        return text.rstrip()
+
+    def _current_plain_line(self) -> str:
+        lines = self._nav_lines()
+        idx = getattr(self, "line_index", None)
+        if idx is None or not (0 <= idx < len(lines)):
+            return ""
+        return self._plain_copy_line(lines[idx])
+
+    def copy_current_line(self) -> str:
+        """Копирует текущую строку в буфер. Возвращает скопированный текст."""
+        text = self._current_plain_line()
+        app = getattr(self, "app", None)
+        try:
+            copy_text_to_clipboards(text, app)
+            if app is not None:
+                app.sub_title = getattr(app, "MSG_COPIED", "Copied to clipboard!")
+                try:
+                    app.set_timer(app.TIMER_DELAY, app.clear_subtitle)
+                except Exception:
+                    pass
+        except Exception:
+            if app is not None:
+                app.sub_title = "Error copying to clipboard."
+                try:
+                    app.set_timer(app.TIMER_DELAY, app.clear_subtitle)
+                except Exception:
+                    pass
+            return ""
+        return text
+
+    def append_current_line_to_input(self) -> None:
+        """Shift+Enter: дописать выделенную строку во ввод через пробел."""
+        text = self._current_plain_line()
+        if not text:
+            return
+        app = getattr(self, "app", None)
+        if app is None:
+            return
+        try:
+            inp = app.query_one(f"#{app.ID_INPUT}", Input)
+        except Exception:
+            return
+        current = inp.value or ""
+        if not current:
+            new_val = text
+        elif current.endswith((" ", "\t")):
+            new_val = current + text
+        else:
+            new_val = current + " " + text
+        inp.value = new_val
+        inp.cursor_position = len(new_val)
+        if getattr(app, "_completion_list", None) is not None:
+            app._completion_list.hide()
+        app.sub_title = f"Appended to input: {text}"
+        try:
+            app.set_timer(app.TIMER_DELAY, app.clear_subtitle)
+        except Exception:
+            pass
+
+    def move_line(self, delta: int) -> bool:
+        """Сдвиг курсора на delta строк. False — край блока, пусть журнал скроллится дальше."""
+        if not getattr(self, "line_nav_active", False):
+            return False
+        lines = self._nav_lines()
+        if not lines:
+            return False
+        current = getattr(self, "line_index", None)
+        if current is None:
+            current = self._visible_line_index(lines)
+        nxt = current + delta
+        if nxt < 0 or nxt >= len(lines):
+            return False
+        self.line_index = nxt
+        self._paint_line_cursor()
+        self._scroll_cursor_into_view()
+        return True
+
+    def jump_line(self, where: str) -> None:
+        if not getattr(self, "line_nav_active", False):
+            return
+        lines = self._nav_lines()
+        if not lines:
+            return
+        self.line_index = 0 if where == "home" else len(lines) - 1
+        self._paint_line_cursor()
+        self._scroll_cursor_into_view()
+
+    def _is_append_line_key(self, event: events.Key) -> bool:
+        """Shift+Enter в разных терминалах: shift+enter, ctrl+enter, ctrl+j (LF)."""
+        key = event.key or ""
+        if key in ("shift+enter", "ctrl+enter", "ctrl+j"):
+            return True
+        parts = key.split("+")
+        if "enter" in parts and "shift" in parts:
+            return True
+        aliases = getattr(event, "aliases", None) or []
+        return any(a in ("shift+enter", "ctrl+enter", "ctrl+j") for a in aliases)
+
+    def action_append_line(self) -> None:
+        if getattr(self, "line_nav_active", False):
+            self.append_current_line_to_input()
+
+    def on_key(self, event: events.Key) -> None:
+        if self._is_append_line_key(event):
+            if getattr(self, "line_nav_active", False):
+                self.append_current_line_to_input()
+                event.stop()
+            return
+        if event.key == "enter":
+            if getattr(self, "line_nav_active", False):
+                self.copy_current_line()
+                if hasattr(self.app, "action_focus_input"):
+                    self.app.action_focus_input()
+            else:
+                self.enter_line_nav()
+            event.stop()
+            return
+        if event.key == "escape" and getattr(self, "line_nav_active", False):
+            self.exit_line_nav()
+            event.stop()
+            return
+        if not getattr(self, "line_nav_active", False):
+            return
+        # VerticalScroll тоже слушает ↑/↓/Home/End — останавливаем событие на блоке.
+        if event.key == "up":
+            if not self.move_line(-1):
+                self.app._scroll_results(-1)
+            event.stop()
+        elif event.key == "down":
+            if not self.move_line(1):
+                self.app._scroll_results(1)
+            event.stop()
+        elif event.key == "home":
+            self.jump_line("home")
+            event.stop()
+        elif event.key == "end":
+            self.jump_line("end")
+            event.stop()
+
+    def on_blur(self) -> None:
+        self.exit_line_nav(notify=False)
+
+
+_LINE_NAV_APPEND_BINDINGS = [
+    Binding("shift+enter", "append_line", show=False, priority=True),
+    Binding("ctrl+enter", "append_line", show=False, priority=True),
+    Binding("ctrl+j", "append_line", show=False, priority=True),
+]
+
+
+class CommandBlock(LineNavigable, Static):
     """Виджет для отображения одной команды и её вывода."""
     MAX_DISPLAY_LINES = 300  # Безопасный лимит для рендера в UI
+    BINDINGS = _LINE_NAV_APPEND_BINDINGS
 
     def __init__(self, header: str, raw_stdout: str, raw_stderr: str, return_code: int, **kwargs):
         """
@@ -166,6 +516,8 @@ class CommandBlock(Static):
         self.collapsed = False
         self._truncated = False  # Флаг: вывод был обрезан
         self.pending = True  # True пока не пришёл результат из потока (run_command)
+        self.line_index: Optional[int] = None
+        self.line_nav_active: bool = False
 
         # Формируем отображаемый контент
         self.text_content = self._format_output()
@@ -225,9 +577,13 @@ class CommandBlock(Static):
 
         return "\n".join(parts) + "\n\n"
 
+    def _nav_plain_text(self) -> str:
+        return self._format_output()
+
     def toggle_collapse(self) -> None:
         """Переключает состояние сворачивания."""
         self.collapsed = not self.collapsed
+        self.exit_line_nav()
         try:
             self.update(self._format_output())
         except Exception:
@@ -251,6 +607,10 @@ class CommandBlock(Static):
         self._truncated = False  # Сброс флага при обновлении
         self.pending = False
         self.update(self._format_output())
+        if getattr(self, "line_nav_active", False) and getattr(self, "line_index", None) is not None:
+            n = len(self._nav_lines())
+            self.line_index = min(self.line_index, max(0, n - 1))
+            self._paint_line_cursor()
 
     def on_focus(self) -> None:
         """
@@ -284,8 +644,10 @@ class ClickableCommand(Static):
             input_widget.focus()
         return False
 
-class InfoBlock(Static):
+class InfoBlock(LineNavigable, Static):
     """Виджет для отображения информационных сообщений (не от команд)."""
+
+    BINDINGS = _LINE_NAV_APPEND_BINDINGS
 
     def __init__(self, text_content: str, **kwargs):
         """
@@ -295,28 +657,30 @@ class InfoBlock(Static):
             text_content: Текст для отображения.
         """
         self.text_content = text_content.rstrip() + "\n\n"
+        self.line_index: Optional[int] = None
+        self.line_nav_active: bool = False
         super().__init__(self.text_content, **kwargs)
         self.can_focus = True
 
+    def _nav_plain_text(self) -> str:
+        return self.text_content
+
 
 class CompletionList(Static):
-    """Выпадающий список подсказок для автодополнения."""
+    """Список подсказок: в потоке layout под полем ввода, не overlay поверх журнала."""
 
-    MAX_VISIBLE_ITEMS = 16
+    MAX_VISIBLE_ITEMS = 8
 
     DEFAULT_CSS = """
     CompletionList {
-        layer: overlay;
         background: $surface;
-        border: heavy $accent;
-        width: auto;
-        max-width: 80;
+        border: tall $accent;
+        width: 100%;
         height: auto;
-        max-height: 20;
+        max-height: 8;
         overflow: hidden;
         padding: 0 1;
         display: none;
-        offset-y: 3;  /* Сместить ниже input */
     }
     CompletionList .selected {
         background: $accent;
@@ -326,6 +690,7 @@ class CompletionList(Static):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.can_focus = False
         self.all_candidates: List[str] = []
         self.candidates: List[str] = []
         self.window_start: int = 0
@@ -404,9 +769,16 @@ class CompletionList(Static):
 
 
 class CommandInput(Input):
-    """Поле ввода с автодополнением по Tab из БД и истории сессии."""
+    """Поле ввода: Tab — в журнал (или применить подсказку, если список открыт)."""
+
+    BINDINGS = [
+        Binding("tab", "tab_input", show=False, priority=True),
+        Binding("shift+insert", "paste_clipboard", show=False, priority=True),
+        Binding("ctrl+v", "paste_clipboard", show=False, priority=True),
+    ]
 
     def __init__(self, **kwargs):
+        kwargs.setdefault("select_on_focus", False)
         super().__init__(**kwargs)
         self._completion_list: Optional[CompletionList] = None
         self._applying_completion: bool = False  # Флаг: применяем completion
@@ -415,17 +787,42 @@ class CommandInput(Input):
         """Привязать список подсказок (вызывается из App.on_mount)."""
         self._completion_list = completion_list
 
+    def _should_replace_last_token(self, selected: str) -> bool:
+        """Path-токен заменяем только если кандидат — путь, а не целая команда."""
+        app = self.app
+        if not (hasattr(app, "_is_path_context") and app._is_path_context(self.value)):
+            return False
+        if any(ch.isspace() for ch in selected.strip()):
+            return False
+        return True
+
+    def _preview_completion_value(self, selected: str) -> str:
+        """Строка ввода после применения кандидата (без изменения поля)."""
+        if not self._should_replace_last_token(selected):
+            return selected
+        current = self.value
+        pos = self.cursor_position
+        start = current.rfind(" ", 0, pos) + 1
+        end = current.find(" ", pos)
+        if end == -1:
+            end = len(current)
+        return current[:start] + selected + current[end:]
+
+    def _typed_command_is_complete(self) -> bool:
+        """Пробел в конце: команда набрана, Enter выполняет её, а не кандидата с аргументами."""
+        value = self.value or ""
+        return bool(value) and value[-1] in " \t"
+
     def _apply_selected_completion(self, selected: str) -> bool:
         """
         Применяет выбранное автодополнение.
         В path-контексте заменяет только текущий токен, а не всю строку.
+        Полная команда из истории/БД всегда подменяет строку целиком
+        (иначе `cat json.file` + Enter даёт `cat cat json.file`).
         Возвращает True, если нужно сразу показать подсказки снова.
         """
-        app = self.app
-        is_path_context = hasattr(app, "_is_path_context") and app._is_path_context(self.value)
-
         self._applying_completion = True
-        if not is_path_context:
+        if not self._should_replace_last_token(selected):
             self.value = selected
             self.cursor_position = len(selected)
             return False
@@ -441,18 +838,41 @@ class CommandInput(Input):
         self.cursor_position = start + len(selected)
         return selected.endswith("/")
 
+    def action_tab_input(self) -> None:
+        """Tab: применить открытую подсказку, иначе перейти на панель вывода."""
+        clist = self._completion_list
+        if clist is not None and clist.is_visible():
+            selected = clist.get_selected()
+            if selected:
+                if self._preview_completion_value(selected) != self.value:
+                    reopen = self._apply_selected_completion(selected)
+                    clist.hide()
+                    if reopen:
+                        self._applying_completion = False
+                        self.call_after_refresh(self._show_completions)
+                    return
+                # Уже введён готовый каталог (`~/`, `/usr/`): не подменяем дочерним путём.
+                clist.hide()
+                return
+        if hasattr(self.app, "action_focus_output"):
+            self.app.action_focus_output()
+
+    def action_paste_clipboard(self) -> None:
+        """Shift+Insert / Ctrl+V: системный буфер, не внутренний clipboard Textual."""
+        if hasattr(self.app, "action_paste_clipboard"):
+            self.app.action_paste_clipboard()
+
     def on_key(self, event: events.Key) -> None:
         """Обработка клавиш для автодополнения."""
         if not self._completion_list:
             return
 
-        # Tab на пустой строке не должен переводить фокус
-        if event.key == "tab" and not self.value.strip():
-            event.stop()
-            return
-
-        # Навигация по списку
+        # Навигация по списку. PageUp/PageDown и Esc закрывают список,
+        # чтобы журнал оставался доступен мышью и стрелками.
         if self._completion_list.is_visible():
+            if event.key in ("pageup", "pagedown"):
+                self._completion_list.hide()
+                return
             if event.key == "down":
                 self._completion_list.next_item()
                 event.stop()
@@ -461,9 +881,12 @@ class CommandInput(Input):
                 self._completion_list.prev_item()
                 event.stop()
                 return
-            elif event.key == "tab" or event.key == "enter":
+            elif event.key == "enter":
+                if self._typed_command_is_complete():
+                    self._completion_list.hide()
+                    return
                 selected = self._completion_list.get_selected()
-                if selected:
+                if selected and self._preview_completion_value(selected) != self.value:
                     reopen = self._apply_selected_completion(selected)
                     self._completion_list.hide()
                     if reopen:
@@ -471,6 +894,9 @@ class CommandInput(Input):
                         self._applying_completion = False
                         self.call_after_refresh(self._show_completions)
                     event.stop()
+                    return
+                # Совпадает с уже введённым путём (`ls ~/`) — выполняем команду как есть.
+                self._completion_list.hide()
                 return
             elif event.key == "escape":
                 self._completion_list.hide()
@@ -497,6 +923,10 @@ class CommandInput(Input):
             return
 
         raw_value = self.value
+        if self._typed_command_is_complete():
+            # `ls   ` — выполнить ls, не держать список `ls -la`.
+            self._completion_list.hide()
+            return
         prefix = raw_value.strip()
         is_path_context = hasattr(app, "_is_path_context") and app._is_path_context(self.value)
         if len(prefix) < 2 and not is_path_context:
@@ -505,9 +935,12 @@ class CommandInput(Input):
 
         candidates = app.get_completion_candidates(raw_value)
         if candidates:
-            # Если точное совпадение — не показываем (команда уже выбрана, пользователь добавляет аргументы)
-            # В path-контексте не скрываем, чтобы можно было сразу углубляться в следующий уровень.
-            if len(candidates) == 1 and candidates[0] == prefix and not is_path_context:
+            # Точная команда уже набрана — не перехватывать Enter повторным apply.
+            # Для каталога с / список оставляем, чтобы можно было углубиться.
+            if (
+                candidates[0] == prefix
+                and not prefix.endswith(("/", "\\"))
+            ):
                 self._completion_list.hide()
                 return
             self._completion_list.update_candidates(candidates)
@@ -528,7 +961,7 @@ class CommandInput(Input):
         event.stop()
 
 
-class QueryResultsBlock(Static):
+class QueryResultsBlock(LineNavigable, Static):
     """
     Виджет для отображения результатов запроса с кликабельными командами.
 
@@ -536,6 +969,8 @@ class QueryResultsBlock(Static):
     <global_id> tag[tid]  command_text
     где tag[tid] является кликабельным.
     """
+
+    BINDINGS = _LINE_NAV_APPEND_BINDINGS
 
     def __init__(self, content: str, **kwargs):
         """
@@ -545,8 +980,13 @@ class QueryResultsBlock(Static):
             content: Текст для отображения (без кликабельных элементов).
         """
         self.text_content = content.rstrip() + "\n\n"
+        self.line_index: Optional[int] = None
+        self.line_nav_active: bool = False
         super().__init__(self.text_content, **kwargs)
         self.can_focus = True
+
+    def _nav_plain_text(self) -> str:
+        return self.text_content
 
 
 class CommandRunner(App):
@@ -561,6 +1001,7 @@ class CommandRunner(App):
         ("pagedown", "focus_next", "Next Block"),
         ("f5", "copy_block", "Copy Block"),
         ("f6", "toggle_simple_output", "Simple output"),
+        ("f7", "toggle_line_nav", "Line cursor"),
         ("f3", "open_json_viewer", "JSON Viewer"),
         Binding("shift+insert", "paste_clipboard", "Paste", show=False),
         Binding("ctrl+v", "paste_clipboard", "Paste", show=False),
@@ -571,7 +1012,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.18"  # terminal_mouse: false — выделение мышью в терминале
+    VERSION = "v1.1.32"  # Trailing space dismisses completion so Enter runs the typed command
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -640,22 +1081,36 @@ class CommandRunner(App):
         parts = text.split()
         return parts[-1] if parts else text
 
+    def _last_token_is_path_like(self, token: str) -> bool:
+        if not token:
+            return False
+        return (
+            token.startswith(("./", "../", "/", "~"))
+            or token in (".", "..", "~")
+            or "/" in token
+            or "\\" in token
+        )
+
     def _is_path_context(self, text: str) -> bool:
         """
-        Проверяет, что ввод находится в path-контексте:
-        - есть хотя бы один аргумент после команды, либо
-        - последний токен явно похож на путь.
+        Path-контекст: последний токен похож на путь, либо аргумент cd/pushd.
+        Не любое «два слова»: иначе `cat file` + Enter из истории даёт `cat cat file`.
         """
         stripped = text.rstrip()
         if not stripped:
             return False
 
-        parts = stripped.split()
-        if len(parts) >= 2:
+        token = self._extract_path_token(text)
+        if self._last_token_is_path_like(token):
             return True
 
-        token = self._extract_path_token(stripped)
-        return token.startswith(("./", "../", "/", "~")) or token in (".", "..", "~")
+        parts = stripped.split()
+        if len(parts) >= 2 and parts[0] in ("cd", "pushd"):
+            return True
+        # Относительное имя файла после команды: `cat te` → test.json
+        if len(parts) >= 2 and token and not token.startswith("-"):
+            return True
+        return False
 
     def _get_file_completion_candidates(self, text: str) -> List[str]:
         """Подсказки файлов/директорий для текущей директории (включая скрытые)."""
@@ -722,7 +1177,15 @@ class CommandRunner(App):
                 candidate_path += "/"
             suggestions.append(candidate_path)
 
-        return sorted(suggestions)
+        suggestions = sorted(suggestions)
+        # Токен уже заканчивается на / — это готовый каталог (`~/`, `./`, `/usr/`).
+        # Ставим его первым, чтобы Enter выполнил именно его, а не первого ребёнка.
+        if token.endswith("/") or token.endswith("\\"):
+            dir_path = os.path.expanduser(token) if token.startswith("~") else token
+            if os.path.isdir(dir_path):
+                suggestions = [c for c in suggestions if c != token]
+                suggestions.insert(0, token)
+        return suggestions
 
     def get_completion_candidates(self, prefix: str) -> List[str]:
         """
@@ -733,6 +1196,12 @@ class CommandRunner(App):
         prefix = prefix.strip()
         if not raw_prefix:
             return []
+        file_cands = self._get_file_completion_candidates(raw_prefix)
+        if file_cands:
+            # Не смешивать полные команды из БД/истории с путями:
+            # иначе Enter подставляет `cat json.file` вместо токена файла.
+            return file_cands[:20]
+
         candidates: List[str] = []
         try:
             from_db = database.get_commands_by_prefix(self.db_file, prefix)
@@ -742,9 +1211,6 @@ class CommandRunner(App):
         for cmd in self.session_history:
             if cmd.strip().startswith(prefix):
                 candidates.append(cmd.strip())
-        # Подсказки по файлам текущей директории (path-context).
-        candidates.extend(self._get_file_completion_candidates(raw_prefix))
-        # Уникальные, отсортированные, максимум 20
         return sorted(set(candidates))[:20]
 
     def on_key(self, event: events.Key) -> None:
@@ -754,6 +1220,9 @@ class CommandRunner(App):
             self.action_paste_clipboard()
             event.stop()
             return
+
+        if event.key in ("pageup", "pagedown") and getattr(self, "_completion_list", None):
+            self._completion_list.hide()
 
         # Если нажата печатаемая клавиша и фокус не на input — переводим фокус
         # Но не перехватываем если фокус на CommandBlock (для сворачивания Space)
@@ -766,21 +1235,26 @@ class CommandRunner(App):
 
     def action_paste_clipboard(self) -> None:
         """Вставляет текст из буфера обмена в command input."""
-        try:
-            clip = pyperclip.paste()
-        except Exception:
+        clip = paste_text_from_clipboards(self)
+        if not clip:
             return
 
-        if clip is None:
-            return
-
-        input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
-        input_widget.focus()
-
-        pos = input_widget.cursor_position
+        input_widget = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        if not input_widget.has_focus:
+            input_widget.focus()
         current = input_widget.value or ""
+        sel = getattr(input_widget, "selection", None)
+        if sel is not None and getattr(sel, "start", 0) != getattr(sel, "end", 0):
+            # Не затирать уже набранное: вставляем в конец, а не вместо выделения.
+            pos = len(current)
+        else:
+            pos = input_widget.cursor_position
         input_widget.value = current[:pos] + clip + current[pos:]
         input_widget.cursor_position = pos + len(clip)
+
+    def copy_text(self, text: str) -> None:
+        """Копирует текст в CLIPBOARD, PRIMARY и внутренний буфер Textual."""
+        copy_text_to_clipboards(text or "", self)
 
     def on_mouse_scroll_down(self, event) -> None:
         """Скролл вниз всегда идёт в контейнер вывода."""
@@ -910,14 +1384,28 @@ class CommandRunner(App):
             # Перезапускаем таймер для следующего цикла
             self.set_timer(self.DB_RELOAD_INTERVAL, self._periodic_db_reload)
 
+    def _parse_bashrc_assignment(self, line: str) -> Optional[tuple]:
+        """Разбирает `export VAR=val` или `VAR=val`. Комментарии пропускает."""
+        line = line.strip()
+        if not line or line.startswith("#"):
+            return None
+        if line.startswith("export "):
+            line = line[7:].strip()
+        if "=" not in line:
+            return None
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not RE_VAR_NAME.match(key):
+            return None
+        value = value.strip().strip('"').strip("'")
+        return key, value
+
     def load_bashrc(self) -> None:
         """
-        Читает файл .bashrc_term, парсит строки export VAR="VAL"
-        и заполняет словарь self.local_env.
-        Также обновляет os.environ для текущего процесса.
+        Читает `.bashrc_term_<instance>` и `.bashrc_term`, парсит VAR=val / export VAR=val.
 
-        Использует file locking для безопасного чтения при одновременной работе
-        нескольких копий приложения.
+        Инстанс-файл имеет приоритет при совпадении имён; переменные только из
+        `.bashrc_term` (как MYVAR) подхватываются, даже если в инстанс-файле уже есть NS.
         """
         # Создаем файл, если его нет (с блокировкой)
         if not os.path.exists(self.FILE_BASHRC):
@@ -927,7 +1415,6 @@ class CommandRunner(App):
                     f.write("# Terminal-specific environment variables\n")
                     release_file_lock(f)
             except FileLockTimeoutError:
-                # Если не можем получить блокировку при создании, это не критично
                 with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f:
                     f.write("# Terminal-specific environment variables\n")
             except Exception as e:
@@ -935,52 +1422,39 @@ class CommandRunner(App):
                 return
 
         try:
-            # Пытаемся прочитать из файлов по порядку
-            # Приоритет: .bashrc_term_{INSTANCE_NAME}, затем .bashrc_term (для обратной совместимости)
             bashrc_files = [self.FILE_BASHRC]
             if self.FILE_BASHRC != ".bashrc_term" and os.path.exists(".bashrc_term"):
                 bashrc_files.append(".bashrc_term")
 
+            seen_keys = set()
             for bashrc_file in bashrc_files:
                 if not os.path.exists(bashrc_file):
                     continue
 
                 with open(bashrc_file, "r", encoding=self.ENCODING) as f:
-                    # Пытаемся получить блокировку для чтения
                     try:
                         acquire_file_lock(f, self.FILE_LOCK_TIMEOUT)
                     except FileLockTimeoutError:
-                        # Если не удалось получить блокировку, читаем без неё
-                        # (лучше прочитать без блокировки, чем вообще не прочитать)
                         pass
 
                     try:
-                        for line in f:
-                            line = line.strip()
-                            # Ищем строки, начинающиеся с export и содержащие =
-                            if line.startswith("export ") and "=" in line:
-                                # Убираем "export "
-                                assignment = line[7:]
-                                # Разделяем на имя и значение (только по первому знаку =)
-                                key, value = assignment.split("=", 1)
-                                # Очищаем значение от кавычек
-                                value = value.strip('"').strip("'")
-                                self.local_env[key] = value
-                                # Добавляем в окружение процесса, чтобы subprocess видел их
-                                os.environ[key] = value
+                        for raw_line in f:
+                            parsed = self._parse_bashrc_assignment(raw_line)
+                            if not parsed:
+                                continue
+                            key, value = parsed
+                            if key in seen_keys:
+                                continue
+                            seen_keys.add(key)
+                            self.local_env[key] = value
+                            os.environ[key] = value
                     finally:
-                        # Всегда освобождаем блокировку, если получили её
                         try:
                             release_file_lock(f)
-                        except:
+                        except Exception:
                             pass
 
-                # Если нашли файл и прочитали переменные, выходим (приоритет первому файлу)
-                if self.local_env:
-                    break
-
         except Exception as e:
-            # Если файл есть, но прочитать не удалось, сообщаем
             self.add_block(InfoBlock(f"Error loading {self.FILE_BASHRC}: {e}"))
 
     def load_aliases(self) -> None:
@@ -1015,19 +1489,67 @@ class CommandRunner(App):
     def on_ready(self) -> None:
         """Приветственное сообщение после загрузки UI."""
         self.add_block(InfoBlock(f"--- {self.TITLE} {self.VERSION} ---"))
+        self._request_shift_enter_encoding()
+
+    def _request_shift_enter_encoding(self) -> None:
+        """Просим терминал отличать Shift+Enter от Enter (kitty CSI u / xterm)."""
+        try:
+            driver = getattr(self, "_driver", None)
+            if driver is None:
+                return
+            # 1=disambiguate, 8=report all keys as escape codes → CSI 13;2u
+            driver.write("\x1b[>9u")
+            driver.write("\x1b[>4;2m")  # xterm modifyOtherKeys=2
+            driver.flush()
+        except Exception:
+            pass
+
+    def on_unmount(self) -> None:
+        try:
+            driver = getattr(self, "_driver", None)
+            if driver is not None:
+                driver.write("\x1b[>4;0m")
+        except Exception:
+            pass
 
     def compose(self) -> ComposeResult:
         """Построение UI."""
         yield Header()
+        yield CommandInput(placeholder="Enter command (type 2+ chars for completion)", id=self.ID_INPUT)
         self._completion_list = CompletionList()
         yield self._completion_list
-        yield CommandInput(placeholder="Enter command (type 2+ chars for completion)", id=self.ID_INPUT)
         yield VerticalScroll(id=self.ID_RESULTS_CONTAINER)
         yield Footer()
 
     def action_focus_input(self) -> None:
-        """Переводит фокус в строку ввода."""
-        self.query_one(f"#{self.ID_INPUT}", Input).focus()
+        """Переводит фокус в строку ввода без выделения всего текста."""
+        inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        inp.focus()
+        inp.cursor_position = len(inp.value or "")
+
+    def set_input_draft(self, text: str) -> None:
+        """Подставляет черновик команды во ввод (после JSON viewer / jq-пути)."""
+        inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        inp._applying_completion = True
+        inp.value = text
+        inp.cursor_position = len(text)
+        inp.focus()
+        if getattr(self, "_completion_list", None) is not None:
+            self._completion_list.hide()
+
+    def action_focus_output(self) -> None:
+        """Переводит фокус на панель вывода: последний блок журнала."""
+        if getattr(self, "_completion_list", None) is not None:
+            self._completion_list.hide()
+        commands = list(self.query(CommandBlock))
+        if commands:
+            commands[-1].focus()
+            return
+        others = list(self.query("InfoBlock, QueryResultsBlock"))
+        if others:
+            others[-1].focus()
+            return
+        self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll).focus()
 
     def clear_all_blocks(self) -> None:
         """
@@ -1115,6 +1637,17 @@ class CommandRunner(App):
         )
         self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
 
+    def action_toggle_line_nav(self) -> None:
+        """F7: режим курсора по строкам в блоке вывода."""
+        focused = self.focused
+        if not isinstance(focused, LineNavigable):
+            self.action_focus_output()
+            focused = self.focused
+            if isinstance(focused, LineNavigable):
+                focused.enter_line_nav()
+            return
+        focused.toggle_line_nav()
+
     def action_copy_block(self) -> None:
         """Копирует содержимое сфокусированного блока в буфер обмена."""
         focused = self.focused
@@ -1134,7 +1667,7 @@ class CommandRunner(App):
                 # Удаляем лишние переводы строк
                 text_to_copy = text_to_copy.strip()
 
-                pyperclip.copy(text_to_copy)
+                copy_text_to_clipboards(text_to_copy, self)
                 self.sub_title = self.MSG_COPIED
                 self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
             except Exception:
@@ -1144,7 +1677,7 @@ class CommandRunner(App):
             try:
                 # Для InfoBlock копируем весь текст
                 clean_text = self._strip_formatting_tags(focused.text_content)
-                pyperclip.copy(clean_text)
+                copy_text_to_clipboards(clean_text, self)
                 self.sub_title = self.MSG_COPIED
                 self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
             except Exception:
@@ -1174,127 +1707,72 @@ class CommandRunner(App):
 
     def action_open_json_viewer(self) -> None:
         """
-        Открывает JSON viewer для последнего блока (F3).
-        Работает аналогично команде :json.
+        Открывает JSON viewer для сфокусированного блока (F3).
+        Если фокус не на блоке — берём последний CommandBlock.
         """
-        all_blocks = self.query("CommandBlock, InfoBlock")
-        if all_blocks:
-            # Берём последний блок
-            last_block = list(all_blocks)[-1]
-
-            # Извлекаем JSON
-            try:
-                # Для CommandBlock используем raw_stdout, для InfoBlock - text_content
-                if isinstance(last_block, CommandBlock):
-                    text_to_parse = last_block.raw_stdout
-                else:
-                    text_to_parse = self._strip_formatting_tags(last_block.text_content)
-
-                json_data = self._extract_json(text_to_parse)
-
-                if json_data is not None:
-                    self.push_screen(JSONViewer(json_data))
-                    self.sub_title = "JSON viewer opened! Press Escape to close."
-                    self.set_timer(2, self.clear_subtitle)
-                else:
-                    self.sub_title = "No valid JSON found in last block."
-                    self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
-            except Exception as e:
-                self.sub_title = f"Error parsing JSON: {e}"
-                self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
-        else:
+        block = self._block_for_json_viewer()
+        if block is None:
             self.sub_title = "No blocks found."
             self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+            return
+        try:
+            json_data = self._extract_json(self._text_from_json_block(block))
+            if json_data is not None:
+                self.push_screen(JSONViewer(json_data))
+                self.sub_title = "JSON viewer opened! Press Escape to close."
+                self.set_timer(2, self.clear_subtitle)
+            else:
+                self.sub_title = "No valid JSON found in focused/last block."
+                self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+        except Exception as e:
+            self.sub_title = f"Error parsing JSON: {e}"
+            self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
 
-    def _extract_json(self, text: str) -> Optional[dict]:
+    def _block_for_json_viewer(self) -> Optional[Static]:
+        """Сфокусированный блок вывода или последний CommandBlock."""
+        focused = self.focused
+        if isinstance(focused, (CommandBlock, InfoBlock, QueryResultsBlock)):
+            return focused
+        commands = list(self.query(CommandBlock))
+        if commands:
+            return commands[-1]
+        others = list(self.query("InfoBlock, QueryResultsBlock"))
+        return others[-1] if others else None
+
+    def _text_from_json_block(self, block: Static) -> str:
+        if isinstance(block, CommandBlock):
+            return block.raw_stdout or ""
+        return self._strip_formatting_tags(getattr(block, "text_content", "") or "")
+
+    def _extract_json(self, text: str) -> Optional[Any]:
         """
-        Извлекает JSON из текста.
+        Извлекает JSON из текста (объект, массив или примитив).
 
-        Пытается найти и распарсить JSON в тексте. Поскольку вывод команды
-        может содержать дополнительный текст (например, временную метку),
-        ищем первый валидный JSON объект.
-
-        Args:
-            text: Текст для поиска JSON
-
-        Returns:
-            Распаршенные JSON данные или None если не найден
+        Сначала парсит весь текст, затем ищет первый валидный JSON,
+        начиная с `{` или `[` (вывод команды может содержать лишние строки).
         """
         import json
 
-        # Сначала пробуем распарсить весь текст как есть
+        if not text:
+            return None
+        raw = text.strip().lstrip("\ufeff")
+        if not raw:
+            return None
+
         try:
-            return json.loads(text.strip())
+            return json.loads(raw)
         except json.JSONDecodeError:
             pass
 
-        # Если не получилось, ищем JSON в тексте
-        # Находим первую открывающую скобку { или [
-        first_brace_pos = -1
-        for i, char in enumerate(text):
-            if char in '{[':
-                first_brace_pos = i
-                break
-
-        if first_brace_pos == -1:
-            return None
-
-        # Находим соответствующую закрывающую скобку
-        bracket_count = 0
-        start_char = text[first_brace_pos]
-        end_char = '}' if start_char == '{' else ']'
-
-        in_string = False
-        escape_next = False
-
-        for i in range(first_brace_pos, len(text)):
-            char = text[i]
-
-            if escape_next:
-                escape_next = False
+        decoder = json.JSONDecoder()
+        for i, char in enumerate(raw):
+            if char not in "{[":
                 continue
-
-            if char == '\\':
-                escape_next = True
+            try:
+                obj, _end = decoder.raw_decode(raw, i)
+                return obj
+            except json.JSONDecodeError:
                 continue
-
-            if char == '"' and not escape_next:
-                in_string = not in_string
-                continue
-
-            if not in_string:
-                if char == start_char:
-                    bracket_count += 1
-                elif char == end_char:
-                    bracket_count -= 1
-                    if bracket_count == 0:
-                        # Нашли конец JSON
-                        json_text = text[first_brace_pos:i+1]
-                        try:
-                            return json.loads(json_text)
-                        except json.JSONDecodeError:
-                            # Если не получилось парсить, продолжаем поиск
-                            break
-
-        # Если не получилось с точным подсчётом, пробуем более простой подход
-        # Ищем строки, начинающиеся с { или [
-        lines = text.split('\n')
-        for i, line in enumerate(lines):
-            line_stripped = line.strip()
-            if line_stripped.startswith('{') or line_stripped.startswith('['):
-                # Собираем от этой строки до конца
-                candidate = '\n'.join(lines[i:])
-                try:
-                    return json.loads(candidate)
-                except json.JSONDecodeError:
-                    # Пробуем добавлять строки по одной
-                    for j in range(i + 1, len(lines) + 1):
-                        candidate = '\n'.join(lines[i:j])
-                        try:
-                            return json.loads(candidate)
-                        except json.JSONDecodeError:
-                            continue
-
         return None
 
     def _open_json_file(self, filename: str) -> None:
@@ -1321,32 +1799,21 @@ class CommandRunner(App):
             self.add_block(InfoBlock(f"Error reading file '{filename}': {e}"))
 
     def _open_json_from_last_block(self) -> None:
-        """Открывает JSON viewer для последнего блока."""
-        all_blocks = self.query("CommandBlock, InfoBlock")
-        if all_blocks:
-            # Берём последний блок
-            last_block = list(all_blocks)[-1]
-
-            # Извлекаем JSON
-            try:
-                # Для CommandBlock используем raw_stdout, для InfoBlock - text_content
-                if isinstance(last_block, CommandBlock):
-                    text_to_parse = last_block.raw_stdout
-                else:
-                    text_to_parse = self._strip_formatting_tags(last_block.text_content)
-
-                json_data = self._extract_json(text_to_parse)
-
-                if json_data is not None:
-                    self.push_screen(JSONViewer(json_data))
-                    self.sub_title = "JSON viewer opened! Press Escape to close."
-                    self.set_timer(2, self.clear_subtitle)
-                else:
-                    self.add_block(InfoBlock("No valid JSON found in last block."))
-            except Exception as e:
-                self.add_block(InfoBlock(f"Error parsing JSON: {e}"))
-        else:
+        """Открывает JSON viewer для сфокусированного или последнего блока."""
+        block = self._block_for_json_viewer()
+        if block is None:
             self.add_block(InfoBlock("[bold]ERROR:[/bold] No blocks found."))
+            return
+        try:
+            json_data = self._extract_json(self._text_from_json_block(block))
+            if json_data is not None:
+                self.push_screen(JSONViewer(json_data))
+                self.sub_title = "JSON viewer opened! Press Escape to close."
+                self.set_timer(2, self.clear_subtitle)
+            else:
+                self.add_block(InfoBlock("No valid JSON found in focused/last block."))
+        except Exception as e:
+            self.add_block(InfoBlock(f"Error parsing JSON: {e}"))
 
     def on_input_submitted(self, message: Input.Submitted) -> None:
         """
@@ -1652,15 +2119,40 @@ class CommandRunner(App):
   $VAR=val   - Set environment variable
 
 [bold]Navigation[/bold]
-  ↑/↓        - Command history (when input focused)
-  PgUp/PgDn  - Navigate output blocks
+  ↑/↓        - History in input; journal scroll when a block is focused
+  Tab        - Focus output panel (from input)
+  PgUp/PgDn  - Move focus between output blocks
+  Esc        - Return to input (see also line-cursor mode)
   Space      - Toggle block collapse
-  F3         - Open focused block in JSON viewer
-  F5         - Copy full output to clipboard
+  ← / →      - Collapse / expand focused block
+  F3         - Open focused (or last command) block in JSON viewer
+  F5         - Copy full block output to clipboard
+  F6         - Toggle simple (plain) output
+  F7         - Toggle line-cursor mode (see below)
+  Shift+Insert / Ctrl+V - Paste into input (does not replace existing text)
+  (JSON) Enter - Insert `jq 'path'` into input; also sets $JSON
+
+[bold]Line-cursor mode[/bold]
+  Focus a block (Tab or PgUp), then Enter or F7 to turn the mode on.
+  Off by default: ↑/↓ still scroll the journal.
+  On: current line is highlighted.
+  ↑/↓        - Move by lines inside the block
+  Home/End   - First / last line of the block
+  Enter      - Copy current line (trailing spaces stripped) and jump to input
+               Cursor goes to the end of the input; existing text is not selected
+  Shift+Enter / Ctrl+J - Append current line to input, separated by a space
+               Stay in the block (can append several lines)
+               If Shift+Enter acts like Enter, the terminal does not distinguish
+               the keys — use Ctrl+J
+  Esc        - Turn mode off, stay on the block; Esc again returns to input
+  F7         - Toggle mode on/off
 
 [bold]Variables[/bold]
   Use $VAR in commands for variable substitution
   $NS is auto-set when using -n in :i commands
+  $JSON is set on Enter in JSON viewer (jq path of the selected node)
+  Example: jq $JSON test.json
+  $VAR also loaded from .bashrc_term and .bashrc_term_<instance>
 """
         self.add_block(InfoBlock(help_text))
 
@@ -2444,11 +2936,26 @@ class CommandRunner(App):
         self.session_history_pos = len(self.session_history)
         self.run_command(command, stdin_data)
 
+    def _scroll_results(self, delta: int) -> None:
+        """Прокрутка журнала команд (когда фокус не на поле ввода)."""
+        container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+        container.scroll_relative(delta)
+
     def action_history_prev(self) -> None:
-        """Навигация истории назад (только если фокус на input)."""
+        """Up: история сессии в input; в журнале — скролл или строки (если line cursor)."""
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
         if not input_widget.has_focus:
-            return  # Не перехватываем если фокус на контейнере вывода
+            if getattr(self, "_completion_list", None) is not None:
+                self._completion_list.hide()
+            focused = self.focused
+            if (
+                isinstance(focused, LineNavigable)
+                and getattr(focused, "line_nav_active", False)
+                and focused.move_line(-1)
+            ):
+                return
+            self._scroll_results(-1)
+            return
         if not self.session_history: return
         if self.session_history_pos > 0:
             self.session_history_pos -= 1
@@ -2456,10 +2963,20 @@ class CommandRunner(App):
             input_widget.cursor_position = len(input_widget.value)
 
     def action_history_next(self) -> None:
-        """Навигация истории вперед (только если фокус на input)."""
+        """Down: история сессии в input; в журнале — скролл или строки (если line cursor)."""
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
         if not input_widget.has_focus:
-            return  # Не перехватываем если фокус на контейнере вывода
+            if getattr(self, "_completion_list", None) is not None:
+                self._completion_list.hide()
+            focused = self.focused
+            if (
+                isinstance(focused, LineNavigable)
+                and getattr(focused, "line_nav_active", False)
+                and focused.move_line(1)
+            ):
+                return
+            self._scroll_results(1)
+            return
         if not self.session_history: return
         if self.session_history_pos < len(self.session_history) - 1:
             self.session_history_pos += 1

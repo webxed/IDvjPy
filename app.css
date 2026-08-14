@@ -22,8 +22,12 @@ CommandBlock, InfoBlock {
     padding: 0 1;
 }
 
-CommandBlock:focus, InfoBlock:focus {
+CommandBlock:focus, InfoBlock:focus, QueryResultsBlock:focus {
     background: $primary-darken-1;  /* менее яркий цвет выделения */
+}
+
+CommandBlock.line-nav, InfoBlock.line-nav, QueryResultsBlock.line-nav {
+    border-left: thick $accent;
 }
 
 /* Свернутый блок */
@@ -47,8 +51,17 @@ CommandBlock.collapsed {
 /* Стили для JSON Viewer */
 JSONViewer {
     layout: vertical;
+    width: 100%;
+    height: 100%;
+}
+
+JSONViewer #json-search {
+    dock: top;
+    height: 3;
 }
 
 JSONViewer Tree {
+    width: 100%;
     height: 1fr;
+    min-height: 8;
 }
