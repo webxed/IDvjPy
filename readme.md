@@ -45,7 +45,7 @@ The application uses several command prefixes to unlock its features:
 | `??`      | `??`                  | Shows all commands from the database, grouped by tag.                     |
 | `!`       | `! 1`                 | Executes the command corresponding to the number from the last `?` query.    |
 | `:`       | `:q` or `:w log.txt`  | Executes an application command (quit or write to file).                  |
-| `:h [X]`    | `:h` or `:h 5`        | Shows the last X lines of command history from `history.txt`. If X is not specified, it defaults to the value of `history_lines` in `settings.yml`. |
+| `:h [X]`    | `:h` or `:h 5`        | Shows the last X lines of command history from `history.txt` as one multiline block. If X is not specified, it defaults to the value of `history_lines` in `settings.yml`. |
 | `:json <file>` | `:json data.json` | Opens JSON file in tree viewer with lazy loading. Also works with F3 on command blocks that output JSON. |
 | `|`       | `| jq .`              | Pipes the `stdout` of the most recent command block as `stdin` to the specified command. |
 | `$`       | `$MY_VAR=hello`      | Creates or updates an environment variable in `.bashrc_term` and the current session. |

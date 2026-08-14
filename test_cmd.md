@@ -35,6 +35,7 @@ python3 app.py
 | `F5` | Копировать stdout сфокусированного блока |
 | `F6` | Simple output |
 | `Shift+Insert` / `Ctrl+V` | Вставка из буфера |
+| `Ctrl+D` | Очистить строку ввода |
 
 ---
 
@@ -260,7 +261,7 @@ echo hist-line
 :c
 ```
 
-**Ожидание:** `:h` показывает `hist-line`; `test_output.txt` создан; `:?` — help; `:i` — help ingress; `:c` — `All blocks cleared.`
+**Ожидание:** `:h` показывает `hist-line` в одном блоке; `test_output.txt` создан; `:?` — help; `:i` — help ingress; `:c` — `All blocks cleared.`
 
 `:q` — выход (в конце сессии).
 

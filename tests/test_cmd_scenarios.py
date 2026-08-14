@@ -3,11 +3,10 @@ from pathlib import Path
 
 import database_v2 as database
 import pyperclip
-from app import CommandBlock, CommandRunner
+from app import CommandBlock, CommandRunner, InfoBlock
 
 from tests.conftest import (
     confirm_input,
-    info_texts,
     input_widget,
     last_info,
     submit,
@@ -208,9 +207,17 @@ async def test_s12_colon_commands(isolated_home):
     async with app.run_test(size=(120, 40)) as pilot:
         await submit(pilot, "echo hist-line")
         await wait_command_done(app)
+        await submit(pilot, "echo hist-line-2")
+        await wait_command_done(app)
 
+        info_before = len(list(app.query(InfoBlock)))
         await submit(pilot, ":h")
-        assert any("hist-line" in text for text in info_texts(app))
+        infos = list(app.query(InfoBlock))
+        assert len(infos) == info_before + 1
+        hist = last_info(app).text_content
+        assert "echo hist-line" in hist
+        assert "echo hist-line-2" in hist
+        assert "\n" in hist.strip()
 
         await submit(pilot, ":w test_output.txt")
         assert "written to" in last_info(app).text_content

@@ -360,10 +360,20 @@ async def test_shift_enter_appends_line_to_input(isolated_home):
         assert isinstance(app.focused, CommandBlock)
         assert not input_widget(app).has_focus
         current = app.focused._current_plain_line()
-        await pilot.press("ctrl+j")
+        await pilot.press("ctrl+v")
         await pilot.pause()
         assert inp.value == f"cmd 1 2 {current}"
         assert isinstance(app.focused, CommandBlock)
+        from textual.events import Paste
+        await pilot.press("down")
+        await pilot.pause()
+        nxt = app.focused._current_plain_line()
+        app.focused.post_message(Paste("CLIPBOARD-SHOULD-NOT-APPEAR"))
+        await pilot.pause()
+        assert inp.value == f"cmd 1 2 {current} {nxt}"
+        assert "CLIPBOARD-SHOULD-NOT-APPEAR" not in inp.value
+        assert isinstance(app.focused, CommandBlock)
+        assert app.focused.line_nav_active
 
 
 async def test_line_nav_enter_keeps_input_text_and_paste_appends(isolated_home, monkeypatch):
@@ -397,6 +407,9 @@ async def test_line_nav_enter_keeps_input_text_and_paste_appends(isolated_home, 
         await pilot.press("shift+insert")
         await pilot.pause()
         assert inp.value == "keep-mePASTE"
+        await pilot.press("ctrl+v")
+        await pilot.pause()
+        assert inp.value == "keep-mePASTEPASTE"
 
 
 async def test_tab_focuses_output_when_input_empty(isolated_home):
@@ -434,3 +447,38 @@ async def test_tab_focuses_output_when_text_without_completion(isolated_home):
         assert not input_widget(app).has_focus
         assert isinstance(app.focused, (CommandBlock, InfoBlock))
         assert input_widget(app).value == "x"
+
+
+async def test_tab_focuses_colon_h_block_after_command(isolated_home):
+    from app import CommandBlock, InfoBlock
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "echo tab-after-h")
+        await wait_command_done(app)
+        await submit(pilot, ":h")
+        await pilot.pause()
+        inp = input_widget(app)
+        assert inp.has_focus
+        await pilot.press("tab")
+        await pilot.pause()
+        assert isinstance(app.focused, InfoBlock)
+        assert not isinstance(app.focused, CommandBlock)
+        assert "echo tab-after-h" in app.focused.text_content
+
+
+async def test_tab_focuses_help_block_after_command(isolated_home):
+    from app import CommandBlock, InfoBlock
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "echo tab-after-help")
+        await wait_command_done(app)
+        await submit(pilot, ":?")
+        await pilot.pause()
+        assert input_widget(app).has_focus
+        await pilot.press("tab")
+        await pilot.pause()
+        assert isinstance(app.focused, InfoBlock)
+        assert not isinstance(app.focused, CommandBlock)
+        assert "Line-cursor mode" in app.focused.text_content

@@ -48,7 +48,7 @@ The application parses command prefixes to route to different behaviors:
 | `#tag-` or `#tag-ID` | Mark database commands as deleted |
 | `?` | Query database (all tags, specific tag, or all grouped) |
 | `! N` | Execute command by ID from last query |
-| `:` | Application commands (`:q` quit, `:w file` write, `:h [N]` shell history) |
+| `:` | Application commands (`:q` quit, `:w file` write, `:h [N]` shell history as one block) |
 | `\| cmd` | Pipe stdout from focused block to another command |
 | `$ VAR=val` | Set environment variable in `.bashrc_term` and current session |
 

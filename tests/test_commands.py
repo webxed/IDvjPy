@@ -113,3 +113,17 @@ async def test_shift_insert_pastes_into_input(isolated_home, monkeypatch):
         await pilot.press("shift+insert")
         await pilot.pause()
         assert "pasted-value" in input_widget(app).value
+
+
+async def test_ctrl_d_clears_input_line(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.press("escape")
+        await type_keys(pilot, "echo keep-this")
+        await pilot.pause()
+        inp = input_widget(app)
+        assert inp.value == "echo keep-this"
+        await pilot.press("ctrl+d")
+        await pilot.pause()
+        assert inp.value == ""
+        assert inp.has_focus

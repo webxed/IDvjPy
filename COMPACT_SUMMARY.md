@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.1.32**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.1.37**.
 
 Запуск: `python3 app.py`. Тесты: `python3 -m pytest tests/ -v`.
 
@@ -24,7 +24,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `\|` | Pipe focused/last block stdout |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
 
-Hotkeys: `Tab` input → output (Esc back); `F3` JSON; `F5` copy block; `F6` simple output; `F7` line-cursor mode; `Shift+Insert`/`Ctrl+V` paste (does not replace existing input); `PgUp`/`PgDn` blocks; `Up`/`Down` session history in input, journal scroll when a block is focused (line-by-line in line-cursor mode).
+Hotkeys: `Tab` input → output (Esc back); `F3` JSON; `F5` copy block; `F6` simple output; `F7` line-cursor mode; `Shift+Insert`/`Ctrl+V` paste in the input (does not replace existing text); in line-cursor mode `Ctrl+V` appends the current line; `Ctrl+D` clears the input line; `PgUp`/`PgDn` blocks; `Up`/`Down` session history in input, journal scroll when a block is focused (line-by-line in line-cursor mode).
 
 ---
 
@@ -43,8 +43,9 @@ Details: `DATABASE.md`. Module: **`database_v2.py`** (`database.py` unused). Fil
 ## Key features (current)
 
 ### Focus / journal
-- `Tab` in the input focuses the last command block (works on empty input). Completion list, if open, still consumes Tab to apply a candidate.
+- `Tab` in the input focuses the last journal block in display order (`:h` / `:?` InfoBlocks included, not only the last CommandBlock). Completion list, if open, still consumes Tab to apply a candidate.
 - `Esc` returns to input (in line-cursor mode: first Esc exits the mode, second Esc goes to input).
+- `Ctrl+D` in the input clears the entire line (and hides the completion list).
 - Completion list is **in-flow under the input** (not overlay); `MAX_VISIBLE_ITEMS = 8`; `can_focus = False`. PgUp/PgDn hide the list then move block focus.
 - Input `select_on_focus = False`: returning from a block does not select-all, so paste/typing does not wipe the draft.
 
@@ -52,9 +53,13 @@ Details: `DATABASE.md`. Module: **`database_v2.py`** (`database.py` unused). Fil
 - **Off by default.** Focus a block (`Tab` / `PgUp`), then `Enter` or `F7` to turn it on. Current line is highlighted (`[reverse]` + left accent border).
 - Off: `↑/↓` scroll the journal. On: `↑/↓` move by lines; `Home`/`End` first/last line. At the edge, arrows scroll the journal again.
 - `Enter`: copy the current line (trailing spaces stripped) to CLIPBOARD + PRIMARY + Textual/OSC 52, then jump to input (cursor at end, no selection).
-- `Shift+Enter` / `Ctrl+J`: append the line to the input, separated by a space; stay in the block (can append several lines). If the terminal sends Shift+Enter as plain Enter, use **Ctrl+J**. The app requests kitty CSI-u / xterm `modifyOtherKeys`.
+- `Shift+Enter` / `Ctrl+V`: append the line to the input, separated by a space; stay in the block (can append several lines). If the terminal sends Shift+Enter as plain Enter, use **Ctrl+V**. While the input is focused, `Ctrl+V` still pastes from the clipboard. The app requests kitty CSI-u / xterm `modifyOtherKeys`.
+- Many terminals deliver Ctrl+V as a **Paste** event rather than a `ctrl+v` key; line-cursor mode treats that Paste as append (same as the key).
 - `Esc`: turn mode off, stay on the block. `F7`: toggle.
 - Documented in `:?` under **Line-cursor mode**.
+
+### `:h` history
+- `:h [N]` shows the last N lines of `history.txt` as **one** multiline `InfoBlock` (line-cursor can copy/append individual commands). Empty file → one info message.
 
 ### JSON Viewer (F3 / `:json` / `:json file`)
 - F3 uses the **focused** block (`raw_stdout`); if focus is the input — last `CommandBlock`.
@@ -74,7 +79,7 @@ Details: `DATABASE.md`. Module: **`database_v2.py`** (`database.py` unused). Fil
 
 ### Clipboard / paste
 - Copy (F5, line Enter, JSON path) writes system CLIPBOARD, X11/Wayland PRIMARY, and Textual internal + OSC 52 (so Shift+Insert in the terminal matches mouse paste).
-- `Shift+Insert` / `Ctrl+V` in the input paste from those buffers and **do not replace** existing text (insert at cursor / end if a leftover selection exists).
+- `Shift+Insert` / `Ctrl+V` in the input paste from those buffers and **do not replace** existing text (insert at cursor / end if a leftover selection exists). In line-cursor mode `Ctrl+V` / Paste appends the current journal line instead.
 
 ### Output
 - `MAX_DISPLAY_LINES = 300` (UI). Full text stays in `raw_stdout`; F5 copies full output.
@@ -101,9 +106,9 @@ Details: `DATABASE.md`. Module: **`database_v2.py`** (`database.py` unused). Fil
 |------|----------|
 | `test_cmd.md` | Manual plan v1.4 (base v1.1.18; newer UX in this file) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses) |
-| `tests/test_commands.py` | echo, history, vars, paste, `:c`/`:q`, merge `.bashrc_term` + `_default` |
+| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete |
-| `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→output, line-cursor, trailing-space Enter, Shift+Enter append |
+| `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append |
 | `tests/test_json_viewer.py` | expand, search, F3 from focused cat, bracket keys, jq draft / `$JSON` |
 
 Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then Enter.
@@ -114,7 +119,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 | File | Purpose |
 |------|---------|
-| `app.py` | TUI (`CommandRunner`), v1.1.32 |
+| `app.py` | TUI (`CommandRunner`), v1.1.37 |
 | `database_v2.py` | SQLite tagged history |
 | `json_viewer.py` | JSON tree modal |
 | `ingress_analyzer.py` | `:i` k8s |
@@ -126,11 +131,15 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 ---
 
-## This session (v1.1.25 → v1.1.32)
+## This session (v1.1.25 → v1.1.37)
 
 - **Line-cursor mode** on a focused output block (`Enter`/`F7` on, `Esc`/`F7` off). Arrows move by lines; Home/End jump.
 - **Enter** in that mode copies the current line (rstrip) and returns to input without select-all.
-- **Shift+Enter** / **Ctrl+J** append the line to the input with a space and stay in the block. Kitty CSI-u / `modifyOtherKeys` so Shift+Enter is not the same as Enter when the terminal supports it.
+- **Shift+Enter** / **Ctrl+V** append the line to the input with a space and stay in the block. Kitty CSI-u / `modifyOtherKeys` so Shift+Enter is not the same as Enter when the terminal supports it. `Ctrl+V` in the input still pastes from the clipboard.
 - Copy writes CLIPBOARD + PRIMARY + Textual/OSC 52 so Shift+Insert paste works, not only mouse paste.
 - Trailing space after a command dismisses the completion list so Enter runs `echo`, not `echo with-args extra`.
-- `:?` documents Navigation + Line-cursor mode (including the Ctrl+J fallback).
+- `:?` documents Navigation + Line-cursor mode (including the Ctrl+V append shortcut).
+- **`:h [N]`** shows `history.txt` as **one** multiline `InfoBlock` (line-cursor can copy/append individual commands). Previously each history line was a separate block.
+- **Tab** from the input focuses the last journal block in display order, so `:h` / `:?` are reached in one Tab (not the previous shell `CommandBlock`).
+- **Ctrl+V** in line-cursor mode also handles terminal **Paste** events (many emulators send paste instead of the `ctrl+v` key; that is why Ctrl+J worked and Ctrl+V did not).
+- **Ctrl+D** in the input clears the entire line (overrides Textual's delete-char-right).

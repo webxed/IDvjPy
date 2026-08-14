@@ -241,7 +241,7 @@ def release_file_lock(file_obj) -> None:
 
 
 class LineNavigable:
-    """Построчный курсор: F7/Enter включают; Enter копирует и уходит во ввод; Shift+Enter дописывает во ввод."""
+    """Построчный курсор: F7/Enter включают; Enter копирует и уходит во ввод; Shift+Enter/Ctrl+V дописывают во ввод."""
 
     def _nav_plain_text(self) -> str:
         return ""
@@ -305,7 +305,7 @@ class LineNavigable:
         self._scroll_cursor_into_view()
         app = getattr(self, "app", None)
         if app is not None:
-            app.sub_title = "Line cursor: on (Enter copy+input, Shift+Enter append; F7/Esc off)"
+            app.sub_title = "Line cursor: on (Enter copy+input, Shift+Enter/Ctrl+V append; F7/Esc off)"
             try:
                 app.set_timer(app.TIMER_DELAY, app.clear_subtitle)
             except Exception:
@@ -375,10 +375,19 @@ class LineNavigable:
         return text
 
     def append_current_line_to_input(self) -> None:
-        """Shift+Enter: дописать выделенную строку во ввод через пробел."""
+        """Shift+Enter / Ctrl+V: дописать выделенную строку во ввод через пробел."""
         text = self._current_plain_line()
         if not text:
             return
+        # Key ctrl+v and terminal Paste often arrive together; keep one append.
+        now = time.monotonic()
+        if (
+            now - getattr(self, "_last_append_at", 0) < 0.08
+            and getattr(self, "_last_append_text", None) == text
+        ):
+            return
+        self._last_append_at = now
+        self._last_append_text = text
         app = getattr(self, "app", None)
         if app is None:
             return
@@ -432,19 +441,34 @@ class LineNavigable:
         self._scroll_cursor_into_view()
 
     def _is_append_line_key(self, event: events.Key) -> bool:
-        """Shift+Enter в разных терминалах: shift+enter, ctrl+enter, ctrl+j (LF)."""
+        """Shift+Enter в разных терминалах: shift+enter, ctrl+enter; Ctrl+V — привычный fallback."""
         key = event.key or ""
-        if key in ("shift+enter", "ctrl+enter", "ctrl+j"):
+        if key in ("shift+enter", "ctrl+enter", "ctrl+v"):
+            return True
+        if (event.character or "") == "\x16":
             return True
         parts = key.split("+")
         if "enter" in parts and "shift" in parts:
             return True
         aliases = getattr(event, "aliases", None) or []
-        return any(a in ("shift+enter", "ctrl+enter", "ctrl+j") for a in aliases)
+        return any(a in ("shift+enter", "ctrl+enter", "ctrl+v") for a in aliases)
 
     def action_append_line(self) -> None:
         if getattr(self, "line_nav_active", False):
             self.append_current_line_to_input()
+
+    def action_append_line_or_paste(self) -> None:
+        """Ctrl+V: в построчном режиме дописать строку, иначе вставить буфер во ввод."""
+        if getattr(self, "line_nav_active", False):
+            self.append_current_line_to_input()
+        elif hasattr(self.app, "action_paste_clipboard"):
+            self.app.action_paste_clipboard()
+
+    def on_paste(self, event: events.Paste) -> None:
+        """Многие терминалы шлют Ctrl+V как Paste, а не как клавишу."""
+        if getattr(self, "line_nav_active", False):
+            self.append_current_line_to_input()
+            event.stop()
 
     def on_key(self, event: events.Key) -> None:
         if self._is_append_line_key(event):
@@ -490,7 +514,7 @@ class LineNavigable:
 _LINE_NAV_APPEND_BINDINGS = [
     Binding("shift+enter", "append_line", show=False, priority=True),
     Binding("ctrl+enter", "append_line", show=False, priority=True),
-    Binding("ctrl+j", "append_line", show=False, priority=True),
+    Binding("ctrl+v", "append_line_or_paste", show=False, priority=True),
 ]
 
 
@@ -769,12 +793,13 @@ class CompletionList(Static):
 
 
 class CommandInput(Input):
-    """Поле ввода: Tab — в журнал (или применить подсказку, если список открыт)."""
+    """Поле ввода: Tab — в журнал; Ctrl+D — очистить строку."""
 
     BINDINGS = [
         Binding("tab", "tab_input", show=False, priority=True),
         Binding("shift+insert", "paste_clipboard", show=False, priority=True),
         Binding("ctrl+v", "paste_clipboard", show=False, priority=True),
+        Binding("ctrl+d", "clear_input", show=False, priority=True),
     ]
 
     def __init__(self, **kwargs):
@@ -861,6 +886,13 @@ class CommandInput(Input):
         """Shift+Insert / Ctrl+V: системный буфер, не внутренний clipboard Textual."""
         if hasattr(self.app, "action_paste_clipboard"):
             self.app.action_paste_clipboard()
+
+    def action_clear_input(self) -> None:
+        """Ctrl+D: удалить всю строку ввода."""
+        self.value = ""
+        self.cursor_position = 0
+        if self._completion_list is not None:
+            self._completion_list.hide()
 
     def on_key(self, event: events.Key) -> None:
         """Обработка клавиш для автодополнения."""
@@ -1012,7 +1044,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.32"  # Trailing space dismisses completion so Enter runs the typed command
+    VERSION = "v1.1.37"  # Ctrl+D clears the entire input line
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -1233,8 +1265,23 @@ class CommandRunner(App):
                 input_widget.focus()
                 # Клавиша обработается input'ом автоматически
 
+    def on_paste(self, event: events.Paste) -> None:
+        """Ctrl+V в терминале часто приходит как Paste, не как клавиша ctrl+v."""
+        focused = self.focused
+        if isinstance(focused, LineNavigable) and getattr(focused, "line_nav_active", False):
+            focused.append_current_line_to_input()
+            event.stop()
+
     def action_paste_clipboard(self) -> None:
-        """Вставляет текст из буфера обмена в command input."""
+        """Вставляет текст из буфера обмена в command input.
+
+        В построчном режиме Ctrl+V дописывает текущую строку, а не буфер.
+        """
+        focused = self.focused
+        if isinstance(focused, LineNavigable) and getattr(focused, "line_nav_active", False):
+            focused.append_current_line_to_input()
+            return
+
         clip = paste_text_from_clipboards(self)
         if not clip:
             return
@@ -1537,17 +1584,22 @@ class CommandRunner(App):
         if getattr(self, "_completion_list", None) is not None:
             self._completion_list.hide()
 
+    def _journal_blocks(self) -> List[Static]:
+        """Блоки журнала в порядке отображения (команды и системный вывод)."""
+        container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+        return [
+            child
+            for child in container.children
+            if isinstance(child, (CommandBlock, InfoBlock, QueryResultsBlock))
+        ]
+
     def action_focus_output(self) -> None:
-        """Переводит фокус на панель вывода: последний блок журнала."""
+        """Переводит фокус на последний блок журнала (:h, :?, команда — что было последним)."""
         if getattr(self, "_completion_list", None) is not None:
             self._completion_list.hide()
-        commands = list(self.query(CommandBlock))
-        if commands:
-            commands[-1].focus()
-            return
-        others = list(self.query("InfoBlock, QueryResultsBlock"))
-        if others:
-            others[-1].focus()
+        blocks = self._journal_blocks()
+        if blocks:
+            blocks[-1].focus()
             return
         self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll).focus()
 
@@ -1968,8 +2020,11 @@ class CommandRunner(App):
                 num_lines = int(parts[1]) if len(parts) > 1 else self.history_lines
                 with open(self.FILE_HISTORY, "r", encoding=self.ENCODING) as f:
                     lines = f.readlines()
-                for line in lines[-num_lines:]:
-                    self.add_block(InfoBlock(line.strip()))
+                history = [line.strip() for line in lines[-num_lines:] if line.strip()]
+                if not history:
+                    self.add_block(InfoBlock(f"{self.FILE_HISTORY} is empty."))
+                else:
+                    self.add_block(InfoBlock("\n".join(history)))
             except FileNotFoundError:
                 self.add_block(InfoBlock(f"{self.FILE_HISTORY} not found."))
             except Exception as e:
@@ -2097,7 +2152,7 @@ class CommandRunner(App):
   :?          - Show this help
   :q          - Quit application
   :w <file>   - Write output to file
-  :h [N]      - Show shell history (default: 20 lines)
+  :h [N]      - Show shell history as one block (default: 20 lines)
   :c          - Clear all output blocks
   :json       - Open JSON viewer (from last block)
   :json <file>- Open JSON file in viewer
@@ -2120,7 +2175,7 @@ class CommandRunner(App):
 
 [bold]Navigation[/bold]
   ↑/↓        - History in input; journal scroll when a block is focused
-  Tab        - Focus output panel (from input)
+  Tab        - Focus last journal block (from input), including :h / :?
   PgUp/PgDn  - Move focus between output blocks
   Esc        - Return to input (see also line-cursor mode)
   Space      - Toggle block collapse
@@ -2130,6 +2185,8 @@ class CommandRunner(App):
   F6         - Toggle simple (plain) output
   F7         - Toggle line-cursor mode (see below)
   Shift+Insert / Ctrl+V - Paste into input (does not replace existing text)
+               In line-cursor mode Ctrl+V appends the current line instead
+  Ctrl+D     - Clear the entire input line
   (JSON) Enter - Insert `jq 'path'` into input; also sets $JSON
 
 [bold]Line-cursor mode[/bold]
@@ -2140,10 +2197,10 @@ class CommandRunner(App):
   Home/End   - First / last line of the block
   Enter      - Copy current line (trailing spaces stripped) and jump to input
                Cursor goes to the end of the input; existing text is not selected
-  Shift+Enter / Ctrl+J - Append current line to input, separated by a space
+  Shift+Enter / Ctrl+V - Append current line to input, separated by a space
                Stay in the block (can append several lines)
                If Shift+Enter acts like Enter, the terminal does not distinguish
-               the keys — use Ctrl+J
+               the keys — use Ctrl+V. While the input is focused, Ctrl+V pastes
   Esc        - Turn mode off, stay on the block; Esc again returns to input
   F7         - Toggle mode on/off
 
