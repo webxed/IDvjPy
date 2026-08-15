@@ -1,9 +1,0 @@
---- IDvjPy_term v1.0.5 ---
-
----
-
-Database error: get_commands_by_tag() missing 1 required positional argument: 'tag'
-
----
-
-Database error: get_all_tags() missing 1 required positional argument: 'db_file'

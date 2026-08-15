@@ -1,0 +1,6 @@
+# Copy to .bashrc_term (or .bashrc_term_<instance>) next to app.py.
+# These variables are loaded at startup and can be used as $VAR in commands.
+
+# export NS=default
+# export EDITOR=nvim
+# export HOST=api.example.local

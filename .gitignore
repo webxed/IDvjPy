@@ -5,21 +5,34 @@ build/
 
 # Virtual environment
 .venv/
+venv/
+pyvenv.cfg
+lib/
+lib64
+bin/
+include/
 
-# Python cache
+# Python
 __pycache__/
+*.py[cod]
+.pytest_cache/
 
+# Local runtime (command DB, env, session logs)
+*.db
+.bashrc_term
+.bashrc_term_*
+!.bashrc_term.example
 history.txt
 log*.txt
-*.json
-*.csv
-lib64
-lib
-bin
-
-*_*.db
+tt.txt
+ns_*.txt
 todo.txt
 
-# Backups directory (keep contents but exclude from root patterns)
-#!backups/*.json
-#!backups/*.csv
+# Exports / backups produced by the app
+*.json
+*.csv
+backups/
+
+# OS / editor
+.DS_Store
+*.swp
