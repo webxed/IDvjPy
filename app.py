@@ -512,13 +512,11 @@ class LineNavigable:
         # VerticalScroll тоже слушает ↑/↓/Home/End — останавливаем событие на блоке.
         if event.key == "up":
             if not self.move_line(-1):
-                self.app._scroll_results(-1)
-                self.app.call_after_refresh(self.app._focus_visible_block)
+                self.app._scroll_journal_and_focus(-1)
             event.stop()
         elif event.key == "down":
             if not self.move_line(1):
-                self.app._scroll_results(1)
-                self.app.call_after_refresh(self.app._focus_visible_block)
+                self.app._scroll_journal_and_focus(1)
             event.stop()
         elif event.key == "home":
             self.jump_line("home")
@@ -526,6 +524,13 @@ class LineNavigable:
         elif event.key == "end":
             self.jump_line("end")
             event.stop()
+
+    def action_journal_page_up(self) -> None:
+        """PgUp крутит журнал, а не сам блок."""
+        self.app._scroll_journal_and_focus(-max(1, int(self.app._journal_page_size())))
+
+    def action_journal_page_down(self) -> None:
+        self.app._scroll_journal_and_focus(max(1, int(self.app._journal_page_size())))
 
     def on_blur(self) -> None:
         self.exit_line_nav(notify=False)
@@ -535,6 +540,8 @@ _LINE_NAV_APPEND_BINDINGS = [
     Binding("shift+enter", "append_line", show=False, priority=True),
     Binding("ctrl+enter", "append_line", show=False, priority=True),
     Binding("ctrl+v", "append_line_or_paste", show=False, priority=True),
+    Binding("pageup", "journal_page_up", show=False, priority=True),
+    Binding("pagedown", "journal_page_down", show=False, priority=True),
 ]
 
 
@@ -739,7 +746,7 @@ class CompletionList(Static):
     DEFAULT_CSS = """
     CompletionList {
         background: $surface;
-        border: tall $accent;
+        border: round #4a8c58;
         width: 100%;
         height: auto;
         overflow: hidden;
@@ -1113,20 +1120,22 @@ class CommandInput(Input):
     def on_mouse_scroll_down(self, event: events.MouseScrollDown) -> None:
         """Колесо над полем ввода — прокрутка области вывода команд (не истории сессии)."""
         app = self.app
-        container = app.query_one(f"#{app.ID_RESULTS_CONTAINER}", VerticalScroll)
-        container.scroll_relative(1, animate=False)
         inp = app.query_one(f"#{app.ID_INPUT}", Input)
-        if not inp.has_focus:
-            app.call_after_refresh(app._focus_visible_block)
+        if inp.has_focus:
+            container = app.query_one(f"#{app.ID_RESULTS_CONTAINER}", VerticalScroll)
+            container.scroll_relative(y=1, animate=False, immediate=True)
+        else:
+            app._scroll_journal_and_focus(1)
         event.stop()
 
     def on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
         app = self.app
-        container = app.query_one(f"#{app.ID_RESULTS_CONTAINER}", VerticalScroll)
-        container.scroll_relative(-1, animate=False)
         inp = app.query_one(f"#{app.ID_INPUT}", Input)
-        if not inp.has_focus:
-            app.call_after_refresh(app._focus_visible_block)
+        if inp.has_focus:
+            container = app.query_one(f"#{app.ID_RESULTS_CONTAINER}", VerticalScroll)
+            container.scroll_relative(y=-1, animate=False, immediate=True)
+        else:
+            app._scroll_journal_and_focus(-1)
         event.stop()
 
 
@@ -1162,26 +1171,18 @@ class JournalScroll(VerticalScroll):
     """Журнал: клавиши скролла активируют видимый блок (родитель перехватывает ↑/↓/PgUp раньше App)."""
 
     def action_scroll_up(self) -> None:
-        self.scroll_relative(y=-1, animate=False)
-        self.app._focus_visible_block()
-        self.app.call_after_refresh(self.app._focus_visible_block)
+        self.app._scroll_journal_and_focus(-1)
 
     def action_scroll_down(self) -> None:
-        self.scroll_relative(y=1, animate=False)
-        self.app._focus_visible_block()
-        self.app.call_after_refresh(self.app._focus_visible_block)
+        self.app._scroll_journal_and_focus(1)
 
     def action_page_up(self) -> None:
         height = max(1, int(self.size.height) - 1)
-        self.scroll_relative(y=-height, animate=False)
-        self.app._focus_visible_block()
-        self.app.call_after_refresh(self.app._focus_visible_block)
+        self.app._scroll_journal_and_focus(-height)
 
     def action_page_down(self) -> None:
         height = max(1, int(self.size.height) - 1)
-        self.scroll_relative(y=height, animate=False)
-        self.app._focus_visible_block()
-        self.app.call_after_refresh(self.app._focus_visible_block)
+        self.app._scroll_journal_and_focus(height)
 
 
 class CommandRunner(App):
@@ -1207,7 +1208,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.49"  # Alias $1/$2/$@ substitution from trailing arguments
+    VERSION = "v1.1.50"  # Small last journal block is focusable when it cannot reach the viewport top
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -1615,20 +1616,22 @@ class CommandRunner(App):
 
     def on_mouse_scroll_down(self, event) -> None:
         """Скролл вниз всегда идёт в контейнер вывода."""
-        container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
-        container.scroll_relative(1, animate=False)
         inp = self.query_one(f"#{self.ID_INPUT}", Input)
-        if not inp.has_focus:
-            self.call_after_refresh(self._focus_visible_block)
+        if inp.has_focus:
+            container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+            container.scroll_relative(y=1, animate=False, immediate=True)
+        else:
+            self._scroll_journal_and_focus(1)
         event.stop()
 
     def on_mouse_scroll_up(self, event) -> None:
         """Скролл вверх всегда идёт в контейнер вывода."""
-        container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
-        container.scroll_relative(-1, animate=False)
         inp = self.query_one(f"#{self.ID_INPUT}", Input)
-        if not inp.has_focus:
-            self.call_after_refresh(self._focus_visible_block)
+        if inp.has_focus:
+            container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+            container.scroll_relative(y=-1, animate=False, immediate=True)
+        else:
+            self._scroll_journal_and_focus(-1)
         event.stop()
 
     def on_mount(self) -> None:
@@ -1921,8 +1924,33 @@ class CommandRunner(App):
             return
         self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll).focus()
 
+    def _journal_block_span(self, block: Static) -> Tuple[int, int]:
+        region = getattr(block, "virtual_region", None) or block.region
+        top = int(getattr(region, "y", 0))
+        height = max(1, int(getattr(region, "height", 1) or 1))
+        return top, height
+
+    def _overlapping_journal_blocks(self) -> List[Static]:
+        """Блоки, пересекающиеся с видимой областью журнала (сверху вниз)."""
+        try:
+            container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+        except Exception:
+            return []
+        blocks = self._journal_blocks()
+        if not blocks:
+            return []
+        view_top = int(container.scroll_y)
+        view_h = max(1, int(container.size.height) or 1)
+        view_bottom = view_top + view_h
+        visible: List[Static] = []
+        for block in blocks:
+            top, height = self._journal_block_span(block)
+            if min(top + height, view_bottom) - max(top, view_top) > 0:
+                visible.append(block)
+        return visible
+
     def _visible_journal_block(self) -> Optional[Static]:
-        """Блок, которому принадлежит верхняя видимая строка журнала."""
+        """Блок у верхней видимой строки; в конце прокрутки — нижний видимый, если он не доезжает до края."""
         try:
             container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
         except Exception:
@@ -1933,27 +1961,33 @@ class CommandRunner(App):
         view_top = int(container.scroll_y)
         view_h = max(1, int(container.size.height) or 1)
         view_bottom = view_top + view_h
+        overlapping: List[Tuple[Static, int, int, int]] = []
         for block in blocks:
-            region = getattr(block, "virtual_region", None) or block.region
-            top = int(getattr(region, "y", 0))
-            height = max(1, int(getattr(region, "height", 1) or 1))
+            top, height = self._journal_block_span(block)
+            overlap = min(top + height, view_bottom) - max(top, view_top)
+            if overlap > 0:
+                overlapping.append((block, top, height, overlap))
+        if not overlapping:
+            return blocks[-1]
+        max_y = float(getattr(container, "max_scroll_y", 0) or 0)
+        at_bottom = float(container.scroll_y) >= max_y - 0.5
+        if at_bottom and max_y > 0.5:
+            last_block, last_top, _, _ = overlapping[-1]
+            if last_top > view_top:
+                return last_block
+        for block, top, height, _ in overlapping:
             if top <= view_top < top + height:
                 return block
         chosen = None
         best = 0
-        for block in blocks:
-            region = getattr(block, "virtual_region", None) or block.region
-            top = int(getattr(region, "y", 0))
-            height = max(1, int(getattr(region, "height", 1) or 1))
-            overlap = min(top + height, view_bottom) - max(top, view_top)
+        for block, _top, _height, overlap in overlapping:
             if overlap > best:
                 best = overlap
                 chosen = block
         return chosen or blocks[-1]
 
-    def _focus_visible_block(self) -> None:
-        """Сделать видимый блок активным, не прокручивая журнал к его началу."""
-        chosen = self._visible_journal_block()
+    def _assign_journal_focus(self, chosen: Optional[Static]) -> None:
+        """Сфокусировать блок журнала, не прокручивая к его началу."""
         if chosen is None:
             return
         prev = self.focused
@@ -1970,6 +2004,56 @@ class CommandRunner(App):
             self.screen.set_focus(chosen, scroll_visible=False)
         except Exception:
             chosen.focus(scroll_visible=False)
+
+    def _focus_visible_block(self) -> None:
+        """Сделать видимый блок активным, не прокручивая журнал к его началу."""
+        self._assign_journal_focus(self._visible_journal_block())
+
+    def _focus_adjacent_visible_block(self, direction: int) -> None:
+        """Если скролл упёрся в край — перевести фокус на соседний видимый блок."""
+        visible = self._overlapping_journal_blocks()
+        if not visible:
+            return
+        current = self.focused
+        if current in visible:
+            idx = visible.index(current)
+            nxt = idx + (1 if direction > 0 else -1)
+            if 0 <= nxt < len(visible):
+                self._assign_journal_focus(visible[nxt])
+            return
+        blocks = self._journal_blocks()
+        if current in blocks:
+            ci = blocks.index(current)
+            if direction > 0:
+                for block in blocks[ci + 1:]:
+                    if block in visible:
+                        self._assign_journal_focus(block)
+                        return
+                self._assign_journal_focus(visible[-1])
+            else:
+                for block in reversed(blocks[:ci]):
+                    if block in visible:
+                        self._assign_journal_focus(block)
+                        return
+                self._assign_journal_focus(visible[0])
+            return
+        self._assign_journal_focus(visible[-1] if direction > 0 else visible[0])
+
+    def _scroll_journal_and_focus(self, delta: int) -> None:
+        """Прокрутить журнал и активировать видимый блок; у края — соседний видимый."""
+        try:
+            container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+        except Exception:
+            return
+        y0 = float(container.scroll_y)
+        container.scroll_relative(y=delta, animate=False, immediate=True)
+        y1 = float(container.scroll_y)
+        direction = 1 if delta > 0 else -1
+        if abs(y1 - y0) > 0.25:
+            self._focus_visible_block()
+            self.call_after_refresh(self._focus_visible_block)
+            return
+        self._focus_adjacent_visible_block(direction)
 
     def _enter_journal_view(self) -> None:
         """Из ввода: фокус на последний командный блок, без прыжка вьюпорта."""
@@ -1991,9 +2075,7 @@ class CommandRunner(App):
         if inp.has_focus:
             self._enter_journal_view()
             return
-        self._scroll_results(-max(1, int(self._journal_page_size())))
-        self._focus_visible_block()
-        self.call_after_refresh(self._focus_visible_block)
+        self._scroll_journal_and_focus(-max(1, int(self._journal_page_size())))
 
     def action_journal_page_down(self) -> None:
         """PgDn: страница вниз, активный видимый блок; из ввода — войти в просмотр."""
@@ -2003,9 +2085,7 @@ class CommandRunner(App):
         if inp.has_focus:
             self._enter_journal_view()
             return
-        self._scroll_results(max(1, int(self._journal_page_size())))
-        self._focus_visible_block()
-        self.call_after_refresh(self._focus_visible_block)
+        self._scroll_journal_and_focus(max(1, int(self._journal_page_size())))
 
     def _journal_page_size(self) -> int:
         try:
@@ -3499,7 +3579,7 @@ class CommandRunner(App):
     def _scroll_results(self, delta: int) -> None:
         """Прокрутка журнала команд (когда фокус не на поле ввода)."""
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
-        container.scroll_relative(delta, animate=False)
+        container.scroll_relative(y=delta, animate=False, immediate=True)
 
     def action_history_prev(self) -> None:
         """Up: история сессии в input; в журнале — скролл или строки (если line cursor)."""
@@ -3514,8 +3594,7 @@ class CommandRunner(App):
                 and focused.move_line(-1)
             ):
                 return
-            self._scroll_results(-1)
-            self.call_after_refresh(self._focus_visible_block)
+            self._scroll_journal_and_focus(-1)
             return
         if not self.session_history: return
         if self.session_history_pos > 0:
@@ -3536,8 +3615,7 @@ class CommandRunner(App):
                 and focused.move_line(1)
             ):
                 return
-            self._scroll_results(1)
-            self.call_after_refresh(self._focus_visible_block)
+            self._scroll_journal_and_focus(1)
             return
         if not self.session_history: return
         if self.session_history_pos < len(self.session_history) - 1:

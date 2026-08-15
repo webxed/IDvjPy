@@ -6,8 +6,20 @@ Screen {
 Input {
     dock: top;
     height: 3;
-    border: heavy white;
+    margin: 0 1;
+    padding: 0 1;
+    border: round #6b5494;
+    background: $surface;
     overflow: hidden;
+}
+
+Input:focus {
+    border: round #8a6bb5;
+}
+
+CompletionList {
+    margin: 0 1;
+    border: round #4a8c58;
 }
 
 #results-container {

@@ -319,6 +319,52 @@ async def test_keyboard_scroll_activates_visible_block(isolated_home):
         assert app.focused is not last
 
 
+async def test_small_last_block_gets_focus_when_it_cannot_reach_top(isolated_home):
+    from textual.containers import VerticalScroll
+    from app import CommandBlock
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "seq 1 50")
+        await wait_command_done(app)
+        await submit(pilot, "echo tiny-last")
+        await wait_command_done(app)
+        blocks = list(app.query(CommandBlock))
+        first, last = blocks[0], blocks[-1]
+        container = app.query_one("#results-container", VerticalScroll)
+        container.scroll_to(y=0, animate=False)
+        await pilot.pause()
+        await pilot.click(first)
+        await pilot.pause()
+        assert app.focused is first
+        for _ in range(40):
+            await pilot.press("pagedown")
+            await pilot.pause()
+        assert app.focused is last
+
+
+async def test_down_moves_focus_when_journal_fits_in_frame(isolated_home):
+    from app import CommandBlock
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "echo alpha-fit")
+        await wait_command_done(app)
+        await submit(pilot, "echo beta-fit")
+        await wait_command_done(app)
+        await submit(pilot, "echo gamma-fit")
+        await wait_command_done(app)
+        blocks = list(app.query(CommandBlock))
+        first, last = blocks[0], blocks[-1]
+        await pilot.click(first)
+        await pilot.pause()
+        assert app.focused is first
+        for _ in range(8):
+            await pilot.press("down")
+            await pilot.pause()
+        assert app.focused is last
+
+
 async def test_line_cursor_mode_toggles_on_block(isolated_home):
     from app import CommandBlock
 
