@@ -168,6 +168,51 @@ async def test_completion_scroll_window(isolated_home):
         assert clist.get_selected() != first
 
 
+async def test_completion_list_grows_and_shows_count(isolated_home):
+    for i in range(14):
+        (isolated_home / f"hint_{i:02d}.txt").write_text("n\n", encoding="utf-8")
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.press("escape")
+        await type_keys(pilot, "ls ./hint_")
+        await pilot.pause()
+        clist = app._completion_list
+        assert clist.is_visible()
+        n = clist.total_candidates
+        assert n >= 14
+        assert clist._visible_capacity() > 8
+        assert len(clist.candidates) == n
+        status = clist._window_status()
+        assert f"{n}/{n}" in status
+        assert "all" in status
+
+
+async def test_completion_list_overflow_status(isolated_home):
+    for i in range(20):
+        (isolated_home / f"many_{i:02d}.txt").write_text("n\n", encoding="utf-8")
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 22)) as pilot:
+        await pilot.press("escape")
+        await type_keys(pilot, "ls ./many_")
+        await pilot.pause()
+        clist = app._completion_list
+        assert clist.is_visible()
+        assert clist.total_candidates >= 16
+        cap = clist._visible_capacity()
+        assert cap < clist.total_candidates
+        assert len(clist.candidates) == cap
+        status = clist._window_status()
+        assert f"/ {clist.total_candidates}" in status
+        assert "more" in status
+        for _ in range(cap + 1):
+            await pilot.press("down")
+        await pilot.pause()
+        scrolled = clist._window_status()
+        assert "↑" in scrolled
+
+
 async def test_pageup_hides_completion_and_leaves_journal(isolated_home):
     (isolated_home / "alpha.txt").write_text("x\n", encoding="utf-8")
     app = CommandRunner()
@@ -482,3 +527,79 @@ async def test_tab_focuses_help_block_after_command(isolated_home):
         assert isinstance(app.focused, InfoBlock)
         assert not isinstance(app.focused, CommandBlock)
         assert "Line-cursor mode" in app.focused.text_content
+
+
+async def test_bang_completion_lists_tags_on_exclamation(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "#file ls -la")
+        await submit(pilot, "#kube kubectl get pods")
+        await submit(pilot, "#log echo logs")
+        await pilot.press("escape")
+        await type_keys(pilot, "!")
+        await pilot.pause()
+        clist = app._completion_list
+        assert clist.is_visible()
+        displays = " ".join(clist.all_displays)
+        assert "file" in displays
+        assert "kube" in displays
+        assert "log" in displays
+        assert clist.preview == "[file, kube, log]"
+        assert clist.all_candidates == ["!file", "!kube", "!log"]
+        await pilot.press("tab")
+        await pilot.pause()
+        assert input_widget(app).value.strip() == "!file"
+        assert any("ls -la" in d for d in app._completion_list.all_displays)
+
+
+async def test_bang_completion_shows_command_inserts_ref(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "#file ls -la")
+        await submit(pilot, "#file cat json.file")
+        await submit(pilot, "#kube kubectl get pods")
+        await pilot.press("escape")
+        await type_keys(pilot, "!file")
+        await pilot.pause()
+        clist = app._completion_list
+        assert clist.is_visible()
+        assert any("ls -la" in d for d in clist.all_displays)
+        assert any("file[1]" in d for d in clist.all_displays)
+        assert all(item.startswith("!file[") for item in clist.all_candidates)
+        await pilot.press("tab")
+        await pilot.pause()
+        value = input_widget(app).value
+        assert value.strip() == "!file[1]"
+        assert "ls -la" not in value
+
+
+async def test_bang_completion_keeps_save_prefix_and_previews(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "#file ls -la")
+        await submit(pilot, "#file cat json.file")
+        await pilot.press("escape")
+        await type_keys(pilot, "#pack !file")
+        await pilot.pause()
+        assert app._completion_list.is_visible()
+        await pilot.press("tab")
+        await pilot.pause()
+        value = input_widget(app).value
+        assert value.startswith("#pack ")
+        assert "!file[1]" in value
+        assert "ls -la" not in value
+        await type_keys(pilot, "| !file")
+        await pilot.pause()
+        await pilot.press("down")
+        await pilot.pause()
+        await pilot.press("tab")
+        await pilot.pause()
+        value = input_widget(app).value
+        assert value.startswith("#pack ")
+        assert "!file[1]" in value
+        assert "!file[2]" in value
+        assert "ls -la" not in value
+        assert "cat json.file" not in value
+        preview = app._completion_list.preview
+        assert "ls -la" in preview
+        assert "cat json.file" in preview

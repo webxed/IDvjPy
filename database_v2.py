@@ -238,23 +238,46 @@ def get_all_tags_with_comments(db_file: str):
     conn.close()
     return [(row['tag'], row['comment']) for row in results]
 
-def set_command_comment(db_file: str, tag: str, tid: int, comment: str):
+def _find_live_command(conn, tag: str, cmd_id: int):
+    """Live command by tag-local tid, else by global id (same tag)."""
+    cursor = conn.execute(
+        "SELECT id, tag, tid, command, comment FROM commands "
+        "WHERE tag = ? AND tid = ? AND deleted = 0",
+        (tag, cmd_id),
+    )
+    row = cursor.fetchone()
+    if row:
+        return row
+    cursor = conn.execute(
+        "SELECT id, tag, tid, command, comment FROM commands "
+        "WHERE id = ? AND tag = ? AND deleted = 0",
+        (cmd_id, tag),
+    )
+    return cursor.fetchone()
+
+
+def set_command_comment(db_file: str, tag: str, cmd_id: int, comment: str):
     """
     Sets or updates the comment for a specific command.
 
-    Args:
-        db_file: Path to database file
-        tag: Tag name
-        tid: Tag-local ID
-        comment: Comment text (use empty string to clear)
+    ``cmd_id`` is the tag-local tid first; if that row does not exist,
+    it is treated as the global ``id`` (must belong to ``tag``).
+
+    Returns:
+        The updated row (id, tag, tid, ...), or None if not found.
     """
     conn = get_db_connection(db_file)
+    row = _find_live_command(conn, tag, cmd_id)
+    if not row:
+        conn.close()
+        return None
     conn.execute(
-        "UPDATE commands SET comment = ? WHERE tag = ? AND tid = ?",
-        (comment, tag, tid)
+        "UPDATE commands SET comment = ? WHERE id = ? AND deleted = 0",
+        (comment, row["id"]),
     )
     conn.commit()
     conn.close()
+    return row
 
 def get_command_comment(db_file: str, tag: str, tid: int) -> str:
     """

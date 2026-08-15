@@ -106,7 +106,7 @@ async def test_f3_opens_viewer_from_command_output(isolated_home):
         await wait_command_done(app)
         await pilot.press("tab")  # как пользователь: фокус на блок вывода
         await pilot.pause()
-        await pilot.press("f3")
+        await pilot.press("f5")
         viewer = await wait_json_viewer(app)
         tree = viewer.query_one(Tree)
         assert tree.root.children
@@ -135,13 +135,13 @@ async def test_f3_tree_with_bracket_keys_and_array_root(isolated_home):
         assert "foo[bar]" in block.raw_stdout
         await pilot.press("tab")
         await pilot.pause()
-        await pilot.press("f3")
+        await pilot.press("f5")
         viewer = await wait_json_viewer(app)
         tree = viewer.query_one(Tree)
         assert tree.root.children
         wrapper = tree.root.children[0]
         assert wrapper.is_expanded
-        assert wrapper.children, "tree was empty after F3 on cat test.json"
+        assert wrapper.children, "tree was empty after F5 on cat test.json"
         assert any("[0]" in c.label.plain for c in wrapper.children)
         await pilot.press("q")
 

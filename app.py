@@ -48,7 +48,7 @@ try:
     import re
     import time
     import portalocker
-    from typing import Any, List, Optional, Dict
+    from typing import Any, List, Optional, Dict, Tuple, Union
     from command_parser_v2 import CommandParser
     from textual import events
     from textual.app import App, ComposeResult
@@ -84,6 +84,10 @@ RE_FORMATTING_TAGS = re.compile(
 )
 RE_TAG_TID_FIND = re.compile(r'!([a-zA-Z_0-9]+)\[(\d+)\]')
 RE_GID_FIND = re.compile(r'(?<!!)!(\d+)')
+RE_BANG_PARTIAL = re.compile(
+    r'^!([A-Za-z_][A-Za-z0-9_]*)(\[(\d*)(\]?))?$'
+)
+TOKEN_SEPS = frozenset(" \t|&;")
 
 
 def _linux_clipboard_cmd(selection: str, data: Optional[bytes] = None) -> Optional[bytes]:
@@ -241,7 +245,7 @@ def release_file_lock(file_obj) -> None:
 
 
 class LineNavigable:
-    """Построчный курсор: F7/Enter включают; Enter копирует и уходит во ввод; Shift+Enter/Ctrl+V дописывают во ввод."""
+    """Построчный курсор: F2/Enter включают; Enter копирует и уходит во ввод; Shift+Enter/Ctrl+V дописывают во ввод."""
 
     def _nav_plain_text(self) -> str:
         return ""
@@ -305,7 +309,7 @@ class LineNavigable:
         self._scroll_cursor_into_view()
         app = getattr(self, "app", None)
         if app is not None:
-            app.sub_title = "Line cursor: on (Enter copy+input, Shift+Enter/Ctrl+V append; F7/Esc off)"
+            app.sub_title = "Line cursor: on (Enter copy+input, Shift+Enter/Ctrl+V append; F2/Esc off)"
             try:
                 app.set_timer(app.TIMER_DELAY, app.clear_subtitle)
             except Exception:
@@ -566,8 +570,8 @@ class CommandBlock(LineNavigable, Static):
         truncated = '\n'.join(lines[-self.MAX_DISPLAY_LINES:])
         hidden = len(lines) - self.MAX_DISPLAY_LINES
         if self._simple_mode():
-            return f"(...{hidden} lines truncated for UI stability, F5 copies full output)\n{truncated}"
-        return f"[dim](...{hidden} lines truncated for UI stability, F5 copies full output)[/dim]\n{truncated}"
+            return f"(...{hidden} lines truncated for UI stability, F3 copies full output)\n{truncated}"
+        return f"[dim](...{hidden} lines truncated for UI stability, F3 copies full output)[/dim]\n{truncated}"
 
     def _format_output(self) -> str:
         """Форматирует вывод команды."""
@@ -690,10 +694,31 @@ class InfoBlock(LineNavigable, Static):
         return self.text_content
 
 
+class CompletionItem:
+    """Один пункт списка подсказок: что показать и что вставить."""
+
+    def __init__(
+        self,
+        insert: str,
+        display: Optional[str] = None,
+        replace_token: bool = False,
+        add_space: bool = False,
+        reopen: bool = False,
+    ) -> None:
+        self.insert = insert
+        self.display = insert if display is None else display
+        self.replace_token = replace_token
+        self.add_space = add_space
+        self.reopen = reopen
+
+
 class CompletionList(Static):
     """Список подсказок: в потоке layout под полем ввода, не overlay поверх журнала."""
 
-    MAX_VISIBLE_ITEMS = 8
+    MIN_VISIBLE_ITEMS = 6
+    MAX_VISIBLE_ITEMS = 24
+    _CHROME_ROWS = 8  # header + input + footer + list border
+    _JOURNAL_MIN_ROWS = 6
 
     DEFAULT_CSS = """
     CompletionList {
@@ -701,7 +726,6 @@ class CompletionList(Static):
         border: tall $accent;
         width: 100%;
         height: auto;
-        max-height: 8;
         overflow: hidden;
         padding: 0 1;
         display: none;
@@ -715,80 +739,148 @@ class CompletionList(Static):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.can_focus = False
-        self.all_candidates: List[str] = []
-        self.candidates: List[str] = []
+        self._items: List[CompletionItem] = []
+        self.candidates: List[CompletionItem] = []
         self.window_start: int = 0
         self.selected_index: int = 0
         self.total_candidates: int = 0
+        self.preview: str = ""
+        self.replace_token: bool = False
 
-    def update_candidates(self, candidates: List[str]) -> None:
-        """Обновить список кандидатов."""
-        self.total_candidates = len(candidates)
-        self.all_candidates = candidates
+    @property
+    def all_candidates(self) -> List[str]:
+        return [item.insert for item in self._items]
+
+    @property
+    def all_displays(self) -> List[str]:
+        return [item.display for item in self._items]
+
+    def _visible_capacity(self) -> int:
+        """Сколько пунктов влезает: растёт с высотой терминала, журнал не съедаем."""
+        height = 24
+        try:
+            if self.app is not None and self.app.size.height:
+                height = int(self.app.size.height)
+        except Exception:
+            pass
+        extra = 1  # строка счётчика всегда
+        if self.preview:
+            extra += 1
+        cap = height - self._CHROME_ROWS - self._JOURNAL_MIN_ROWS - extra
+        return max(self.MIN_VISIBLE_ITEMS, min(self.MAX_VISIBLE_ITEMS, cap))
+
+    def _window_status(self) -> str:
+        """Всегда видно, полный это список или есть ещё пункты."""
+        n = self.total_candidates
+        cap = self._visible_capacity()
+        if n == 0:
+            return "0/0"
+        shown = min(cap, n - self.window_start)
+        start = self.window_start + 1
+        end = self.window_start + shown
+        if self.window_start == 0 and end >= n:
+            return f"{n}/{n}  all"
+        parts = [f"{start}–{end} / {n}"]
+        above = self.window_start
+        below = n - end
+        if above:
+            parts.append(f"↑{above}")
+        if below:
+            parts.append(f"↓{below} more")
+        return "  ".join(parts)
+
+    def update_candidates(
+        self,
+        candidates: List[Union[str, CompletionItem]],
+        preview: str = "",
+    ) -> None:
+        """Обновить список кандидатов и опциональную расшифровку !tag[tid]."""
+        items: List[CompletionItem] = []
+        for cand in candidates:
+            if isinstance(cand, CompletionItem):
+                items.append(cand)
+            else:
+                items.append(CompletionItem(insert=cand, display=cand))
+        self._items = items
+        self.total_candidates = len(items)
+        self.preview = preview or ""
+        self.replace_token = any(item.replace_token for item in items)
         self.window_start = 0
         self.selected_index = 0
-        self.candidates = self.all_candidates[:self.MAX_VISIBLE_ITEMS]
-        if self.all_candidates:
+        if self._items or self.preview:
             self._render_list()
             self.styles.display = "block"
         else:
             self.styles.display = "none"
 
     def _render_list(self) -> None:
-        """Отрисовать список."""
-        window_end = self.window_start + self.MAX_VISIBLE_ITEMS
-        self.candidates = self.all_candidates[self.window_start:window_end]
+        """Отрисовать список; высота окна = число видимых строк."""
+        cap = self._visible_capacity()
+        if self.window_start > 0 and self.window_start + cap > len(self._items):
+            self.window_start = max(0, len(self._items) - cap)
+        window_end = self.window_start + cap
+        self.candidates = self._items[self.window_start:window_end]
 
         lines = []
-        for i, cmd in enumerate(self.candidates):
+        if self.preview:
+            lines.append(f"[dim]→ {escape(self.preview)}[/dim]")
+        for i, item in enumerate(self.candidates):
             global_index = self.window_start + i
-            safe = escape(cmd)
+            safe = escape(item.display)
             if global_index == self.selected_index:
                 lines.append(f"[bold reverse] {safe} [/bold reverse]")
             else:
                 lines.append(f" {safe}")
 
-        remaining = self.total_candidates - window_end
-        if remaining > 0:
-            lines.append(f"[dim] ... and {remaining} more (keep typing to narrow)[/dim]")
-        self.update("\n".join(lines))
+        if self._items:
+            lines.append(f"[dim]{escape(self._window_status())}[/dim]")
+        self.update("\n".join(lines) if lines else "")
+        self.styles.max_height = max(len(lines) + 2, 3)
 
     def next_item(self) -> None:
         """Следующий элемент."""
-        if self.all_candidates:
-            self.selected_index = (self.selected_index + 1) % len(self.all_candidates)
+        if self._items:
+            cap = self._visible_capacity()
+            self.selected_index = (self.selected_index + 1) % len(self._items)
             if self.selected_index < self.window_start:
                 self.window_start = self.selected_index
-            elif self.selected_index >= self.window_start + self.MAX_VISIBLE_ITEMS:
-                self.window_start = self.selected_index - self.MAX_VISIBLE_ITEMS + 1
+            elif self.selected_index >= self.window_start + cap:
+                self.window_start = self.selected_index - cap + 1
             self._render_list()
 
     def prev_item(self) -> None:
         """Предыдущий элемент."""
-        if self.all_candidates:
-            self.selected_index = (self.selected_index - 1) % len(self.all_candidates)
+        if self._items:
+            cap = self._visible_capacity()
+            self.selected_index = (self.selected_index - 1) % len(self._items)
             if self.selected_index < self.window_start:
                 self.window_start = self.selected_index
-            elif self.selected_index >= self.window_start + self.MAX_VISIBLE_ITEMS:
-                self.window_start = self.selected_index - self.MAX_VISIBLE_ITEMS + 1
+            elif self.selected_index >= self.window_start + cap:
+                self.window_start = self.selected_index - cap + 1
             self._render_list()
 
     def get_selected(self) -> Optional[str]:
-        """Получить выбранный элемент."""
-        if self.all_candidates and 0 <= self.selected_index < len(self.all_candidates):
-            return self.all_candidates[self.selected_index]
+        """Текст для вставки выбранного элемента."""
+        item = self.get_selected_item()
+        return None if item is None else item.insert
+
+    def get_selected_item(self) -> Optional[CompletionItem]:
+        if self._items and 0 <= self.selected_index < len(self._items):
+            return self._items[self.selected_index]
         return None
 
     def is_visible(self) -> bool:
         """Видим ли список."""
-        return bool(self.all_candidates)
+        return bool(self._items) or bool(self.preview)
 
     def hide(self) -> None:
         """Скрыть список."""
-        self.all_candidates = []
+        self._items = []
         self.candidates = []
         self.window_start = 0
         self.total_candidates = 0
+        self.preview = ""
+        self.replace_token = False
         self.styles.display = "none"
 
 
@@ -812,8 +904,25 @@ class CommandInput(Input):
         """Привязать список подсказок (вызывается из App.on_mount)."""
         self._completion_list = completion_list
 
+    def _token_span(self, text: str, pos: int) -> Tuple[int, int]:
+        """Границы текущего токена (разделители: пробел, |, &, ;)."""
+        pos = max(0, min(pos, len(text)))
+        start = pos
+        while start > 0 and text[start - 1] not in TOKEN_SEPS:
+            start -= 1
+        end = pos
+        while end < len(text) and text[end] not in TOKEN_SEPS:
+            end += 1
+        return start, end
+
     def _should_replace_last_token(self, selected: str) -> bool:
         """Path-токен заменяем только если кандидат — путь, а не целая команда."""
+        clist = self._completion_list
+        if clist is not None and getattr(clist, "replace_token", False):
+            return True
+        item = clist.get_selected_item() if clist is not None else None
+        if item is not None and item.replace_token:
+            return True
         app = self.app
         if not (hasattr(app, "_is_path_context") and app._is_path_context(self.value)):
             return False
@@ -827,10 +936,7 @@ class CommandInput(Input):
             return selected
         current = self.value
         pos = self.cursor_position
-        start = current.rfind(" ", 0, pos) + 1
-        end = current.find(" ", pos)
-        if end == -1:
-            end = len(current)
+        start, end = self._token_span(current, pos)
         return current[:start] + selected + current[end:]
 
     def _typed_command_is_complete(self) -> bool:
@@ -841,11 +947,14 @@ class CommandInput(Input):
     def _apply_selected_completion(self, selected: str) -> bool:
         """
         Применяет выбранное автодополнение.
-        В path-контексте заменяет только текущий токен, а не всю строку.
+        В path-контексте и для !tag заменяет только текущий токен, а не всю строку.
         Полная команда из истории/БД всегда подменяет строку целиком
         (иначе `cat json.file` + Enter даёт `cat cat json.file`).
         Возвращает True, если нужно сразу показать подсказки снова.
         """
+        item = None
+        if self._completion_list is not None:
+            item = self._completion_list.get_selected_item()
         self._applying_completion = True
         if not self._should_replace_last_token(selected):
             self.value = selected
@@ -854,13 +963,17 @@ class CommandInput(Input):
 
         current = self.value
         pos = self.cursor_position
-        start = current.rfind(" ", 0, pos) + 1
-        end = current.find(" ", pos)
-        if end == -1:
-            end = len(current)
-
-        self.value = current[:start] + selected + current[end:]
-        self.cursor_position = start + len(selected)
+        start, end = self._token_span(current, pos)
+        new_val = current[:start] + selected + current[end:]
+        new_pos = start + len(selected)
+        add_space = bool(item.add_space) if item is not None else False
+        if add_space and end >= len(current) and not selected.endswith(" "):
+            new_val += " "
+            new_pos += 1
+        self.value = new_val
+        self.cursor_position = new_pos
+        if item is not None:
+            return bool(item.reopen)
         return selected.endswith("/")
 
     def action_tab_input(self) -> None:
@@ -870,11 +983,9 @@ class CommandInput(Input):
             selected = clist.get_selected()
             if selected:
                 if self._preview_completion_value(selected) != self.value:
-                    reopen = self._apply_selected_completion(selected)
-                    clist.hide()
-                    if reopen:
-                        self._applying_completion = False
-                        self.call_after_refresh(self._show_completions)
+                    self._apply_selected_completion(selected)
+                    self._applying_completion = False
+                    self.call_after_refresh(self._show_completions)
                     return
                 # Уже введён готовый каталог (`~/`, `/usr/`): не подменяем дочерним путём.
                 clist.hide()
@@ -919,12 +1030,9 @@ class CommandInput(Input):
                     return
                 selected = self._completion_list.get_selected()
                 if selected and self._preview_completion_value(selected) != self.value:
-                    reopen = self._apply_selected_completion(selected)
-                    self._completion_list.hide()
-                    if reopen:
-                        # Углубление в директорию: сразу показываем следующий уровень.
-                        self._applying_completion = False
-                        self.call_after_refresh(self._show_completions)
+                    self._apply_selected_completion(selected)
+                    self._applying_completion = False
+                    self.call_after_refresh(self._show_completions)
                     event.stop()
                     return
                 # Совпадает с уже введённым путём (`ls ~/`) — выполняем команду как есть.
@@ -955,6 +1063,13 @@ class CommandInput(Input):
             return
 
         raw_value = self.value
+        bang_items: List[CompletionItem] = []
+        preview = ""
+        if hasattr(app, "get_bang_completions"):
+            bang_items, preview = app.get_bang_completions(raw_value, self.cursor_position)
+        if bang_items or preview:
+            self._completion_list.update_candidates(bang_items, preview=preview)
+            return
         if self._typed_command_is_complete():
             # `ls   ` — выполнить ls, не держать список `ls -la`.
             self._completion_list.hide()
@@ -1026,25 +1141,25 @@ class CommandRunner(App):
 
     CSS_PATH = "app.css"
     BINDINGS = [
-        ("d", "toggle_dark", "Toggle dark mode"),
-        Binding("up", "history_prev", "Previous command", priority=False),
-        Binding("down", "history_next", "Next command", priority=False),
-        ("pageup", "focus_previous", "Prev Block"),
-        ("pagedown", "focus_next", "Next Block"),
-        ("f5", "copy_block", "Copy Block"),
+        ("escape", "focus_input", "Focus Input"),
+        ("f2", "toggle_line_nav", "Line cursor"),
+        ("f3", "copy_block", "Copy Block"),
+        ("f5", "open_json_viewer", "JSON Viewer"),
         ("f6", "toggle_simple_output", "Simple output"),
-        ("f7", "toggle_line_nav", "Line cursor"),
-        ("f3", "open_json_viewer", "JSON Viewer"),
+        Binding("d", "toggle_dark", "Toggle dark mode", show=False),
+        Binding("up", "history_prev", "Previous command", priority=False, show=False),
+        Binding("down", "history_next", "Next command", priority=False, show=False),
+        Binding("pageup", "focus_previous", "Prev Block", show=False),
+        Binding("pagedown", "focus_next", "Next Block", show=False),
         Binding("shift+insert", "paste_clipboard", "Paste", show=False),
         Binding("ctrl+v", "paste_clipboard", "Paste", show=False),
-        ("escape", "focus_input", "Focus Input"),
         Binding("space", "toggle_block_collapse", "Collapse", show=False),
         Binding("left", "collapse_block", "← Collapse", show=False),
         Binding("right", "expand_block", "→ Expand", show=False),
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.37"  # Ctrl+D clears the entire input line
+    VERSION = "v1.1.45"  # Footer hint order: Esc, F2, F3, F5, F6
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -1133,6 +1248,8 @@ class CommandRunner(App):
             return False
 
         token = self._extract_path_token(text)
+        if token.startswith(("!", "#", "?", ":", "$")):
+            return False
         if self._last_token_is_path_like(token):
             return True
 
@@ -1218,6 +1335,150 @@ class CommandRunner(App):
                 suggestions = [c for c in suggestions if c != token]
                 suggestions.insert(0, token)
         return suggestions
+
+    def _bang_token_at_cursor(self, text: str, pos: int) -> Optional[str]:
+        """Текущий токен, если это !tag / !tag[ / !tag[tid], но не !!."""
+        pos = max(0, min(pos, len(text)))
+        start = pos
+        while start > 0 and text[start - 1] not in TOKEN_SEPS:
+            start -= 1
+        token = text[start:pos]
+        if not token.startswith("!") or token.startswith("!!"):
+            return None
+        return token
+
+    def _bang_preview_source(self, text: str) -> str:
+        """Часть строки, в которой раскрываются !tag[tid] (тело #tag cmd или вся строка)."""
+        stripped = text.strip()
+        if not stripped:
+            return ""
+        if stripped.startswith("#"):
+            rest = stripped[1:].lstrip()
+            if not rest:
+                return ""
+            tag, sep, body = rest.partition(" ")
+            if not sep or not body.strip():
+                return ""
+            if tag.endswith(("=", "+", "-")) or "=" in tag:
+                return ""
+            return body.strip()
+        if stripped.startswith((":", "?")):
+            return ""
+        return stripped
+
+    def _expand_bang_refs_preview(self, text: str) -> str:
+        """Живая расшифровка полных ссылок !tag[tid] / !ID во время набора."""
+        source = self._bang_preview_source(text)
+        if not source or not RE_COMMAND_REFS.search(source):
+            return ""
+
+        def repl(match: re.Match) -> str:
+            tag, tid, gid = match.group(1), match.group(2), match.group(3)
+            try:
+                if tag and tid:
+                    row = database.get_command_by_tid(self.db_file, tag, int(tid))
+                    return row["command"] if row else match.group(0)
+                if gid:
+                    row = database.get_command_by_global_id(self.db_file, int(gid))
+                    return row["command"] if row else match.group(0)
+            except Exception:
+                return match.group(0)
+            return match.group(0)
+
+        expanded = RE_COMMAND_REFS.sub(repl, source)
+        if expanded == source:
+            return ""
+        return expanded
+
+    def _tag_completion_items(self, tags: List[str]) -> List[CompletionItem]:
+        """Пункты выбора тега: показ `file`, вставка `!file`."""
+        items: List[CompletionItem] = []
+        for tag in tags:
+            try:
+                n = len(database.get_commands_by_tag(self.db_file, tag))
+            except Exception:
+                n = 0
+            items.append(
+                CompletionItem(
+                    insert=f"!{tag}",
+                    display=f"{tag}  ({n})" if n else tag,
+                    replace_token=True,
+                    add_space=False,
+                    reopen=True,
+                )
+            )
+        return items
+
+    def get_bang_completions(
+        self, text: str, cursor_pos: int
+    ) -> Tuple[List[CompletionItem], str]:
+        """
+        Подсказки для !file / !kube: в списке полная команда, во ввод — !tag[tid].
+        Возвращает (пункты, расшифровка уже набранных ссылок).
+        """
+        preview = self._expand_bang_refs_preview(text)
+        token = self._bang_token_at_cursor(text, cursor_pos)
+        if not token:
+            return [], preview
+
+        try:
+            tags = database.get_all_tags(self.db_file)
+        except Exception:
+            return [], preview
+
+        if token == "!":
+            items = self._tag_completion_items(tags)
+            if not preview:
+                preview = f"[{', '.join(tags)}]" if tags else ""
+            return items, preview
+
+        parsed = RE_BANG_PARTIAL.match(token)
+        if not parsed:
+            return [], preview
+
+        tag_prefix = parsed.group(1)
+        has_bracket = parsed.group(2) is not None
+        tid_prefix = parsed.group(3) or ""
+        closed = parsed.group(4) == "]"
+        if closed:
+            return [], preview
+
+        exact = [t for t in tags if t == tag_prefix]
+        prefixed = [t for t in tags if t.startswith(tag_prefix)]
+        items: List[CompletionItem] = []
+        command_tags = exact if exact else (prefixed if len(prefixed) == 1 else [])
+
+        if command_tags:
+            tag = command_tags[0]
+            try:
+                rows = database.get_commands_by_tag(self.db_file, tag)
+            except Exception:
+                rows = []
+            for row in rows:
+                tid = row["tid"]
+                if tid_prefix and not str(tid).startswith(tid_prefix):
+                    continue
+                insert = f"!{tag}[{tid}]"
+                display = f"<{row['id']}> {tag}[{tid}]  {row['command']}"
+                comment = ""
+                if "comment" in row.keys() and row["comment"]:
+                    comment = str(row["comment"]).strip()
+                if comment:
+                    display += f"  # {comment}"
+                items.append(
+                    CompletionItem(
+                        insert=insert,
+                        display=display,
+                        replace_token=True,
+                        add_space=True,
+                    )
+                )
+        elif not has_bracket:
+            items = self._tag_completion_items(prefixed)
+            if not preview and prefixed:
+                preview = f"[{', '.join(prefixed)}]"
+
+        return items, preview
 
     def get_completion_candidates(self, prefix: str) -> List[str]:
         """
@@ -1690,7 +1951,7 @@ class CommandRunner(App):
         self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
 
     def action_toggle_line_nav(self) -> None:
-        """F7: режим курсора по строкам в блоке вывода."""
+        """F2: режим курсора по строкам в блоке вывода."""
         focused = self.focused
         if not isinstance(focused, LineNavigable):
             self.action_focus_output()
@@ -1759,7 +2020,7 @@ class CommandRunner(App):
 
     def action_open_json_viewer(self) -> None:
         """
-        Открывает JSON viewer для сфокусированного блока (F3).
+        Открывает JSON viewer для сфокусированного блока (F5).
         Если фокус не на блоке — берём последний CommandBlock.
         """
         block = self._block_for_json_viewer()
@@ -2169,6 +2430,9 @@ class CommandRunner(App):
   (none)     - Execute shell command
   #<tag>     - Save command to database with tag
   ?          - Query database (? all, ?<tag>, ?? grouped)
+  !tag / !tag[tid] - Type ! to list tags [file, kube, log]; Tab picks a tag
+               Then commands show as `<id> tag[tid]  full command`; Tab inserts `!tag[tid]`
+               Compose pipes/saves: `#file !file[1] | !file[2]` (preview expands refs)
   !N         - Execute command by ID from last query
   |<cmd>     - Pipe focused block output to command
   $VAR=val   - Set environment variable
@@ -2180,17 +2444,17 @@ class CommandRunner(App):
   Esc        - Return to input (see also line-cursor mode)
   Space      - Toggle block collapse
   ← / →      - Collapse / expand focused block
-  F3         - Open focused (or last command) block in JSON viewer
-  F5         - Copy full block output to clipboard
+  F3         - Copy full block output to clipboard
+  F5         - Open focused (or last command) block in JSON viewer
   F6         - Toggle simple (plain) output
-  F7         - Toggle line-cursor mode (see below)
+  F2         - Toggle line-cursor mode (see below)
   Shift+Insert / Ctrl+V - Paste into input (does not replace existing text)
                In line-cursor mode Ctrl+V appends the current line instead
   Ctrl+D     - Clear the entire input line
   (JSON) Enter - Insert `jq 'path'` into input; also sets $JSON
 
 [bold]Line-cursor mode[/bold]
-  Focus a block (Tab or PgUp), then Enter or F7 to turn the mode on.
+  Focus a block (Tab or PgUp), then Enter or F2 to turn the mode on.
   Off by default: ↑/↓ still scroll the journal.
   On: current line is highlighted.
   ↑/↓        - Move by lines inside the block
@@ -2202,7 +2466,7 @@ class CommandRunner(App):
                If Shift+Enter acts like Enter, the terminal does not distinguish
                the keys — use Ctrl+V. While the input is focused, Ctrl+V pastes
   Esc        - Turn mode off, stay on the block; Esc again returns to input
-  F7         - Toggle mode on/off
+  F2         - Toggle mode on/off
 
 [bold]Variables[/bold]
   Use $VAR in commands for variable substitution
@@ -2549,7 +2813,7 @@ class CommandRunner(App):
         - #tag+ID              - редактировать команду (v1.1.9+)
         - #tag+                - редактировать последнюю команду тега (v1.1.9+)
         - #tag=comment         - установить комментарий к тегу
-        - #tag=ID=comment      - установить комментарий к конкретной команде (v1.1.2+)
+        - #tag=ID=comment      - комментарий к команде (ID = tid или глобальный id)
 
         Логика парсинга:
         1. Проверка на "=" с двумя знаками -> комментарий к команде
@@ -2560,14 +2824,25 @@ class CommandRunner(App):
         """
         content = user_input[1:].strip()
 
-        # Формат: #tag=ID=comment
+        # Формат: #tag=ID=comment  (ID = tid или глобальный <id> из ??)
         m = re.match(r"^([a-zA-Z_0-9]+)=(\d+)=(.*)$", content)
         if m:
-            tag, tid_str, comment = m.groups()
+            tag, id_str, comment = m.groups()
             try:
-                tid = int(tid_str)
-                database.set_command_comment(self.db_file, tag, tid, comment.strip())
-                self.add_block(InfoBlock(f"Command {tag}[{tid}] comment set to: '{comment.strip()}'"))
+                cmd_id = int(id_str)
+                updated = database.set_command_comment(
+                    self.db_file, tag, cmd_id, comment.strip()
+                )
+                if updated:
+                    self.add_block(InfoBlock(
+                        f"Command {updated['tag']}[{updated['tid']}] "
+                        f"comment set to: '{comment.strip()}'"
+                    ))
+                else:
+                    self.add_block(InfoBlock(
+                        f"Error: Command {tag}[{cmd_id}] not found "
+                        f"(use tid from {tag}[tid] or global id from <id>)."
+                    ))
             except Exception as e:
                 self.add_block(InfoBlock(f"Database error: {e}"))
             return
@@ -2656,6 +2931,23 @@ class CommandRunner(App):
                 self.add_block(InfoBlock(f"Database error: {e}"))
         else:
             self.add_block(InfoBlock("Invalid syntax. Use: #tag <command> or #tag=<comment>"))
+
+    def _format_tagged_command_line(
+        self,
+        gid: int,
+        tag: str,
+        tid: int,
+        command: str,
+        cmd_comment: str = "",
+    ) -> str:
+        """Строка для ?? / ?tag. escape, иначе Rich съедает `[tid]` и комментарий."""
+        ref = escape(f"{tag}[{tid}]")
+        cmd = escape(command or "")
+        line = f"  [dim]<{gid}>[/dim] [bold]{ref}[/bold]  {cmd}"
+        comment = (cmd_comment or "").strip()
+        if comment:
+            line += f"  [dim]# {escape(comment)}[/dim]"
+        return line
 
     def handle_query_command(self, user_input: str) -> None:
         """
@@ -2755,11 +3047,9 @@ class CommandRunner(App):
                         else:
                             content += f"\n- {tag}:\n"
                         for gid, tid, cmd, cmd_comment in items:
-                            # Глобальный ID в угловых скобках с dim-стилем для менее яркого цвета
-                            if cmd_comment:
-                                content += f"  [dim]<{gid}>[/] [bold]{tag}[{tid}][/bold]  {cmd}  # {cmd_comment}\n"
-                            else:
-                                content += f"  [dim]<{gid}>[/] [bold]{tag}[{tid}][/bold]  {cmd}\n"
+                            content += self._format_tagged_command_line(
+                                gid, tag, tid, cmd, cmd_comment
+                            ) + "\n"
                 content += "\nUse `!tag[tid]` or `!ID` to execute a command."
                 content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
@@ -2778,8 +3068,14 @@ class CommandRunner(App):
                         self.last_query_results[row['id']] = row['command']
                     lines = []
                     for row in commands:
-                        comment_part = f"  # {row['comment']}" if 'comment' in row.keys() and row['comment'] else ""
-                        lines.append(f"  [dim]<{row['id']}>[/] [bold]{tag_part}[{row['tid']}][/bold]  {row['command']}{comment_part}")
+                        cmd_comment = ""
+                        if "comment" in row.keys() and row["comment"]:
+                            cmd_comment = row["comment"]
+                        lines.append(
+                            self._format_tagged_command_line(
+                                row["id"], tag_part, row["tid"], row["command"], cmd_comment
+                            )
+                        )
                     content += "\n".join(lines)
                     content += "\n\nUse `!{}[<tid>]` or `!ID` to execute.".format(tag_part)
                     content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."

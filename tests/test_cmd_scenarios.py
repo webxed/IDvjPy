@@ -3,6 +3,7 @@ from pathlib import Path
 
 import database_v2 as database
 import pyperclip
+from rich.text import Text
 from app import CommandBlock, CommandRunner, InfoBlock
 
 from tests.conftest import (
@@ -96,12 +97,37 @@ async def test_s04_comments(isolated_home):
 
         await submit(pilot, "?start")
         one = last_info(app).text_content
+        one_plain = Text.from_markup(one).plain
         assert "Start in normal mode" in one
+        assert "Start in normal mode" in one_plain
+        assert "start[1]" in one_plain
 
         await submit(pilot, "??")
         all_cmds = last_info(app).text_content
+        all_plain = Text.from_markup(all_cmds).plain
         assert "Startup commands" in all_cmds
         assert "Start in normal mode" in all_cmds
+        assert "Start in normal mode" in all_plain
+        assert "start[1]" in all_plain
+
+        # #tag=ID= accepts global <id> (not only tid); missing id is an error
+        await submit(pilot, "#other echo filler")
+        await submit(pilot, "#start echo via-gid")
+        start_rows = [r for r in database.get_commands_by_tag(app.db_file, "start")
+                      if "via-gid" in r["command"]]
+        assert start_rows
+        gid = start_rows[0]["id"]
+        tid = start_rows[0]["tid"]
+        assert gid != tid
+        await submit(pilot, f"#start={gid}=comment by global id")
+        assert "comment set" in last_info(app).text_content
+        assert database.get_command_comment(app.db_file, "start", tid) == "comment by global id"
+        await submit(pilot, "?start")
+        assert "comment by global id" in Text.from_markup(last_info(app).text_content).plain
+
+        await submit(pilot, "#start=186=test comment")
+        assert "not found" in last_info(app).text_content.lower()
+        assert database.get_command_comment(app.db_file, "start", 186) == ""
 
 
 async def test_s06_query(isolated_home):
@@ -196,7 +222,7 @@ async def test_s11_nav_history_copy(isolated_home):
 
         first.focus()
         await pilot.pause()
-        await pilot.press("f5")
+        await pilot.press("f3")
         await pilot.pause()
         assert "first" in pyperclip.paste()
         assert app.sub_title == app.MSG_COPIED
