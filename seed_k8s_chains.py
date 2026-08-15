@@ -22,7 +22,7 @@ except ImportError as e:
 
 FILE_SETTINGS = "settings.yml"
 ENCODING = "utf-8"
-DEFAULT_DB = "history_v2.db"
+DEFAULT_DB = "mytags.db"
 
 # tag -> (tag comment, [(command, command comment), ...])
 # tid = 1-based index in each list. Playbooks reference these tids.

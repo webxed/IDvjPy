@@ -1,6 +1,6 @@
 # backup_db.py - Database Import/Export Tool
 
-Скрипт для импорта и экспорта базы тегов IDvjPy_term v2 (history_v2.db). Поддерживает форматы JSON и CSV для редактирования команд в табличных редакторах.
+Скрипт для импорта и экспорта базы тегов IDvjPy_term v2 (mytags.db). Поддерживает форматы JSON и CSV для редактирования команд в табличных редакторах.
 
 ## Установка
 
@@ -80,7 +80,7 @@ python3 backup_db.py export backup.json --db custom.db
   "version": "2.0",
   "schema_version": "v2",
   "export_date": "2026-01-30T18:49:32.723003",
-  "source_db": "history_v2.db",
+  "source_db": "mytags.db",
   "tag_filter": null,
   "total_commands": 8,
   "total_tags": 2,
@@ -216,7 +216,7 @@ python3 backup_db.py list --db custom.db
 **Пример вывода:**
 
 ```
-Database: history_v2.db
+Database: mytags.db
 ------------------------------------------------------------
   [deploy] 7 commands - Управление nginx
   [start] 1 commands - Запуск приложения
@@ -291,7 +291,7 @@ python3 backup_db.py import-csv commands.csv
 По умолчанию используется файл из `settings.yml`:
 
 ```yaml
-database_tags_file: history_v2.db
+database_tags_file: mytags.db
 ```
 
 Можно указать другой файл через параметр `--db`:

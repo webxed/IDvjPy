@@ -1,7 +1,7 @@
 # Maximum number of lines to keep in the output buffer.
 max_lines: 100000
 history_lines: 20
-database_tags_file: history_v2.db
+database_tags_file: mytags.db
 backup_dir: backups
 
 # Таймаут выполнения команды (секунды). 0 = без таймаута (tsh login, долгие команды).
@@ -10,4 +10,4 @@ command_timeout: 10
 # Протокол мыши в TUI: true — клик выделяет блок, колесо крутит журнал;
 # false — выделение текста мышью в терминале (клик по блоку не фокусирует).
 # Если параметр отсутствует, используется true.
-terminal_mouse: true
+terminal_mouse: false

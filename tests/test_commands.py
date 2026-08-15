@@ -13,6 +13,18 @@ async def test_app_starts_with_input_focused(isolated_home):
         assert "IDvjPy_term" in welcome
 
 
+async def test_starts_without_existing_database(isolated_home):
+    db = isolated_home / "test_history.db"
+    assert not db.exists()
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        assert db.is_file()
+        texts = " ".join(block.text_content for block in app.query(InfoBlock))
+        assert "Empty command database" in texts
+        assert "seed_linux_commands.py --seed" in texts
+
+
 async def test_echo_command_creates_block(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(120, 40)) as pilot:

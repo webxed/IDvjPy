@@ -23,7 +23,7 @@ except ImportError as e:
 
 FILE_SETTINGS = "settings.yml"
 ENCODING = "utf-8"
-DEFAULT_DB = "history_v2.db"
+DEFAULT_DB = "mytags.db"
 
 # Порядок тегов: процессы → файлы → сеть → kubectl
 TAG_COMMENTS = {

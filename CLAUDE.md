@@ -87,7 +87,7 @@ Aliases load from `~/.bashrc`. If the body contains `$1` / `$2` / `$@` / `$*`, a
 
 ### Database Schema
 
-File: `settings.yml` → `database_tags_file` (default `history_v2.db`).
+File: `settings.yml` → `database_tags_file` (default `mytags.db`).
 
 - Global `id` (`!1`, `!! 1`) and per-tag `tid` (`!deploy[1]`)
 - Soft-delete flag (`deleted = 0` in queries)
@@ -110,6 +110,6 @@ Install from `requirements.txt`:
 Edit `settings.yml`:
 - `max_lines`: Output buffer limit (default: 100000)
 - `history_lines`: Default lines for `:h` (default: 20)
-- `database_tags_file`: SQLite filename (default: `history_v2.db`)
+- `database_tags_file`: SQLite filename (default: `mytags.db`)
 - `command_timeout`: seconds; `0` = no timeout (default: 10)
 - `terminal_mouse`: `true` — click focuses a block, wheel scrolls the journal; `false` — OS text selection (clicks do not focus)

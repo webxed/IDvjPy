@@ -21,8 +21,8 @@ def load_settings():
     if settings_path.exists():
         with open(settings_path, 'r') as f:
             settings = yaml.safe_load(f)
-            return settings.get('database_tags_file', 'history_v2.db')
-    return 'history_v2.db'
+            return settings.get('database_tags_file', 'mytags.db')
+    return 'mytags.db'
 
 
 def load_backup_dir():

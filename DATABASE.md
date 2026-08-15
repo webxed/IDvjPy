@@ -11,10 +11,10 @@ IDvjPy_term хранит тегированные команды в SQLite. Эт
 Путь задаётся в `settings.yml`:
 
 ```yaml
-database_tags_file: history_v2.db
+database_tags_file: mytags.db
 ```
 
-При старте `CommandRunner.on_mount()` читает этот ключ в `self.db_file` и вызывает `database.init_db()`. Если ключа нет, используется запасной `history.db` (`FILE_DATABASE`).
+При старте `CommandRunner.on_mount()` читает этот ключ в `self.db_file` и вызывает `database.init_db()`. Если ключа нет, используется запасной `mytags.db` (`FILE_DATABASE`).
 
 `history.txt` к SQLite не относится: туда пишутся только обычные shell-команды текущей сессии (без префиксов `# ? ! : | $`).
 
@@ -171,6 +171,6 @@ ORDER BY command
 Проверка глазами:
 
 ```bash
-sqlite3 history_v2.db "SELECT tag, tid, id, command FROM commands WHERE deleted = 0 ORDER BY tag, tid;"
-sqlite3 history_v2.db "SELECT tag, comment FROM tags ORDER BY tag;"
+sqlite3 mytags.db "SELECT tag, tid, id, command FROM commands WHERE deleted = 0 ORDER BY tag, tid;"
+sqlite3 mytags.db "SELECT tag, comment FROM tags ORDER BY tag;"
 ```

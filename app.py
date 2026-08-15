@@ -1151,7 +1151,7 @@ class CommandRunner(App):
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
     FILE_HISTORY = "history.txt"
-    FILE_DATABASE = "history.db"
+    FILE_DATABASE = "mytags.db"
     # FILE_BASHRC теперь уникален для каждого инстанса
     FILE_BASHRC = f".bashrc_term_{INSTANCE_NAME}"  # Файл для хранения локальных переменных
     FILE_BASH_ALIASES = ".bashrc" # Системный файл алиасов
@@ -1217,6 +1217,7 @@ class CommandRunner(App):
         self._search_pattern: str = ""
         self._search_hits: List[Tuple[Static, int]] = []
         self._search_index: int = -1
+        self._fresh_command_db: bool = False
 
     def _extract_path_token(self, text: str) -> str:
         """Возвращает последний токен для path completion."""
@@ -1603,10 +1604,12 @@ class CommandRunner(App):
         except (FileNotFoundError, KeyError, yaml.YAMLError):
             pass
 
-        # 2. Инициализация базы данных
+        # 2. Инициализация базы данных (файл создаётся, если его нет в клоне)
         try:
             database.init_db(self.db_file)
+            self._fresh_command_db = not database.has_live_commands(self.db_file)
         except Exception as e:
+            self._fresh_command_db = False
             self.sub_title = f"DB Error: {e}"
             self.set_timer(5, self.clear_subtitle)
 
@@ -1714,10 +1717,15 @@ class CommandRunner(App):
         # Создаем файл, если его нет (с блокировкой)
         if not os.path.exists(self.FILE_BASHRC):
             try:
-                with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f:
-                    acquire_file_lock(f, self.FILE_LOCK_TIMEOUT)
-                    f.write("# Terminal-specific environment variables\n")
-                    release_file_lock(f)
+                example = ".bashrc_term.example"
+                if os.path.exists(example):
+                    import shutil
+                    shutil.copy(example, self.FILE_BASHRC)
+                else:
+                    with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f:
+                        acquire_file_lock(f, self.FILE_LOCK_TIMEOUT)
+                        f.write("# Terminal-specific environment variables\n")
+                        release_file_lock(f)
             except FileLockTimeoutError:
                 with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f:
                     f.write("# Terminal-specific environment variables\n")
@@ -1780,6 +1788,13 @@ class CommandRunner(App):
     def on_ready(self) -> None:
         """Приветственное сообщение после загрузки UI."""
         self.add_block(InfoBlock(f"--- {self.TITLE} {self.VERSION} ---"))
+        if getattr(self, "_fresh_command_db", False):
+            self.add_block(InfoBlock(
+                f"Empty command database ({self.db_file}). "
+                "Save with #tag cmd, or load the handbook:\n"
+                "  python3 seed_linux_commands.py --seed\n"
+                "  python3 seed_k8s_chains.py --seed"
+            ))
         self._request_shift_enter_encoding()
 
     def _request_shift_enter_encoding(self) -> None:

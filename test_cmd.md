@@ -22,7 +22,7 @@ python3 -m pytest tests/ -v             # весь набор, включая JS
 python3 app.py
 ```
 
-Автотесты поднимают приложение сами, в изолированной tmp-директории (своя БД, не `history_v2.db`).
+Автотесты поднимают приложение сами, в изолированной tmp-директории (своя БД, не `mytags.db`).
 
 | Клавиша | Действие |
 |---------|----------|
@@ -479,8 +479,8 @@ cat ./al<Tab>
 ## Проверка БД после ручного прогона
 
 ```bash
-sqlite3 history_v2.db "SELECT tag, tid, command, comment FROM commands WHERE deleted = 0 ORDER BY tag, tid;"
-sqlite3 history_v2.db "SELECT tag, comment FROM tags ORDER BY tag;"
+sqlite3 mytags.db "SELECT tag, tid, command, comment FROM commands WHERE deleted = 0 ORDER BY tag, tid;"
+sqlite3 mytags.db "SELECT tag, comment FROM tags ORDER BY tag;"
 cat .bashrc_term_default
 cat history.txt
 ```

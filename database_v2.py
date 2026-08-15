@@ -16,6 +16,7 @@ Schema:
 import sqlite3
 import datetime
 import json
+import os
 from typing import Tuple
 
 def get_db_connection(db_file: str):
@@ -28,10 +29,18 @@ def init_db(db_file: str):
     """
     Initializes the database and creates all required tables.
 
+    Creates ``db_file`` (and parent directories) if they do not exist,
+    so a clone without a committed SQLite file still starts.
+
     Tables:
     - commands: stores tagged commands with tag-local IDs
     - tags: stores tag comments/descriptions
     """
+    if not db_file:
+        raise ValueError("database path is empty")
+    parent = os.path.dirname(os.path.abspath(db_file))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     conn = get_db_connection(db_file)
 
     # Commands table
@@ -131,6 +140,17 @@ def get_all_tags(db_file: str):
     tags = [row['tag'] for row in cursor.fetchall()]
     conn.close()
     return tags
+
+def has_live_commands(db_file: str) -> bool:
+    """True if the database has at least one non-deleted command."""
+    if not db_file or not os.path.exists(db_file):
+        return False
+    conn = get_db_connection(db_file)
+    row = conn.execute(
+        "SELECT 1 FROM commands WHERE deleted = 0 LIMIT 1"
+    ).fetchone()
+    conn.close()
+    return row is not None
 
 def get_commands_by_tag(db_file: str, tag: str):
     """Fetches all commands for a given tag with their tids and comments."""

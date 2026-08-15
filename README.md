@@ -139,12 +139,14 @@ python3 app.py --instance-name=user1   # отдельный .bashrc_term_user1
 ```yaml
 max_lines: 100000
 history_lines: 20
-database_tags_file: history_v2.db
+database_tags_file: mytags.db
 command_timeout: 10          # 0 = без таймаута
 terminal_mouse: true         # клик выделяет блок; false — выделение текста ОС
 ```
 
-Переменные читаются из `.bashrc_term_<instance>` (приоритет) и `.bashrc_term` (дополняет). Формат: `export VAR=val` или `VAR=val`.
+Переменные читаются из `.bashrc_term_<instance>` (приоритет) и `.bashrc_term` (дополняет). Формат: `export VAR=val` или `VAR=val`. Если файлов нет, при старте копируется [`.bashrc_term.example`](.bashrc_term.example).
+
+Файл БД (`database_tags_file`, по умолчанию `mytags.db`) **не входит в git**. При первом запуске создаётся пустая SQLite-схема. Справочник команд: `python3 seed_linux_commands.py --seed`. Цепочки k8s: `python3 seed_k8s_chains.py --seed`.
 
 ## Архитектура
 
