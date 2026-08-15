@@ -53,3 +53,29 @@ async def test_delete_tag_id_and_bang_execute(isolated_home):
 
         await submit(pilot, "#demo-1")
         assert "marked as deleted" in last_info(app).text_content
+
+
+async def test_restore_soft_deleted_command(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "#pack echo restore-me")
+        await submit(pilot, "#pack-1")
+        assert database.get_command_by_tid(app.db_file, "pack", 1) is None
+        await submit(pilot, "#pack!1")
+        assert "Restored pack[1]" in last_info(app).text_content
+        row = database.get_command_by_tid(app.db_file, "pack", 1)
+        assert row is not None
+        assert "restore-me" in row["command"]
+
+
+async def test_export_and_import_tag(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "#ship echo cargo-one")
+        await submit(pilot, ":export ship ship.json")
+        assert "Exported 1" in last_info(app).text_content
+        await submit(pilot, "#ship-")
+        await submit(pilot, ":import ship.json")
+        assert "Imported 1" in last_info(app).text_content
+        rows = database.get_commands_by_tag(app.db_file, "ship")
+        assert any("cargo-one" in row["command"] for row in rows)

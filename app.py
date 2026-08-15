@@ -67,6 +67,7 @@ try:
         expand_aliases,
         load_aliases_from_file,
         parse_bashrc_assignment,
+        parse_standalone_cd,
         substitute_variables,
     )
 except ImportError as e:
@@ -206,7 +207,7 @@ class LineNavigable:
         except Exception:
             pass
 
-    def enter_line_nav(self) -> None:
+    def enter_line_nav(self, notify: bool = True) -> None:
         """Включить режим курсора по строкам."""
         self.line_nav_active = True
         try:
@@ -221,12 +222,24 @@ class LineNavigable:
         self._paint_line_cursor()
         self._scroll_cursor_into_view()
         app = getattr(self, "app", None)
-        if app is not None:
+        if notify and app is not None:
             app.sub_title = "Line cursor: on (Enter copy+input, Shift+Enter/Ctrl+V append; F2/Esc off)"
             try:
                 app.set_timer(app.TIMER_DELAY, app.clear_subtitle)
             except Exception:
                 pass
+
+    def jump_to_line(self, idx: int, notify: bool = False) -> None:
+        """Перейти на строку и включить построчный курсор (поиск по журналу)."""
+        lines = self._nav_lines()
+        if not lines:
+            return
+        self.line_index = max(0, min(int(idx), len(lines) - 1))
+        if not getattr(self, "line_nav_active", False):
+            self.enter_line_nav(notify=notify)
+        else:
+            self._paint_line_cursor()
+            self._scroll_cursor_into_view()
 
     def exit_line_nav(self, notify: bool = True) -> None:
         """Выключить режим курсора по строкам."""
@@ -443,6 +456,16 @@ class LineNavigable:
     def action_journal_page_down(self) -> None:
         self.app._scroll_journal_and_focus(max(1, int(self.app._journal_page_size())))
 
+    def action_journal_search(self) -> None:
+        """/ в журнале — черновик :/ во вводе."""
+        self.app.set_input_draft(":/")
+
+    def action_search_next(self) -> None:
+        self.app._journal_search(self.app._search_pattern, direction=1, next_only=True)
+
+    def action_search_prev(self) -> None:
+        self.app._journal_search(self.app._search_pattern, direction=-1, next_only=True)
+
     def on_blur(self) -> None:
         self.exit_line_nav(notify=False)
 
@@ -453,6 +476,9 @@ _LINE_NAV_APPEND_BINDINGS = [
     Binding("ctrl+v", "append_line_or_paste", show=False, priority=True),
     Binding("pageup", "journal_page_up", show=False, priority=True),
     Binding("pagedown", "journal_page_down", show=False, priority=True),
+    Binding("slash", "journal_search", show=False, priority=True),
+    Binding("n", "search_next", show=False, priority=True),
+    Binding("shift+n", "search_prev", show=False, priority=True),
 ]
 
 
@@ -461,7 +487,7 @@ class CommandBlock(LineNavigable, Static):
     MAX_DISPLAY_LINES = 300  # Безопасный лимит для рендера в UI
     BINDINGS = _LINE_NAV_APPEND_BINDINGS
 
-    def __init__(self, header: str, raw_stdout: str, raw_stderr: str, return_code: int, **kwargs):
+    def __init__(self, header: str, raw_stdout: str, raw_stderr: str, return_code: int, source_command: str = "", **kwargs):
         """
         Инициализация блока команды.
 
@@ -475,6 +501,7 @@ class CommandBlock(LineNavigable, Static):
         self.raw_stdout = raw_stdout
         self.raw_stderr = raw_stderr
         self.return_code = return_code
+        self.source_command = source_command or ""
         self.collapsed = False
         self._truncated = False  # Флаг: вывод был обрезан
         self.pending = True  # True пока не пришёл результат из потока (run_command)
@@ -1119,7 +1146,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.50"  # Small last journal block is focusable when it cannot reach the viewport top
+    VERSION = "v1.1.52"  # Line-level journal search (:/ :n :N)
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -1159,6 +1186,13 @@ class CommandRunner(App):
     CMD_JSON = "json"
     CMD_INGRESS = "i"
     CMD_HELP = "?"
+    CMD_CD = "cd"
+    CMD_REPLAY = "r"
+    CMD_GREP = "g"
+    CMD_SEARCH_NEXT = "n"
+    CMD_SEARCH_PREV = "N"
+    CMD_EXPORT = "export"
+    CMD_IMPORT = "import"
 
     def __init__(self):
         """Инициализация состояния приложения."""
@@ -1179,6 +1213,10 @@ class CommandRunner(App):
         self.command_parser = CommandParser()
         # Kubernetes Ingress Analyzer
         self.ingress_analyzer: Optional[IngressAnalyzer] = None
+        self._old_cwd: Optional[str] = None
+        self._search_pattern: str = ""
+        self._search_hits: List[Tuple[Static, int]] = []
+        self._search_index: int = -1
 
     def _extract_path_token(self, text: str) -> str:
         """Возвращает последний токен для path completion."""
@@ -2374,6 +2412,10 @@ class CommandRunner(App):
         """Обработка команд управления (:q, :w, :h, :c)."""
         parts = user_input[1:].split()
         if not parts: return
+        raw = user_input[1:].strip()
+        if raw.startswith("/"):
+            self._journal_search(raw[1:])
+            return
         command = parts[0]
         if command == self.CMD_QUIT:
             self.exit()
@@ -2423,8 +2465,163 @@ class CommandRunner(App):
             self.handle_ingress_command(user_input[2:].strip())
         elif command == self.CMD_HELP:
             self._show_main_help()
+        elif command == self.CMD_CD:
+            if len(parts) == 1:
+                self.add_block(InfoBlock(f"cwd: {os.getcwd()}"))
+            else:
+                self._change_cwd(" ".join(parts[1:]))
+        elif command == self.CMD_REPLAY:
+            self._replay_focused_command()
+        elif command == self.CMD_GREP:
+            self._journal_search(" ".join(parts[1:]))
+        elif command == self.CMD_SEARCH_NEXT:
+            self._journal_search(self._search_pattern, direction=1, next_only=True)
+        elif command == self.CMD_SEARCH_PREV:
+            self._journal_search(self._search_pattern, direction=-1, next_only=True)
+        elif command == self.CMD_EXPORT:
+            self._export_tag(parts[1:])
+        elif command == self.CMD_IMPORT:
+            self._import_tag(parts[1:])
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
+
+    def _change_cwd(self, path: str) -> None:
+        """Меняет cwd процесса приложения (cd / :cd)."""
+        if path == "-":
+            target = self._old_cwd or os.environ.get("OLDPWD")
+            if not target:
+                self.add_block(InfoBlock("cd: OLDPWD not set"))
+                return
+        elif path == "":
+            target = os.path.expanduser("~")
+        else:
+            target = os.path.abspath(os.path.expanduser(path))
+        if not os.path.isdir(target):
+            self.add_block(InfoBlock(f"cd: {path}: not a directory"))
+            return
+        old = os.getcwd()
+        try:
+            os.chdir(target)
+        except OSError as e:
+            self.add_block(InfoBlock(f"cd: {e}"))
+            return
+        self._old_cwd = old
+        os.environ["OLDPWD"] = old
+        os.environ["PWD"] = os.getcwd()
+        self.add_block(InfoBlock(f"cwd: {os.getcwd()}"))
+
+    def _command_from_block(self, block: Optional[Static]) -> str:
+        if block is None:
+            return ""
+        cmd = (getattr(block, "source_command", None) or "").strip()
+        if cmd:
+            return cmd
+        header = getattr(block, "header", "") or ""
+        if " $ " in header:
+            return header.split(" $ ", 1)[1].strip()
+        return ""
+
+    def _replay_focused_command(self) -> None:
+        """Подставить команду сфокусированного (или последнего) блока во ввод."""
+        block = self.focused if isinstance(self.focused, CommandBlock) else None
+        if block is None:
+            blocks = list(self.query(CommandBlock))
+            block = blocks[-1] if blocks else None
+        cmd = self._command_from_block(block)
+        if not cmd:
+            self.add_block(InfoBlock("No command block to replay."))
+            return
+        self.set_input_draft(cmd)
+
+    def _collect_line_hits(self, lowered: str) -> List[Tuple[Static, int]]:
+        """Совпадения (блок, индекс строки) по видимым строкам журнала."""
+        hits: List[Tuple[Static, int]] = []
+        for block in self._journal_blocks():
+            if not isinstance(block, LineNavigable):
+                continue
+            if isinstance(block, CommandBlock) and getattr(block, "collapsed", False):
+                blob = f"{block.header}\n{block.raw_stdout}\n{block.raw_stderr}"
+                if lowered not in blob.lower():
+                    continue
+                block.collapsed = False
+                try:
+                    block.update(block._format_output())
+                except Exception:
+                    pass
+            for i, line in enumerate(block._nav_lines()):
+                plain = self._strip_formatting_tags(line)
+                if lowered in plain.lower():
+                    hits.append((block, i))
+        return hits
+
+    def _journal_search(
+        self, pattern: str, direction: int = 1, next_only: bool = False
+    ) -> None:
+        needle = (pattern or "").strip()
+        if not needle:
+            if next_only:
+                return
+            self.add_block(InfoBlock("Usage: :/text  or :g text  (then :n / :N)"))
+            return
+        lowered = needle.lower()
+        if not next_only or lowered != self._search_pattern or not self._search_hits:
+            self._search_pattern = lowered
+            self._search_hits = self._collect_line_hits(lowered)
+            self._search_index = -1
+            anchor = self.focused if isinstance(self.focused, LineNavigable) else None
+            if anchor is None:
+                try:
+                    anchor = self._visible_journal_block()
+                except Exception:
+                    anchor = None
+            if isinstance(anchor, LineNavigable):
+                for i, (block, _) in enumerate(self._search_hits):
+                    if block is anchor:
+                        self._search_index = i - 1
+                        break
+        if not self._search_hits:
+            self.add_block(InfoBlock(f"No journal matches for '{needle}'"))
+            return
+        n = len(self._search_hits)
+        step = -1 if direction < 0 else 1
+        self._search_index = (self._search_index + step) % n
+        chosen, line_idx = self._search_hits[self._search_index]
+        self._assign_journal_focus(chosen)
+        if isinstance(chosen, LineNavigable):
+            chosen.jump_to_line(line_idx, notify=False)
+        else:
+            try:
+                container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+                container.scroll_to_widget(chosen, animate=False)
+            except Exception:
+                pass
+        self.sub_title = f"search {self._search_index + 1}/{n}"
+        self.set_timer(3, self.clear_subtitle)
+
+    def _export_tag(self, args: List[str]) -> None:
+        if not args:
+            self.add_block(InfoBlock("Usage: :export <tag> [file.json]"))
+            return
+        tag = args[0]
+        path = args[1] if len(args) > 1 else f"{tag}.json"
+        try:
+            n = database.export_tag_to_file(self.db_file, tag, path)
+            self.add_block(InfoBlock(f"Exported {n} command(s) of '{tag}' to {path}"))
+        except Exception as e:
+            self.add_block(InfoBlock(f"Export error: {e}"))
+
+    def _import_tag(self, args: List[str]) -> None:
+        if not args:
+            self.add_block(InfoBlock("Usage: :import <file.json>"))
+            return
+        path = args[0]
+        try:
+            tag, n = database.import_tag_from_file(self.db_file, path)
+            self.add_block(InfoBlock(f"Imported {n} command(s) into tag '{tag}'"))
+        except FileNotFoundError:
+            self.add_block(InfoBlock(f"Error: file '{path}' not found."))
+        except Exception as e:
+            self.add_block(InfoBlock(f"Import error: {e}"))
 
     def handle_ingress_command(self, args: str) -> None:
         """
@@ -2535,6 +2732,11 @@ class CommandRunner(App):
   :json       - Open JSON viewer (from last block)
   :json <file>- Open JSON file in viewer
   :i          - Kubernetes Ingress Analyzer (see :i for details)
+  :cd [path]  - Show or change the app working directory (also: cd path)
+  :r          - Put the focused (or last) block command into the input
+  :/text  :g  - Search journal lines; :n / n next, :N / N prev. / on a block starts :/
+  :export tag [file] - Write one tag to JSON
+  :import file       - Insert commands from that JSON (new tids)
 
 [bold]Kubernetes Commands (prefix :i)[/bold]
   :i list             - List all ingresses
@@ -2547,6 +2749,7 @@ class CommandRunner(App):
   (none)     - Execute shell command
   > <cmd>    - Suspend TUI and run with a real TTY (htop, vim, ssh, less)
   #<tag>     - Save command to database with tag
+  #tag! / #tag!tid - Restore soft-deleted tag / command
   ?          - Query database (? all, ?<tag>, ?? grouped)
   !tag / !tag[tid] - Type ! to list tags [file, kube, log]; Tab picks a tag
                Then commands show as `<id> tag[tid]  full command`; Tab inserts `!tag[tid]`
@@ -2591,6 +2794,8 @@ class CommandRunner(App):
                the keys — use Ctrl+V. While the input is focused, Ctrl+V pastes
   Esc        - Turn mode off, stay on the block; Esc again returns to input
   F2         - Toggle mode on/off
+  /          - Start journal search (:/ in the input)
+  n / N      - Next / previous search hit (jumps to the matching line)
 
 [bold]Variables[/bold]
   Use $VAR in commands for variable substitution
@@ -3021,6 +3226,27 @@ class CommandRunner(App):
                         self.add_block(InfoBlock(f"Editing {tag}[{tid}] (last command). Edit and press Enter to save."))
                     else:
                         self.add_block(InfoBlock(f"Error: No active commands found for tag '{tag}'"))
+            except Exception as e:
+                self.add_block(InfoBlock(f"Database error: {e}"))
+            return
+
+        # Формат: #tag!  или  #tag!tid  — восстановить soft-delete
+        m = re.match(r"^([a-zA-Z_0-9]+)!(?:(\d+))?$", content)
+        if m:
+            tag, tid_str = m.groups()
+            try:
+                if tid_str:
+                    tid = int(tid_str)
+                    if database.restore_command_by_tid(self.db_file, tag, tid):
+                        self.add_block(InfoBlock(f"Restored {tag}[{tid}]."))
+                    else:
+                        self.add_block(InfoBlock(f"Error: deleted command {tag}[{tid}] not found."))
+                else:
+                    n = database.restore_commands_by_tag(self.db_file, tag)
+                    if n:
+                        self.add_block(InfoBlock(f"Restored {n} command(s) with tag '{tag}'."))
+                    else:
+                        self.add_block(InfoBlock(f"No deleted commands for tag '{tag}'."))
             except Exception as e:
                 self.add_block(InfoBlock(f"Database error: {e}"))
             return
@@ -3459,6 +3685,11 @@ class CommandRunner(App):
         if command not in self.session_history:
             self.session_history.append(command)
         self.session_history_pos = len(self.session_history)
+        expanded = self._expand_aliases(self._substitute_variables(command))
+        cd_path = parse_standalone_cd(expanded)
+        if cd_path is not None:
+            self._change_cwd(cd_path)
+            return
         self.run_command(command, stdin_data)
 
     def _scroll_results(self, delta: int) -> None:
@@ -3569,6 +3800,7 @@ class CommandRunner(App):
             raw_stdout="[Executing...]",
             raw_stderr="",
             return_code=0,
+            source_command=command,
         )
         initial_text = self._pending_block_display(block)
         block.text_content = initial_text

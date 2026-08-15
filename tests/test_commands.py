@@ -166,3 +166,87 @@ async def test_tty_prefix_no_space(isolated_home, monkeypatch):
         await submit(pilot, ">true")
         assert ran == ["true"]
         assert "Exit code: 3" in last_info(app).text_content
+
+
+async def test_cd_changes_app_cwd(isolated_home):
+    import os
+    from pathlib import Path
+
+    sub = isolated_home / "inner"
+    sub.mkdir()
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        start = os.getcwd()
+        await submit(pilot, "cd inner")
+        assert os.getcwd() == str(sub.resolve())
+        assert f"cwd: {sub.resolve()}" in last_info(app).text_content
+        await submit(pilot, "cd -")
+        assert os.getcwd() == start
+
+
+async def test_colon_cd_and_missing_dir(isolated_home):
+    import os
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        here = os.getcwd()
+        await submit(pilot, ":cd")
+        assert here in last_info(app).text_content
+        await submit(pilot, ":cd no-such-idivjopy-dir")
+        assert "not a directory" in last_info(app).text_content
+        assert os.getcwd() == here
+
+
+async def test_replay_puts_command_in_input(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "echo replay-me-please")
+        await wait_command_done(app)
+        await submit(pilot, ":r")
+        assert "echo replay-me-please" in input_widget(app).value
+
+
+async def test_journal_search_focuses_matching_block(isolated_home):
+    from app import CommandBlock
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "echo search-alpha-unique")
+        await wait_command_done(app)
+        await submit(pilot, "echo search-omega-unique")
+        await wait_command_done(app)
+        await submit(pilot, ":/search-alpha-unique")
+        assert isinstance(app.focused, CommandBlock)
+        assert "search-alpha-unique" in (app.focused.source_command or app.focused.header)
+        assert app.focused.line_nav_active
+        assert "search-alpha-unique" in app.focused._current_plain_line()
+
+
+async def test_journal_search_jumps_to_matching_line(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "seq 1 40")
+        await wait_command_done(app)
+        await submit(pilot, ":/27")
+        assert isinstance(app.focused, CommandBlock)
+        assert app.focused.line_nav_active
+        assert app.focused._current_plain_line().strip() == "27"
+
+
+async def test_journal_search_next_and_prev_line(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "python3 -c 'print(\"aaa-hit\"); print(\"bbb\"); print(\"aaa-hit\")'")
+        await wait_command_done(app)
+        await submit(pilot, ":/aaa-hit")
+        assert isinstance(app.focused, CommandBlock)
+        first = app.focused.line_index
+        assert "aaa-hit" in app.focused._current_plain_line()
+        await pilot.press("escape")
+        await submit(pilot, ":n")
+        second = app.focused.line_index
+        assert second > first
+        assert "aaa-hit" in app.focused._current_plain_line()
+        await pilot.press("escape")
+        await submit(pilot, ":N")
+        assert app.focused.line_index == first

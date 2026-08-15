@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.1.49**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.1.52**.
 
 Запуск: `python3 app.py`. Тесты: `python3 -m pytest tests/ -v`.
 
@@ -18,10 +18,11 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `#tag=` / `#tag=ID=` | Tag / command comment (ID = tid or global `<id>`) |
 | `#tag+` / `#tag+ID` | Edit last / by tid |
 | `#tag-` / `#tag-tid` | Soft-delete (strict `#tag-` only, not `-` inside cmd) |
+| `#tag!` / `#tag!tid` | Restore soft-deleted tag / command |
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` |
+| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:r` `:/` `:g` `:n` `:N` `:export` `:import` |
 | `\|` | Pipe focused/last block stdout |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
 
@@ -129,7 +130,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 | File | Purpose |
 |------|---------|
-| `app.py` | TUI (`CommandRunner`), v1.1.49 |
+| `app.py` | TUI (`CommandRunner`), v1.1.52 |
 | `database_v2.py` | SQLite tagged history |
 | `json_viewer.py` | JSON tree modal |
 | `ingress_analyzer.py` | `:i` k8s |
@@ -141,7 +142,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 ---
 
-## This session (v1.1.25 → v1.1.49)
+## This session (v1.1.25 → v1.1.52)
 
 - **Line-cursor mode** on a focused output block (`Enter`/`F2` on, `Esc`/`F2` off). Arrows move by lines; Home/End jump.
 - **Enter** in that mode copies the current line (rstrip) and returns to input without select-all.
@@ -163,3 +164,4 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 - **`> cmd`**: suspend the TUI and run with a real TTY (`> htop`, `> vim file`). No timeout, stdout is not captured. `>>` is left to the shell.
 - Click a journal block to focus it. Arrows / PgUp / PgDn scroll the journal and activate the **visible** block without jumping to its first line. `terminal_mouse: true` is required for clicks.
 - Alias bodies with `$1` / `$2` / `$@` substitute arguments (`klogin cluster` → `tsh kube login cluster`). Aliases without `$1` still append the rest of the line.
+- **`cd` / `:cd`**: change the app process cwd (standalone `cd`, no `&&`). `:r` puts the focused block command into the input. `:/text` / `:g` / `:n` / `:N` search journal **lines** (line-cursor on the hit; `n`/`N` on a focused block). `/` on a block starts `:/`. `#tag!` restores soft-delete. `:export` / `:import` one tag as JSON.

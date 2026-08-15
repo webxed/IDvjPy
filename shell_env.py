@@ -121,3 +121,25 @@ def expand_aliases(command: str, aliases: Mapping[str, str]) -> str:
         if extra:
             expanded = f"{expanded} {extra}".strip()
     return expanded
+
+
+def parse_standalone_cd(command: str) -> Optional[str]:
+    """
+    Если команда — одиночный cd без &&/||/|;, вернуть путь.
+    Пустая строка = домашний каталог. None = это не builtin cd.
+    """
+    raw = command.strip()
+    if not raw or re.search(r"[&|;]", raw):
+        return None
+    try:
+        tokens = shlex.split(raw, posix=True)
+    except ValueError:
+        tokens = raw.split()
+    if not tokens or tokens[0] != "cd":
+        return None
+    args = tokens[1:]
+    if not args:
+        return ""
+    if args[0] == "--":
+        return args[1] if len(args) > 1 else ""
+    return args[0]

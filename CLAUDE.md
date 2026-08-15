@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.1.49) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.1.52) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
@@ -62,10 +62,11 @@ The TUI lives mainly in `app.py`. Key types:
 | `#tag=` / `#tag=ID=` | Tag / command comment (ID = tid or global `<id>`) |
 | `#tag+` / `#tag+ID` | Load last / by tid into input for editing |
 | `#tag-` / `#tag-tid` | Soft-delete |
+| `#tag!` / `#tag!tid` | Restore soft-deleted tag / command |
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble refs into the input line |
-| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:c`, `:json`, `:i`, `:?`) |
+| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:r`, `:/`, `:n`, `:N`, `:export`) |
 | `\| cmd` | Pipe stdout from the focused block |
 | `$VAR=val` | Set env in `.bashrc_term_<instance>` and the current session |
 

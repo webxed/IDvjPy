@@ -15,6 +15,8 @@ Schema:
 """
 import sqlite3
 import datetime
+import json
+from typing import Tuple
 
 def get_db_connection(db_file: str):
     """Establishes a connection to the database."""
@@ -317,4 +319,83 @@ def update_command_by_tid(db_file: str, tag: str, tid: int, new_command: str):
     rows_updated = cursor.rowcount
     conn.close()
     return rows_updated > 0
+
+
+def restore_commands_by_tag(db_file: str, tag: str) -> int:
+    """Clears the soft-delete flag for all commands with this tag. Returns row count."""
+    conn = get_db_connection(db_file)
+    cursor = conn.execute(
+        "UPDATE commands SET deleted = 0 WHERE tag = ? AND deleted = 1",
+        (tag,),
+    )
+    conn.commit()
+    n = cursor.rowcount
+    conn.close()
+    return n
+
+
+def restore_command_by_tid(db_file: str, tag: str, tid: int) -> bool:
+    """Restores one soft-deleted command by tag and tid."""
+    conn = get_db_connection(db_file)
+    cursor = conn.execute(
+        "UPDATE commands SET deleted = 0 WHERE tag = ? AND tid = ? AND deleted = 1",
+        (tag, tid),
+    )
+    conn.commit()
+    ok = cursor.rowcount > 0
+    conn.close()
+    return ok
+
+
+def export_tag_to_file(db_file: str, tag: str, path: str) -> int:
+    """Writes live commands of one tag to JSON. Returns how many commands were written."""
+    commands = get_commands_by_tag(db_file, tag)
+    payload = {
+        "version": "2.0",
+        "schema_version": "v2",
+        "tag_filter": tag,
+        "tag_comments": {tag: get_tag_comment(db_file, tag)},
+        "commands": [
+            {
+                "tag": tag,
+                "tid": row["tid"],
+                "command": row["command"],
+                "comment": row["comment"] or "",
+            }
+            for row in commands
+        ],
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    return len(commands)
+
+
+def import_tag_from_file(db_file: str, path: str) -> Tuple[str, int]:
+    """Inserts commands from an export JSON (new tids). Returns (tag, count)."""
+    with open(path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+    commands = payload.get("commands") or []
+    tag = payload.get("tag_filter")
+    if not tag and commands:
+        tag = commands[0].get("tag")
+    if not tag:
+        raise ValueError("JSON has no tag_filter / commands[].tag")
+    comments = payload.get("tag_comments") or {}
+    comment = comments.get(tag) or ""
+    if comment:
+        set_tag_comment(db_file, tag, comment)
+    n = 0
+    for item in commands:
+        if item.get("deleted"):
+            continue
+        cmd = (item.get("command") or "").strip()
+        if not cmd:
+            continue
+        tid = add_command(db_file, cmd, tag)
+        cmd_comment = (item.get("comment") or "").strip()
+        if cmd_comment:
+            set_command_comment(db_file, tag, tid, cmd_comment)
+        n += 1
+    return tag, n
 

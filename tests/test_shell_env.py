@@ -37,3 +37,14 @@ def test_expand_aliases_positional_and_classic():
     assert "$1" not in expand_aliases("klogin my-cluster", aliases)
     assert expand_aliases("ll /tmp", aliases) == "ls -la /tmp"
     assert expand_aliases("echo hi", aliases) == "echo hi"
+
+
+def test_parse_standalone_cd():
+    from shell_env import parse_standalone_cd
+
+    assert parse_standalone_cd("cd") == ""
+    assert parse_standalone_cd("cd /tmp") == "/tmp"
+    assert parse_standalone_cd("cd -- /tmp") == "/tmp"
+    assert parse_standalone_cd("cd -") == "-"
+    assert parse_standalone_cd("cd foo && ls") is None
+    assert parse_standalone_cd("echo cd") is None
