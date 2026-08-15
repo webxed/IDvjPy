@@ -11,7 +11,6 @@ Usage:
 import subprocess
 import sys
 import argparse
-import shlex
 
 # Parse command-line arguments BEFORE importing dependencies
 def parse_arguments():
@@ -43,7 +42,6 @@ try:
     import datetime
     import os
     import json
-    import pyperclip
     import database_v2 as database
     import threading
     import re
@@ -60,6 +58,17 @@ try:
     from textual.containers import VerticalScroll, Vertical
     from json_viewer import JSONViewer
     from ingress_analyzer import IngressAnalyzer
+    from clipboard import (
+        copy_text_to_clipboards,
+        paste_text_from_clipboards,
+    )
+    from shell_env import (
+        RE_VAR_NAME,
+        expand_aliases,
+        load_aliases_from_file,
+        parse_bashrc_assignment,
+        substitute_variables,
+    )
 except ImportError as e:
     print(f"Error: Missing dependency - {e}", file=sys.stderr)
     print("Please install required dependencies:", file=sys.stderr)
@@ -73,11 +82,8 @@ except ImportError as e:
 
 RE_ANSI_TAGS = re.compile(r'\x1b\[[0-9;]*m')
 RE_RICH_TAGS = re.compile(r'\[/?[^\]]*\]')
-RE_VAR_SUBST = re.compile(r'\$([a-zA-Z_][a-zA-Z0-9_]*)\b')
-RE_ALIAS_POS = re.compile(r'\$\{(\d+|[@*])\}|\$(\d+|[@*])')
 RE_COMMAND_REFS = re.compile(r'(?<!!)!([a-zA-Z_0-9]+)\[(\d+)\]|(?<!!)!(\d+)')
 RE_SHELL_OPERATORS = re.compile(r'[&|;]')
-RE_VAR_NAME = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
 RE_TAG_TID = re.compile(r'^([a-zA-Z_0-9]+)\[(\d+)\]$')
 RE_TAG_MATCH = re.compile(r'^([a-zA-Z_0-9]+)\[(\d+)\]')
 RE_DIGIT_MATCH = re.compile(r'^(\d+)')
@@ -90,101 +96,6 @@ RE_BANG_PARTIAL = re.compile(
     r'^!([A-Za-z_][A-Za-z0-9_]*)(\[(\d*)(\]?))?$'
 )
 TOKEN_SEPS = frozenset(" \t|&;")
-
-
-def _linux_clipboard_cmd(selection: str, data: Optional[bytes] = None) -> Optional[bytes]:
-    """Чтение/запись X11/Wayland буферов. selection: clipboard | primary."""
-    writers_readers = []
-    if selection == "primary":
-        writers_readers = [
-            (["xclip", "-selection", "primary"], ["xclip", "-selection", "primary", "-o"]),
-            (["xsel", "--primary", "--input"], ["xsel", "--primary", "--output"]),
-            (["wl-copy", "--primary"], ["wl-paste", "--primary", "-n"]),
-        ]
-    else:
-        writers_readers = [
-            (["xclip", "-selection", "clipboard"], ["xclip", "-selection", "clipboard", "-o"]),
-            (["xsel", "--clipboard", "--input"], ["xsel", "--clipboard", "--output"]),
-            (["wl-copy"], ["wl-paste", "-n"]),
-        ]
-    if data is not None:
-        for write_cmd, _read_cmd in writers_readers:
-            try:
-                completed = subprocess.run(
-                    write_cmd,
-                    input=data,
-                    capture_output=True,
-                    timeout=0.4,
-                    check=False,
-                )
-                if completed.returncode == 0:
-                    return b""
-            except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-                continue
-        return None
-    for _write_cmd, read_cmd in writers_readers:
-        try:
-            completed = subprocess.run(
-                read_cmd,
-                capture_output=True,
-                timeout=0.4,
-                check=False,
-            )
-            if completed.returncode == 0:
-                return completed.stdout
-        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-            continue
-    return None
-
-
-def copy_text_to_clipboards(text: str, app: Optional["CommandRunner"] = None) -> None:
-    """
-    Копирует текст во все буферы, которые читает терминал:
-    Textual (Ctrl+V в Input), OSC 52, CLIPBOARD и PRIMARY (Shift+Insert).
-    """
-    payload = text if text is not None else ""
-    if app is not None:
-        try:
-            app.copy_to_clipboard(payload)
-        except Exception:
-            pass
-        try:
-            driver = getattr(app, "_driver", None)
-            if driver is not None:
-                import base64
-                b64 = base64.b64encode(payload.encode("utf-8")).decode("ascii")
-                driver.write(f"\x1b]52;p;{b64}\a")
-        except Exception:
-            pass
-    try:
-        pyperclip.copy(payload)
-    except Exception:
-        pass
-    encoded = payload.encode("utf-8")
-    _linux_clipboard_cmd("clipboard", encoded)
-    _linux_clipboard_cmd("primary", encoded)
-
-
-def paste_text_from_clipboards(app: Optional["CommandRunner"] = None) -> str:
-    """Сначала системный CLIPBOARD/PRIMARY, затем внутренний буфер Textual."""
-    try:
-        clip = pyperclip.paste() or ""
-        if clip:
-            return clip
-    except Exception:
-        pass
-    for selection in ("clipboard", "primary"):
-        raw = _linux_clipboard_cmd(selection)
-        if raw:
-            try:
-                decoded = raw.decode("utf-8", errors="replace")
-            except Exception:
-                continue
-            if decoded:
-                return decoded
-    if app is not None:
-        return getattr(app, "clipboard", None) or ""
-    return ""
 
 
 # ============================================================================
@@ -1753,20 +1664,7 @@ class CommandRunner(App):
             self.set_timer(self.DB_RELOAD_INTERVAL, self._periodic_db_reload)
 
     def _parse_bashrc_assignment(self, line: str) -> Optional[tuple]:
-        """Разбирает `export VAR=val` или `VAR=val`. Комментарии пропускает."""
-        line = line.strip()
-        if not line or line.startswith("#"):
-            return None
-        if line.startswith("export "):
-            line = line[7:].strip()
-        if "=" not in line:
-            return None
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if not RE_VAR_NAME.match(key):
-            return None
-        value = value.strip().strip('"').strip("'")
-        return key, value
+        return parse_bashrc_assignment(line)
 
     def load_bashrc(self) -> None:
         """
@@ -1837,20 +1735,7 @@ class CommandRunner(App):
             return
 
         try:
-            with open(alias_file, "r", encoding=self.ENCODING) as f:
-                for line in f:
-                    line = line.strip()
-                    # Ищем строки, начинающиеся с alias
-                    if line.startswith("alias ") and "=" in line:
-                        # Убираем "alias "
-                        alias_def = line[6:]
-                        # Разделяем на имя и значение (только по первому знаку =)
-                        parts = alias_def.split("=", 1)
-                        if len(parts) == 2:
-                            alias_name = parts[0].strip()
-                            # Очищаем значение от кавычек (одинарных или двойных)
-                            alias_value = parts[1].strip().strip('"').strip("'")
-                            self.aliases[alias_name] = alias_value
+            self.aliases.update(load_aliases_from_file(alias_file, self.ENCODING))
         except Exception as e:
             self.add_block(InfoBlock(f"Warning: Error loading aliases from {alias_file}: {e}"))
 
@@ -3628,70 +3513,10 @@ class CommandRunner(App):
             input_widget.cursor_position = 0
 
     def _substitute_variables(self, command: str) -> str:
-        """
-        Заменяет переменные вида $VAR_NAME на значения.
-        Приоритет: self.local_env > os.environ.
-        """
-        def replacer(match):
-            var_name = match.group(1)
-            if var_name in self.local_env:
-                return self.local_env[var_name]
-            if var_name in os.environ:
-                return os.environ[var_name]
-            # Если переменной нет нигде, оставляем $NAME как есть (чтобы shell сам вывел ошибку)
-            return match.group(0)
-
-        return RE_VAR_SUBST.sub(replacer, command)
+        return substitute_variables(command, self.local_env)
 
     def _expand_aliases(self, command: str) -> str:
-        """
-        Раскрывает алиас в первом слове.
-
-        Если в теле есть $1, $2, $@ / $* — подставляет аргументы (как у shell-функции).
-        Иначе классический alias: тело + оставшаяся строка.
-        """
-        raw = command.strip()
-        if not raw:
-            return command
-        try:
-            tokens = shlex.split(raw, posix=True)
-        except ValueError:
-            tokens = raw.split()
-        if not tokens:
-            return command
-        name = tokens[0]
-        if name not in self.aliases:
-            return command
-        body = self.aliases[name]
-        args = tokens[1:]
-        if not RE_ALIAS_POS.search(body):
-            if len(raw.split(None, 1)) > 1:
-                return f"{body} {raw.split(None, 1)[1]}"
-            return body
-
-        used_max = 0
-        used_all = False
-
-        def repl(match: re.Match) -> str:
-            nonlocal used_max, used_all
-            token = match.group(1) or match.group(2)
-            if token in ("@", "*"):
-                used_all = True
-                return " ".join(shlex.quote(a) for a in args)
-            idx = int(token)
-            if idx == 0:
-                return shlex.quote(name)
-            used_max = max(used_max, idx)
-            if 1 <= idx <= len(args):
-                return shlex.quote(args[idx - 1])
-            return ""
-
-        expanded = RE_ALIAS_POS.sub(repl, body).strip()
-        if not used_all and used_max < len(args):
-            extra = " ".join(shlex.quote(a) for a in args[used_max:])
-            if extra:
-                expanded = f"{expanded} {extra}".strip()
-        return expanded
+        return expand_aliases(command, self.aliases)
 
     def _execute_in_thread(self, block: CommandBlock, command: str, stdin_data: Optional[str]) -> None:
         """

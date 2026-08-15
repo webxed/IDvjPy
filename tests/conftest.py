@@ -39,7 +39,7 @@ def isolated_home(tmp_path, monkeypatch):
             return b""
         return linux_clip.get(selection) or None
 
-    monkeypatch.setattr("app._linux_clipboard_cmd", fake_linux)
+    monkeypatch.setattr("clipboard._linux_clipboard_cmd", fake_linux)
     return tmp_path
 
 

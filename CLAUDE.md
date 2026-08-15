@@ -44,6 +44,8 @@ The TUI lives mainly in `app.py`. Key types:
 
 - **`database_v2.py`**: SQLite tagged history (`database.py` is unused)
 - **`command_parser_v2.py`**: `!tag[tid]` / `!ID` / `!!` assembly
+- **`clipboard.py`**: CLIPBOARD / PRIMARY / OSC 52
+- **`shell_env.py`**: `.bashrc_term` vars, `~/.bashrc` aliases, `$1` substitution
 - **`json_viewer.py`**: JSON tree modal
 - **`ingress_analyzer.py`**: `:i` Kubernetes helper
 - **`app.css`**: Textual styling
