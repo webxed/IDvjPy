@@ -127,3 +127,42 @@ async def test_ctrl_d_clears_input_line(isolated_home):
         await pilot.pause()
         assert inp.value == ""
         assert inp.has_focus
+
+
+async def test_tty_prefix_empty_shows_usage(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ">")
+        assert "Usage:" in last_info(app).text_content
+        await submit(pilot, ">   ")
+        assert "Usage:" in last_info(app).text_content
+
+
+async def test_tty_prefix_runs_substituted_command(isolated_home, monkeypatch):
+    ran = []
+
+    def fake_tty(self, command):
+        ran.append(command)
+        return 0
+
+    monkeypatch.setattr(CommandRunner, "_run_in_tty", fake_tty)
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "$HOST=example.com")
+        await submit(pilot, "> ssh $HOST")
+        assert ran == ["ssh example.com"]
+        text = last_info(app).text_content
+        assert "TTY:" in text
+        assert "ssh example.com" in text
+        assert "Exit code: 0" in text
+        assert "> ssh $HOST" in app.session_history
+
+
+async def test_tty_prefix_no_space(isolated_home, monkeypatch):
+    ran = []
+    monkeypatch.setattr(CommandRunner, "_run_in_tty", lambda self, command: ran.append(command) or 3)
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ">true")
+        assert ran == ["true"]
+        assert "Exit code: 3" in last_info(app).text_content

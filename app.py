@@ -11,6 +11,7 @@ Usage:
 import subprocess
 import sys
 import argparse
+import shlex
 
 # Parse command-line arguments BEFORE importing dependencies
 def parse_arguments():
@@ -51,7 +52,7 @@ try:
     from typing import Any, List, Optional, Dict, Tuple, Union
     from command_parser_v2 import CommandParser
     from textual import events
-    from textual.app import App, ComposeResult
+    from textual.app import App, ComposeResult, SuspendNotSupported
     from textual.binding import Binding
     from textual.widgets import Header, Footer, Input, Static
     from rich.markup import escape
@@ -73,6 +74,7 @@ except ImportError as e:
 RE_ANSI_TAGS = re.compile(r'\x1b\[[0-9;]*m')
 RE_RICH_TAGS = re.compile(r'\[/?[^\]]*\]')
 RE_VAR_SUBST = re.compile(r'\$([a-zA-Z_][a-zA-Z0-9_]*)\b')
+RE_ALIAS_POS = re.compile(r'\$\{(\d+|[@*])\}|\$(\d+|[@*])')
 RE_COMMAND_REFS = re.compile(r'(?<!!)!([a-zA-Z_0-9]+)\[(\d+)\]|(?<!!)!(\d+)')
 RE_SHELL_OPERATORS = re.compile(r'[&|;]')
 RE_VAR_NAME = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
@@ -434,6 +436,18 @@ class LineNavigable:
         self._scroll_cursor_into_view()
         return True
 
+    def on_click(self, event: events.Click) -> None:
+        """Клик по блоку в журнале — выделить его, не прокручивая к началу."""
+        prev = getattr(self.app, "focused", None)
+        if (
+            prev is not None
+            and prev is not self
+            and isinstance(prev, LineNavigable)
+            and getattr(prev, "line_nav_active", False)
+        ):
+            prev.exit_line_nav(notify=False)
+        self.focus(scroll_visible=False)
+
     def jump_line(self, where: str) -> None:
         if not getattr(self, "line_nav_active", False):
             return
@@ -499,10 +513,12 @@ class LineNavigable:
         if event.key == "up":
             if not self.move_line(-1):
                 self.app._scroll_results(-1)
+                self.app.call_after_refresh(self.app._focus_visible_block)
             event.stop()
         elif event.key == "down":
             if not self.move_line(1):
                 self.app._scroll_results(1)
+                self.app.call_after_refresh(self.app._focus_visible_block)
             event.stop()
         elif event.key == "home":
             self.jump_line("home")
@@ -1098,13 +1114,19 @@ class CommandInput(Input):
         """Колесо над полем ввода — прокрутка области вывода команд (не истории сессии)."""
         app = self.app
         container = app.query_one(f"#{app.ID_RESULTS_CONTAINER}", VerticalScroll)
-        container.scroll_relative(1)
+        container.scroll_relative(1, animate=False)
+        inp = app.query_one(f"#{app.ID_INPUT}", Input)
+        if not inp.has_focus:
+            app.call_after_refresh(app._focus_visible_block)
         event.stop()
 
     def on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
         app = self.app
         container = app.query_one(f"#{app.ID_RESULTS_CONTAINER}", VerticalScroll)
-        container.scroll_relative(-1)
+        container.scroll_relative(-1, animate=False)
+        inp = app.query_one(f"#{app.ID_INPUT}", Input)
+        if not inp.has_focus:
+            app.call_after_refresh(app._focus_visible_block)
         event.stop()
 
 
@@ -1136,6 +1158,32 @@ class QueryResultsBlock(LineNavigable, Static):
         return self.text_content
 
 
+class JournalScroll(VerticalScroll):
+    """Журнал: клавиши скролла активируют видимый блок (родитель перехватывает ↑/↓/PgUp раньше App)."""
+
+    def action_scroll_up(self) -> None:
+        self.scroll_relative(y=-1, animate=False)
+        self.app._focus_visible_block()
+        self.app.call_after_refresh(self.app._focus_visible_block)
+
+    def action_scroll_down(self) -> None:
+        self.scroll_relative(y=1, animate=False)
+        self.app._focus_visible_block()
+        self.app.call_after_refresh(self.app._focus_visible_block)
+
+    def action_page_up(self) -> None:
+        height = max(1, int(self.size.height) - 1)
+        self.scroll_relative(y=-height, animate=False)
+        self.app._focus_visible_block()
+        self.app.call_after_refresh(self.app._focus_visible_block)
+
+    def action_page_down(self) -> None:
+        height = max(1, int(self.size.height) - 1)
+        self.scroll_relative(y=height, animate=False)
+        self.app._focus_visible_block()
+        self.app.call_after_refresh(self.app._focus_visible_block)
+
+
 class CommandRunner(App):
     """Textual приложение для запуска shell команд с поддержкой переменных."""
 
@@ -1149,8 +1197,8 @@ class CommandRunner(App):
         Binding("d", "toggle_dark", "Toggle dark mode", show=False),
         Binding("up", "history_prev", "Previous command", priority=False, show=False),
         Binding("down", "history_next", "Next command", priority=False, show=False),
-        Binding("pageup", "focus_previous", "Prev Block", show=False),
-        Binding("pagedown", "focus_next", "Next Block", show=False),
+        Binding("pageup", "journal_page_up", "Prev Block", show=False),
+        Binding("pagedown", "journal_page_down", "Next Block", show=False),
         Binding("shift+insert", "paste_clipboard", "Paste", show=False),
         Binding("ctrl+v", "paste_clipboard", "Paste", show=False),
         Binding("space", "toggle_block_collapse", "Collapse", show=False),
@@ -1159,7 +1207,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.1.45"  # Footer hint order: Esc, F2, F3, F5, F6
+    VERSION = "v1.1.49"  # Alias $1/$2/$@ substitution from trailing arguments
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -1190,6 +1238,7 @@ class CommandRunner(App):
     PREFIX_DOUBLE_BANG = "!!"
     PREFIX_PIPE = "|"
     PREFIX_VAR = "$" # Новый префикс для переменных
+    PREFIX_TTY = ">"
     
     CMD_QUIT = "q"
     CMD_WRITE = "w"
@@ -1248,7 +1297,7 @@ class CommandRunner(App):
             return False
 
         token = self._extract_path_token(text)
-        if token.startswith(("!", "#", "?", ":", "$")):
+        if token.startswith(("!", "#", "?", ":", "$", ">")):
             return False
         if self._last_token_is_path_like(token):
             return True
@@ -1520,7 +1569,7 @@ class CommandRunner(App):
         # Если нажата печатаемая клавиша и фокус не на input — переводим фокус
         # Но не перехватываем если фокус на CommandBlock (для сворачивания Space)
         focused = self.focused
-        if event.is_printable and not isinstance(focused, CommandBlock):
+        if event.is_printable and not isinstance(focused, LineNavigable):
             input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
             if not input_widget.has_focus:
                 input_widget.focus()
@@ -1567,12 +1616,20 @@ class CommandRunner(App):
     def on_mouse_scroll_down(self, event) -> None:
         """Скролл вниз всегда идёт в контейнер вывода."""
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
-        container.scroll_relative(1)
+        container.scroll_relative(1, animate=False)
+        inp = self.query_one(f"#{self.ID_INPUT}", Input)
+        if not inp.has_focus:
+            self.call_after_refresh(self._focus_visible_block)
+        event.stop()
 
     def on_mouse_scroll_up(self, event) -> None:
         """Скролл вверх всегда идёт в контейнер вывода."""
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
-        container.scroll_relative(-1)
+        container.scroll_relative(-1, animate=False)
+        inp = self.query_one(f"#{self.ID_INPUT}", Input)
+        if not inp.has_focus:
+            self.call_after_refresh(self._focus_visible_block)
+        event.stop()
 
     def on_mount(self) -> None:
         """
@@ -1826,7 +1883,7 @@ class CommandRunner(App):
         yield CommandInput(placeholder="Enter command (type 2+ chars for completion)", id=self.ID_INPUT)
         self._completion_list = CompletionList()
         yield self._completion_list
-        yield VerticalScroll(id=self.ID_RESULTS_CONTAINER)
+        yield JournalScroll(id=self.ID_RESULTS_CONTAINER)
         yield Footer()
 
     def action_focus_input(self) -> None:
@@ -1860,9 +1917,102 @@ class CommandRunner(App):
             self._completion_list.hide()
         blocks = self._journal_blocks()
         if blocks:
-            blocks[-1].focus()
+            blocks[-1].focus(scroll_visible=False)
             return
         self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll).focus()
+
+    def _visible_journal_block(self) -> Optional[Static]:
+        """Блок, которому принадлежит верхняя видимая строка журнала."""
+        try:
+            container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+        except Exception:
+            return None
+        blocks = self._journal_blocks()
+        if not blocks:
+            return None
+        view_top = int(container.scroll_y)
+        view_h = max(1, int(container.size.height) or 1)
+        view_bottom = view_top + view_h
+        for block in blocks:
+            region = getattr(block, "virtual_region", None) or block.region
+            top = int(getattr(region, "y", 0))
+            height = max(1, int(getattr(region, "height", 1) or 1))
+            if top <= view_top < top + height:
+                return block
+        chosen = None
+        best = 0
+        for block in blocks:
+            region = getattr(block, "virtual_region", None) or block.region
+            top = int(getattr(region, "y", 0))
+            height = max(1, int(getattr(region, "height", 1) or 1))
+            overlap = min(top + height, view_bottom) - max(top, view_top)
+            if overlap > best:
+                best = overlap
+                chosen = block
+        return chosen or blocks[-1]
+
+    def _focus_visible_block(self) -> None:
+        """Сделать видимый блок активным, не прокручивая журнал к его началу."""
+        chosen = self._visible_journal_block()
+        if chosen is None:
+            return
+        prev = self.focused
+        if (
+            prev is not None
+            and prev is not chosen
+            and isinstance(prev, LineNavigable)
+            and getattr(prev, "line_nav_active", False)
+        ):
+            prev.exit_line_nav(notify=False)
+        if prev is chosen:
+            return
+        try:
+            self.screen.set_focus(chosen, scroll_visible=False)
+        except Exception:
+            chosen.focus(scroll_visible=False)
+
+    def _enter_journal_view(self) -> None:
+        """Из ввода: фокус на последний командный блок, без прыжка вьюпорта."""
+        blocks = self._journal_blocks()
+        if not blocks:
+            return
+        commands = [b for b in blocks if isinstance(b, CommandBlock)]
+        target = commands[-1] if commands else blocks[-1]
+        try:
+            self.screen.set_focus(target, scroll_visible=False)
+        except Exception:
+            target.focus(scroll_visible=False)
+
+    def action_journal_page_up(self) -> None:
+        """PgUp: в журнале — страница вверх и активный видимый блок; из ввода — войти в просмотр."""
+        if getattr(self, "_completion_list", None) is not None:
+            self._completion_list.hide()
+        inp = self.query_one(f"#{self.ID_INPUT}", Input)
+        if inp.has_focus:
+            self._enter_journal_view()
+            return
+        self._scroll_results(-max(1, int(self._journal_page_size())))
+        self._focus_visible_block()
+        self.call_after_refresh(self._focus_visible_block)
+
+    def action_journal_page_down(self) -> None:
+        """PgDn: страница вниз, активный видимый блок; из ввода — войти в просмотр."""
+        if getattr(self, "_completion_list", None) is not None:
+            self._completion_list.hide()
+        inp = self.query_one(f"#{self.ID_INPUT}", Input)
+        if inp.has_focus:
+            self._enter_journal_view()
+            return
+        self._scroll_results(max(1, int(self._journal_page_size())))
+        self._focus_visible_block()
+        self.call_after_refresh(self._focus_visible_block)
+
+    def _journal_page_size(self) -> int:
+        try:
+            container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+            return max(1, int(container.size.height) - 1)
+        except Exception:
+            return 10
 
     def clear_all_blocks(self) -> None:
         """
@@ -2168,6 +2318,8 @@ class CommandRunner(App):
             self.handle_pipe_command(user_input)
         elif user_input.startswith(self.PREFIX_VAR):
             self.handle_variable_assignment(user_input)
+        elif user_input.startswith(self.PREFIX_TTY) and not user_input.startswith(">>"):
+            self.handle_tty_command(user_input)
         elif has_command_refs:
             # Команды с ссылками (!tag[tid] или !ID), даже с операторами
             # Раскрываем ссылки и вставляем в input, НЕ выполняем
@@ -2428,6 +2580,7 @@ class CommandRunner(App):
 
 [bold]Command Prefixes[/bold]
   (none)     - Execute shell command
+  > <cmd>    - Suspend TUI and run with a real TTY (htop, vim, ssh, less)
   #<tag>     - Save command to database with tag
   ?          - Query database (? all, ?<tag>, ?? grouped)
   !tag / !tag[tid] - Type ! to list tags [file, kube, log]; Tab picks a tag
@@ -2436,11 +2589,17 @@ class CommandRunner(App):
   !N         - Execute command by ID from last query
   |<cmd>     - Pipe focused block output to command
   $VAR=val   - Set environment variable
+  aliases    - From ~/.bashrc. If the body has $1 / $2 / $@, args are substituted
+               (klogin cluster → tsh kube login cluster). Else the rest of the line
+               is appended as in a classic alias.
 
 [bold]Navigation[/bold]
   ↑/↓        - History in input; journal scroll when a block is focused
   Tab        - Focus last journal block (from input), including :h / :?
-  PgUp/PgDn  - Move focus between output blocks
+  Click      - Focus a journal block without jumping to its start
+               (needs terminal_mouse: true in settings.yml)
+  PgUp/PgDn  - Scroll the journal a page; the visible block becomes active
+               (does not jump to the start of the block). From input: enter viewing.
   Esc        - Return to input (see also line-cursor mode)
   Space      - Toggle block collapse
   ← / →      - Collapse / expand focused block
@@ -3276,7 +3435,55 @@ class CommandRunner(App):
 
         input_for_pipe = source_block.raw_stdout
         self.handle_normal_command(pipe_command, stdin_data=input_for_pipe)
-            
+
+    def handle_tty_command(self, user_input: str) -> None:
+        """
+        `> cmd` — приостановить TUI и выполнить команду с настоящим TTY.
+        Нужно для htop, vim, less, ssh и других интерактивных программ.
+        `>>` не перехватывается (это редирект shell).
+        """
+        command = user_input[1:].strip()
+        if not command:
+            self.add_block(InfoBlock("Usage: > <command>  (real TTY, e.g. > htop)"))
+            return
+
+        if RE_COMMAND_REFS.search(command):
+            resolved = self._resolve_command_references(command)
+            if not resolved:
+                self.add_block(InfoBlock("Error: Unable to resolve command references."))
+                return
+            command = resolved
+
+        if user_input not in self.session_history:
+            self.session_history.append(user_input)
+        self.session_history_pos = len(self.session_history)
+
+        final_command = self._expand_aliases(self._substitute_variables(command))
+        try:
+            return_code = self._run_in_tty(final_command)
+        except SuspendNotSupported:
+            self.add_block(InfoBlock(
+                "Error: this terminal cannot suspend the TUI for interactive commands."
+            ))
+            return
+        except Exception as e:
+            self.add_block(InfoBlock(f"TTY error: {e}"))
+            return
+        self.add_block(InfoBlock(
+            f"TTY: {escape(final_command)}\nExit code: {return_code}"
+        ))
+        self._request_shift_enter_encoding()
+
+    def _run_in_tty(self, command: str) -> int:
+        """Отдаёт терминал дочернему процессу (без таймаута и захвата stdout)."""
+        with self.suspend():
+            completed = subprocess.run(
+                command,
+                shell=True,
+                executable="/bin/bash",
+            )
+            return completed.returncode
+
     def handle_normal_command(self, command: str, stdin_data: Optional[str] = None) -> None:
         """
         Обертка для выполнения обычной команды с обновлением истории.
@@ -3292,7 +3499,7 @@ class CommandRunner(App):
     def _scroll_results(self, delta: int) -> None:
         """Прокрутка журнала команд (когда фокус не на поле ввода)."""
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
-        container.scroll_relative(delta)
+        container.scroll_relative(delta, animate=False)
 
     def action_history_prev(self) -> None:
         """Up: история сессии в input; в журнале — скролл или строки (если line cursor)."""
@@ -3308,6 +3515,7 @@ class CommandRunner(App):
             ):
                 return
             self._scroll_results(-1)
+            self.call_after_refresh(self._focus_visible_block)
             return
         if not self.session_history: return
         if self.session_history_pos > 0:
@@ -3329,6 +3537,7 @@ class CommandRunner(App):
             ):
                 return
             self._scroll_results(1)
+            self.call_after_refresh(self._focus_visible_block)
             return
         if not self.session_history: return
         if self.session_history_pos < len(self.session_history) - 1:
@@ -3358,24 +3567,53 @@ class CommandRunner(App):
 
     def _expand_aliases(self, command: str) -> str:
         """
-        Заменяет алиасы в команде на их значения.
-        Работает с первым словом команды.
+        Раскрывает алиас в первом слове.
+
+        Если в теле есть $1, $2, $@ / $* — подставляет аргументы (как у shell-функции).
+        Иначе классический alias: тело + оставшаяся строка.
         """
-        # Разбиваем команду на части, сохраняя кавычки
-        parts = command.strip().split(None, 1) if command.strip() else []
-        if not parts:
+        raw = command.strip()
+        if not raw:
             return command
+        try:
+            tokens = shlex.split(raw, posix=True)
+        except ValueError:
+            tokens = raw.split()
+        if not tokens:
+            return command
+        name = tokens[0]
+        if name not in self.aliases:
+            return command
+        body = self.aliases[name]
+        args = tokens[1:]
+        if not RE_ALIAS_POS.search(body):
+            if len(raw.split(None, 1)) > 1:
+                return f"{body} {raw.split(None, 1)[1]}"
+            return body
 
-        first_word = parts[0]
-        # Проверяем, является ли первое слово алиасом
-        if first_word in self.aliases:
-            alias_value = self.aliases[first_word]
-            # Если есть остаток команды, добавляем его
-            if len(parts) > 1:
-                return f"{alias_value} {parts[1]}"
-            return alias_value
+        used_max = 0
+        used_all = False
 
-        return command
+        def repl(match: re.Match) -> str:
+            nonlocal used_max, used_all
+            token = match.group(1) or match.group(2)
+            if token in ("@", "*"):
+                used_all = True
+                return " ".join(shlex.quote(a) for a in args)
+            idx = int(token)
+            if idx == 0:
+                return shlex.quote(name)
+            used_max = max(used_max, idx)
+            if 1 <= idx <= len(args):
+                return shlex.quote(args[idx - 1])
+            return ""
+
+        expanded = RE_ALIAS_POS.sub(repl, body).strip()
+        if not used_all and used_max < len(args):
+            extra = " ".join(shlex.quote(a) for a in args[used_max:])
+            if extra:
+                expanded = f"{expanded} {extra}".strip()
+        return expanded
 
     def _execute_in_thread(self, block: CommandBlock, command: str, stdin_data: Optional[str]) -> None:
         """

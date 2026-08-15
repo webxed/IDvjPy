@@ -252,6 +252,73 @@ async def test_arrows_scroll_journal_when_block_focused(isolated_home):
         _ = y_before
 
 
+async def test_click_selects_block_without_leaving_input_only(isolated_home):
+    from app import CommandBlock
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "echo click-first")
+        await wait_command_done(app)
+        await submit(pilot, "echo click-second")
+        await wait_command_done(app)
+        blocks = list(app.query(CommandBlock))
+        first, second = blocks[0], blocks[-1]
+        await pilot.click(first)
+        await pilot.pause()
+        assert app.focused is first
+        await pilot.click(second)
+        await pilot.pause()
+        assert app.focused is second
+
+
+async def test_pageup_does_not_jump_to_block_start(isolated_home):
+    from textual.containers import VerticalScroll
+    from app import CommandBlock
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "seq 1 40")
+        await wait_command_done(app)
+        await submit(pilot, "seq 41 80")
+        await wait_command_done(app)
+        container = app.query_one("#results-container", VerticalScroll)
+        await pilot.press("escape")
+        await pilot.press("pageup")
+        await pilot.pause()
+        assert isinstance(app.focused, CommandBlock)
+        y_before = float(container.scroll_y)
+        await pilot.press("pageup")
+        await pilot.pause()
+        y_after = float(container.scroll_y)
+        assert isinstance(app.focused, CommandBlock)
+        assert y_after <= y_before
+        if y_before > 12:
+            assert y_after > 0
+
+
+async def test_keyboard_scroll_activates_visible_block(isolated_home):
+    from app import CommandBlock, LineNavigable
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "echo block-alpha")
+        await wait_command_done(app)
+        await submit(pilot, "seq 1 50")
+        await wait_command_done(app)
+        await submit(pilot, "echo block-omega")
+        await wait_command_done(app)
+        blocks = list(app.query(CommandBlock))
+        last = blocks[-1]
+        await pilot.click(last)
+        await pilot.pause()
+        assert app.focused is last
+        for _ in range(25):
+            await pilot.press("pageup")
+            await pilot.pause()
+        assert isinstance(app.focused, LineNavigable)
+        assert app.focused is not last
+
+
 async def test_line_cursor_mode_toggles_on_block(isolated_home):
     from app import CommandBlock
 

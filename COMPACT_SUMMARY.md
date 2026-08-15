@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.1.45**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.1.49**.
 
 Запуск: `python3 app.py`. Тесты: `python3 -m pytest tests/ -v`.
 
@@ -13,6 +13,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | Prefix | Action |
 |--------|--------|
 | (none) | Execute shell command |
+| `> cmd` | Suspend TUI, run with a real TTY (`htop`, `vim`, `ssh`) |
 | `#tag cmd` | Save (literal text; refs `!tag[tid]` not expanded on save) |
 | `#tag=` / `#tag=ID=` | Tag / command comment (ID = tid or global `<id>`) |
 | `#tag+` / `#tag+ID` | Edit last / by tid |
@@ -24,7 +25,9 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `\|` | Pipe focused/last block stdout |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
 
-Hotkeys: `Tab` input → output (Esc back); `F3` copy block; `F5` JSON; `F6` simple output; `F2` line-cursor mode; `Shift+Insert`/`Ctrl+V` paste in the input (does not replace existing text); in line-cursor mode `Ctrl+V` appends the current line; `Ctrl+D` clears the input line; `PgUp`/`PgDn` blocks; `Up`/`Down` session history in input, journal scroll when a block is focused (line-by-line in line-cursor mode).
+Aliases from `~/.bashrc`: bodies with `$1` / `$2` / `$@` substitute args; otherwise the rest of the line is appended.
+
+Hotkeys: `Tab` input → output (Esc back); `F3` copy block; `F5` JSON; `F6` simple output; `F2` line-cursor mode; `Shift+Insert`/`Ctrl+V` paste in the input (does not replace existing text); in line-cursor mode `Ctrl+V` appends the current line; `Ctrl+D` clears the input line; `PgUp`/`PgDn` scroll a page and activate the visible block (no jump to block start); click a block to focus it; `Up`/`Down` session history in input, journal scroll when a block is focused (line-by-line in line-cursor mode).
 
 ---
 
@@ -92,7 +95,7 @@ Details: `DATABASE.md`. Module: **`database_v2.py`** (`database.py` unused). Fil
 - `MAX_DISPLAY_LINES = 300` (UI). Full text stays in `raw_stdout`; F3 copies full output.
 - `F6` toggles simple output (no Rich tags).
 - `command_timeout` from `settings.yml` (default 10s; tests use 5s).
-- `terminal_mouse: false` lets the terminal select/copy text; scroll journal with PgUp/PgDn.
+- `terminal_mouse: true` (default): click focuses a journal block, wheel scrolls the journal. `false` restores OS text selection (clicks do not focus).
 
 ### Tags / vars
 - `#` parser: strict regex so `ping -c` / `A=B` save instead of delete/comment.
@@ -111,11 +114,11 @@ Details: `DATABASE.md`. Module: **`database_v2.py`** (`database.py` unused). Fil
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.4 (base v1.1.18; newer UX in this file) |
-| `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses) |
-| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default` |
+| `test_cmd.md` | Manual plan v1.5 (app v1.1.49) |
+| `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
+| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete |
-| `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion |
+| `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
 
 Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then Enter.
@@ -126,7 +129,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 | File | Purpose |
 |------|---------|
-| `app.py` | TUI (`CommandRunner`), v1.1.45 |
+| `app.py` | TUI (`CommandRunner`), v1.1.49 |
 | `database_v2.py` | SQLite tagged history |
 | `json_viewer.py` | JSON tree modal |
 | `ingress_analyzer.py` | `:i` k8s |
@@ -138,7 +141,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 ---
 
-## This session (v1.1.25 → v1.1.45)
+## This session (v1.1.25 → v1.1.49)
 
 - **Line-cursor mode** on a focused output block (`Enter`/`F2` on, `Esc`/`F2` off). Arrows move by lines; Home/End jump.
 - **Enter** in that mode copies the current line (rstrip) and returns to input without select-all.
@@ -157,3 +160,6 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 - **Line-cursor toggle** is **F2** (was F7).
 - **Copy block** is **F3** (was F5). JSON viewer is **F5**.
 - Footer hints: Esc Focus Input, F2 Line cursor, F3 Copy Block, F5 JSON Viewer, F6 Simple output.
+- **`> cmd`**: suspend the TUI and run with a real TTY (`> htop`, `> vim file`). No timeout, stdout is not captured. `>>` is left to the shell.
+- Click a journal block to focus it. Arrows / PgUp / PgDn scroll the journal and activate the **visible** block without jumping to its first line. `terminal_mouse: true` is required for clicks.
+- Alias bodies with `$1` / `$2` / `$@` substitute arguments (`klogin cluster` → `tsh kube login cluster`). Aliases without `$1` still append the rest of the line.

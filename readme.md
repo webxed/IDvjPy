@@ -23,10 +23,13 @@ A custom terminal-like application for those who are tired of the old ways. Buil
 *   **Vim-like Controls**:
     *   `:q` to quit the application.
     *   `:w <filename>` to write the entire output of the current session to a file.
-*   **Keyboard-driven Workflow**:
-    *   **Navigate Blocks**: Use `PageUp` and `PageDown` to select different command blocks.
-    *   **Copy to Clipboard**: Press `F5` to copy the entire content of the currently focused block.
-    *   **Dark Mode**: Press `Ctrl+D` to toggle dark mode.
+*   **Keyboard-driven Workflow** (v1.1.49):
+    *   **Journal**: `PageUp` / `PageDown` scroll a page and activate the visible block (no jump to its start). Click a block to focus it (`terminal_mouse: true`).
+    *   **Copy to Clipboard**: `F3` copies the focused block. `F5` opens the JSON viewer. `F2` toggles line-cursor mode.
+    *   **Clear input**: `Ctrl+D`. Dark mode: `d`.
+    *   **Real TTY**: `> htop` / `> vim file` suspends the TUI.
+
+Current Russian docs: [`README.md`](README.md), [`COMPACT_SUMMARY.md`](COMPACT_SUMMARY.md). In-app: `:?`.
 
 ### Command Syntax
 
@@ -35,6 +38,7 @@ The application uses several command prefixes to unlock its features:
 | Prefix    | Example               | Description                                                               |
 |-----------|-----------------------|---------------------------------------------------------------------------|
 | (none)    | `ls -l`               | Executes a standard shell command. Added to session history.              |
+| `>`       | `> htop`              | Suspends the TUI and runs with a real TTY (`htop`, `vim`, `ssh`).         |
 | `#`       | `#git git status`     | Saves the command (`git status`) to the persistent history with a tag (`git`). |
 | `#tag-`   | `#git-`               | Marks all commands with the specified tag as deleted.                     |
 | `#tag-ID` | `#git-1`              | Marks a specific command by local ID as deleted.                           |
@@ -46,7 +50,7 @@ The application uses several command prefixes to unlock its features:
 | `!`       | `! 1`                 | Executes the command corresponding to the number from the last `?` query.    |
 | `:`       | `:q` or `:w log.txt`  | Executes an application command (quit or write to file).                  |
 | `:h [X]`    | `:h` or `:h 5`        | Shows the last X lines of command history from `history.txt` as one multiline block. If X is not specified, it defaults to the value of `history_lines` in `settings.yml`. |
-| `:json <file>` | `:json data.json` | Opens JSON file in tree viewer with lazy loading. Also works with F3 on command blocks that output JSON. |
+| `:json <file>` | `:json data.json` | Opens JSON file in tree viewer. Also works with F5 on a command block that output JSON. |
 | `|`       | `| jq .`              | Pipes the `stdout` of the most recent command block as `stdin` to the specified command. |
 | `$`       | `$MY_VAR=hello`      | Creates or updates an environment variable in `.bashrc_term` and the current session. |
 
@@ -103,7 +107,7 @@ View JSON output in a navigable tree structure with lazy loading for large files
 ```bash
 # View JSON from command output
 echo '{"users": [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]}'
-# Focus the output block and press F3
+# Focus the output block and press F5
 
 # Open JSON files directly
 :json k8sdesc.json
@@ -157,5 +161,5 @@ jq '.users[0].name' < data.json
     
     ### Bash Alias Support
     
-    This application supports bash aliases. It will automatically source the `.bashrc` file in your home directory if it exists. This feature is intended for Linux/Debian environments.
+    This application supports bash aliases from `~/.bashrc`. Bodies with `$1` / `$2` / `$@` substitute arguments (`klogin cluster` → `tsh kube login cluster`); otherwise the rest of the line is appended.
     ```

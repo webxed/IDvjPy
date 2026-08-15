@@ -284,6 +284,18 @@ async def test_s14_aliases(isolated_home):
         assert "Hello from alias" in block.raw_stdout
 
 
+async def test_s14_alias_positional_dollar1(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        app.aliases["klogin"] = "echo tsh kube login $1"
+        await submit(pilot, "klogin my-cluster")
+        block = await wait_command_done(app)
+        assert "tsh kube login my-cluster" in block.raw_stdout
+        assert "$1" not in block.raw_stdout
+        assert "my-cluster" in block.header
+        assert "$1 my-cluster" not in block.header
+
+
 async def test_s15_errors_timeout_truncate(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(120, 40)) as pilot:

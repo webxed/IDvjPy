@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.1.18
+# План тестирования IDvjPy_term v1.1.49
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -30,9 +30,11 @@ python3 app.py
 | `Esc` | Скрыть подсказки / вернуть фокус во ввод |
 | `Tab` | Вставить выбранную подсказку |
 | `Up`/`Down` | История сессии (если список подсказок закрыт) |
-| `PageUp`/`PageDown` | Фокус между блоками |
-| `F3` | JSON viewer для последнего блока |
-| `F5` | Копировать stdout сфокусированного блока |
+| `PageUp`/`PageDown` | Прокрутка журнала; активным становится видимый блок |
+| клик по блоку | Фокус на блоке (`terminal_mouse: true`) |
+| `F2` | Построчный режим |
+| `F3` | Копировать stdout сфокусированного блока |
+| `F5` | JSON viewer для сфокусированного (или последнего) блока |
 | `F6` | Simple output |
 | `Shift+Insert` / `Ctrl+V` | Вставка из буфера |
 | `Ctrl+D` | Очистить строку ввода |
@@ -231,7 +233,7 @@ PageUp на этот блок (или просто последний блок):
 
 ---
 
-## Секция 11: Навигация, история, F5
+## Секция 11: Навигация, история, F3
 
 ```
 echo first
@@ -240,9 +242,9 @@ echo second
 
 Up / Esc / Up — `echo second`, затем `echo first`.
 
-PageUp / PageDown — фокус на блоках. Esc — обратно во ввод.
+PageUp / PageDown — прокрутка журнала, активен видимый блок (без прыжка к началу). Esc — обратно во ввод.
 
-На блоке `echo first`: F5.
+На блоке `echo first`: F3.
 
 **Ожидание:** в буфере `first` (полный raw_stdout, без заголовка).
 
@@ -300,6 +302,42 @@ mytest
 
 Автотест: `test_s14_aliases`.
 
+Алиас с `$1` подставляет аргумент, а не дописывает его после литерала `$1`:
+
+```
+# alias klogin="echo tsh kube login $1"
+klogin my-cluster
+```
+
+**Ожидание:** stdout `tsh kube login my-cluster`, в выводе нет `$1`.
+
+Автотест: `test_s14_alias_positional_dollar1`.
+
+---
+
+## Секция 14b: Настоящий TTY (`> cmd`)
+
+```
+>
+> ssh $HOST
+```
+
+**Ожидание:** пустой `>` — Usage. `> cmd` снимает TUI и запускает команду с настоящим TTY (stdout не пишется в журнал). После выхода — InfoBlock `TTY: … / Exit code: N`. `>>` остаётся редиректом оболочки.
+
+Автотесты: `test_tty_prefix_empty_shows_usage`, `test_tty_prefix_runs_substituted_command` (мок `_run_in_tty`).
+
+---
+
+## Секция 14c: Клик и клавиатурный скролл журнала
+
+Два блока (`echo click-first`, `echo click-second`). Клик по первому, затем по второму — фокус без прыжка к началу блока.
+
+`seq` с длинным выводом: из ввода PageUp входит в просмотр последнего блока, повторный PageUp не прыгает к строке 1. Стрелки / PageUp на сфокусированном блоке активируют **видимый** блок.
+
+Нужен `terminal_mouse: true` (по умолчанию).
+
+Автотесты: `test_click_selects_block_without_leaving_input_only`, `test_pageup_does_not_jump_to_block_start`, `test_keyboard_scroll_activates_visible_block`.
+
 ---
 
 ## Секция 15: Ошибки, таймаут, обрезка вывода
@@ -315,7 +353,7 @@ seq 1 400
 
 - несуществующая команда: stderr + exit code ≠ 0
 - `sleep 15`: таймаут (`command_timeout` в `settings.yml`, по умолчанию 10 с), полный вывод не теряется
-- `seq 1 400`: в UI последние ~300 строк + `truncated for UI stability`; F5 копирует полный вывод
+- `seq 1 400`: в UI последние ~300 строк + `truncated for UI stability`; F3 копирует полный вывод
 
 Автотест: `test_s15_errors_timeout_truncate`.
 
@@ -449,7 +487,7 @@ cat history.txt
 
 ---
 
-**Версия документа**: v1.4  
-**Версия приложения**: v1.1.18  
-**Автотесты**: `tests/test_cmd_scenarios.py`  
-**Дата**: 2026-08-14
+**Версия документа**: v1.5  
+**Версия приложения**: v1.1.49  
+**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`  
+**Дата**: 2026-08-15
