@@ -31,6 +31,14 @@ In-app help: `:?`.
 
 The setup script handles dependencies and configuration. On Linux, clipboard needs `xclip`/`xsel` (Wayland: `wl-clipboard`).
 
+## Layout
+
+- **`src/`** — TUI, CSS, seed scripts, `.bashrc_term.example`
+- **cwd** — `settings.yml`, SQLite command DB, `.bashrc_term*`, `history.txt`
+- Root **`app.py`** / **`backup_db.py`** are launchers
+- Empty command DB: welcome InfoBlock lists handbook seeds (`src/seed_catalog.py`). After `--seed`, type `??` or wait ~5s
+- Seeds: `python3 src/seed_linux_commands.py --seed`, `python3 src/seed_k8s_chains.py --seed` ([`K8S_CHAINS.md`](K8S_CHAINS.md)), `python3 src/seed_git.py --seed`, `python3 src/seed_ops.py --seed` (all ops except linux / k8s / git). Each `--seed` replaces only its own tags
+
 ## Architecture
 
 The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:

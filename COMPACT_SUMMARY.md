@@ -2,7 +2,9 @@
 
 TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.2**.
 
-Запуск: `python3 app.py`. Тесты: `python3 -m pytest tests/ -v`.
+Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`.
+
+Пустая БД: в журнале каталог seed (`python3 src/seed_….py --seed`). Цепочки k8s: [`K8S_CHAINS.md`](K8S_CHAINS.md).
 
 Параллельный порт: `Idivjopy_rust` (ratatui). Поведение ниже — про Python, если не сказано иное.
 
@@ -34,7 +36,7 @@ Hotkeys: `Tab` input → output (Esc back); `F3` copy block; `F5` JSON; `F6` sim
 
 ## Database read path
 
-Details: `DATABASE.md`. Module: **`database_v2.py`** (`database.py` unused). File: `settings.yml` → `database_tags_file` (`mytags.db`).
+Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unused). File: `settings.yml` → `database_tags_file` (`mytags.db`).
 
 - Two IDs: global `id` (`!1`, `!! 1`) and per-tag `tid` (`!deploy[1]`).
 - Each call opens SQLite, queries, closes. Filter `deleted = 0`.
@@ -106,8 +108,9 @@ Details: `DATABASE.md`. Module: **`database_v2.py`** (`database.py` unused). Fil
 - `-n` without value → explicit error (no silent fallback).
 
 ### CLI
-- `--instance-name` parsed only in `__main__` (pytest can import `app.py`).
-- Instance bashrc: `.bashrc_term_{instance}`.
+- Root `app.py` is a launcher; the TUI module is `src/app.py`. `--instance-name` is parsed in the launcher / `src/app.py` `__main__` (pytest imports `src/app.py` via `pythonpath = src`).
+- Instance bashrc: `.bashrc_term_{instance}` in cwd. Template: `src/.bashrc_term.example`.
+- Empty command DB (`has_live_commands` is false): welcome InfoBlock lists handbook seeds.
 
 ---
 
@@ -117,10 +120,11 @@ Details: `DATABASE.md`. Module: **`database_v2.py`** (`database.py` unused). Fil
 |------|----------|
 | `test_cmd.md` | Manual plan v1.5 (app v1.1.49) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
-| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix |
+| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete |
 | `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
+| `tests/test_seed_*.py` | linux / k8s chains / git / ops handbooks; empty-DB catalog text |
 
 Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then Enter.
 
@@ -130,17 +134,27 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 | File | Purpose |
 |------|---------|
-| `app.py` | TUI (`CommandRunner`), v1.2 |
-| `database_v2.py` | SQLite tagged history |
-| `json_viewer.py` | JSON tree modal |
-| `ingress_analyzer.py` | `:i` k8s |
-| `command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
-| `app.css` | Styles (JSON viewer, line-nav border, block focus) |
-| `settings.yml` | DB path, timeout, `terminal_mouse` |
+| `app.py` | Launcher (`python3 app.py`) |
+| `src/app.py` | TUI (`CommandRunner`), v1.2 |
+| `src/database_v2.py` | SQLite tagged history |
+| `src/json_viewer.py` | JSON tree modal |
+| `src/ingress_analyzer.py` | `:i` k8s |
+| `src/command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
+| `src/seed_*.py` | Handbook seeds (linux, k8s, git, ops, …) |
+| `src/app.css` | Styles (JSON viewer, line-nav border, block focus) |
+| `settings.yml` | DB path, timeout, `terminal_mouse` (cwd) |
+| `K8S_CHAINS.md` | k8s investigation overview |
+| `SEED_*_COMMANDS.md` | Canonical tids per handbook |
 | `DATABASE.md` | How commands are read from SQLite |
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.2
+
+- Application code in `src/`; cwd holds `settings.yml`, the command DB, `.bashrc_term*`, `history.txt`.
+- Empty command DB shows a seed catalog (linux, k8s chains, git, `seed_ops.py`, individual ops).
+- [`K8S_CHAINS.md`](K8S_CHAINS.md) is the investigation overview; tids are in [`SEED_K8S_CHAINS_COMMANDS.md`](SEED_K8S_CHAINS_COMMANDS.md).
 
 ## This session (v1.1.25 → v1.1.52)
 

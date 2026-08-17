@@ -2817,6 +2817,14 @@ class CommandRunner(App):
   $JSON is set on Enter in JSON viewer (jq path of the selected node)
   Example: jq $JSON test.json
   $VAR also loaded from .bashrc_term and .bashrc_term_<instance>
+
+[bold]Handbooks (empty database)[/bold]
+  First start with no commands lists seed scripts in the journal.
+  python3 src/seed_linux_commands.py --seed
+  python3 src/seed_k8s_chains.py --seed    # K8S_CHAINS.md — investigation chains
+  python3 src/seed_git.py --seed
+  python3 src/seed_ops.py --seed           # all ops except linux / k8s / git
+  Type the command here, then ?? (or wait ~5s). Each --seed replaces only its own tags.
 """
         self.add_block(InfoBlock(help_text))
 

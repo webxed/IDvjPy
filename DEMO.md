@@ -13,6 +13,7 @@ Kubernetes не обязателен: `:i` — опциональный бис �
 ```bash
 python3 src/seed_linux_commands.py --seed   # если БД пустая: теги proc / file / net / kube
 python3 src/seed_git.py --seed              # опционально: git / gstat / gsync
+# без seed при первом старте TUI сам покажет каталог справочников
 python3 app.py
 ```
 

@@ -1,6 +1,6 @@
-# Справочник k8s investigation chains для IDvjPy
+# Цепочки для расследования k8s — канонические tid
 
-Обзор и цикл расследования: [`K8S_CHAINS.md`](K8S_CHAINS.md). Ниже — канонические tid.
+Обзор и цикл расследования: [`K8S_CHAINS.md`](K8S_CHAINS.md). Ниже — фиксированные tid рабочих тегов.
 
 Сидовый тег `kube` (`seed_linux_commands.py`) — общий справочник.  
 Этот сид — **рабочие** теги с `$NS`, `$POD`, `$DEPLOY`, `$SVC`, `$ING`, `$APP`, `$CTR`, `$QUOTA`.
