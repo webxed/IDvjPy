@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.1.52**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.2**.
 
 Запуск: `python3 app.py`. Тесты: `python3 -m pytest tests/ -v`.
 
@@ -130,7 +130,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 | File | Purpose |
 |------|---------|
-| `app.py` | TUI (`CommandRunner`), v1.1.52 |
+| `app.py` | TUI (`CommandRunner`), v1.2 |
 | `database_v2.py` | SQLite tagged history |
 | `json_viewer.py` | JSON tree modal |
 | `ingress_analyzer.py` | `:i` k8s |

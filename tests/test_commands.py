@@ -23,6 +23,27 @@ async def test_starts_without_existing_database(isolated_home):
         texts = " ".join(block.text_content for block in app.query(InfoBlock))
         assert "Empty command database" in texts
         assert "seed_linux_commands.py --seed" in texts
+        assert "seed_k8s_chains.py --seed" in texts
+        assert "seed_git.py --seed" in texts
+        assert "seed_ops.py --seed" in texts
+        assert "seed_docker.py --seed" in texts
+        assert "seed_ssh.py --seed" in texts
+        assert "Ops по отдельности" in texts
+
+
+async def test_seed_hint_skipped_when_database_has_commands(isolated_home):
+    import database_v2 as database
+
+    db = isolated_home / "test_history.db"
+    database.init_db(str(db))
+    database.add_command(str(db), "echo hi", "demo")
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        texts = " ".join(block.text_content for block in app.query(InfoBlock))
+        assert "IDvjPy_term" in texts
+        assert "Empty command database" not in texts
+        assert "seed_linux_commands.py --seed" not in texts
 
 
 async def test_echo_command_creates_block(isolated_home):

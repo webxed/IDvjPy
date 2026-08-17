@@ -79,5 +79,5 @@
 - `app.css` — Styles (focus, overflow)
 - `database_v2.py` — get_commands_by_prefix()
 - `seed_linux_commands.py` — kube commands
-- `LINUX_COMMANDS.md` — Updated docs
+- `SEED_LINUX_COMMANDS.md` — Updated docs
 - `.bashrc_term_default` — NS variable

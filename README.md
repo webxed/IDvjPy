@@ -2,7 +2,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.1.52 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.2 — умный терминал для создания командных строк из тегов.
 
 > *Define your variables, join your command.*
 
@@ -13,7 +13,7 @@ IDvjPy — терминальное приложение (TUI) на Python (Text
 
 **Философия:** теги — переменные с шаблонами команд; приложение собирает их в сложные командные строки.
 
-Запуск: `python3 app.py`. Тесты: `python3 -m pytest tests/ -v`. Справка в приложении: `:?`.
+Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Справка в приложении: `:?`.
 
 ## Возможности
 
@@ -38,7 +38,7 @@ source .venv/bin/activate
 
 На Linux для буфера обмена нужны `xclip` или `xsel` (на Wayland — `wl-clipboard`).
 
-Переменные: скопируйте [`.bashrc_term.example`](.bashrc_term.example) в `.bashrc_term`. Демо-сценарий: [`DEMO.md`](DEMO.md).
+Переменные: при первом старте копируется [`src/.bashrc_term.example`](src/.bashrc_term.example) в `.bashrc_term_<instance>`. Демо-сценарий: [`DEMO.md`](DEMO.md).
 
 ## Запуск
 
@@ -46,6 +46,8 @@ source .venv/bin/activate
 python3 app.py
 python3 app.py --instance-name=user1   # отдельный .bashrc_term_user1
 ```
+
+Код приложения лежит в `src/`. В корне рабочей копии — данные: `settings.yml`, база тегов, `.bashrc_term*`, `history.txt`. Seed-справочники: `python3 src/seed_git.py --seed` и т.п. (команды также показаны при первом старте, если БД пустая).
 
 ## Система префиксов
 
@@ -144,9 +146,9 @@ command_timeout: 10          # 0 = без таймаута
 terminal_mouse: true         # клик выделяет блок; false — выделение текста ОС
 ```
 
-Переменные читаются из `.bashrc_term_<instance>` (приоритет) и `.bashrc_term` (дополняет). Формат: `export VAR=val` или `VAR=val`. Если файлов нет, при старте копируется [`.bashrc_term.example`](.bashrc_term.example).
+Переменные читаются из `.bashrc_term_<instance>` (приоритет) и `.bashrc_term` (дополняет). Формат: `export VAR=val` или `VAR=val`. Если файлов нет, при старте копируется [`src/.bashrc_term.example`](src/.bashrc_term.example).
 
-Файл БД (`database_tags_file`, по умолчанию `mytags.db`) **не входит в git**. При первом запуске создаётся пустая SQLite-схема. Справочник команд: `python3 seed_linux_commands.py --seed`. Цепочки k8s: `python3 seed_k8s_chains.py --seed`.
+Файл БД (`database_tags_file`, по умолчанию `mytags.db`) **не входит в git**. При первом запуске создаётся пустая SQLite-схема; в журнале появляется каталог seed-скриптов, чтобы выбрать набор команд. Каждый `--seed` можно ввести в том же TUI.
 
 ## Архитектура
 
@@ -155,7 +157,7 @@ terminal_mouse: true         # клик выделяет блок; false — в�
 - **`CommandBlock`** / **`InfoBlock`** / **`QueryResultsBlock`** — блоки журнала
 - **`LineNavigable`** — построчный курсор в блоке
 
-Модули: [`app.py`](app.py), [`database_v2.py`](database_v2.py), [`command_parser_v2.py`](command_parser_v2.py), [`json_viewer.py`](json_viewer.py), [`ingress_analyzer.py`](ingress_analyzer.py), [`app.css`](app.css).
+Модули в [`src/`](src/): [`app.py`](src/app.py), [`database_v2.py`](src/database_v2.py), [`command_parser_v2.py`](src/command_parser_v2.py), [`json_viewer.py`](src/json_viewer.py), [`ingress_analyzer.py`](src/ingress_analyzer.py), [`app.css`](src/app.css). Корневой [`app.py`](app.py) только запускает TUI.
 
 Подробности сессии и поведения: [`COMPACT_SUMMARY.md`](COMPACT_SUMMARY.md). Как читается БД: [`DATABASE.md`](DATABASE.md).
 
@@ -165,11 +167,33 @@ terminal_mouse: true         # клик выделяет блок; false — в�
 python3 -m pytest tests/ -v
 ```
 
-## Справочник Linux-команд
+## Справочники команд
 
-Канонический набор команд с фиксированным `tid`: [`LINUX_COMMANDS.md`](LINUX_COMMANDS.md). Заполнить БД: `python3 seed_linux_commands.py --seed`.
+Каждый сид перезаписывает **только свои** теги.
 
-Цепочки для расследования k8s: [`K8S_CHAINS.md`](K8S_CHAINS.md). `python3 seed_k8s_chains.py --seed` (не трогает `proc` / `file` / `net` / `kube`).
+Цепочки для расследования k8s: [`K8S_CHAINS.md`](K8S_CHAINS.md). `python3 src/seed_k8s_chains.py --seed` (не трогает `proc` / `file` / `net` / `kube`).
+
+| Скрипт | Документация | Теги |
+|--------|--------------|------|
+| `python3 src/seed_linux_commands.py --seed` | [`SEED_LINUX_COMMANDS.md`](SEED_LINUX_COMMANDS.md) | `proc` `file` `net` `kube` |
+| `python3 src/seed_k8s_chains.py --seed` | [`K8S_CHAINS.md`](K8S_CHAINS.md) | `kpod` `klog` `kquota` … |
+| `python3 src/seed_git.py --seed` | [`SEED_GIT_COMMANDS.md`](SEED_GIT_COMMANDS.md) | `git` `gstat` `gsync` … |
+| `python3 src/seed_ops.py --seed` | все ops ниже | docker + helm + http + netfw + data + host + disk + vault + text + rsync + find + recon + ssh |
+| `python3 src/seed_docker.py --seed` | [`SEED_DOCKER_COMMANDS.md`](SEED_DOCKER_COMMANDS.md) | `dck` `dcmp` `dps` `dlog` |
+| `python3 src/seed_helm.py --seed` | [`SEED_HELM_COMMANDS.md`](SEED_HELM_COMMANDS.md) | `helm` `hls` |
+| `python3 src/seed_http.py --seed` | [`SEED_HTTP_COMMANDS.md`](SEED_HTTP_COMMANDS.md) | `curl` `ngx` `trf` |
+| `python3 src/seed_netfw.py --seed` | [`SEED_NETFW_COMMANDS.md`](SEED_NETFW_COMMANDS.md) | `ss` `nst` `ipt` `fwd` |
+| `python3 src/seed_data.py --seed` | [`SEED_DATA_COMMANDS.md`](SEED_DATA_COMMANDS.md) | `pg` `kf` |
+| `python3 src/seed_host.py --seed` | [`SEED_HOST_COMMANDS.md`](SEED_HOST_COMMANDS.md) | `tar` `gz` |
+| `python3 src/seed_disk.py --seed` | [`SEED_DISK_COMMANDS.md`](SEED_DISK_COMMANDS.md) | `df` `du` `mount` `fdisk` `lsblk` `smart` `ncdu` |
+| `python3 src/seed_vault.py --seed` | [`SEED_VAULT_COMMANDS.md`](SEED_VAULT_COMMANDS.md) | `vault` `vstat` `vkv` |
+| `python3 src/seed_text.py --seed` | [`SEED_TEXT_COMMANDS.md`](SEED_TEXT_COMMANDS.md) | `grep` `awk` `sed` |
+| `python3 src/seed_rsync.py --seed` | [`SEED_RSYNC_COMMANDS.md`](SEED_RSYNC_COMMANDS.md) | `rsync` `rchk` |
+| `python3 src/seed_find.py --seed` | [`SEED_FIND_COMMANDS.md`](SEED_FIND_COMMANDS.md) | `find` `fchk` |
+| `python3 src/seed_recon.py --seed` | [`SEED_RECON_COMMANDS.md`](SEED_RECON_COMMANDS.md) | `dig` `nmap` |
+| `python3 src/seed_ssh.py --seed` | [`SEED_SSH_COMMANDS.md`](SEED_SSH_COMMANDS.md) | `ssh` `scp` `schk` `ossh` `ocert` |
+
+`seed_ops.py` не трогает linux / k8s / git. `seed_http` / `seed_netfw` / `seed_rsync` / `seed_recon` / `seed_ssh` не затирают linux-тег `net`. `seed_text` / `seed_find` / `seed_disk` не затирают `file`. `seed_host` не затирает `smart` / `df`.
 
 ## Зависимости
 

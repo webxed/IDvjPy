@@ -321,7 +321,11 @@ async def test_keyboard_scroll_activates_visible_block(isolated_home):
 
 async def test_small_last_block_gets_focus_when_it_cannot_reach_top(isolated_home):
     from textual.containers import VerticalScroll
+    import database_v2 as database
     from app import CommandBlock
+
+    database.init_db("test_history.db")
+    database.add_command("test_history.db", "echo keep-db-nonempty", "demo")
 
     app = CommandRunner()
     async with app.run_test(size=(80, 24)) as pilot:

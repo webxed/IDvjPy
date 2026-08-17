@@ -2,10 +2,10 @@
 """
 Seed the IDvjPy_term database with a canonical set of Linux commands.
 
-Command order and tid mapping are defined in LINUX_COMMANDS.md.
+Command order and tid mapping are defined in SEED_LINUX_COMMANDS.md.
 Run:
-  python3 seed_linux_commands.py --seed       # replace proc/file/net/kube
-  python3 seed_linux_commands.py --comments   # fill empty command comments in place
+  python3 src/seed_linux_commands.py --seed       # replace proc/file/net/kube
+  python3 src/seed_linux_commands.py --comments   # fill empty command comments in place
 
 Uses database_tags_file from settings.yml (same as app.py).
 """
@@ -200,7 +200,7 @@ def apply_comments(db_file: str, only_empty: bool = True) -> int:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Seed IDvjPy_term DB with Linux commands (see LINUX_COMMANDS.md)"
+        description="Seed IDvjPy_term DB with Linux commands (see SEED_LINUX_COMMANDS.md)"
     )
     parser.add_argument(
         "--seed",

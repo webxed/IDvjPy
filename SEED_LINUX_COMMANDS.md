@@ -8,7 +8,7 @@
 - `!proc[1]` — подставить команду в строку ввода
 - `!! proc[1]; file[2]` — собрать цепочку
 
-**Заполнить БД:** `python3 seed_linux_commands.py --seed`
+**Заполнить БД:** `python3 src/seed_linux_commands.py --seed`
 
 ---
 

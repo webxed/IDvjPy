@@ -40,6 +40,19 @@ def test_seed_k8s_chains_tids_and_playbook_refs(tmp_path):
     assert "!kpod[1]" in watch["command"]
     assert "!kev[3]" in watch["command"]
 
+    kres = database.get_commands_by_tag(db, "kres")
+    assert kres[0]["command"] == "kubectl get resourcequotas -n $NS"
+    assert "describe resourcequota compute-resources" in kres[1]["command"]
+    assert "resourcequota $QUOTA" in kres[2]["command"]
+
+    quota = database.get_command_by_tid(db, "kquota", 1)
+    assert "!kres[1]" in quota["command"]
+    assert "!kres[2]" in quota["command"]
+    assert "!kres[4]" in quota["command"]
+
+    kjq = database.get_commands_by_tag(db, "kjq")
+    assert "status.hard" in kjq[6]["command"]  # tid 7
+
     assert database.get_tag_comment(db, "kcrash")
     assert "CrashLoop" in database.get_command_comment(db, "kcrash", 1)
 

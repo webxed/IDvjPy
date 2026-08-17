@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.1.52) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.2) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
@@ -33,7 +33,7 @@ The setup script handles dependencies and configuration. On Linux, clipboard nee
 
 ## Architecture
 
-The TUI lives mainly in `app.py`. Key types:
+The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 
 - **`CommandRunner`** (App): command routing and UI orchestration
 - **`JournalScroll`** (`VerticalScroll`): journal container; keyboard scroll activates the visible block
@@ -42,15 +42,15 @@ The TUI lives mainly in `app.py`. Key types:
 
 ### Supporting Modules
 
-- **`database_v2.py`**: SQLite tagged history (`database.py` is unused)
-- **`command_parser_v2.py`**: `!tag[tid]` / `!ID` / `!!` assembly
-- **`clipboard.py`**: CLIPBOARD / PRIMARY / OSC 52
-- **`shell_env.py`**: `.bashrc_term` vars, `~/.bashrc` aliases, `$1` substitution
-- **`json_viewer.py`**: JSON tree modal
-- **`ingress_analyzer.py`**: `:i` Kubernetes helper
-- **`app.css`**: Textual styling
-- **`settings.yml`**: buffer limits, timeout, DB file, `terminal_mouse`
-- **`.bashrc_term` / `.bashrc_term_<instance>`**: env vars from `$VAR=val`
+- **`src/database_v2.py`**: SQLite tagged history (`database.py` is unused)
+- **`src/command_parser_v2.py`**: `!tag[tid]` / `!ID` / `!!` assembly
+- **`src/clipboard.py`**: CLIPBOARD / PRIMARY / OSC 52
+- **`src/shell_env.py`**: `.bashrc_term` vars, `~/.bashrc` aliases, `$1` substitution
+- **`src/json_viewer.py`**: JSON tree modal
+- **`src/ingress_analyzer.py`**: `:i` Kubernetes helper
+- **`src/app.css`**: Textual styling
+- **`settings.yml`**: buffer limits, timeout, DB file, `terminal_mouse` (cwd)
+- **`.bashrc_term` / `.bashrc_term_<instance>`**: env vars from `$VAR=val` (cwd; template `src/.bashrc_term.example`)
 
 ### Command Prefix System
 

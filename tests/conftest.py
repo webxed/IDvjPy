@@ -2,15 +2,20 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 import time
 from pathlib import Path
 
 import pytest
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_SRC = PROJECT_ROOT / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
 from app import CommandBlock, CommandInput, CommandRunner, InfoBlock
 from json_viewer import JSONViewer
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TEST_SETTINGS = """\
 max_lines: 1000
 history_lines: 20
@@ -25,7 +30,7 @@ def isolated_home(tmp_path, monkeypatch):
     """Изолирует cwd, БД, history и .bashrc_term от рабочей копии проекта."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "settings.yml").write_text(TEST_SETTINGS, encoding="utf-8")
-    monkeypatch.setattr(CommandRunner, "CSS_PATH", str(PROJECT_ROOT / "app.css"))
+    monkeypatch.setattr(CommandRunner, "CSS_PATH", str(PROJECT_ROOT / "src" / "app.css"))
 
     clip = {"text": ""}
     monkeypatch.setattr("pyperclip.copy", lambda text: clip.update(text=text or ""))

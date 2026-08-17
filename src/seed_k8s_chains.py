@@ -4,7 +4,7 @@ Seed investigation tags for Kubernetes (see K8S_CHAINS.md).
 
 Does not touch proc / file / net / kube from seed_linux_commands.py.
 
-Run: python3 seed_k8s_chains.py --seed
+Run: python3 src/seed_k8s_chains.py --seed
 
 Uses database_tags_file from settings.yml (same as app.py).
 """
@@ -31,8 +31,8 @@ SEED_TAGS = {
         "переменные инцидента",
         [
             (
-                "echo ns=$NS pod=$POD deploy=$DEPLOY svc=$SVC ing=$ING app=$APP ctr=$CTR",
-                "проверка $NS/$POD/…",
+                "echo ns=$NS pod=$POD deploy=$DEPLOY svc=$SVC ing=$ING app=$APP ctr=$CTR quota=$QUOTA",
+                "проверка $NS/$POD/…/$QUOTA",
             ),
         ],
     ),
@@ -134,6 +134,36 @@ SEED_TAGS = {
             ("kubectl get rs -n $NS -l app=$APP -o wide", "ReplicaSet $APP"),
         ],
     ),
+    "kres": (
+        "квоты / лимиты / свободные ресурсы",
+        [
+            ("kubectl get resourcequotas -n $NS", "список ResourceQuota"),
+            (
+                "kubectl describe resourcequota compute-resources -n $NS",
+                "describe compute-resources",
+            ),
+            ("kubectl describe resourcequota $QUOTA -n $NS", "describe $QUOTA"),
+            ("kubectl get resourcequota -n $NS -o json", "json всех quota → F5 / kjq"),
+            (
+                "kubectl get resourcequota compute-resources -n $NS -o json",
+                "json compute-resources",
+            ),
+            ("kubectl get limitrange -n $NS", "LimitRange в $NS"),
+            ("kubectl get limitrange -n $NS -o yaml", "LimitRange yaml"),
+            ("kubectl top node", "метрики нод (metrics-server)"),
+            (
+                "kubectl get nodes -o custom-columns="
+                "NAME:.metadata.name,CPU:.status.allocatable.cpu,"
+                "MEM:.status.allocatable.memory,PODS:.status.allocatable.pods",
+                "allocatable CPU/MEM/pods на нодах",
+            ),
+            (
+                "kubectl get events -n $NS --sort-by=.lastTimestamp "
+                "| grep -iE 'quota|exceeded|Forbidden|limit'",
+                "events про quota/limit",
+            ),
+        ],
+    ),
     "kjq": (
         "jq к stdout блока",
         [
@@ -156,6 +186,13 @@ SEED_TAGS = {
             (
                 "jq '.spec.rules[] | {host, paths:[.http.paths[] | {path, svc:.backend.service.name}]}'",
                 "правила ingress",
+            ),
+            (
+                "jq '[((.items) // [.])[] | .metadata.name as $n "
+                "| (.status.hard // {}) as $h | (.status.used // {}) as $u "
+                "| $h | to_entries[] "
+                "| {quota:$n, resource:.key, hard:.value, used:($u[.key] // \"0\")}]'",
+                "quota used vs hard (list или один объект)",
             ),
         ],
     ),
@@ -196,6 +233,17 @@ SEED_TAGS = {
                 "!kpod[1] ; echo '--- not running ---' ; !kpod[2] ; "
                 "echo '--- warnings ---' ; !kev[3]",
                 "что случилось в $NS",
+            ),
+        ],
+    ),
+    "kquota": (
+        "ResourceQuota + LimitRange + ноды",
+        [
+            (
+                "!kres[1] ; echo '--- compute-resources ---' ; !kres[2] ; "
+                "echo '--- json ---' ; !kres[4] ; echo '--- limitrange ---' ; !kres[6] ; "
+                "echo '--- top node ---' ; !kres[8] ; echo '--- quota events ---' ; !kres[10]",
+                "квоты / лимиты / allocatable",
             ),
         ],
     ),
@@ -248,7 +296,7 @@ def main() -> None:
     parser.add_argument(
         "--seed",
         action="store_true",
-        help="Replace kns/kpod/klog/…/kcrash tags (does not touch proc/file/net/kube)",
+        help="Replace kns/kpod/kres/kquota/… tags (does not touch proc/file/net/kube)",
     )
     parser.add_argument(
         "--db",

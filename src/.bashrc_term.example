@@ -1,0 +1,99 @@
+# Template copied to .bashrc_term_<instance> in the working directory on first start.
+# These variables are loaded at startup and can be used as $VAR in commands.
+
+# export NS=default
+# export EDITOR=nvim
+# export HOST=api.example.local
+
+# git seed (seed_git.py): $BRANCH $COMMIT $FILE $MSG $REMOTE
+# export BRANCH=
+# export COMMIT=HEAD
+# export FILE=
+# export MSG=
+# export REMOTE=origin
+
+# docker (seed_docker.py)
+# export IMAGE=
+# export CTR=
+# export SVC=
+# export COMPOSE_FILE=compose.yaml
+
+# helm (seed_helm.py)
+# export RELEASE=
+# export CHART=
+# export VALUES=values.yaml
+
+# http: curl / nginx / traefik (seed_http.py)
+# export URL=https://example.com/
+# export TRAEFIK_API=http://127.0.0.1:8080
+
+# sockets / firewall (seed_netfw.py)
+# export PORT=443
+# export ZONE=public
+# export PROTO=tcp
+
+# postgres + kafka (seed_data.py)
+# export PGHOST=127.0.0.1
+# export PGPORT=5432
+# export PGUSER=postgres
+# export PGDATABASE=postgres
+# export BROKER=127.0.0.1:9092
+# export TOPIC=
+# export GROUP=
+
+# tar / gzip (seed_host.py)
+# export SRC=.
+# export DEST=backup.tar.gz
+# export ARCHIVE=backup.tar.gz
+# export PATTERN=error
+
+# df / du / lsblk / smartctl / ncdu (seed_disk.py)
+# export DISK=/dev/sda
+# export MNT=/
+# export SRC=.
+
+# vault (seed_vault.py) — do not put VAULT_TOKEN in this file if it is shared
+# export VAULT_ADDR=https://vault.example.com:8200
+# export VAULT_NAMESPACE=
+# export MOUNT=secret
+# export SECRET=secret/app
+# export ROLE=
+# export POLICY=default
+# export FIELD=
+
+# grep / awk / sed (seed_text.py)
+# export FILE=
+# export PATTERN=
+# export REPL=
+# export SEP=,
+# export N=1
+
+# rsync (seed_rsync.py) — trailing slash on SRC matters
+# export SRC=./
+# export DEST=/backup/app/
+# export REMOTE=user@host
+# export EXCL=.git
+
+# find (seed_find.py) — $PATTERN is a glob for -name, e.g. *.log
+# export SRC=.
+# export PATTERN='*.log'
+# export DAYS=7
+# export SIZE=100M
+
+# dig / nmap (seed_recon.py) — scan only hosts you own
+# export HOST=example.com
+# export PORT=443
+# export CIDR=192.168.1.0/24
+# export DNS=1.1.1.1
+# export IP=1.1.1.1
+
+# ssh / scp (seed_ssh.py) — interactive login: > ssh $REMOTE
+# export REMOTE=user@host
+# export HOST=host
+# export PORT=22
+# export SRC=./file
+# export DEST=/tmp/
+# export KEY=~/.ssh/id_ed25519
+# export CERT=~/.ssh/id_ed25519-cert.pub
+# export COMMENT=
+# export CMD='uname -a'

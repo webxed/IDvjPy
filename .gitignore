@@ -22,6 +22,7 @@ __pycache__/
 .bashrc_term
 .bashrc_term_*
 !.bashrc_term.example
+!src/.bashrc_term.example
 history.txt
 log*.txt
 tt.txt
