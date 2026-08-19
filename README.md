@@ -92,6 +92,7 @@ python3 app.py --instance-name=user1   # отдельный .bashrc_term_user1
 - `:r` — команда сфокусированного блока во ввод
 - `:/text` / `:g` / `:n` / `:N` — поиск по строкам журнала (с блока `/` открывает `:/`; `n`/`N` — следующее / предыдущее)
 - `:export tag [file]` / `:import file` — один тег в JSON и обратно
+- `:theme [name]` — тема TUI (`dark` / `light` / `nord` / …); пишется в `settings.yml`. Клавиша `d` — dark/light
 - `:?` — эта справка внутри TUI
 
 ## Горячие клавиши
@@ -110,7 +111,7 @@ python3 app.py --instance-name=user1   # отдельный .bashrc_term_user1
 | `F2` | Построчный режим в блоке |
 | `Shift+Insert` / `Ctrl+V` | Вставка во ввод (не затирает уже набранное). В построчном режиме `Ctrl+V` дописывает текущую строку |
 | `Ctrl+D` | Очистить всю строку ввода |
-| `d` | Тёмная / светлая тема |
+| `d` | Тёмная / светлая тема (`textual-dark` / `textual-light`), сохраняется в `settings.yml`. Когда фокус во вводе, `d` печатается как буква; тема: фокус на журнале или `:theme` |
 
 ### Построчный режим (блок в фокусе)
 
@@ -153,6 +154,7 @@ history_lines: 20
 database_tags_file: mytags.db
 command_timeout: 10          # 0 = без таймаута
 terminal_mouse: true         # клик выделяет блок; false — выделение текста ОС
+theme: textual-dark          # `d` / `:theme`; сохраняется при смене
 ```
 
 Переменные читаются из `.bashrc_term_<instance>` (приоритет) и `.bashrc_term` (дополняет). Формат: `export VAR=val` или `VAR=val`. Если файлов нет, при старте копируется [`src/.bashrc_term.example`](src/.bashrc_term.example).

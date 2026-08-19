@@ -24,7 +24,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:r` `:/` `:g` `:n` `:N` `:export` `:import` |
+| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` |
 | `\|` | Pipe focused/last block stdout |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
 
@@ -99,6 +99,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 - `F6` toggles simple output (no Rich tags).
 - `command_timeout` from `settings.yml` (default 10s; tests use 5s).
 - `terminal_mouse: true` (default): click focuses a journal block, wheel scrolls the journal. `false` restores OS text selection (clicks do not focus).
+- `theme` in `settings.yml` (default `textual-dark`). `d` toggles textual-dark / textual-light and saves. `:theme [name]` lists or sets a builtin theme (`nord`, `dracula`, …).
 
 ### Tags / vars
 - `#` parser: strict regex so `ping -c` / `A=B` save instead of delete/comment.
@@ -142,7 +143,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
 | `src/seed_*.py` | Handbook seeds (linux, k8s, git, ops, …) |
 | `src/app.css` | Styles (JSON viewer, line-nav border, block focus) |
-| `settings.yml` | DB path, timeout, `terminal_mouse` (cwd) |
+| `settings.yml` | DB path, timeout, `terminal_mouse`, `theme` (cwd) |
 | `K8S_CHAINS.md` | k8s investigation overview |
 | `SEED_*_COMMANDS.md` | Canonical tids per handbook |
 | `DATABASE.md` | How commands are read from SQLite |

@@ -121,3 +121,4 @@ Edit `settings.yml`:
 - `database_tags_file`: SQLite filename (default: `mytags.db`)
 - `command_timeout`: seconds; `0` = no timeout (default: 10)
 - `terminal_mouse`: `true` — click focuses a block, wheel scrolls the journal; `false` — OS text selection (clicks do not focus)
+- `theme`: Textual theme name (`textual-dark` default). `d` toggles dark/light and writes this key; `:theme nord` picks a named theme

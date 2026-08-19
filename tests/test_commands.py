@@ -11,6 +11,10 @@ async def test_app_starts_with_input_focused(isolated_home):
         assert input_widget(app).has_focus
         welcome = " ".join(block.text_content for block in app.query(InfoBlock))
         assert "IDvjPy_term" in welcome
+        assert ":?" in welcome
+        assert "#tag cmd" in welcome
+        assert "Define your variables" in welcome
+        assert r"\]" not in welcome
 
 
 async def test_starts_without_existing_database(isolated_home):
@@ -283,3 +287,39 @@ async def test_journal_search_next_and_prev_line(isolated_home):
         await pilot.press("escape")
         await submit(pilot, ":N")
         assert app.focused.line_index == first
+
+
+async def test_theme_loaded_from_settings(isolated_home):
+    settings = isolated_home / "settings.yml"
+    settings.write_text(settings.read_text(encoding="utf-8") + "theme: textual-light\n", encoding="utf-8")
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        assert app.theme == "textual-light"
+
+
+async def test_toggle_dark_saves_theme(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        before = app.theme
+        app.action_toggle_dark()
+        await pilot.pause()
+        assert app.theme != before
+        saved = (isolated_home / "settings.yml").read_text(encoding="utf-8")
+        assert f"theme: {app.theme}" in saved
+
+
+async def test_colon_theme_sets_and_lists(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":theme nord")
+        assert app.theme == "nord"
+        assert "theme: nord" in (isolated_home / "settings.yml").read_text(encoding="utf-8")
+        await submit(pilot, ":theme")
+        listed = last_info(app).text_content
+        assert "nord" in listed
+        assert "Available:" in listed
+        await submit(pilot, ":theme not-a-theme")
+        assert "Unknown theme" in last_info(app).text_content
+        assert app.theme == "nord"

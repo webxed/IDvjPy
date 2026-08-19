@@ -50,7 +50,7 @@ try:
     from typing import Any, List, Optional, Dict, Tuple, Union
     from command_parser_v2 import CommandParser
     from textual import events
-    from textual.app import App, ComposeResult, SuspendNotSupported
+    from textual.app import App, ComposeResult, InvalidThemeError, SuspendNotSupported
     from textual.binding import Binding
     from textual.widgets import Header, Footer, Input, Static
     from rich.markup import escape
@@ -1148,6 +1148,33 @@ class CommandRunner(App):
 
     TITLE = "IDvjPy_term"
     VERSION = "v1.2"
+    STARTUP_LOGO = (
+        "      ___ ____        _ ____        \n"
+        "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
+        "      | || | | \\ \\ / / | |_) | | | |\n"
+        "      | || |_| |\\ V /| |  __/| |_| |\n"
+        "     |___|____/  \\_/ |_|_|    \\__, |\n"
+        "                   (_!_)       |___/"
+    )
+
+    @classmethod
+    def format_startup_help(cls) -> str:
+        """Короткая справка на один экран: логотип, суть, основные команды."""
+        bang_ref = escape("!tag[tid]")
+        return "\n".join(
+            [
+                f"[bold #b794f4]{cls.STARTUP_LOGO}[/]",
+                f"  [bold]{cls.TITLE}[/]  {cls.VERSION}   теги → шаблоны → командная строка",
+                "  [dim]Define your variables, join your command.[/]",
+                "",
+                f"  [bold]{bang_ref}[/] / [bold]!![/] собирают строку, [bold]Enter[/] запускает.  Полная справка: [bold]:?[/]",
+                "",
+                "  [bold]:?[/] справка      [bold]:q[/] выход       [bold]:h[/] история     [bold]:c[/] очистить",
+                f"  [bold]#tag cmd[/] сохранить    [bold]?[/] / [bold]??[/] теги БД     [bold]{bang_ref}[/] вставить",
+                "  [bold]$VAR=val[/] переменная   [bold]> cmd[/] TTY          [bold]| cmd[/] пайп блока",
+                "  [bold]Tab[/] журнал  [bold]F2[/] строки  [bold]F3[/] копия  [bold]F5[/] JSON  [bold]d[/] / [bold]:theme[/] тема",
+            ]
+        )
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
@@ -1194,6 +1221,13 @@ class CommandRunner(App):
     CMD_SEARCH_PREV = "N"
     CMD_EXPORT = "export"
     CMD_IMPORT = "import"
+    CMD_THEME = "theme"
+    KEY_THEME = "theme"
+    DEFAULT_THEME = "textual-dark"
+    THEME_ALIASES = {
+        "dark": "textual-dark",
+        "light": "textual-light",
+    }
 
     def __init__(self):
         """Инициализация состояния приложения."""
@@ -1602,6 +1636,7 @@ class CommandRunner(App):
                     self.history_lines = settings.get(self.KEY_HISTORY_LINES, 20)
                     self.COMMAND_TIMEOUT = settings.get("command_timeout", 10)
                     self.db_file = settings.get("database_tags_file", self.FILE_DATABASE)
+                    self._apply_theme_name(settings.get(self.KEY_THEME))
         except (FileNotFoundError, KeyError, yaml.YAMLError):
             pass
 
@@ -1790,8 +1825,8 @@ class CommandRunner(App):
             self.add_block(InfoBlock(f"Warning: Error loading aliases from {alias_file}: {e}"))
 
     def on_ready(self) -> None:
-        """Приветственное сообщение после загрузки UI."""
-        self.add_block(InfoBlock(f"--- {self.TITLE} {self.VERSION} ---"))
+        """Приветствие: короткий экран справки; при пустой БД — каталог seed."""
+        self.add_block(InfoBlock(self.format_startup_help()))
         if getattr(self, "_fresh_command_db", False):
             self.add_block(InfoBlock(format_empty_db_hint(self.db_file)))
         self._request_shift_enter_encoding()
@@ -2496,6 +2531,8 @@ class CommandRunner(App):
             self._export_tag(parts[1:])
         elif command == self.CMD_IMPORT:
             self._import_tag(parts[1:])
+        elif command == self.CMD_THEME:
+            self._handle_theme_command(parts[1:])
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
 
@@ -2751,6 +2788,7 @@ class CommandRunner(App):
   :/text  :g  - Search journal lines; :n / n next, :N / N prev. / on a block starts :/
   :export tag [file] - Write one tag to JSON
   :import file       - Insert commands from that JSON (new tids)
+  :theme [name] - Show or set TUI theme (saved in settings.yml)
 
 [bold]Kubernetes Commands (prefix :i)[/bold]
   :i list             - List all ingresses
@@ -3837,6 +3875,87 @@ class CommandRunner(App):
             daemon=True
         )
         thread.start()
+
+    def action_toggle_dark(self) -> None:
+        """Переключить textual-dark / textual-light и записать тему в settings.yml."""
+        super().action_toggle_dark()
+        self._save_settings_theme(self.theme)
+        self.sub_title = self.theme
+        self.set_timer(2, self.clear_subtitle)
+
+    def _normalize_theme_name(self, name: str) -> str:
+        key = str(name or "").strip().lower()
+        return self.THEME_ALIASES.get(key, key)
+
+    def _apply_theme_name(self, name: Optional[str]) -> None:
+        """Ставит тему из settings.yml; неизвестное имя — textual-dark."""
+        theme = self._normalize_theme_name(name or self.DEFAULT_THEME)
+        if not theme:
+            theme = self.DEFAULT_THEME
+        try:
+            self.theme = theme
+        except InvalidThemeError:
+            self.theme = self.DEFAULT_THEME
+
+    def _handle_theme_command(self, args: List[str]) -> None:
+        """`:theme` — текущая и список; `:theme nord` — выбрать и сохранить."""
+        if not args:
+            names = ", ".join(sorted(self.available_themes))
+            self.add_block(
+                InfoBlock(
+                    f"Theme: {self.theme}\n"
+                    f"Available: {names}\n"
+                    f"Set: :theme <name>  (aliases: dark, light)\n"
+                    f"Saved in {self.FILE_SETTINGS}. Key `d` toggles textual-dark / textual-light."
+                )
+            )
+            return
+        theme = self._normalize_theme_name(args[0])
+        if theme not in self.available_themes:
+            self.add_block(
+                InfoBlock(f"Unknown theme: {args[0]}. Type :theme for the list.")
+            )
+            return
+        self.theme = theme
+        self._save_settings_theme(theme)
+        self.add_block(InfoBlock(f"Theme: {theme} (saved in {self.FILE_SETTINGS})"))
+
+    def _save_settings_theme(self, name: str) -> None:
+        """Пишет ключ theme: в settings.yml, сохраняя остальные строки и комментарии."""
+        path = self.FILE_SETTINGS
+        try:
+            if os.path.exists(path):
+                with open(path, "r", encoding=self.ENCODING) as f:
+                    raw = f.read()
+                lines = raw.splitlines(keepends=True)
+                replaced = False
+                out: List[str] = []
+                for line in lines:
+                    if re.match(r"^theme:\s*", line):
+                        nl = "\n" if line.endswith("\n") else ""
+                        out.append(f"theme: {name}{nl}")
+                        replaced = True
+                    else:
+                        out.append(line)
+                if not replaced:
+                    if out and not out[-1].endswith("\n"):
+                        out[-1] += "\n"
+                    if out and out[-1].strip():
+                        out.append("\n")
+                    out.append(
+                        "# TUI color theme (`d` toggles textual-dark / textual-light).\n"
+                    )
+                    out.append(f"theme: {name}\n")
+                with open(path, "w", encoding=self.ENCODING) as f:
+                    f.writelines(out)
+            else:
+                with open(path, "w", encoding=self.ENCODING) as f:
+                    f.write(
+                        "# TUI color theme (`d` toggles textual-dark / textual-light).\n"
+                        f"theme: {name}\n"
+                    )
+        except OSError as e:
+            self.add_block(InfoBlock(f"Could not save theme to {path}: {e}"))
 
     def _settings_terminal_mouse(self) -> bool:
         """
