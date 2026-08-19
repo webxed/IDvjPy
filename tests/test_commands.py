@@ -236,6 +236,23 @@ async def test_instance_name_uses_separate_history_file(isolated_home, monkeypat
         assert "echo inst-only" not in shared
 
 
+async def test_hash_space_parks_in_history_without_running(isolated_home):
+    """`# command` — в journal и history_*, без запуска и без тега."""
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "# curl https://parked.example/later")
+        assert list(app.query(CommandBlock)) == []
+        assert "# curl https://parked.example/later" in last_info(app).text_content
+        hist = (isolated_home / CommandRunner.FILE_HISTORY).read_text(encoding="utf-8")
+        assert "# curl https://parked.example/later" in hist
+
+        await submit(pilot, "#logs echo still-a-tag")
+        assert "Saved:" in last_info(app).text_content
+        assert "logs[1]" in last_info(app).text_content
+        hist = (isolated_home / CommandRunner.FILE_HISTORY).read_text(encoding="utf-8")
+        assert "#logs echo still-a-tag" not in hist
+
+
 def test_history_append_skips_consecutive_duplicate(isolated_home):
     from app import append_history_file_line, read_history_file_lines
 
@@ -353,6 +370,37 @@ async def test_ctrl_d_clears_input_line(isolated_home):
         await pilot.pause()
         assert inp.value == ""
         assert inp.has_focus
+
+
+async def test_ctrl_c_copies_whole_input_line(isolated_home):
+    import pyperclip
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.press("escape")
+        await type_keys(pilot, "echo copy-all-input")
+        await pilot.pause()
+        await pilot.press("ctrl+c")
+        await pilot.pause()
+        assert pyperclip.paste() == "echo copy-all-input"
+        assert input_widget(app).value == "echo copy-all-input"
+        assert input_widget(app).has_focus
+
+
+async def test_ctrl_c_on_block_copies_stdout(isolated_home):
+    import pyperclip
+    from app import CommandBlock
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "echo copied-from-block")
+        await wait_command_done(app)
+        await pilot.press("tab")
+        await pilot.pause()
+        assert isinstance(app.focused, CommandBlock)
+        await pilot.press("ctrl+c")
+        await pilot.pause()
+        assert "copied-from-block" in pyperclip.paste()
 
 
 async def test_tty_prefix_empty_shows_usage(isolated_home):

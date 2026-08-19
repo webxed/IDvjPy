@@ -538,6 +538,40 @@ async def test_shift_enter_appends_line_to_input(isolated_home):
         assert app.focused.line_nav_active
 
 
+async def test_line_copy_strips_parked_hash_prefix(isolated_home):
+    """F2: Enter и Ctrl+V снимают ведущий `# ` у запаркованной строки."""
+    from app import InfoBlock
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "# curl https://parked.example/later")
+        await pilot.press("tab")
+        await pilot.pause()
+        assert isinstance(app.focused, InfoBlock)
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("home")
+        await pilot.pause()
+        assert app.focused._current_plain_line() == "curl https://parked.example/later"
+        await pilot.press("enter")
+        await pilot.pause()
+        assert pyperclip.paste() == "curl https://parked.example/later"
+        assert input_widget(app).has_focus
+
+        await pilot.press("tab")
+        await pilot.pause()
+        await pilot.press("f2")
+        await pilot.pause()
+        await pilot.press("home")
+        await pilot.pause()
+        inp = input_widget(app)
+        inp.value = "run"
+        inp.cursor_position = 3
+        await pilot.press("ctrl+v")
+        await pilot.pause()
+        assert inp.value == "run curl https://parked.example/later"
+
+
 async def test_line_nav_enter_keeps_input_text_and_paste_appends(isolated_home, monkeypatch):
     from app import CommandBlock
 

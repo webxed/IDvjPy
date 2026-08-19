@@ -17,6 +17,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | (none) | Execute shell command |
 | `> cmd` | Suspend TUI, run with a real TTY (`htop`, `vim`, `ssh`) |
 | `#tag cmd` | Save (literal text; refs `!tag[tid]` not expanded on save) |
+| `# command` | Park in instance history + journal, do not run (`#` + space) |
 | `#tag=` / `#tag=ID=` | Tag / command comment (ID = tid or global `<id>`) |
 | `#tag+` / `#tag+ID` | Edit last / by tid |
 | `#tag-` / `#tag-tid` | Soft-delete (strict `#tag-` only, not `-` inside cmd) |
@@ -30,7 +31,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 
 Aliases from `~/.bashrc`: bodies with `$1` / `$2` / `$@` substitute args; otherwise the rest of the line is appended.
 
-Hotkeys: `Tab` input → output (Esc back); `F3` copy block; `F5` JSON; `F6` simple output; `F2` line-cursor mode; `Shift+Insert`/`Ctrl+V` paste in the input (does not replace existing text); in line-cursor mode `Ctrl+V` appends the current line; `Ctrl+D` clears the input line; `PgUp`/`PgDn` scroll a page and activate the visible block (no jump to block start); click a block to focus it; `Up`/`Down` walk `history_<instance>.txt` in the input (typed text filters), journal scroll when a block is focused (line-by-line in line-cursor mode).
+Hotkeys: `Tab` input → output (Esc back); `F3` / `Ctrl+C` copy block (Ctrl+C in the input copies the draft); `F5` JSON; `F6` simple output; `F2` line-cursor mode; `Shift+Insert`/`Ctrl+V` paste in the input (does not replace existing text); in line-cursor mode `Ctrl+V` appends the current line; `Ctrl+D` clears the input line; `PgUp`/`PgDn` scroll a page and activate the visible block (no jump to block start); click a block to focus it; `Up`/`Down` walk `history_<instance>.txt` in the input (typed text filters), journal scroll when a block is focused (line-by-line in line-cursor mode).
 
 ---
 
@@ -58,8 +59,8 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 ### Line-cursor mode (F2 / Enter on a focused block)
 - **Off by default.** Focus a block (`Tab` / `PgUp`), then `Enter` or `F2` to turn it on. Current line is highlighted (`[reverse]` + left accent border).
 - Off: `↑/↓` scroll the journal. On: `↑/↓` move by lines; `Home`/`End` first/last line. At the edge, arrows scroll the journal again.
-- `Enter`: copy the current line (trailing spaces stripped) to CLIPBOARD + PRIMARY + Textual/OSC 52, then jump to input (cursor at end, no selection).
-- `Shift+Enter` / `Ctrl+V`: append the line to the input, separated by a space; stay in the block (can append several lines). If the terminal sends Shift+Enter as plain Enter, use **Ctrl+V**. While the input is focused, `Ctrl+V` still pastes from the clipboard. The app requests kitty CSI-u / xterm `modifyOtherKeys`.
+- `Enter`: copy the current line (trailing spaces stripped; a leading `# ` from a parked history line is removed) to CLIPBOARD + PRIMARY + Textual/OSC 52, then jump to input (cursor at end, no selection).
+- `Shift+Enter` / `Ctrl+V`: append the line to the input, separated by a space (same `# ` strip); stay in the block (can append several lines). If the terminal sends Shift+Enter as plain Enter, use **Ctrl+V**. While the input is focused, `Ctrl+V` still pastes from the clipboard. The app requests kitty CSI-u / xterm `modifyOtherKeys`.
 - Many terminals deliver Ctrl+V as a **Paste** event rather than a `ctrl+v` key; line-cursor mode treats that Paste as append (same as the key).
 - `Esc`: turn mode off, stay on the block. `F2`: toggle.
 - Documented in `:?` under **Line-cursor mode**.
@@ -94,7 +95,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 - Unique tag prefix (`!fi` when only `file` exists) lists that tag's commands. Several matching tags → pick a tag first.
 
 ### Clipboard / paste
-- Copy (F3, line Enter, JSON path) writes system CLIPBOARD, X11/Wayland PRIMARY, and Textual internal + OSC 52 (so Shift+Insert in the terminal matches mouse paste).
+- Copy (F3, line Enter, JSON path, **Ctrl+C**) writes system CLIPBOARD, X11/Wayland PRIMARY, and Textual internal + OSC 52 (so Shift+Insert in the terminal matches mouse paste). **Ctrl+C** in the input copies the whole draft; on a journal block it copies the block (same as F3).
 - `Shift+Insert` / `Ctrl+V` in the input paste from those buffers and **do not replace** existing text (insert at cursor / end if a leftover selection exists). In line-cursor mode `Ctrl+V` / Paste appends the current journal line instead.
 
 ### Output
@@ -161,6 +162,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 - **`↑`/`↓`** in the input walk that file (plus this session). Typed text filters matches; empty input walks everything; Down past newest restores the draft.
 - **`:h /text`** searches the instance history in the completion list (unique lines, newest first). Esc then Enter dumps a journal block. Empty `:h /` is the same as `:h`.
 - History search uses an in-memory cache (reload on mtime/size). Appends take one exclusive flock so several app copies do not race on the same file.
+- **`# command`** (space after `#`) parks the line in history and the journal without running it, like a bash comment. `#tag cmd` (no space) still saves a tag.
 
 ## v1.2
 

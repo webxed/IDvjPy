@@ -67,6 +67,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | (none) | Execute shell command via subprocess, add to session history |
 | `> cmd` | Suspend TUI (`App.suspend()`), run with a real TTY (`htop`, `vim`, `ssh`). No timeout, stdout not captured. `>>` is left to the shell. |
 | `#tag cmd` | Save command to database with tag (literal text; refs not expanded on save) |
+| `# command` | Park the line in `history_<instance>.txt` and the journal; do not run (`#` + space, like bash) |
 | `#tag=` / `#tag=ID=` | Tag / command comment (ID = tid or global `<id>`) |
 | `#tag+` / `#tag+ID` | Load last / by tid into input for editing |
 | `#tag-` / `#tag-tid` | Soft-delete |
@@ -90,7 +91,7 @@ Aliases load from `~/.bashrc`. If the body contains `$1` / `$2` / `$@` / `$*`, a
 4. **Focused block as pipe source**: `|` uses the focused block's stdout
 5. **Bash aliases**: loaded at startup; `$1` positional substitution supported
 6. **Background execution**: shell commands run in threads so the UI stays responsive
-7. **Line-cursor (F2 / Enter on a focused block)**: copy or append individual output lines
+7. **Line-cursor (F2 / Enter on a focused block)**: copy or append individual output lines. **Ctrl+C** copies the whole input draft, or the focused journal block (same as F3).
 8. **Bang-ref completion**: type `!` to list tags, then commands as `<id> tag[tid]`; Tab inserts `!tag[tid]`
 
 ### Database Schema

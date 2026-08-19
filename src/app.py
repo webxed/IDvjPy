@@ -368,7 +368,11 @@ class LineNavigable:
         app = getattr(self, "app", None)
         if app is not None and hasattr(app, "_strip_formatting_tags"):
             text = app._strip_formatting_tags(text)
-        return text.rstrip()
+        text = text.rstrip()
+        parked = re.match(r"^#\s+(.*)$", text)
+        if parked:
+            return parked.group(1)
+        return text
 
     def _current_plain_line(self) -> str:
         lines = self._nav_lines()
@@ -947,6 +951,7 @@ class CommandInput(Input):
         Binding("tab", "tab_input", show=False, priority=True),
         Binding("shift+insert", "paste_clipboard", show=False, priority=True),
         Binding("ctrl+v", "paste_clipboard", show=False, priority=True),
+        Binding("ctrl+c", "copy_input", show=False, priority=True),
         Binding("ctrl+d", "clear_input", show=False, priority=True),
     ]
 
@@ -1060,6 +1065,11 @@ class CommandInput(Input):
         self.cursor_position = 0
         if self._completion_list is not None:
             self._completion_list.hide()
+
+    def action_copy_input(self) -> None:
+        """Ctrl+C: скопировать всю строку ввода в буфер."""
+        if hasattr(self.app, "copy_input_line"):
+            self.app.copy_input_line()
 
     def on_key(self, event: events.Key) -> None:
         """Обработка клавиш для автодополнения."""
@@ -1243,6 +1253,7 @@ class CommandRunner(App):
         Binding("pagedown", "journal_page_down", "Next Block", show=False),
         Binding("shift+insert", "paste_clipboard", "Paste", show=False),
         Binding("ctrl+v", "paste_clipboard", "Paste", show=False),
+        Binding("ctrl+c", "copy_input_or_block", "Copy", show=False, priority=True),
         Binding("space", "toggle_block_collapse", "Collapse", show=False),
         Binding("left", "collapse_block", "← Collapse", show=False),
         Binding("right", "expand_block", "→ Expand", show=False),
@@ -2320,6 +2331,29 @@ class CommandRunner(App):
             return
         focused.toggle_line_nav()
 
+    def copy_input_line(self) -> None:
+        """Копирует весь текст поля ввода в системный буфер."""
+        inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        text = inp.value or ""
+        if not text:
+            self.sub_title = "Input is empty."
+            self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+            return
+        try:
+            copy_text_to_clipboards(text, self)
+            self.sub_title = self.MSG_COPIED
+        except Exception:
+            self.sub_title = "Error copying to clipboard."
+        self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+
+    def action_copy_input_or_block(self) -> None:
+        """Ctrl+C: во вводе — вся строка; в журнале — весь блок (как F3)."""
+        inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        if inp.has_focus:
+            self.copy_input_line()
+            return
+        self.action_copy_block()
+
     def action_copy_block(self) -> None:
         """Копирует содержимое сфокусированного блока в буфер обмена."""
         focused = self.focused
@@ -2504,6 +2538,9 @@ class CommandRunner(App):
             return
 
         self.log_to_history(user_input)
+        if self._is_history_comment(user_input):
+            self._park_history_comment(user_input)
+            return
 
         # v1.1.9+: Проверяем, содержит ли команда ссылки на другие команды
         # Ссылки: !tag[tid] или !ID (но не !!)
@@ -2569,12 +2606,14 @@ class CommandRunner(App):
 
     def log_to_history(self, command: str) -> None:
         """
-        Записывает команду в файл history.txt, исключая спецкоманды.
+        Записывает команду в файл истории инстанса, исключая спецкоманды.
 
+        `# command` (пробел после #) пишется в историю, как комментарий в bash.
+        `#tag` без пробела — тег, в history не попадает.
         Проверка хвоста файла и append — одна блокировка (несколько экземпляров).
         """
         prefixes = (self.PREFIX_CMD, self.PREFIX_QUERY, self.PREFIX_BANG, self.PREFIX_DOUBLE_BANG, self.PREFIX_TAG, self.PREFIX_PIPE, self.PREFIX_VAR)
-        if command.startswith(prefixes):
+        if command.startswith(prefixes) and not self._is_history_comment(command):
             return
         append_history_file_line(
             self.FILE_HISTORY,
@@ -2582,8 +2621,19 @@ class CommandRunner(App):
             encoding=self.ENCODING,
             lock_timeout=self.FILE_LOCK_TIMEOUT,
         )
-        # Файл могли дописать мы или другой инстанс — не держим устаревший кэш.
         self._history_file_stat = None
+
+    @staticmethod
+    def _is_history_comment(text: str) -> bool:
+        """`# command` — не тег и не shell, только запись в историю."""
+        return bool(re.match(r"^#\s+\S", text or ""))
+
+    def _park_history_comment(self, user_input: str) -> None:
+        """Оставляет строку в журнале и session history, ничего не запускает."""
+        if user_input not in self.session_history:
+            self.session_history.append(user_input)
+        self.session_history_pos = len(self.session_history)
+        self.add_block(InfoBlock(escape(user_input)))
 
     def handle_colon_command(self, user_input: str) -> None:
         """Обработка команд управления (:q, :w, :h, :c)."""
@@ -2933,7 +2983,8 @@ class CommandRunner(App):
 [bold]Command Prefixes[/bold]
   (none)     - Execute shell command
   > <cmd>    - Suspend TUI and run with a real TTY (htop, vim, ssh, less)
-  #<tag>     - Save command to database with tag
+  #<tag>     - Save command to database with tag (`#tag cmd`, no space after #)
+  # command  - Park a line in history without running (bash-style; space after #)
   #tag! / #tag!tid - Restore soft-deleted tag / command
   ?          - Query database (? all, ?<tag>, ?? grouped)
   !tag / !tag[tid] - Type ! to list tags [file, kube, log]; Tab picks a tag
@@ -2957,6 +3008,7 @@ class CommandRunner(App):
   Space      - Toggle block collapse
   ← / →      - Collapse / expand focused block
   F3         - Copy full block output to clipboard
+  Ctrl+C     - Copy the whole input line; if a journal block is focused, copy the block (same as F3)
   F5         - Open focused (or last command) block in JSON viewer
   F6         - Toggle simple (plain) output
   F2         - Toggle line-cursor mode (see below)
@@ -2972,8 +3024,10 @@ class CommandRunner(App):
   ↑/↓        - Move by lines inside the block
   Home/End   - First / last line of the block
   Enter      - Copy current line (trailing spaces stripped) and jump to input
+               Leading `# ` (parked history line) is removed so the command is ready
                Cursor goes to the end of the input; existing text is not selected
   Shift+Enter / Ctrl+V - Append current line to input, separated by a space
+               Leading `# ` is stripped the same way
                Stay in the block (can append several lines)
                If Shift+Enter acts like Enter, the terminal does not distinguish
                the keys — use Ctrl+V. While the input is focused, Ctrl+V pastes
