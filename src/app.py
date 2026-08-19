@@ -28,7 +28,7 @@ Examples:
         '--instance-name',
         type=str,
         default='default',
-        help='Instance name for unique .bashrc_term file (default: default)'
+        help='Instance name for unique .bashrc_term and history files (default: default)'
     )
     return parser.parse_args()
 
@@ -97,6 +97,7 @@ RE_GID_FIND = re.compile(r'(?<!!)!(\d+)')
 RE_BANG_PARTIAL = re.compile(
     r'^!([A-Za-z_][A-Za-z0-9_]*)(\[(\d*)(\]?))?$'
 )
+RE_COLON_H_SEARCH = re.compile(r"^:h\s*/(.*)$")
 TOKEN_SEPS = frozenset(" \t|&;")
 
 
@@ -109,9 +110,9 @@ class FileLockTimeoutError(Exception):
     pass
 
 
-def acquire_file_lock(file_obj, timeout_sec: int = 5) -> None:
+def acquire_file_lock(file_obj, timeout_sec: int = 5, *, shared: bool = False) -> None:
     """
-    Acquire exclusive lock on file with timeout (cross-platform).
+    Acquire lock on file with timeout (cross-platform).
 
     Uses portalocker for cross-platform file locking support:
     - Linux/Unix: fcntl.flock()
@@ -119,30 +120,29 @@ def acquire_file_lock(file_obj, timeout_sec: int = 5) -> None:
 
     Args:
         file_obj: Open file object (must be opened in a mode that allows locking)
-        timeout_sec: Maximum time to wait for lock (default: 5 seconds)
+        timeout_sec: Maximum time to wait for lock (default: 5 seconds). 0 = one try.
+        shared: True for a shared read lock (several readers, blocks writers).
 
     Raises:
         FileLockTimeoutError: If lock cannot be acquired within timeout
         IOError: If locking operation fails
     """
+    flags = portalocker.LOCK_SH if shared else portalocker.LOCK_EX
+    flags |= portalocker.LOCK_NB
     start_time = time.time()
 
     while True:
         try:
-            # Try to acquire exclusive lock (non-blocking)
-            portalocker.lock(file_obj, portalocker.LOCK_EX)
-            return  # Lock acquired successfully
-        except portalocker.exceptions.LockException as e:
-            # Lock is held by another process
+            portalocker.lock(file_obj, flags)
+            return
+        except portalocker.exceptions.LockException:
             elapsed = time.time() - start_time
             if elapsed >= timeout_sec:
                 raise FileLockTimeoutError(
                     f"Could not acquire file lock after {timeout_sec} seconds"
                 )
-            # Wait a bit before retrying (100ms)
             time.sleep(0.1)
         except Exception as e:
-            # Some other error occurred
             raise IOError(f"Failed to acquire file lock: {e}")
 
 
@@ -157,6 +157,100 @@ def release_file_lock(file_obj) -> None:
         portalocker.unlock(file_obj)
     except Exception:
         pass  # Lock was already released or file was closed
+
+
+def _stat_key_from_stat(st) -> Tuple[int, int]:
+    """Ключ кэша history.txt: mtime_ns + size (видно записи других процессов)."""
+    mtime_ns = getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000))
+    return (int(mtime_ns), int(st.st_size))
+
+
+def history_file_stat_key(path: str) -> Optional[Tuple[int, int]]:
+    try:
+        return _stat_key_from_stat(os.stat(path))
+    except OSError:
+        return None
+
+
+def _read_last_history_line(file_obj, encoding: str, tail: int = 8192) -> Optional[str]:
+    """Последняя непустая строка; file_obj открыт в бинарном режиме."""
+    file_obj.seek(0, os.SEEK_END)
+    size = file_obj.tell()
+    if size <= 0:
+        return None
+    file_obj.seek(max(0, size - tail), os.SEEK_SET)
+    data = file_obj.read()
+    text = data.decode(encoding, errors="replace")
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    return lines[-1] if lines else None
+
+
+def read_history_file_lines(
+    path: str,
+    encoding: str = "utf-8",
+) -> Tuple[List[str], Optional[Tuple[int, int]]]:
+    """
+    Читает history.txt. Shared-lock, если свободен; иначе читает без lock,
+    чтобы подсказки не ждали писателя.
+    """
+    try:
+        f = open(path, "r", encoding=encoding)
+    except FileNotFoundError:
+        return [], None
+    except OSError:
+        return [], None
+    with f:
+        locked = False
+        try:
+            acquire_file_lock(f, timeout_sec=0, shared=True)
+            locked = True
+        except (FileLockTimeoutError, IOError):
+            locked = False
+        try:
+            lines = [line.strip() for line in f if line.strip()]
+            key = _stat_key_from_stat(os.fstat(f.fileno()))
+            return lines, key
+        finally:
+            if locked:
+                release_file_lock(f)
+
+
+def append_history_file_line(
+    path: str,
+    command: str,
+    encoding: str = "utf-8",
+    lock_timeout: int = 5,
+) -> bool:
+    """
+    Дописывает команду в history.txt, если она не совпадает с последней строкой.
+
+    Проверка последней строки и запись — под одним exclusive flock,
+    чтобы несколько экземпляров не гонялись за хвостом файла.
+    """
+    command = (command or "").strip()
+    if not command:
+        return False
+    try:
+        with open(path, "ab+") as f:
+            locked = False
+            try:
+                acquire_file_lock(f, lock_timeout)
+                locked = True
+            except FileLockTimeoutError:
+                locked = False
+            try:
+                last = _read_last_history_line(f, encoding)
+                if last == command:
+                    return False
+                f.seek(0, os.SEEK_END)
+                f.write(f"{command}\n".encode(encoding))
+                f.flush()
+                return True
+            finally:
+                if locked:
+                    release_file_lock(f)
+    except OSError:
+        return False
 
 
 class LineNavigable:
@@ -1013,6 +1107,9 @@ class CommandInput(Input):
         if self._applying_completion:
             self._applying_completion = False
             return
+        app = self.app
+        if hasattr(app, "_reset_history_walk"):
+            app._reset_history_walk()
         # Затем показываем подсказки
         self.call_after_refresh(self._show_completions)
 
@@ -1036,6 +1133,11 @@ class CommandInput(Input):
             # `ls   ` — выполнить ls, не держать список `ls -la`.
             self._completion_list.hide()
             return
+        if hasattr(app, "get_history_search_completions"):
+            hist_cands, hist_preview = app.get_history_search_completions(raw_value)
+            if hist_cands or hist_preview:
+                self._completion_list.update_candidates(hist_cands, preview=hist_preview)
+                return
         prefix = raw_value.strip()
         is_path_context = hasattr(app, "_is_path_context") and app._is_path_context(self.value)
         if len(prefix) < 2 and not is_path_context:
@@ -1147,7 +1249,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.2"
+    VERSION = "v1.22"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1178,7 +1280,8 @@ class CommandRunner(App):
 
     # --- Конфигурация и константы ---
     FILE_SETTINGS = "settings.yml"
-    FILE_HISTORY = "history.txt"
+    FILE_HISTORY_LEGACY = "history.txt"
+    FILE_HISTORY = f"history_{INSTANCE_NAME}.txt"
     FILE_DATABASE = "mytags.db"
     # FILE_BASHRC теперь уникален для каждого инстанса
     FILE_BASHRC = f".bashrc_term_{INSTANCE_NAME}"  # Файл для хранения локальных переменных
@@ -1187,6 +1290,7 @@ class CommandRunner(App):
     ID_INPUT = "command-input"
     ID_RESULTS_CONTAINER = "results-container"
     KEY_HISTORY_LINES = "history_lines"
+    HISTORY_SEARCH_LIMIT = 50
     ENCODING = "utf-8"
     TIMER_DELAY = 2
     COMMAND_TIMEOUT = 10
@@ -1234,6 +1338,13 @@ class CommandRunner(App):
         super().__init__()
         self.session_history: List[str] = []
         self.session_history_pos: int = 0
+        self._history_walking: bool = False
+        self._history_needle: str = ""
+        self._history_draft: str = ""
+        self._history_matches: List[str] = []
+        self._history_walk_index: int = 0
+        self._history_file_lines: List[str] = []
+        self._history_file_stat: Optional[Tuple[int, int]] = None
         # Словарь для хранения результатов поиска {ID: Command}
         self.last_query_results: Dict[int, str] = {}
         self.history_lines: int = 20
@@ -1277,9 +1388,14 @@ class CommandRunner(App):
         """
         Path-контекст: последний токен похож на путь, либо аргумент cd/pushd.
         Не любое «два слова»: иначе `cat file` + Enter из истории даёт `cat cat file`.
+        `:h /…` — поиск по history.txt, не листинг `/`.
         """
         stripped = text.rstrip()
         if not stripped:
+            return False
+
+        parts = stripped.split()
+        if parts and parts[0] == f"{self.PREFIX_CMD}{self.CMD_HISTORY}":
             return False
 
         token = self._extract_path_token(text)
@@ -1288,7 +1404,6 @@ class CommandRunner(App):
         if self._last_token_is_path_like(token):
             return True
 
-        parts = stripped.split()
         if len(parts) >= 2 and parts[0] in ("cd", "pushd"):
             return True
         # Относительное имя файла после команды: `cat te` → test.json
@@ -1515,6 +1630,33 @@ class CommandRunner(App):
 
         return items, preview
 
+    def _unique_history_matches(self, needle: str) -> List[str]:
+        """Совпадения history.txt (+ сессия), свежие сверху, одинаковые строки один раз."""
+        folded = (needle or "").strip().casefold()
+        unique: List[str] = []
+        seen = set()
+        for cmd in reversed(self._history_pool()):
+            if folded and folded not in cmd.casefold():
+                continue
+            if cmd in seen:
+                continue
+            seen.add(cmd)
+            unique.append(cmd)
+        return unique
+
+    def get_history_search_completions(self, text: str) -> Tuple[List[str], str]:
+        """Подсказки для `:h /text`: уникальные строки history, свежие сверху."""
+        matched = RE_COLON_H_SEARCH.match((text or "").rstrip())
+        if not matched:
+            return [], ""
+        matches = self._unique_history_matches(matched.group(1))
+        if not matches:
+            return [], ""
+        shown = matches[: self.HISTORY_SEARCH_LIMIT]
+        label = (matched.group(1) or "").strip()
+        preview = f"{self.FILE_HISTORY} /{label}  {len(shown)}/{len(matches)}"
+        return shown, preview
+
     def get_completion_candidates(self, prefix: str) -> List[str]:
         """
         Возвращает список команд из БД и истории сессии по префиксу.
@@ -1661,6 +1803,8 @@ class CommandRunner(App):
                 except Exception as e:
                     pass  # Ошибка миграции не критична
 
+        self._migrate_legacy_history()
+
         # 3. Загрузка переменных из файла .bashrc_term
         self.load_bashrc()
         self.load_aliases()
@@ -1739,6 +1883,19 @@ class CommandRunner(App):
         finally:
             # Перезапускаем таймер для следующего цикла
             self.set_timer(self.DB_RELOAD_INTERVAL, self._periodic_db_reload)
+
+    def _migrate_legacy_history(self) -> None:
+        """Копирует history.txt → history_<instance>.txt, если инстанс-файла ещё нет."""
+        if os.path.exists(self.FILE_HISTORY):
+            return
+        legacy = self.FILE_HISTORY_LEGACY
+        if not os.path.exists(legacy):
+            return
+        try:
+            import shutil
+            shutil.copy(legacy, self.FILE_HISTORY)
+        except OSError:
+            pass
 
     def _parse_bashrc_assignment(self, line: str) -> Optional[tuple]:
         return parse_bashrc_assignment(line)
@@ -2341,6 +2498,7 @@ class CommandRunner(App):
         user_input = message.value.strip()
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
         input_widget.value = ""
+        self._reset_history_walk()
 
         if not user_input:
             return
@@ -2413,49 +2571,19 @@ class CommandRunner(App):
         """
         Записывает команду в файл history.txt, исключая спецкоманды.
 
-        Использует file locking для безопасной записи при одновременной работе
-        нескольких копий приложения.
+        Проверка хвоста файла и append — одна блокировка (несколько экземпляров).
         """
         prefixes = (self.PREFIX_CMD, self.PREFIX_QUERY, self.PREFIX_BANG, self.PREFIX_DOUBLE_BANG, self.PREFIX_TAG, self.PREFIX_PIPE, self.PREFIX_VAR)
         if command.startswith(prefixes):
             return
-        last_command = None
-        try:
-            if os.path.exists(self.FILE_HISTORY):
-                try:
-                    with open(self.FILE_HISTORY, "r", encoding=self.ENCODING) as f:
-                        acquire_file_lock(f, self.FILE_LOCK_TIMEOUT)
-                        try:
-                            lines = f.readlines()
-                            if lines:
-                                last_command = lines[-1].strip()
-                        finally:
-                            release_file_lock(f)
-                except FileLockTimeoutError:
-                    # Если не получили блокировку для чтения, читаем без неё
-                    with open(self.FILE_HISTORY, "r", encoding=self.ENCODING) as f:
-                        lines = f.readlines()
-                        if lines:
-                            last_command = lines[-1].strip()
-        except IOError:
-            return
-
-        if command != last_command:
-            try:
-                with open(self.FILE_HISTORY, "a", encoding=self.ENCODING) as f:
-                    # Пытаемся получить блокировку для записи
-                    try:
-                        acquire_file_lock(f, self.FILE_LOCK_TIMEOUT)
-                        try:
-                            f.write(f"{command}\n")
-                        finally:
-                            release_file_lock(f)
-                    except FileLockTimeoutError:
-                        # Если не получили блокировку, пишем без неё
-                        # (лучше записать дубликат, чем потерять команду)
-                        f.write(f"{command}\n")
-            except IOError:
-                pass
+        append_history_file_line(
+            self.FILE_HISTORY,
+            command,
+            encoding=self.ENCODING,
+            lock_timeout=self.FILE_LOCK_TIMEOUT,
+        )
+        # Файл могли дописать мы или другой инстанс — не держим устаревший кэш.
+        self._history_file_stat = None
 
     def handle_colon_command(self, user_input: str) -> None:
         """Обработка команд управления (:q, :w, :h, :c)."""
@@ -2485,19 +2613,23 @@ class CommandRunner(App):
             else:
                 self.add_block(InfoBlock("Error: Filename required for :w command."))
         elif command == self.CMD_HISTORY:
-            try:
-                num_lines = int(parts[1]) if len(parts) > 1 else self.history_lines
-                with open(self.FILE_HISTORY, "r", encoding=self.ENCODING) as f:
-                    lines = f.readlines()
-                history = [line.strip() for line in lines[-num_lines:] if line.strip()]
-                if not history:
-                    self.add_block(InfoBlock(f"{self.FILE_HISTORY} is empty."))
-                else:
-                    self.add_block(InfoBlock("\n".join(history)))
-            except FileNotFoundError:
-                self.add_block(InfoBlock(f"{self.FILE_HISTORY} not found."))
-            except Exception as e:
-                self.add_block(InfoBlock(f"Error reading history: {e}"))
+            rest = " ".join(parts[1:]) if len(parts) > 1 else ""
+            if rest.startswith("/") and rest[1:].strip():
+                self._show_history_search(rest[1:])
+            else:
+                try:
+                    num_arg = parts[1] if len(parts) > 1 and not parts[1].startswith("/") else None
+                    num_lines = int(num_arg) if num_arg is not None else self.history_lines
+                    if history_file_stat_key(self.FILE_HISTORY) is None:
+                        self.add_block(InfoBlock(f"{self.FILE_HISTORY} not found."))
+                    else:
+                        history = self._read_file_history()[-num_lines:]
+                        if not history:
+                            self.add_block(InfoBlock(f"{self.FILE_HISTORY} is empty."))
+                        else:
+                            self.add_block(InfoBlock("\n".join(history)))
+                except Exception as e:
+                    self.add_block(InfoBlock(f"Error reading history: {e}"))
         elif command == self.CMD_CLEAR:
             self.clear_all_blocks()
         elif command == self.CMD_JSON:
@@ -2772,13 +2904,14 @@ class CommandRunner(App):
 
     def _show_main_help(self) -> None:
         """Show main help for all commands."""
-        help_text = """[bold]IDvjPy_term - Commands Help[/bold]
+        help_text = """[bold]IDvjPy_term VER - Commands Help[/bold]
 
 [bold]Application Commands (prefix :)[/bold]
   :?          - Show this help
   :q          - Quit application
   :w <file>   - Write output to file
-  :h [N]      - Show shell history as one block (default: 20 lines)
+  :h [N]      - Last N lines of history_<instance>.txt (default: 20)
+  :h /text    - Search that file in completions (unique lines, newest first); Enter dumps a block
   :c          - Clear all output blocks
   :json       - Open JSON viewer (from last block)
   :json <file>- Open JSON file in viewer
@@ -2814,7 +2947,7 @@ class CommandRunner(App):
                is appended as in a classic alias.
 
 [bold]Navigation[/bold]
-  ↑/↓        - History in input; journal scroll when a block is focused
+  ↑/↓        - Instance history file in input (typed text filters, case-insensitive); journal scroll when a block is focused
   Tab        - Focus last journal block (from input), including :h / :?
   Click      - Focus a journal block without jumping to its start
                (needs terminal_mouse: true in settings.yml)
@@ -2864,7 +2997,7 @@ class CommandRunner(App):
   python3 src/seed_ops.py --seed           # all ops except linux / k8s / git
   Type the command here, then ?? (or wait ~5s). Each --seed replaces only its own tags.
 """
-        self.add_block(InfoBlock(help_text))
+        self.add_block(InfoBlock(help_text.replace("IDvjPy_term VER", f"IDvjPy_term {self.VERSION}", 1)))
 
     def _show_ingress_help(self) -> None:
         """Show ingress command help."""
@@ -3757,8 +3890,91 @@ class CommandRunner(App):
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
         container.scroll_relative(y=delta, animate=False, immediate=True)
 
+    def _read_file_history(self) -> List[str]:
+        """Строки history.txt из кэша; перечитывает файл при смене mtime/size."""
+        fp = history_file_stat_key(self.FILE_HISTORY)
+        if fp is None:
+            self._history_file_lines = []
+            self._history_file_stat = None
+            return []
+        if self._history_file_stat == fp:
+            return list(self._history_file_lines)
+        lines, key = read_history_file_lines(self.FILE_HISTORY, encoding=self.ENCODING)
+        self._history_file_lines = lines
+        self._history_file_stat = key
+        return list(lines)
+
+    def _history_pool(self) -> List[str]:
+        """history.txt плюс команды сессии, которых ещё нет в файле."""
+        pool = self._read_file_history()
+        seen = set(pool)
+        for cmd in self.session_history:
+            text = (cmd or "").strip()
+            if text and text not in seen:
+                pool.append(text)
+                seen.add(text)
+        return pool
+
+    def _history_matches_for(self, needle: str) -> List[str]:
+        pool = self._history_pool()
+        text = (needle or "").strip()
+        if not text:
+            return pool
+        folded = text.casefold()
+        return [cmd for cmd in pool if folded in cmd.casefold()]
+
+    def _reset_history_walk(self) -> None:
+        self._history_walking = False
+        self._history_needle = ""
+        self._history_draft = ""
+        self._history_matches = []
+        self._history_walk_index = 0
+
+    def _apply_history_line(self, text: str) -> None:
+        cmd_input = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        cmd_input._applying_completion = True
+        cmd_input.value = text
+        cmd_input.cursor_position = len(text)
+        if getattr(self, "_completion_list", None) is not None:
+            self._completion_list.hide()
+
+    def _begin_history_walk(self, current: str) -> bool:
+        """Готовит список совпадений. False — ходить некуда."""
+        if self._history_walking:
+            return bool(self._history_matches)
+        needle = (current or "").strip()
+        matches = self._history_matches_for(needle)
+        if not matches:
+            self.sub_title = f"No match in {self.FILE_HISTORY}"
+            self.set_timer(2, self.clear_subtitle)
+            return False
+        self._history_walking = True
+        self._history_needle = needle
+        self._history_draft = current or ""
+        self._history_matches = matches
+        self._history_walk_index = len(matches)
+        return True
+
+    def _show_history_search(self, pattern: str) -> None:
+        """`:h /text` — совпадения по всему history.txt, свежие сверху."""
+        needle = (pattern or "").strip()
+        if not needle:
+            self.add_block(InfoBlock("Usage: :h /text"))
+            return
+        if not os.path.exists(self.FILE_HISTORY):
+            self.add_block(InfoBlock(f"{self.FILE_HISTORY} not found."))
+            return
+        matches = self._unique_history_matches(needle)
+        if not matches:
+            self.add_block(InfoBlock(f"{self.FILE_HISTORY}: no matches for /{needle}"))
+            return
+        limit = self.HISTORY_SEARCH_LIMIT
+        shown = matches[:limit]
+        header = f"{self.FILE_HISTORY} /{needle}  {len(shown)}/{len(matches)}"
+        self.add_block(InfoBlock(header + "\n" + "\n".join(shown)))
+
     def action_history_prev(self) -> None:
-        """Up: история сессии в input; в журнале — скролл или строки (если line cursor)."""
+        """Up: история history.txt (+ сессия) в input; в журнале — скролл."""
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
         if not input_widget.has_focus:
             if getattr(self, "_completion_list", None) is not None:
@@ -3772,14 +3988,14 @@ class CommandRunner(App):
                 return
             self._scroll_journal_and_focus(-1)
             return
-        if not self.session_history: return
-        if self.session_history_pos > 0:
-            self.session_history_pos -= 1
-            input_widget.value = self.session_history[self.session_history_pos]
-            input_widget.cursor_position = len(input_widget.value)
+        if not self._begin_history_walk(input_widget.value):
+            return
+        if self._history_walk_index > 0:
+            self._history_walk_index -= 1
+            self._apply_history_line(self._history_matches[self._history_walk_index])
 
     def action_history_next(self) -> None:
-        """Down: история сессии в input; в журнале — скролл или строки (если line cursor)."""
+        """Down: вперёд по совпадениям; за последним — исходный черновик."""
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
         if not input_widget.has_focus:
             if getattr(self, "_completion_list", None) is not None:
@@ -3793,15 +4009,15 @@ class CommandRunner(App):
                 return
             self._scroll_journal_and_focus(1)
             return
-        if not self.session_history: return
-        if self.session_history_pos < len(self.session_history) - 1:
-            self.session_history_pos += 1
-            input_widget.value = self.session_history[self.session_history_pos]
-            input_widget.cursor_position = len(input_widget.value)
+        if not self._history_walking:
+            if not self._begin_history_walk(input_widget.value):
+                return
+        if self._history_walk_index < len(self._history_matches) - 1:
+            self._history_walk_index += 1
+            self._apply_history_line(self._history_matches[self._history_walk_index])
         else:
-            self.session_history_pos = len(self.session_history)
-            input_widget.value = ""
-            input_widget.cursor_position = 0
+            self._history_walk_index = len(self._history_matches)
+            self._apply_history_line(self._history_draft)
 
     def _substitute_variables(self, command: str) -> str:
         return substitute_variables(command, self.local_env)
@@ -3979,9 +4195,17 @@ class CommandRunner(App):
             kwargs["mouse"] = self._settings_terminal_mouse()
         return super().run(**kwargs)
 
+
+def apply_instance_name(name: str) -> None:
+    """Суффикс инстанса: `.bashrc_term_<name>` и `history_<name>.txt`."""
+    global INSTANCE_NAME
+    INSTANCE_NAME = name
+    CommandRunner.FILE_BASHRC = f".bashrc_term_{name}"
+    CommandRunner.FILE_HISTORY = f"history_{name}.txt"
+
+
 if __name__ == "__main__":
     args = parse_arguments()
-    INSTANCE_NAME = args.instance_name
-    CommandRunner.FILE_BASHRC = f".bashrc_term_{INSTANCE_NAME}"
+    apply_instance_name(args.instance_name)
     app = CommandRunner()
     app.run()

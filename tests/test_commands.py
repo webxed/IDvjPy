@@ -11,6 +11,7 @@ async def test_app_starts_with_input_focused(isolated_home):
         assert input_widget(app).has_focus
         welcome = " ".join(block.text_content for block in app.query(InfoBlock))
         assert "IDvjPy_term" in welcome
+        assert "v1.22" in welcome
         assert ":?" in welcome
         assert "#tag cmd" in welcome
         assert "Define your variables" in welcome
@@ -94,6 +95,194 @@ async def test_session_history_up_down(isolated_home):
         await pilot.press("escape")
         await pilot.press("down")
         assert input_widget(app).value == "echo second"
+
+
+async def test_history_up_filters_by_typed_text(isolated_home):
+    (isolated_home / CommandRunner.FILE_HISTORY).write_text(
+        "echo unrelated-aaaa\n"
+        "kubectl get pods unique-hist-xyz\n"
+        "ls /tmp\n"
+        "kubectl describe pod unique-hist-xyz\n",
+        encoding="utf-8",
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await type_keys(pilot, "unique-hist-xyz")
+        await pilot.pause()
+        await pilot.press("escape")
+        await pilot.press("up")
+        assert input_widget(app).value == "kubectl describe pod unique-hist-xyz"
+        await pilot.press("escape")
+        await pilot.press("up")
+        assert input_widget(app).value == "kubectl get pods unique-hist-xyz"
+        await pilot.press("escape")
+        await pilot.press("down")
+        assert input_widget(app).value == "kubectl describe pod unique-hist-xyz"
+        await pilot.press("escape")
+        await pilot.press("down")
+        assert input_widget(app).value == "unique-hist-xyz"
+
+
+async def test_colon_h_search_newest_first(isolated_home):
+    (isolated_home / CommandRunner.FILE_HISTORY).write_text(
+        "echo skip-me\n"
+        "curl http://old-hist-grep\n"
+        "curl http://old-hist-grep\n"
+        "ls /tmp\n"
+        "curl http://new-hist-grep\n"
+        "curl http://new-hist-grep\n",
+        encoding="utf-8",
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":h /hist-grep")
+        text = last_info(app).text_content
+        assert "echo skip-me" not in text
+        assert "ls /tmp" not in text
+        assert f"{CommandRunner.FILE_HISTORY} /hist-grep  2/2" in text
+        assert text.count("old-hist-grep") == 1
+        assert text.count("new-hist-grep") == 1
+        assert text.index("new-hist-grep") < text.index("old-hist-grep")
+
+
+async def test_colon_h_empty_slash_falls_back_to_tail(isolated_home):
+    (isolated_home / CommandRunner.FILE_HISTORY).write_text("one\ntwo\nthree\n", encoding="utf-8")
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":h /")
+        text = last_info(app).text_content
+        assert "Usage: :h /text" not in text
+        assert "one" in text
+        assert "two" in text
+        assert "three" in text
+
+
+async def test_colon_h_slash_completes_unique_history(isolated_home):
+    """`:h /` — подсказки из history.txt, без каталогов и без повторов."""
+    (isolated_home / CommandRunner.FILE_HISTORY).write_text(
+        "echo skip-me\n"
+        "kubectl get pods\n"
+        "kubectl get pods\n"
+        "kubectl describe pod\n"
+        "kubectl get pods\n",
+        encoding="utf-8",
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await type_keys(pilot, ":h /kubectl")
+        await pilot.pause()
+        assert app._completion_list.is_visible()
+        cands = app._completion_list.all_candidates
+        assert cands == ["kubectl get pods", "kubectl describe pod"]
+        assert cands.count("kubectl get pods") == 1
+        assert "echo skip-me" not in cands
+        await pilot.press("tab")
+        await pilot.pause()
+        assert input_widget(app).value == "kubectl get pods"
+
+
+async def test_history_cache_reloads_when_file_changes(isolated_home):
+    """Кэш history.txt сбрасывается, если файл дописал другой процесс."""
+    path = isolated_home / CommandRunner.FILE_HISTORY
+    path.write_text("echo one\n", encoding="utf-8")
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        assert app._read_file_history() == ["echo one"]
+        cached = app._history_file_stat
+        assert cached is not None
+        assert app._read_file_history() == ["echo one"]
+        assert app._history_file_stat == cached
+        path.write_text("echo one\necho two\n", encoding="utf-8")
+        assert app._read_file_history() == ["echo one", "echo two"]
+
+
+async def test_default_instance_writes_history_default(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "echo hist-default-file")
+        await wait_command_done(app)
+        text = (isolated_home / "history_default.txt").read_text(encoding="utf-8")
+        assert "echo hist-default-file" in text
+        assert not (isolated_home / "history.txt").exists()
+
+
+async def test_migrates_legacy_history_txt(isolated_home):
+    (isolated_home / "history.txt").write_text("echo legacy-hist\n", encoding="utf-8")
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        dest = isolated_home / CommandRunner.FILE_HISTORY
+        assert dest.read_text(encoding="utf-8") == "echo legacy-hist\n"
+        await type_keys(pilot, ":h /legacy-hist")
+        await pilot.pause()
+        assert app._completion_list.is_visible()
+        assert "echo legacy-hist" in app._completion_list.all_candidates
+
+
+async def test_instance_name_uses_separate_history_file(isolated_home, monkeypatch):
+    monkeypatch.setattr("app.INSTANCE_NAME", "user1")
+    monkeypatch.setattr(CommandRunner, "FILE_BASHRC", ".bashrc_term_user1")
+    monkeypatch.setattr(CommandRunner, "FILE_HISTORY", "history_user1.txt")
+    (isolated_home / "history.txt").write_text("echo from-legacy\n", encoding="utf-8")
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "echo inst-only")
+        await wait_command_done(app)
+        inst = (isolated_home / "history_user1.txt").read_text(encoding="utf-8")
+        assert "echo from-legacy" in inst
+        assert "echo inst-only" in inst
+        shared = (isolated_home / "history.txt").read_text(encoding="utf-8")
+        assert "echo inst-only" not in shared
+
+
+def test_history_append_skips_consecutive_duplicate(isolated_home):
+    from app import append_history_file_line, read_history_file_lines
+
+    path = str(isolated_home / "history.txt")
+    assert append_history_file_line(path, "echo same")
+    assert not append_history_file_line(path, "echo same")
+    assert append_history_file_line(path, "echo other")
+    assert append_history_file_line(path, "echo same")
+    lines, _ = read_history_file_lines(path)
+    assert lines == ["echo same", "echo other", "echo same"]
+
+
+def _mp_append_history(path: str, prefix: str, count: int) -> None:
+    import sys
+    from pathlib import Path
+
+    src = str(Path(__file__).resolve().parents[1] / "src")
+    if src not in sys.path:
+        sys.path.insert(0, src)
+    from app import append_history_file_line
+
+    for i in range(count):
+        append_history_file_line(path, f"{prefix}-{i}")
+
+
+def test_history_concurrent_appends(isolated_home):
+    """Несколько процессов дописывают history.txt без потери строк."""
+    from multiprocessing import Process
+
+    from app import read_history_file_lines
+
+    path = str(isolated_home / "history.txt")
+    workers = 4
+    each = 40
+    procs = [
+        Process(target=_mp_append_history, args=(path, f"w{w}", each))
+        for w in range(workers)
+    ]
+    for proc in procs:
+        proc.start()
+    for proc in procs:
+        proc.join(timeout=30)
+        assert proc.exitcode == 0, proc.exitcode
+    lines, _ = read_history_file_lines(path)
+    expected = {f"w{w}-{i}" for w in range(workers) for i in range(each)}
+    assert set(lines) == expected
+    assert len(lines) == workers * each
 
 
 async def test_variable_assignment_and_substitution(isolated_home):

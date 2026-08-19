@@ -32,7 +32,6 @@ globals().update({k: v for k, v in vars(_real).items() if k != "__name__"})
 
 if __name__ == "__main__":
     args = _real.parse_arguments()
-    _real.INSTANCE_NAME = args.instance_name
-    _real.CommandRunner.FILE_BASHRC = f".bashrc_term_{args.instance_name}"
+    _real.apply_instance_name(args.instance_name)
     application = _real.CommandRunner()
     application.run()

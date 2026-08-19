@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.2) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.22) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
@@ -12,7 +12,7 @@ Philosophy: tags are variables holding command templates; the app assembles them
 
 ```bash
 python3 app.py
-python3 app.py --instance-name=user1   # separate .bashrc_term_user1
+python3 app.py --instance-name=user1   # .bashrc_term_user1 и history_user1.txt
 ```
 
 Tests:
@@ -34,7 +34,7 @@ The setup script handles dependencies and configuration. On Linux, clipboard nee
 ## Layout
 
 - **`src/`** — TUI, CSS, seed scripts, `.bashrc_term.example`
-- **cwd** — `settings.yml`, SQLite command DB, `.bashrc_term*`, `history.txt`
+- **cwd** — `settings.yml`, SQLite command DB, `.bashrc_term*`, `history_<instance>.txt`
 - Root **`app.py`** / **`backup_db.py`** are launchers
 - Empty command DB: welcome InfoBlock lists handbook seeds (`src/seed_catalog.py`). After `--seed`, type `??` or wait ~5s
 - Seeds: `python3 src/seed_linux_commands.py --seed`, `python3 src/seed_k8s_chains.py --seed` ([`K8S_CHAINS.md`](K8S_CHAINS.md)), `python3 src/seed_git.py --seed`, `python3 src/seed_ops.py --seed` (all ops except linux / k8s / git). Each `--seed` replaces only its own tags
@@ -74,7 +74,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble refs into the input line |
-| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:r`, `:/`, `:n`, `:N`, `:export`) |
+| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:r`, `:/`, `:n`, `:N`, `:export`) |
 | `\| cmd` | Pipe stdout from the focused block |
 | `$VAR=val` | Set env in `.bashrc_term_<instance>` and the current session |
 
@@ -84,7 +84,7 @@ Aliases load from `~/.bashrc`. If the body contains `$1` / `$2` / `$@` / `$*`, a
 
 ### Key Behaviors
 
-1. **Session history**: Up/Down in the input cycle commands from the current session
+1. **Shell history**: Up/Down in the input walk `history_<instance>.txt` (plus this session). Typed text filters matches; empty input walks all lines (newest at the end). `:h /text` lists unique matching lines in the completion dropdown (newest first). Legacy `history.txt` is copied once if the instance file is missing.
 2. **Journal**: PgUp/PgDn / arrows (when a block is focused) scroll the journal; the **visible** block becomes active (no jump to its first line). Click a block to focus it (`terminal_mouse: true`)
 3. **Tab** from the input focuses the last journal block (`:h` / `:?` included)
 4. **Focused block as pipe source**: `|` uses the focused block's stdout

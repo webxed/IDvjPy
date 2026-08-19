@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.2**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.22**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`.
 
@@ -30,7 +30,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 
 Aliases from `~/.bashrc`: bodies with `$1` / `$2` / `$@` substitute args; otherwise the rest of the line is appended.
 
-Hotkeys: `Tab` input → output (Esc back); `F3` copy block; `F5` JSON; `F6` simple output; `F2` line-cursor mode; `Shift+Insert`/`Ctrl+V` paste in the input (does not replace existing text); in line-cursor mode `Ctrl+V` appends the current line; `Ctrl+D` clears the input line; `PgUp`/`PgDn` scroll a page and activate the visible block (no jump to block start); click a block to focus it; `Up`/`Down` session history in input, journal scroll when a block is focused (line-by-line in line-cursor mode).
+Hotkeys: `Tab` input → output (Esc back); `F3` copy block; `F5` JSON; `F6` simple output; `F2` line-cursor mode; `Shift+Insert`/`Ctrl+V` paste in the input (does not replace existing text); in line-cursor mode `Ctrl+V` appends the current line; `Ctrl+D` clears the input line; `PgUp`/`PgDn` scroll a page and activate the visible block (no jump to block start); click a block to focus it; `Up`/`Down` walk `history_<instance>.txt` in the input (typed text filters), journal scroll when a block is focused (line-by-line in line-cursor mode).
 
 ---
 
@@ -65,7 +65,10 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 - Documented in `:?` under **Line-cursor mode**.
 
 ### `:h` history
-- `:h [N]` shows the last N lines of `history.txt` as **one** multiline `InfoBlock` (line-cursor can copy/append individual commands). Empty file → one info message.
+- `:h [N]` shows the last N lines of `history_<instance>.txt` as **one** multiline `InfoBlock` (line-cursor can copy/append individual commands). Empty file → one info message.
+- `:h /text` greps that file in the completion list (case-insensitive, newest first, duplicate lines merged). Esc then Enter dumps a journal block (`shown/total`, cap 50). Empty `:h /` still tails the file like `:h`.
+- `↑`/`↓` in the input walk the instance history file plus session commands. Typed text freezes as a needle; empty input walks everything. Down past the newest line restores the draft.
+- `--instance-name=user1` uses `history_user1.txt` (and `.bashrc_term_user1`). Missing instance file is filled once from legacy `history.txt`.
 
 ### JSON Viewer (F5 / `:json` / `:json file`)
 - F5 uses the **focused** block (`raw_stdout`); if focus is the input — last `CommandBlock`.
@@ -111,6 +114,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 ### CLI
 - Root `app.py` is a launcher; the TUI module is `src/app.py`. `--instance-name` is parsed in the launcher / `src/app.py` `__main__` (pytest imports `src/app.py` via `pythonpath = src`).
 - Instance bashrc: `.bashrc_term_{instance}` in cwd. Template: `src/.bashrc_term.example`.
+- Instance history: `history_{instance}.txt` in cwd. Legacy `history.txt` is copied once if the instance file is missing.
 - Empty command DB (`has_live_commands` is false): welcome InfoBlock lists handbook seeds.
 
 ---
@@ -136,7 +140,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | File | Purpose |
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
-| `src/app.py` | TUI (`CommandRunner`), v1.2 |
+| `src/app.py` | TUI (`CommandRunner`), v1.22 |
 | `src/database_v2.py` | SQLite tagged history |
 | `src/json_viewer.py` | JSON tree modal |
 | `src/ingress_analyzer.py` | `:i` k8s |
@@ -151,9 +155,16 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 ---
 
+## v1.22
+
+- **History file per instance:** `--instance-name=user1` uses `history_user1.txt` (same pattern as `.bashrc_term_user1`). Default is `history_default.txt`. Legacy `history.txt` is copied once if the instance file is missing.
+- **`↑`/`↓`** in the input walk that file (plus this session). Typed text filters matches; empty input walks everything; Down past newest restores the draft.
+- **`:h /text`** searches the instance history in the completion list (unique lines, newest first). Esc then Enter dumps a journal block. Empty `:h /` is the same as `:h`.
+- History search uses an in-memory cache (reload on mtime/size). Appends take one exclusive flock so several app copies do not race on the same file.
+
 ## v1.2
 
-- Application code in `src/`; cwd holds `settings.yml`, the command DB, `.bashrc_term*`, `history.txt`.
+- Application code in `src/`; cwd holds `settings.yml`, the command DB, `.bashrc_term*`, `history_<instance>.txt`.
 - Empty command DB shows a seed catalog (linux, k8s chains, git, `seed_ops.py`, individual ops).
 - [`K8S_CHAINS.md`](K8S_CHAINS.md) is the investigation overview; tids are in [`SEED_K8S_CHAINS_COMMANDS.md`](SEED_K8S_CHAINS_COMMANDS.md).
 

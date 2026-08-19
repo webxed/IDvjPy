@@ -24,6 +24,7 @@ __pycache__/
 !.bashrc_term.example
 !src/.bashrc_term.example
 history.txt
+history_*.txt
 log*.txt
 tt.txt
 ns_*.txt
