@@ -203,6 +203,12 @@ async def test_s10_pipe(isolated_home):
         assert "alpha.py" in piped.raw_stdout
         assert "gamma.py" in piped.raw_stdout
         assert "beta.txt" not in piped.raw_stdout
+        hist = (isolated_home / CommandRunner.FILE_HISTORY).read_text(encoding="utf-8")
+        assert "| grep py" in hist
+        assert app.session_history[-1] == "| grep py"
+        await pilot.press("escape")
+        await pilot.press("up")
+        assert input_widget(app).value == "| grep py"
 
 
 async def test_s11_nav_history_copy(isolated_home):

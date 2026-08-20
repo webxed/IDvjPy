@@ -33,5 +33,10 @@ globals().update({k: v for k, v in vars(_real).items() if k != "__name__"})
 if __name__ == "__main__":
     args = _real.parse_arguments()
     _real.apply_instance_name(args.instance_name)
-    application = _real.CommandRunner()
+    demo_spec = _real.load_demo_for_cli(args.demo) if args.demo else None
+    application = _real.CommandRunner(
+        demo=demo_spec,
+        demo_speed=args.demo_speed,
+        demo_quit=args.demo_quit,
+    )
     application.run()

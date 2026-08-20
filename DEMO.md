@@ -1,10 +1,81 @@
 # Сценарий демонстрации IDvjPy_term
 
-Версия приложения: **v1.22**. Длительность: **12–15 минут**.
+Версия приложения: **v1.23**. Длительность живого рассказа: **12–15 минут**.
 
 Тезис для зрителя: теги — переменные с шаблонами команд; приложение собирает их в строку. `!` / `!!` только подставляют текст во ввод, запуск — отдельным Enter.
 
 Kubernetes не обязателен: `:i` — опциональный бис в конце.
+
+## Автотур: как запустить
+
+TUI сам печатает команды из YAML. Рядом можно поставить OBS или asciinema и не набирать руками.
+
+Запуск из каталога с `app.py` (или с абсолютным путём к лаунчеру; данные — `settings.yml`, БД, history — берутся из **текущего** каталога):
+
+```bash
+python3 app.py --demo                     # bundled short, ~2–3 мин
+python3 app.py --demo full                # bundled full, без htop / kubectl / :q
+python3 app.py --demo ip                  # myip → jq .cc → Wiki URL → пайп из тегов hello
+python3 app.py --demo --demo-speed 1.5    # быстрее (2 = вдвое)
+python3 app.py --demo full --demo-quit    # выйти, когда сценарий закончится
+python3 app.py --demo path/to/tour.yml    # свой файл
+```
+
+| Флаг | Что делает |
+|---|---|
+| `--demo` | Имя bundled-тура (`short` по умолчанию, ещё `full`, `ip`) или путь к `.yml` |
+| `--demo-speed N` | Множитель скорости: паузы и набор делятся на N (`1` = как в YAML) |
+| `--demo-quit` | После последнего шага приложение закрывается (удобно для asciinema) |
+| `--instance-name=…` | Как обычно: отдельные `.bashrc_term_*` и `history_*.txt` (БД тегов общая) |
+
+Bundled-сценарии: `src/demos/short.yml`, `src/demos/full.yml`, `src/demos/ip.yml`.
+
+Во время тура в subtitle: `DEMO · … · Esc stops`. **Esc** останавливает проигрывание, сессия остаётся — можно продолжить руками. `:q` выходит из приложения.
+
+`short` пишет в текущую БД теги `tour` / `tourlog` / `tourpipe`; `full` — `check` / `logs` / `restart` / `pipeline`. Для записи без рабочих тегов запускайте из пустого каталога:
+
+```bash
+mkdir -p /tmp/idvj-demo && cd /tmp/idvj-demo
+python3 /path/to/Idivjopy/app.py --demo --demo-quit
+```
+
+Asciinema:
+
+```bash
+cd /tmp/idvj-demo   # или рабочая копия проекта
+asciinema rec idvj-demo.cast -c 'python3 /path/to/Idivjopy/app.py --demo --demo-quit'
+```
+
+### Свой YAML
+
+```yaml
+title: my tour
+start_pause: 1.4     # после сплэша, секунды
+type_delay: 0.14     # пауза между буквами (~7 знаков/с). Длинные строки печатаются быстрее. Шаг может задать своё `type_delay`. Для `\n` в выводе: `echo -e "...\\n..."`
+pause: 0.8           # пауза после каждого шага (шаг может переопределить)
+command_timeout: 12  # ждать stdout блока, если wait_command: true
+# quit: true         # то же, что --demo-quit
+steps:
+  - ":?"                                 # строка = набрать и Enter
+  - type: "echo hello"
+    wait_command: true                   # ждать *новый* блок в журнале (пайп `| jq` не путать с прошлым curl)
+    caption: Журнал                      # текст в subtitle
+  - keys: [tab, f2]                      # горячие клавиши (не набор)
+  - paste: true                          # вставить буфер во ввод (после F2 Enter)
+  - type: "!"
+    enter: false                         # оставить текст / список подсказок
+    pause: 1.2
+  - type: "check[1]"
+    clear: false                         # дописать к уже набранному
+    enter: true
+```
+
+- `caption` / `say` — подпись шага в subtitle.
+- `keys`: `enter`, `escape`/`esc`, `tab`, `f2`…`f6`, `up`/`down`, `home`/`end`, `pageup`/`pagedown`, `ctrl+c`, `ctrl+d`, `ctrl+v`, или список. После `tab` в журнале следующий `type` снова берёт строку ввода (иначе Enter включит курсор строк, как F2).
+- Не ставьте в YAML `> htop` / `vim` / `ssh`: TUI снимется и будет ждать человека.
+- Не ставьте `:q` в шаги, если нужен хвост записи; для автовыхода — `--demo-quit`.
+
+Ниже — ручной сценарий, если ведёте демо сами (с паузами и словами).
 
 ---
 

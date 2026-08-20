@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.22) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.23) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
@@ -13,6 +13,9 @@ Philosophy: tags are variables holding command templates; the app assembles them
 ```bash
 python3 app.py
 python3 app.py --instance-name=user1   # .bashrc_term_user1 и history_user1.txt
+python3 app.py --demo                  # короткий тур (Esc — стоп)
+python3 app.py --demo ip               # myip → jq .cc → Wiki URL → пайп из тегов hello
+python3 app.py --demo full --demo-quit # длинный тур и выход (удобно для asciinema)
 ```
 
 Tests:
@@ -55,6 +58,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/clipboard.py`**: CLIPBOARD / PRIMARY / OSC 52
 - **`src/shell_env.py`**: `.bashrc_term` vars, `~/.bashrc` aliases, `$1` substitution
 - **`src/json_viewer.py`**: JSON tree modal
+- **`src/demo.py`**: `--demo` YAML player (`src/demos/*.yml`)
 - **`src/ingress_analyzer.py`**: `:i` Kubernetes helper
 - **`src/app.css`**: Textual styling
 - **`settings.yml`**: buffer limits, timeout, DB file, `terminal_mouse` (cwd)
@@ -76,7 +80,8 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble refs into the input line |
 | `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:r`, `:/`, `:n`, `:N`, `:export`) |
-| `\| cmd` | Pipe stdout from the focused block |
+| `\| cmd` | Pipe stdout from the focused block, add to history |
+| `$OUT` | On demand: last line of focused/last block (not stored in `.bashrc_term`) |
 | `$VAR=val` | Set env in `.bashrc_term_<instance>` and the current session |
 
 `!` / `!!` only insert text. Run with a separate Enter.
@@ -88,7 +93,7 @@ Aliases load from `~/.bashrc`. If the body contains `$1` / `$2` / `$@` / `$*`, a
 1. **Shell history**: Up/Down in the input walk `history_<instance>.txt` (plus this session). Typed text filters matches; empty input walks all lines (newest at the end). `:h /text` lists unique matching lines in the completion dropdown (newest first). Legacy `history.txt` is copied once if the instance file is missing.
 2. **Journal**: PgUp/PgDn / arrows (when a block is focused) scroll the journal; the **visible** block becomes active (no jump to its first line). Click a block to focus it (`terminal_mouse: true`)
 3. **Tab** from the input focuses the last journal block (`:h` / `:?` included)
-4. **Focused block as pipe source**: `|` uses the focused block's stdout
+4. **Focused block as pipe source**: `|` uses the focused block's stdout. `$OUT` is that block's last non-empty line, computed only when the command contains `$OUT` / `${OUT}`
 5. **Bash aliases**: loaded at startup; `$1` positional substitution supported
 6. **Background execution**: shell commands run in threads so the UI stays responsive
 7. **Line-cursor (F2 / Enter on a focused block)**: copy or append individual output lines. **Ctrl+C** copies the whole input draft, or the focused journal block (same as F3).

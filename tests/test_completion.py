@@ -296,6 +296,23 @@ async def test_pageup_does_not_jump_to_block_start(isolated_home):
             assert y_after > 0
 
 
+async def test_journal_scrolls_to_end_after_tall_output_grows(isolated_home):
+    """После seq/ping блок вырастает — журнал должен остаться у низа, не у [Executing...]."""
+    from textual.containers import VerticalScroll
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        for cmd in ("seq 1 40", "seq 41 80", "seq 81 120"):
+            await submit(pilot, cmd)
+            await wait_command_done(app)
+            await pilot.pause()
+        container = app.query_one("#results-container", VerticalScroll)
+        max_y = float(container.max_scroll_y)
+        assert max_y > 20
+        assert float(container.scroll_y) >= max_y - 2
+        assert input_widget(app).has_focus
+
+
 async def test_keyboard_scroll_activates_visible_block(isolated_home):
     from app import CommandBlock, LineNavigable
 

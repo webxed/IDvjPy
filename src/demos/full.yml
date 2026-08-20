@@ -1,0 +1,167 @@
+# Longer tour for `python3 app.py --demo full`
+# Still recordable: no htop/vim/ssh, no kubectl :i, no :q.
+# See DEMO.md for the live (manual) 12-minute script.
+
+title: IDvjPy full tour
+start_pause: 1.8
+type_delay: 0.14
+pause: 1.2
+command_timeout: 12
+
+steps:
+  - caption: Карта приложения
+    type: ":?"
+    pause: 2.6
+
+  - caption: Shell-команда не блокирует TUI
+    type: "echo hello-idvj"
+    wait_command: true
+
+  - caption: Сменить cwd приложения
+    type: "cd /tmp"
+
+  - type: "pwd"
+    wait_command: true
+
+  - type: ":cd"
+    pause: 1.2
+
+  - type: "cd -"
+    pause: 0.8
+
+  - caption: Переменная сессии
+    type: "$HOST=https://api.agify.io/?name=cursor"
+
+  - type: "echo $HOST"
+    wait_command: true
+
+  - caption: curl по $HOST, jq по блоку
+    type: "curl -s $HOST"
+    wait_command: true
+    pause: 1.8
+
+  - keys: tab
+    pause: 0.4
+
+  - type: "| jq '.age'"
+    wait_command: true
+    pause: 1.5
+
+  - type: "echo error: timeout connecting to $HOST"
+    wait_command: true
+
+  - caption: Tab — фокус на последний блок
+    keys: tab
+    pause: 0.8
+
+  - caption: Поиск по строкам журнала
+    type: ":/timeout"
+    pause: 1.6
+
+  - caption: Наполнить журнал
+    type: "seq 1 12"
+    wait_command: true
+
+  - type: "| grep 7"
+    wait_command: true
+    pause: 1.2
+
+  - type: "echo '{\"service\":\"api\",\"env\":\"prod\",\"pods\":[{\"name\":\"api-7f\",\"status\":\"CrashLoop\"}]}'"
+    wait_command: true
+
+  - caption: Пайп stdout сфокусированного блока
+    keys: tab
+    pause: 0.5
+
+  - caption: JSON viewer
+    keys: [tab, f5]
+    pause: 2.4
+
+  - keys: escape
+    pause: 0.5
+
+  - caption: Построчный курсор F2
+    keys: [tab, f2, home]
+    pause: 1.0
+
+  - keys: enter
+    pause: 1.2
+
+  - caption: "Шаблоны: check / logs / pipeline"
+    type: "#check curl -s $HOST"
+
+  - type: "#check=healthcheck of $HOST"
+
+  - type: "#logs echo kubectl logs -l app=api --tail=50"
+
+  - type: "#restart echo kubectl rollout restart deploy/api"
+
+  - type: "#pipeline !check[1] && !logs[1]"
+
+  - type: "??"
+    pause: 2.2
+
+  - type: "?pipeline[1]"
+    pause: 2.0
+
+  - caption: "Набрать ! — список тегов"
+    type: "!"
+    enter: false
+    clear: true
+    pause: 1.4
+
+  - type: "check[1]"
+    enter: true
+    clear: false
+    pause: 1.3
+
+  - caption: Enter запускает подставленную команду
+    keys: enter
+    wait_command: true
+
+  - type: "!! check[1] && logs[1]"
+    pause: 1.5
+
+  - keys: enter
+    wait_command: true
+    pause: 1.3
+
+  - caption: Правка шаблона
+    type: "#check+1"
+    pause: 1.4
+
+  - keys: [end]
+    pause: 0.3
+
+  - type: " --max-time 2"
+    enter: true
+    clear: false
+    pause: 1.0
+
+  - type: "?check"
+    pause: 1.4
+
+  - caption: Мягкое удаление и восстановление
+    type: "#logs-1"
+
+  - type: "?logs"
+    pause: 1.2
+
+  - type: "#logs!1"
+    pause: 1.0
+
+  - type: "?logs"
+    pause: 1.4
+
+  - caption: Парк строки в history без запуска
+    type: "# curl https://example.com/later"
+
+  - type: ":h 10"
+    pause: 2.2
+
+  - caption: "Повторить команду блока (:r)"
+    keys: tab
+    pause: 0.5
+
+  - type: ":r"
+    pause: 1.6

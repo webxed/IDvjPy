@@ -1,0 +1,151 @@
+# IP / country-code tour: `python3 app.py --demo ip`
+# Needs network, curl, jq. F2 copies jq's .cc, then paste onto the Wiki URL.
+# After that: save tag hello and assemble `!! hello[1]|hello[2]`.
+# `# comment` (space after #) parks an explanation in history without running.
+
+title: My IP and Wiki country
+start_pause: 1.6
+type_delay: 0.06
+pause: 1.0
+command_timeout: 12
+
+steps:
+  - caption: Комментарий — переменная API
+    type: "# URL API myip: JSON с ip, country, cc"
+    pause: 0.9
+
+  - caption: Переменная API
+    type: "$MY_IP_SVC=https://api.myip.com"
+
+  - caption: Комментарий — база Wiki
+    type: "# База Wiki ISO 3166-1; код страны допишем после #"
+    pause: 0.9
+
+  - caption: База Wiki ISO 3166-1 (фрагмент # + код страны)
+    type: "$WIKI_COUNTRY='https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#'"
+
+  - caption: Комментарий — curl
+    type: "# Запросить JSON с текущим IP"
+    pause: 0.9
+
+  - caption: curl по $MY_IP_SVC
+    type: "curl -s $MY_IP_SVC"
+    wait_command: true
+    pause: 1.8
+
+  - caption: Фокус на блок curl (источник пайпа)
+    keys: tab
+    pause: 0.8
+
+  - caption: Комментарий — jq .cc
+    type: "# Из stdout блока взять код страны .cc"
+    pause: 0.9
+
+  - caption: Пайп блока — код страны
+    type: "| jq -r '.cc'"
+    wait_command: true
+    pause: 2.2
+
+  - caption: Tab — блок с кодом страны
+    keys: tab
+    pause: 0.6
+
+  - caption: F2 — построчный курсор
+    keys: f2
+    pause: 0.5
+
+  - keys: [home, down]
+    pause: 0.5
+
+  - caption: Enter — скопировать код в буфер
+    keys: enter
+    pause: 1.4
+
+  - caption: Комментарий — ссылка Wiki
+    type: "# Собрать ссылку Wiki: база + код страны из буфера"
+    pause: 0.9
+
+  - caption: "Набрать echo -e, вставить код в конец URL"
+    type: "echo -e \"Yours regional code on the Wiki:\\n\"${WIKI_COUNTRY}"
+    enter: false
+    pause: 1.0
+
+  - paste: true
+    pause: 1.0
+
+  - keys: enter
+    wait_command: true
+    pause: 1.6
+
+  - caption: Комментарий — hello[1]
+    type: "# Сохранить curl в тег hello[1]"
+    pause: 0.9
+
+  - caption: Сохранить curl в тег hello
+    type: "#hello curl -s $MY_IP_SVC"
+    pause: 1.1
+
+  - caption: Комментарий — hello[2]
+    type: "# Сохранить jq .country в hello[2]"
+    pause: 0.9
+
+  - caption: jq — полное имя страны
+    type: "#hello jq -r '.country'"
+    pause: 1.1
+
+  - caption: Комментарий — hello[3]
+    type: "# Шаблон приветствия со ссылкой на hello[2]"
+    pause: 0.9
+
+  - caption: "Шаблон приветствия со ссылкой на hello[2]"
+    type: "#hello echo \"Hello, \" hello[2]"
+    pause: 1.3
+
+  - caption: Комментарий — список hello
+    type: "# Показать все команды тега hello"
+    pause: 0.9
+
+  - caption: Библиотека тега hello
+    type: "?hello"
+    pause: 2.0
+
+  - caption: Комментарий — пайп из тегов
+    type: "# Собрать пайп hello[1] | hello[2]"
+    pause: 0.9
+
+  - caption: Пайп из тегов
+    type: "!! hello[1]|hello[2]"
+    pause: 1.6
+
+  - keys: enter
+    wait_command: true
+    pause: 1.8
+
+  - caption: F2 — скопировать название страны
+    keys: tab
+    pause: 0.5
+
+  - keys: f2
+    pause: 0.4
+
+  - keys: [home, down]
+    pause: 0.4
+
+  - keys: enter
+    pause: 1.0
+
+  - caption: Комментарий — Hello
+    type: "# Поздороваться, вставив имя страны из буфера"
+    pause: 0.9
+
+  - caption: "echo Hello, + страна"
+    type: "echo \"Hello, \""
+    enter: false
+    pause: 0.8
+
+  - paste: true
+    pause: 0.8
+
+  - keys: enter
+    wait_command: true
+    pause: 1.4

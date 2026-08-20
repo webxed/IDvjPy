@@ -22,6 +22,8 @@ def parse_arguments():
 Examples:
   python app.py                    # Run with default instance name
   python app.py --instance-name=user1  # Run with custom instance name
+  python app.py --demo             # Play the bundled short tour (Esc stops)
+  python app.py --demo full --demo-quit  # Longer tour, then exit (for asciinema)
         """
     )
     parser.add_argument(
@@ -29,6 +31,24 @@ Examples:
         type=str,
         default='default',
         help='Instance name for unique .bashrc_term and history files (default: default)'
+    )
+    parser.add_argument(
+        '--demo',
+        nargs='?',
+        const='short',
+        default=None,
+        help='Play a demo scenario: bundled name (short, full) or path to a .yml file',
+    )
+    parser.add_argument(
+        '--demo-speed',
+        type=float,
+        default=1.0,
+        help='Demo speed multiplier (2 = twice as fast, 0.5 = slower)',
+    )
+    parser.add_argument(
+        '--demo-quit',
+        action='store_true',
+        help='Quit the app when the demo scenario finishes',
     )
     return parser.parse_args()
 
@@ -64,13 +84,17 @@ try:
     )
     from shell_env import (
         RE_VAR_NAME,
+        LAZY_PLACEHOLDERS,
+        command_requests_placeholder,
         expand_aliases,
+        last_nonempty_line,
         load_aliases_from_file,
         parse_bashrc_assignment,
         parse_standalone_cd,
         substitute_variables,
     )
     from seed_catalog import format_empty_db_hint
+    from demo import load_demo_for_cli, play_demo
 except ImportError as e:
     print(f"Error: Missing dependency - {e}", file=sys.stderr)
     print("Please install required dependencies:", file=sys.stderr)
@@ -694,7 +718,13 @@ class CommandBlock(LineNavigable, Static):
         self.return_code = return_code
         self._truncated = False  # Сброс флага при обновлении
         self.pending = False
+        follow = False
+        app = getattr(self, "app", None)
+        if app is not None and hasattr(app, "_should_follow_journal_end"):
+            follow = app._should_follow_journal_end()
         self.update(self._format_output())
+        if follow and app is not None and hasattr(app, "_schedule_journal_follow_end"):
+            app._schedule_journal_follow_end()
         if getattr(self, "line_nav_active", False) and getattr(self, "line_index", None) is not None:
             n = len(self._nav_lines())
             self.line_index = min(self.line_index, max(0, n - 1))
@@ -1260,7 +1290,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.22"
+    VERSION = "v1.23"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1284,7 +1314,7 @@ class CommandRunner(App):
                 "",
                 "  [bold]:?[/] справка      [bold]:q[/] выход       [bold]:h[/] история     [bold]:c[/] очистить",
                 f"  [bold]#tag cmd[/] сохранить    [bold]?[/] / [bold]??[/] теги БД     [bold]{bang_ref}[/] вставить",
-                "  [bold]$VAR=val[/] переменная   [bold]> cmd[/] TTY          [bold]| cmd[/] пайп блока",
+                "  [bold]$VAR=val[/] переменная   [bold]$OUT[/] последняя строка блока   [bold]| cmd[/] пайп",
                 "  [bold]Tab[/] журнал  [bold]F2[/] строки  [bold]F3[/] копия  [bold]F5[/] JSON  [bold]d[/] / [bold]:theme[/] тема",
             ]
         )
@@ -1344,9 +1374,20 @@ class CommandRunner(App):
         "light": "textual-light",
     }
 
-    def __init__(self):
+    def __init__(
+        self,
+        demo: Optional[Dict[str, Any]] = None,
+        demo_speed: float = 1.0,
+        demo_quit: bool = False,
+    ):
         """Инициализация состояния приложения."""
         super().__init__()
+        self._demo_scenario = demo
+        self._demo_speed = demo_speed if demo_speed and demo_speed > 0 else 1.0
+        self._demo_quit = bool(demo_quit)
+        self._demo_active = False
+        self._demo_pressing = False
+        self._demo_worker_started = False
         self.session_history: List[str] = []
         self.session_history_pos: int = 0
         self._history_walking: bool = False
@@ -1998,6 +2039,34 @@ class CommandRunner(App):
         if getattr(self, "_fresh_command_db", False):
             self.add_block(InfoBlock(format_empty_db_hint(self.db_file)))
         self._request_shift_enter_encoding()
+        self._start_demo_if_requested()
+
+    def _start_demo_if_requested(self) -> None:
+        """Запускает YAML-тур после сплэша, если передан ``--demo`` / demo=."""
+        if not self._demo_scenario or getattr(self, "_demo_worker_started", False):
+            return
+        self._demo_worker_started = True
+        self._demo_active = True
+        self.run_worker(
+            play_demo(self, self._demo_scenario, self._demo_speed, self._demo_quit),
+            name="demo",
+            group="demo",
+            exclusive=True,
+            exit_on_error=False,
+        )
+
+    def _stop_demo(self, message: str = "Demo stopped. You can type now.") -> None:
+        """Останавливает проигрывание сценария (Esc)."""
+        if not self._demo_active:
+            return
+        self._demo_active = False
+        try:
+            self.workers.cancel_group("demo")
+        except Exception:
+            pass
+        if message:
+            self.sub_title = message
+            self.set_timer(4, self.clear_subtitle)
 
     def _request_shift_enter_encoding(self) -> None:
         """Просим терминал отличать Shift+Enter от Enter (kitty CSI u / xterm)."""
@@ -2031,6 +2100,8 @@ class CommandRunner(App):
 
     def action_focus_input(self) -> None:
         """Переводит фокус в строку ввода без выделения всего текста."""
+        if self._demo_active and not self._demo_pressing:
+            self._stop_demo()
         inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
         inp.focus()
         inp.cursor_position = len(inp.value or "")
@@ -2255,9 +2326,33 @@ class CommandRunner(App):
             self.add_block(InfoBlock(f"Error clearing blocks: {e}"))
 
     def _scroll_results_end(self) -> None:
-        """Прокрутить контейнер результатов вниз. Вызов после refresh даёт корректный layout."""
+        """Прокрутить журнал вниз. Якорь держит низ, пока пользователь не уедет вверх."""
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
-        container.scroll_end()
+        container.anchor(True)
+
+    def _schedule_journal_follow_end(self) -> None:
+        """Два refresh: после роста блока virtual size ещё не финальный."""
+        def scroll_then_repeat() -> None:
+            self._scroll_results_end()
+            self.call_after_refresh(self._scroll_results_end)
+
+        self.call_after_refresh(scroll_then_repeat)
+
+    def _should_follow_journal_end(self) -> bool:
+        """Следовать за новым выводом: фокус во вводе или уже у нижнего края."""
+        try:
+            container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+            inp = self.query_one(f"#{self.ID_INPUT}", Input)
+        except Exception:
+            return True
+        if inp.has_focus:
+            return True
+        if container.is_anchored and not getattr(container, "_anchor_released", False):
+            return True
+        max_y = float(getattr(container, "max_scroll_y", 0) or 0)
+        if max_y <= 0.5:
+            return True
+        return float(container.scroll_y) >= max_y - 2
 
     def add_block(self, block: Static) -> None:
         """
@@ -2269,17 +2364,12 @@ class CommandRunner(App):
         container.mount(block)
         block.focus()  # Кратковременно фокусируем, чтобы обновить active_pipe_source
         self.query_one(f"#{self.ID_INPUT}", Input).focus()
-
-        # Двойная прокрутка после refresh: при первом запуске один refresh недостаточен для
-        # финального virtual size контейнера; вторая прокрутка доводит скролл до конца.
-        def scroll_then_repeat() -> None:
-            self._scroll_results_end()
-            self.call_after_refresh(self._scroll_results_end)
-
-        self.call_after_refresh(scroll_then_repeat)
+        self._schedule_journal_follow_end()
 
     def clear_subtitle(self) -> None:
         """Очищает подзаголовок (статус-бар)."""
+        if self._demo_active:
+            return
         self.sub_title = ""
 
     def _strip_formatting_tags(self, text: str) -> str:
@@ -2564,6 +2654,8 @@ class CommandRunner(App):
         elif user_input.startswith(self.PREFIX_PIPE):
             self.handle_pipe_command(user_input)
         elif user_input.startswith(self.PREFIX_VAR):
+            if self._handle_lazy_placeholder_query(user_input):
+                return
             self.handle_variable_assignment(user_input)
         elif user_input.startswith(self.PREFIX_TTY) and not user_input.startswith(">>"):
             self.handle_tty_command(user_input)
@@ -2610,9 +2702,10 @@ class CommandRunner(App):
 
         `# command` (пробел после #) пишется в историю, как комментарий в bash.
         `#tag` без пробела — тег, в history не попадает.
+        `| cmd` — пайп с блока, в историю попадает (повтор по ↑).
         Проверка хвоста файла и append — одна блокировка (несколько экземпляров).
         """
-        prefixes = (self.PREFIX_CMD, self.PREFIX_QUERY, self.PREFIX_BANG, self.PREFIX_DOUBLE_BANG, self.PREFIX_TAG, self.PREFIX_PIPE, self.PREFIX_VAR)
+        prefixes = (self.PREFIX_CMD, self.PREFIX_QUERY, self.PREFIX_BANG, self.PREFIX_DOUBLE_BANG, self.PREFIX_TAG, self.PREFIX_VAR)
         if command.startswith(prefixes) and not self._is_history_comment(command):
             return
         append_history_file_line(
@@ -2992,6 +3085,8 @@ class CommandRunner(App):
                Compose pipes/saves: `#file !file[1] | !file[2]` (preview expands refs)
   !N         - Execute command by ID from last query
   |<cmd>     - Pipe focused block output to command
+  $OUT       - On demand: last non-empty line of the focused (or last) command block.
+               Not stored in .bashrc_term. Type $OUT alone to peek. `$OUT=` is rejected.
   $VAR=val   - Set environment variable
   aliases    - From ~/.bashrc. If the body has $1 / $2 / $@, args are substituted
                (klogin cluster → tsh kube login cluster). Else the rest of the line
@@ -3041,7 +3136,15 @@ class CommandRunner(App):
   $NS is auto-set when using -n in :i commands
   $JSON is set on Enter in JSON viewer (jq path of the selected node)
   Example: jq $JSON test.json
+  $OUT is the last line of the focused/last command block, computed only when
+  the command contains $OUT / ${OUT} (not kept in memory as a variable)
   $VAR also loaded from .bashrc_term and .bashrc_term_<instance>
+
+[bold]Demo mode[/bold]
+  python3 app.py --demo              - Play bundled short tour (Esc stops)
+  python3 app.py --demo full --demo-quit
+  python3 app.py --demo path.yml --demo-speed 1.5
+  Scenario YAML: src/demos/*.yml (type / keys / wait_command). Manual script: DEMO.md
 
 [bold]Handbooks (empty database)[/bold]
   First start with no commands lists seed scripts in the journal.
@@ -3240,10 +3343,18 @@ class CommandRunner(App):
             var_name, var_value = parts
             var_name = var_name.strip()
             var_value = var_value.strip()
+            if len(var_value) >= 2 and var_value[0] == var_value[-1] and var_value[0] in "'\"":
+                var_value = var_value[1:-1]
 
             # Простая валидация имени переменной
             if not RE_VAR_NAME.match(var_name):
                 self.add_block(InfoBlock(f"Error: Invalid variable name '{var_name}'."))
+                return
+            if var_name in LAZY_PLACEHOLDERS:
+                self.add_block(InfoBlock(
+                    f"${var_name} is on-demand (last line of the focused/last block). "
+                    f"It is not stored. Use ${var_name} in a command, or type ${var_name} alone to peek."
+                ))
                 return
 
             # Обновляем в памяти
@@ -3872,7 +3983,10 @@ class CommandRunner(App):
             return
 
         input_for_pipe = source_block.raw_stdout
-        self.handle_normal_command(pipe_command, stdin_data=input_for_pipe)
+        if user_input not in self.session_history:
+            self.session_history.append(user_input)
+        self.session_history_pos = len(self.session_history)
+        self.handle_normal_command(pipe_command, stdin_data=input_for_pipe, record_history=False)
 
     def handle_tty_command(self, user_input: str) -> None:
         """
@@ -3922,16 +4036,17 @@ class CommandRunner(App):
             )
             return completed.returncode
 
-    def handle_normal_command(self, command: str, stdin_data: Optional[str] = None) -> None:
+    def handle_normal_command(self, command: str, stdin_data: Optional[str] = None, record_history: bool = True) -> None:
         """
         Обертка для выполнения обычной команды с обновлением истории.
 
         v1.1.9+: Раскрытие ссылок !tag[tid] и !ID происходит в on_input_submitted,
         поэтому здесь мы просто выполняем уже раскрытую команду.
         """
-        if command not in self.session_history:
-            self.session_history.append(command)
-        self.session_history_pos = len(self.session_history)
+        if record_history:
+            if command not in self.session_history:
+                self.session_history.append(command)
+            self.session_history_pos = len(self.session_history)
         expanded = self._expand_aliases(self._substitute_variables(command))
         cd_path = parse_standalone_cd(expanded)
         if cd_path is not None:
@@ -4074,7 +4189,44 @@ class CommandRunner(App):
             self._apply_history_line(self._history_draft)
 
     def _substitute_variables(self, command: str) -> str:
-        return substitute_variables(command, self.local_env)
+        extra = None
+        if command_requests_placeholder(command, "OUT"):
+            extra = {"OUT": self._last_output_line()}
+        return substitute_variables(command, self.local_env, extra=extra)
+
+    def _handle_lazy_placeholder_query(self, user_input: str) -> bool:
+        """`$OUT` без `=` — показать текущую строку, ничего не запоминая."""
+        token = user_input.strip()
+        if token not in ("$OUT", "${OUT}"):
+            return False
+        line = self._last_output_line()
+        if line:
+            self.add_block(InfoBlock(f"$OUT (on demand):\n{line}"))
+        else:
+            self.add_block(InfoBlock("$OUT: no finished command output yet."))
+        return True
+
+    def _last_output_line(self) -> str:
+        """Last non-empty line of the pipe-source / last CommandBlock. No extra store."""
+        block = self._output_block_for_placeholder()
+        if block is None:
+            return ""
+        if getattr(block, "pending", False):
+            return ""
+        stdout = getattr(block, "raw_stdout", "") or ""
+        if stdout == "[Executing...]":
+            return ""
+        return last_nonempty_line(stdout)
+
+    def _output_block_for_placeholder(self) -> Optional["CommandBlock"]:
+        focused = self.focused
+        if isinstance(focused, CommandBlock):
+            return focused
+        source = getattr(self, "active_pipe_source", None)
+        if isinstance(source, CommandBlock):
+            return source
+        blocks = list(self.query(CommandBlock))
+        return blocks[-1] if blocks else None
 
     def _expand_aliases(self, command: str) -> str:
         return expand_aliases(command, self.aliases)
@@ -4261,5 +4413,10 @@ def apply_instance_name(name: str) -> None:
 if __name__ == "__main__":
     args = parse_arguments()
     apply_instance_name(args.instance_name)
-    app = CommandRunner()
+    demo_spec = load_demo_for_cli(args.demo) if args.demo else None
+    app = CommandRunner(
+        demo=demo_spec,
+        demo_speed=args.demo_speed,
+        demo_quit=args.demo_quit,
+    )
     app.run()

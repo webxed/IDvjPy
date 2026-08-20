@@ -1,9 +1,11 @@
 """Unit tests for extracted shell_env helpers."""
 from shell_env import (
     expand_aliases,
+    last_nonempty_line,
     parse_alias_line,
     parse_bashrc_assignment,
     substitute_variables,
+    command_requests_placeholder,
 )
 
 
@@ -26,6 +28,26 @@ def test_substitute_variables_prefers_local_env():
     assert out == "echo local"
     out = substitute_variables("echo $MISSING", {}, {})
     assert out == "echo $MISSING"
+    out = substitute_variables(
+        'echo "${WIKI_COUNTRY}US"',
+        {"WIKI_COUNTRY": "https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#"},
+        {},
+    )
+    assert out == 'echo "https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#US"'
+    out = substitute_variables("echo $OUT", {}, {"OUT": "from-os"}, extra={"OUT": "US"})
+    assert out == "echo US"
+    assert command_requests_placeholder("echo Hello, $OUT")
+    assert command_requests_placeholder("echo ${OUT}")
+    assert not command_requests_placeholder("echo $OUTPUT")
+    assert not command_requests_placeholder("echo hi")
+
+
+def test_last_nonempty_line_does_not_split_whole_buffer():
+    assert last_nonempty_line("") == ""
+    assert last_nonempty_line("US\n") == "US"
+    assert last_nonempty_line("aaa\nbbb\n") == "bbb"
+    huge = ("x" * 10000 + "\n") * 50 + "tail-line\n\n"
+    assert last_nonempty_line(huge) == "tail-line"
 
 
 def test_expand_aliases_positional_and_classic():

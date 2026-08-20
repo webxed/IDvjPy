@@ -11,7 +11,7 @@ async def test_app_starts_with_input_focused(isolated_home):
         assert input_widget(app).has_focus
         welcome = " ".join(block.text_content for block in app.query(InfoBlock))
         assert "IDvjPy_term" in welcome
-        assert "v1.22" in welcome
+        assert "v1.23" in welcome
         assert ":?" in welcome
         assert "#tag cmd" in welcome
         assert "Define your variables" in welcome
@@ -312,6 +312,27 @@ async def test_variable_assignment_and_substitution(isolated_home):
         await submit(pilot, "echo $FOO")
         block = await wait_command_done(app)
         assert "bar-test" in block.raw_stdout
+
+
+async def test_out_placeholder_is_lazy_last_line(isolated_home):
+    """$OUT читает последнюю строку блока только в момент команды, не пишется в env."""
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "printf 'aaa\\nbbb\\n'")
+        await wait_command_done(app)
+        assert "OUT" not in app.local_env
+
+        await submit(pilot, "echo Hello, $OUT")
+        block = await wait_command_done(app)
+        assert "Hello, bbb" in block.raw_stdout
+        assert "OUT" not in app.local_env
+
+        await submit(pilot, "$OUT=nope")
+        assert "not stored" in last_info(app).text_content
+        assert "OUT" not in app.local_env
+
+        await submit(pilot, "$OUT")
+        assert "bbb" in last_info(app).text_content
 
 
 async def test_echo_myvar_from_legacy_bashrc_term(isolated_home):

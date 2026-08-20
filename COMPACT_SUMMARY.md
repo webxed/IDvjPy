@@ -1,8 +1,8 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.22**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.23**.
 
-Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`.
+Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
 Пустая БД: в журнале каталог seed (`python3 src/seed_….py --seed`). Цепочки k8s: [`K8S_CHAINS.md`](K8S_CHAINS.md).
 
@@ -26,7 +26,8 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
 | `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` |
-| `\|` | Pipe focused/last block stdout |
+| `\|` | Pipe focused/last block stdout (saved in history) |
+| `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
 
 Aliases from `~/.bashrc`: bodies with `$1` / `$2` / `$@` substitute args; otherwise the rest of the line is appended.
@@ -108,6 +109,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 ### Tags / vars
 - `#` parser: strict regex so `ping -c` / `A=B` save instead of delete/comment.
 - `$JSON` from viewer; `$NS` from `:i … -n`.
+- `$OUT` is the last non-empty line of the focused (or last) command block, computed only when the typed command contains `$OUT` / `${OUT}`. Not written to `.bashrc_term` / `local_env`. `$OUT=` is rejected.
 - Env files **merged**: `.bashrc_term_<instance>` wins on name clash; extras from `.bashrc_term` still load (`MYVAR` in `.bashrc_term` + `NS` in `_default`). Also accepts `VAR=val` without `export`.
 - `$VAR=val` writes the instance file (`.bashrc_term_default` by default).
 - `-n` without value → explicit error (no silent fallback).
@@ -141,7 +143,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | File | Purpose |
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
-| `src/app.py` | TUI (`CommandRunner`), v1.22 |
+| `src/app.py` | TUI (`CommandRunner`), v1.23 |
 | `src/database_v2.py` | SQLite tagged history |
 | `src/json_viewer.py` | JSON tree modal |
 | `src/ingress_analyzer.py` | `:i` k8s |
@@ -156,6 +158,11 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 ---
 
+## v1.23
+
+- **`$OUT`**: last non-empty line of the focused (or last) command block, computed only when the command contains `$OUT` / `${OUT}`. Not stored in `.bashrc_term` or `local_env`. `$OUT=` is rejected; `$OUT` alone peeks.
+- **`--demo ip`**: myip → jq `.cc` → Wiki URL → tag `hello` pipe (`!! hello[1]|hello[2]`); `# comment` lines before commands.
+
 ## v1.22
 
 - **History file per instance:** `--instance-name=user1` uses `history_user1.txt` (same pattern as `.bashrc_term_user1`). Default is `history_default.txt`. Legacy `history.txt` is copied once if the instance file is missing.
@@ -163,6 +170,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 - **`:h /text`** searches the instance history in the completion list (unique lines, newest first). Esc then Enter dumps a journal block. Empty `:h /` is the same as `:h`.
 - History search uses an in-memory cache (reload on mtime/size). Appends take one exclusive flock so several app copies do not race on the same file.
 - **`# command`** (space after `#`) parks the line in history and the journal without running it, like a bash comment. `#tag cmd` (no space) still saves a tag.
+- **Demo mode:** `python3 app.py --demo` (or `--demo full`, `--demo path.yml`) types a YAML scenario into the live TUI for screen recordings. Esc stops; `--demo-quit` exits at the end; `--demo-speed` scales delays. Bundled files: `src/demos/*.yml`.
 
 ## v1.2
 

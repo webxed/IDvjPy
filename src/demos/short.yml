@@ -1,0 +1,87 @@
+# Bundled short tour for `python3 app.py --demo`
+# Safe to record: no TTY apps, no kubectl, no :q (use --demo-quit to exit).
+# Saves tags tour / tourlog / tourpipe into the current command DB.
+
+title: IDvjPy short tour
+start_pause: 1.6
+type_delay: 0.14
+pause: 1.3
+command_timeout: 12
+
+steps:
+  - caption: Справка — префиксы и горячие клавиши
+    type: ":?"
+    pause: 2.4
+
+  - caption: Обычная команда → блок в журнале
+    type: "echo hello-idvj"
+    wait_command: true
+    pause: 1.3
+
+  - caption: Переменная живёт в .bashrc_term
+    type: "$HOST=https://api.agify.io/?name=cursor"
+
+  - type: "echo $HOST"
+    wait_command: true
+
+  - caption: JSON в журнале — потом F5
+    type: "echo '{\"service\":\"api\",\"pods\":[{\"name\":\"api-7f\",\"status\":\"CrashLoop\"}]}'"
+    wait_command: true
+    pause: 1.1
+
+  - caption: Сохранить шаблон команды
+    type: "#tour echo curl -s $HOST"
+
+  - type: "#tourlog echo kubectl logs -l app=api --tail=20"
+
+  - type: "#tourpipe !tour[1] && !tourlog[1]"
+
+  - caption: Библиотека тегов
+    type: "?"
+    pause: 1.8
+
+  - caption: "Превью: как раскроются ссылки"
+    type: "?tourpipe[1]"
+    pause: 2.0
+
+  - caption: "! подставляет текст, ещё не запускает"
+    type: "!tour[1]"
+    pause: 1.4
+
+  - caption: Второй Enter — запуск собранной строки
+    keys: enter
+    wait_command: true
+    pause: 1.3
+
+  - caption: Собрать цепочку через !!
+    type: "!! tour[1] && tourlog[1]"
+    pause: 1.6
+
+  - keys: enter
+    wait_command: true
+    pause: 1.4
+
+  - caption: Фокус на последний блок
+    keys: tab
+    pause: 0.7
+
+  - caption: JSON viewer (F5), Esc закрывает
+    keys: f5
+    pause: 2.2
+
+  - keys: escape
+    pause: 0.6
+
+  - caption: Построчный режим — Enter копирует строку во ввод
+    keys: [tab, f2]
+    pause: 0.8
+
+  - keys: [home, enter]
+    pause: 1.4
+
+  - caption: Заметка в историю, без запуска
+    type: "# curl this later from history"
+    pause: 1.2
+
+  - type: ":h 6"
+    pause: 2.0

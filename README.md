@@ -2,7 +2,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.22 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.23 — умный терминал для создания командных строк из тегов.
 
 > *Define your variables, join your command.*
 
@@ -25,7 +25,7 @@ IDvjPy — терминальное приложение (TUI) на Python (Text
 - Автодополнение путей и команд из истории/БД
 - Построчный режим в выводе блока (копирование и дописывание во ввод)
 - JSON viewer (F5) с черновиком `jq` и `$JSON`
-- Переменные `$VAR` (файлы `.bashrc_term` / `.bashrc_term_<instance>`)
+- Переменные `$VAR` (файлы `.bashrc_term` / `.bashrc_term_<instance>`); `$OUT` — последняя строка блока, только в момент команды
 - Алиасы из `~/.bashrc` (в том числе `$1` / `$2` / `$@`), фоновое выполнение команд
 - `> cmd` — настоящий TTY (htop, vim, ssh); клик и PgUp/PgDn активируют видимый блок журнала
 
@@ -41,13 +41,16 @@ source .venv/bin/activate
 
 На Linux для буфера обмена нужны `xclip` или `xsel` (на Wayland — `wl-clipboard`).
 
-Переменные: при первом старте копируется [`src/.bashrc_term.example`](src/.bashrc_term.example) в `.bashrc_term_<instance>`. Демо-сценарий: [`DEMO.md`](DEMO.md).
+Переменные: при первом старте копируется [`src/.bashrc_term.example`](src/.bashrc_term.example) в `.bashrc_term_<instance>`. Демо: [`DEMO.md`](DEMO.md) (живой сценарий) и `python3 app.py --demo` (автонабор для записи видео).
 
 ## Запуск
 
 ```bash
 python3 app.py
 python3 app.py --instance-name=user1   # отдельный .bashrc_term_user1 и history_user1.txt
+python3 app.py --demo                  # автотур: печатает команды сам (Esc — стоп)
+python3 app.py --demo ip               # myip → jq .cc → Wiki URL → пайп из тегов hello
+python3 app.py --demo full --demo-quit
 ```
 
 Код приложения лежит в `src/`. В корне рабочей копии — данные: `settings.yml`, база тегов, `.bashrc_term*`, `history_<instance>.txt`. Seed-справочники: `python3 src/seed_git.py --seed` и т.п. (команды также показаны при первом старте, если БД пустая).
@@ -74,7 +77,8 @@ python3 app.py --instance-name=user1   # отдельный .bashrc_term_user1 �
 | `!tag[tid]` / `!N` | Вставить команду во ввод (не запускает) | `!deploy[1]` |
 | `!! …` | Собрать строку во вводе | `!! deploy[1] && start[1]` |
 | `:` | Команды приложения | `:q`, `:cd`, `:r`, `:/text`, `:export tag`, `:i`, `:?` |
-| `\| cmd` | Пайп stdout сфокусированного блока | `\| grep error` |
+| `\| cmd` | Пайп stdout сфокусированного блока (в историю, как обычная команда) | `\| grep error` |
+| `$OUT` | По запросу: последняя непустая строка блока (не хранится) | `echo Hello, $OUT` |
 | `$VAR=val` | Локальная переменная (пишет `.bashrc_term_<instance>`) | `$EDITOR=nvim` |
 
 `!` и `!!` подставляют текст во ввод. Запуск — отдельным Enter.
