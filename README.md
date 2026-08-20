@@ -1,10 +1,14 @@
 # IDvjPy — ID Variables & Joiner on Python
 
+<p align="center">
+  <img src="screen-demo-ip.gif" alt="IDvjPy_term: python3 app.py --demo ip" width="800">
+</p>
+
+<p align="center"><em>Define your variables, join your command.</em></p>
+
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
 **IDvjPy_term** v1.23 — умный терминал для создания командных строк из тегов.
-
-> *Define your variables, join your command.*
 
 ## Что это?
 
