@@ -4,6 +4,7 @@ import time
 from app import CommandBlock, CommandRunner, InfoBlock
 from demo import (
     bundled_demo_names,
+    collect_reset_tags,
     load_scenario,
     normalize_step,
     resolve_demo_path,
@@ -31,9 +32,16 @@ def test_bundled_short_and_full_resolve():
     assert "#hello jq -r '.country'" in types
     assert any(t.startswith("#hello echo") and "hello[2]" in t for t in types)
     assert "!! hello[1]|hello[2]" in types
+    assert any(t == 'echo "Hello, $OUT"' or t.startswith('echo "Hello, $OUT"') for t in types)
+    assert not any(s.get("paste") for s in ip["steps"] if "Hello" in (s.get("type") or "") + (s.get("caption") or ""))
     comments = [t for t in types if t.startswith("# ") and not t.startswith("#hello")]
     assert len(comments) >= 8
     assert any("hello[1]" in t for t in comments)
+    assert collect_reset_tags(ip) == ["hello"]
+    short_tags = collect_reset_tags(scenario)
+    assert "tour" in short_tags
+    assert "tourlog" in short_tags
+    assert "tourpipe" in short_tags
 
 
 def test_normalize_string_step_types_and_enters():
@@ -62,6 +70,21 @@ def test_normalize_step_type_delay():
     step = normalize_step({"type": "echo x", "type_delay": 0.04})
     assert step["type_delay"] == 0.04
     assert normalize_step("echo x")["type_delay"] is None
+
+
+def test_collect_reset_tags_skips_parked_comments():
+    scenario = {
+        "reset_tags": ["explicit"],
+        "steps": [
+            "# parked comment with space",
+            {"type": "#hello curl -s $MY_IP_SVC"},
+            {"type": "#hello jq -r '.country'"},
+            {"type": "#tour=desc"},
+            {"type": "echo not-a-tag"},
+            {"type": "?hello"},
+        ],
+    }
+    assert collect_reset_tags(scenario) == ["explicit", "hello", "tour"]
 
 
 def test_type_gap_long_lines_are_faster():
@@ -276,3 +299,38 @@ def test_resolve_custom_yaml(tmp_path, monkeypatch):
     assert path == custom.resolve()
     scenario = load_scenario(path)
     assert scenario["steps"][0]["type"] == "echo x"
+
+
+async def test_demo_hard_deletes_used_tags_before_playback(isolated_home):
+    """Повторный #hello не должен давать hello[3]: старые строки тега стираются."""
+    import database_v2 as database
+
+    db = str(isolated_home / "test_history.db")
+    database.init_db(db)
+    database.add_command(db, "echo stale-old", "hello")
+    database.add_command(db, "echo stale-two", "hello")
+    database.add_command(db, "echo keep-other", "other")
+    scenario = {
+        "title": "reset-tags",
+        "start_pause": 0,
+        "type_delay": 0,
+        "pause": 0,
+        "command_timeout": 8,
+        "steps": [
+            {"type": "# parked stays out of reset", "enter": True, "pause": 0},
+            {"type": "#hello echo fresh-only", "enter": True, "pause": 0},
+        ],
+    }
+    app = CommandRunner(demo=scenario, demo_speed=20)
+    async with app.run_test(size=(120, 40)) as pilot:
+        deadline = time.monotonic() + 12
+        while app._demo_active and time.monotonic() < deadline:
+            await pilot.pause()
+        assert app._demo_active is False
+        hello = database.get_commands_by_tag(db, "hello")
+        assert len(hello) == 1
+        assert hello[0]["tid"] == 1
+        assert hello[0]["command"] == "echo fresh-only"
+        other = database.get_commands_by_tag(db, "other")
+        assert len(other) == 1
+        assert other[0]["command"] == "echo keep-other"

@@ -14,7 +14,7 @@ Philosophy: tags are variables holding command templates; the app assembles them
 python3 app.py
 python3 app.py --instance-name=user1   # .bashrc_term_user1 и history_user1.txt
 python3 app.py --demo                  # короткий тур (Esc — стоп)
-python3 app.py --demo ip               # myip → jq .cc → Wiki URL → пайп из тегов hello
+python3 app.py --demo ip               # myip → jq .cc → F2 copy → Wiki URL → hello pipe → echo Hello, $OUT
 python3 app.py --demo full --demo-quit # длинный тур и выход (удобно для asciinema)
 ```
 

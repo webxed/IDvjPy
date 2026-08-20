@@ -1,6 +1,6 @@
 # IP / country-code tour: `python3 app.py --demo ip`
 # Needs network, curl, jq. F2 copies jq's .cc, then paste onto the Wiki URL.
-# After that: save tag hello and assemble `!! hello[1]|hello[2]`.
+# After that: save tag hello, assemble `!! hello[1]|hello[2]`, greet with $OUT.
 # `# comment` (space after #) parks an explanation in history without running.
 
 title: My IP and Wiki country
@@ -121,31 +121,11 @@ steps:
     wait_command: true
     pause: 1.8
 
-  - caption: F2 — скопировать название страны
-    keys: tab
-    pause: 0.5
-
-  - keys: f2
-    pause: 0.4
-
-  - keys: [home, down]
-    pause: 0.4
-
-  - keys: enter
-    pause: 1.0
-
-  - caption: Комментарий — Hello
-    type: "# Поздороваться, вставив имя страны из буфера"
+  - caption: Комментарий — Hello через $OUT
+    type: "# Поздороваться, подставив последнюю строку блока ($OUT)"
     pause: 0.9
 
-  - caption: "echo Hello, + страна"
-    type: "echo \"Hello, \""
-    enter: false
-    pause: 0.8
-
-  - paste: true
-    pause: 0.8
-
-  - keys: enter
+  - caption: "echo Hello, $OUT"
+    type: "echo \"Hello, $OUT\""
     wait_command: true
     pause: 1.4

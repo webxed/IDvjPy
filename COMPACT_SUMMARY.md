@@ -161,7 +161,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 ## v1.23
 
 - **`$OUT`**: last non-empty line of the focused (or last) command block, computed only when the command contains `$OUT` / `${OUT}`. Not stored in `.bashrc_term` or `local_env`. `$OUT=` is rejected; `$OUT` alone peeks.
-- **`--demo ip`**: myip → jq `.cc` → Wiki URL → tag `hello` pipe (`!! hello[1]|hello[2]`); `# comment` lines before commands.
+- **`--demo ip`**: myip → jq `.cc` → Wiki URL → tag `hello` pipe (`!! hello[1]|hello[2]`) → `echo "Hello, $OUT"`; `# comment` lines before commands. Demo tags from `#tag cmd` are wiped before playback so a second run does not duplicate tids.
 
 ## v1.22
 

@@ -6,6 +6,7 @@ or shown live. Esc cancels playback; the session stays open unless ``--demo-quit
 from __future__ import annotations
 
 import asyncio
+import re
 import sys
 import time
 import unicodedata
@@ -17,6 +18,7 @@ from textual import events
 from textual.keys import REPLACED_KEYS, _character_to_key, _get_unicode_name_from_key
 
 BUNDLED_DEMOS_DIR = Path(__file__).resolve().parent / "demos"
+RE_DEMO_SAVE_TAG = re.compile(r"^#([A-Za-z_][A-Za-z0-9]*)")
 
 KEY_ALIASES = {
     "esc": "escape",
@@ -80,6 +82,48 @@ def load_scenario(path: Union[str, Path]) -> Dict[str, Any]:
     if not data["steps"]:
         raise ValueError(f"Demo scenario has no steps: {demo_path}")
     return data
+
+
+def collect_reset_tags(scenario: Dict[str, Any]) -> List[str]:
+    """Tags the scenario will `#tag cmd`-save. Cleared before playback so tids restart at 1."""
+    tags: List[str] = []
+    seen = set()
+    for raw in scenario.get("reset_tags") or []:
+        name = str(raw).strip()
+        if name and name not in seen:
+            seen.add(name)
+            tags.append(name)
+    for step in scenario.get("steps") or []:
+        if isinstance(step, str):
+            text = step.strip()
+        else:
+            text = (step.get("type") or "").strip()
+        if len(text) < 2 or not text.startswith("#"):
+            continue
+        if text[1] in " \t":
+            continue
+        match = RE_DEMO_SAVE_TAG.match(text)
+        if not match:
+            continue
+        tag = match.group(1)
+        if tag not in seen:
+            seen.add(tag)
+            tags.append(tag)
+    return tags
+
+
+def _reset_demo_tags(app: Any, tags: List[str]) -> None:
+    if not tags:
+        return
+    db_file = getattr(app, "db_file", None)
+    if not db_file:
+        return
+    import database_v2 as database
+
+    for tag in tags:
+        database.hard_delete_commands_by_tag(db_file, tag)
+    if hasattr(app, "_populate_query_results"):
+        app._populate_query_results()
 
 
 def load_demo_for_cli(name: str) -> Dict[str, Any]:
@@ -169,6 +213,7 @@ async def play_demo(app: Any, scenario: Dict[str, Any], speed: float = 1.0, quit
     app._demo_active = True
     app.sub_title = f"DEMO · {title} · Esc stops"
     try:
+        _reset_demo_tags(app, collect_reset_tags(scenario))
         await asyncio.sleep(_delay(start_pause, speed))
         for index, step in enumerate(steps, start=1):
             if not getattr(app, "_demo_active", False):

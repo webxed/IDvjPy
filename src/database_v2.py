@@ -114,6 +114,14 @@ def delete_commands_by_tag(db_file: str, tag: str):
     conn.commit()
     conn.close()
 
+def hard_delete_commands_by_tag(db_file: str, tag: str) -> None:
+    """Remove a tag completely so the next add_command starts at tid 1."""
+    conn = get_db_connection(db_file)
+    conn.execute("DELETE FROM commands WHERE tag = ?", (tag,))
+    conn.execute("DELETE FROM tags WHERE tag = ?", (tag,))
+    conn.commit()
+    conn.close()
+
 def delete_command_by_tid(db_file: str, tag: str, tid: int):
     """Marks a single command as deleted by tag and tid."""
     conn = get_db_connection(db_file)

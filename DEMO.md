@@ -15,7 +15,7 @@ TUI сам печатает команды из YAML. Рядом можно по
 ```bash
 python3 app.py --demo                     # bundled short, ~2–3 мин
 python3 app.py --demo full                # bundled full, без htop / kubectl / :q
-python3 app.py --demo ip                  # myip → jq .cc → Wiki URL → пайп из тегов hello
+python3 app.py --demo ip                  # myip → jq .cc → Wiki URL → hello pipe → echo Hello, $OUT
 python3 app.py --demo --demo-speed 1.5    # быстрее (2 = вдвое)
 python3 app.py --demo full --demo-quit    # выйти, когда сценарий закончится
 python3 app.py --demo path/to/tour.yml    # свой файл
@@ -70,6 +70,7 @@ steps:
     enter: true
 ```
 
+- Перед проигрыванием теги из `#tag cmd` (и опционально `reset_tags: [hello]`) **удаляются из БД**, чтобы повторный `--demo` не плодил `hello[4]`.
 - `caption` / `say` — подпись шага в subtitle.
 - `keys`: `enter`, `escape`/`esc`, `tab`, `f2`…`f6`, `up`/`down`, `home`/`end`, `pageup`/`pagedown`, `ctrl+c`, `ctrl+d`, `ctrl+v`, или список. После `tab` в журнале следующий `type` снова берёт строку ввода (иначе Enter включит курсор строк, как F2).
 - Не ставьте в YAML `> htop` / `vim` / `ssh`: TUI снимется и будет ждать человека.
