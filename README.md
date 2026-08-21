@@ -24,7 +24,7 @@ IDvjPy — терминальное приложение (TUI) на Python (Text
 ## Возможности
 
 - Персистентные теги и сборка команд (`!tag[tid]`, `!!`)
-- Справочники команд (seed): Linux, [цепочки для расследования k8s](K8S_CHAINS.md), git, docker, helm и другие ops
+- Справочники команд (seed): Linux, [цепочки для расследования k8s](K8S_CHAINS.md), git, docker, helm, ansible, systemd, lsof/strace, sysstat, sort/jq, ip/ethtool, tcpdump/mtr/TLS, apt/rpm и другие ops
 - Журнал по блокам: фокус, сворачивание, пайп `|` из сфокусированного блока
 - Автодополнение путей и команд из истории/БД
 - Построчный режим в выводе блока (копирование и дописывание во ввод)
@@ -200,22 +200,31 @@ python3 -m pytest tests/ -v
 | `python3 src/seed_linux_commands.py --seed` | [`SEED_LINUX_COMMANDS.md`](SEED_LINUX_COMMANDS.md) | `proc` `file` `net` `kube` |
 | `python3 src/seed_k8s_chains.py --seed` | [`K8S_CHAINS.md`](K8S_CHAINS.md) | `kpod` `klog` `kquota` … |
 | `python3 src/seed_git.py --seed` | [`SEED_GIT_COMMANDS.md`](SEED_GIT_COMMANDS.md) | `git` `gstat` `gsync` … |
-| `python3 src/seed_ops.py --seed` | все ops ниже | docker + helm + http + netfw + data + host + disk + vault + text + rsync + find + recon + ssh |
+| `python3 src/seed_ops.py --seed` | все ops ниже | docker + helm + ansible + http + netfw + ip + netdbg + data + host + disk + systemd + sysinfo + sysstat + vault + text + pipe + rsync + find + recon + ssh + pkg + user |
 | `python3 src/seed_docker.py --seed` | [`SEED_DOCKER_COMMANDS.md`](SEED_DOCKER_COMMANDS.md) | `dck` `dcmp` `dps` `dlog` |
 | `python3 src/seed_helm.py --seed` | [`SEED_HELM_COMMANDS.md`](SEED_HELM_COMMANDS.md) | `helm` `hls` |
+| `python3 src/seed_ansible.py --seed` | [`SEED_ANSIBLE_COMMANDS.md`](SEED_ANSIBLE_COMMANDS.md) | `ansible` `aplay` `avault` `agalaxy` `achk` `aping` |
 | `python3 src/seed_http.py --seed` | [`SEED_HTTP_COMMANDS.md`](SEED_HTTP_COMMANDS.md) | `curl` `ngx` `trf` |
-| `python3 src/seed_netfw.py --seed` | [`SEED_NETFW_COMMANDS.md`](SEED_NETFW_COMMANDS.md) | `ss` `nst` `ipt` `fwd` |
+| `python3 src/seed_netfw.py --seed` | [`SEED_NETFW_COMMANDS.md`](SEED_NETFW_COMMANDS.md) | `ss` `nst` `ipt` `nft` `fwd` |
+| `python3 src/seed_ip.py --seed` | [`SEED_IP_COMMANDS.md`](SEED_IP_COMMANDS.md) | `ip` `eth` `ilink` `iiface` |
+| `python3 src/seed_netdbg.py --seed` | [`SEED_NETDBG_COMMANDS.md`](SEED_NETDBG_COMMANDS.md) | `pcap` `ncat` `hops` `tls` `npath` `tlschk` |
 | `python3 src/seed_data.py --seed` | [`SEED_DATA_COMMANDS.md`](SEED_DATA_COMMANDS.md) | `pg` `kf` |
-| `python3 src/seed_host.py --seed` | [`SEED_HOST_COMMANDS.md`](SEED_HOST_COMMANDS.md) | `tar` `gz` |
+| `python3 src/seed_host.py --seed` | [`SEED_HOST_COMMANDS.md`](SEED_HOST_COMMANDS.md) | `tar` `gz` `zip` `tstat` `zstat` |
 | `python3 src/seed_disk.py --seed` | [`SEED_DISK_COMMANDS.md`](SEED_DISK_COMMANDS.md) | `df` `du` `mount` `fdisk` `lsblk` `smart` `ncdu` |
+| `python3 src/seed_systemd.py --seed` | [`SEED_SYSTEMD_COMMANDS.md`](SEED_SYSTEMD_COMMANDS.md) | `sctl` `jctl` `dmesg` `sstat` `sfail` `kmsg` |
+| `python3 src/seed_sysinfo.py --seed` | [`SEED_SYSINFO_COMMANDS.md`](SEED_SYSINFO_COMMANDS.md) | `hinfo` `lsof` `strace` `hstat` `lport` `pdbg` |
+| `python3 src/seed_sysstat.py --seed` | [`SEED_SYSSTAT_COMMANDS.md`](SEED_SYSSTAT_COMMANDS.md) | `vmstat` `iostat` `mpstat` `oload` |
 | `python3 src/seed_vault.py --seed` | [`SEED_VAULT_COMMANDS.md`](SEED_VAULT_COMMANDS.md) | `vault` `vstat` `vkv` |
 | `python3 src/seed_text.py --seed` | [`SEED_TEXT_COMMANDS.md`](SEED_TEXT_COMMANDS.md) | `grep` `awk` `sed` |
+| `python3 src/seed_pipe.py --seed` | [`SEED_PIPE_COMMANDS.md`](SEED_PIPE_COMMANDS.md) | `sort` `uniq` `cut` `tr` `wc` `xargs` `tee` `jq` |
 | `python3 src/seed_rsync.py --seed` | [`SEED_RSYNC_COMMANDS.md`](SEED_RSYNC_COMMANDS.md) | `rsync` `rchk` |
 | `python3 src/seed_find.py --seed` | [`SEED_FIND_COMMANDS.md`](SEED_FIND_COMMANDS.md) | `find` `fchk` |
 | `python3 src/seed_recon.py --seed` | [`SEED_RECON_COMMANDS.md`](SEED_RECON_COMMANDS.md) | `dig` `nmap` |
 | `python3 src/seed_ssh.py --seed` | [`SEED_SSH_COMMANDS.md`](SEED_SSH_COMMANDS.md) | `ssh` `scp` `schk` `ossh` `ocert` |
+| `python3 src/seed_pkg.py --seed` | [`SEED_PKG_COMMANDS.md`](SEED_PKG_COMMANDS.md) | `apt` `dnf` `rpm` `aptq` `rpmq` |
+| `python3 src/seed_user.py --seed` | [`SEED_USER_COMMANDS.md`](SEED_USER_COMMANDS.md) | `ident` `perm` `uidchk` |
 
-`seed_ops.py` не трогает linux / k8s / git. `seed_http` / `seed_netfw` / `seed_rsync` / `seed_recon` / `seed_ssh` не затирают linux-тег `net`. `seed_text` / `seed_find` / `seed_disk` не затирают `file`. `seed_host` не затирает `smart` / `df`.
+`seed_ops.py` не трогает linux / k8s / git. `seed_http` / `seed_netfw` / `seed_ip` / `seed_netdbg` / `seed_rsync` / `seed_recon` / `seed_ssh` не затирают linux-тег `net`. `seed_text` / `seed_pipe` / `seed_find` / `seed_disk` не затирают `file`. `seed_host` не затирает `smart` / `df`. `seed_systemd` / `seed_sysinfo` / `seed_sysstat` не затирают `proc` / `logs`.
 
 ## Зависимости
 

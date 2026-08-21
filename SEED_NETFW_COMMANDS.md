@@ -1,7 +1,7 @@
-# Справочник сокетов и firewall: ss, netstat, iptables, firewalld
+# Справочник сокетов и firewall: ss, netstat, iptables, nftables, firewalld
 
-Теги **`ss`**, **`nst`** (netstat), **`ipt`**, **`fwd`** (firewall-cmd).
-Плейбуки **только осмотр**: нет `iptables -F`, `--panic-on`, `policy DROP`.
+Теги **`ss`**, **`nst`** (netstat), **`ipt`**, **`nft`**, **`fwd`** (firewall-cmd).
+Плейбуки **только осмотр**: нет `iptables -F`, `nft flush`, `--panic-on`, `policy DROP`.
 
 Linux-тег `net` (`ss -tulnp`, `curl -sI`) этот сид не затирает.
 
@@ -69,6 +69,21 @@ $PROTO=tcp
 
 ---
 
+## nft — nftables (tid)
+
+| tid | Команда | Назначение |
+|-----|---------|------------|
+| 1 | `nft list tables` | Таблицы |
+| 2 | `nft list ruleset` | Весь ruleset |
+| 3 | `nft -a list ruleset` | С handle |
+| 4 | `nft list table inet filter` | inet filter |
+| 5 | `nft list table ip nat` | ip nat |
+| 6 | `nft list chain inet filter input` | input |
+
+Нет `flush` / `delete` в теге.
+
+---
+
 ## fwd — firewall-cmd (tid)
 
 | tid | Команда | Назначение |
@@ -97,11 +112,13 @@ $PROTO=tcp
 |-----|---------|
 | `nstat[1]` | `ss -tulnp` + сводка |
 | `iptstat[1]` | filter + nat |
+| `nftstat[1]` | tables → list ruleset |
 | `fwstat[1]` | state → zones → list-all |
 
 ```text
 !! nstat[1]
 $PORT=22
 !! ss[7]
+!! nftstat[1]
 !! fwstat[1]
 ```

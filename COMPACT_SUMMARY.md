@@ -162,6 +162,16 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 - **`$OUT`**: last non-empty line of the focused (or last) command block, computed only when the command contains `$OUT` / `${OUT}`. Not stored in `.bashrc_term` or `local_env`. `$OUT=` is rejected; `$OUT` alone peeks.
 - **`--demo ip`**: myip → jq `.cc` → Wiki URL → tag `hello` pipe (`!! hello[1]|hello[2]`) → `echo "Hello, $OUT"`; `# comment` lines before commands. Demo tags from `#tag cmd` are wiped before playback so a second run does not duplicate tids.
+- **Ansible seed:** `python3 src/seed_ansible.py --seed` — tags `ansible` `aplay` `avault` `agalaxy`, inspect playbooks `achk` / `aping`. Included in `seed_ops.py`.
+- **Systemd seed:** `python3 src/seed_systemd.py --seed` — `sctl` (systemctl), `jctl` (journalctl), `dmesg`; inspect playbooks `sfail` / `sstat` / `kmsg`.
+- **Sysinfo seed:** `python3 src/seed_sysinfo.py --seed` — `hinfo`, `lsof`, `strace`; playbooks `hstat` / `lport` / `pdbg`. Attach `strace -p` is time-bounded or `> cmd`.
+- **Pipe seed:** `python3 src/seed_pipe.py --seed` — `sort` `uniq` `cut` `tr` `wc` `xargs` `tee` `jq` for `|` / `!!`.
+- **IP seed:** `python3 src/seed_ip.py --seed` — `ip` / `ethtool`; inspect playbooks `ilink` / `iiface`.
+- **Sysstat seed:** `python3 src/seed_sysstat.py --seed` — `vmstat` `iostat` `mpstat`; playbook `oload` (finite `$DELAY`×`$SAMPLES`). `htop`/`iotop`/`iftop` as `> cmd`.
+- **Netdbg seed:** `python3 src/seed_netdbg.py --seed` — `tcpdump -c`, `nc -vz`, `mtr -r`, `openssl s_client`; playbooks `npath` / `tlschk`.
+- **Pkg seed:** `python3 src/seed_pkg.py --seed` — `apt` `dnf` `rpm` query; `aptq` / `rpmq`. install is not in playbooks.
+- **User seed:** `python3 src/seed_user.py --seed` — `ident` / `perm`; playbook `uidchk`. No `userdel`; chmod/chown not in the playbook.
+- **nft / zip:** `seed_netfw` adds `nft` / `nftstat`; `seed_host` adds `zip` / `zstat` (list only in playbooks).
 
 ## v1.22
 

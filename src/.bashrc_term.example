@@ -23,6 +23,18 @@
 # export CHART=
 # export VALUES=values.yaml
 
+# ansible (seed_ansible.py) — $VAULTFILE is ansible-vault, not HashiCorp Vault
+# export INV=inventory.ini
+# export PLAY=site.yml
+# export LIMIT=
+# export TAGS=
+# export HOST=all
+# export MODULE=ping
+# export ARGS=
+# export VAULTFILE=secrets.yml
+# export ROLE=
+# export COLLECTION=
+
 # http: curl / nginx / traefik (seed_http.py)
 # export URL=https://example.com/
 # export TRAEFIK_API=http://127.0.0.1:8080
@@ -31,6 +43,11 @@
 # export PORT=443
 # export ZONE=public
 # export PROTO=tcp
+
+# iproute2 / ethtool (seed_ip.py)
+# export IFACE=eth0
+# export ADDR=192.168.1.10/24
+# export GW=192.168.1.1
 
 # postgres + kafka (seed_data.py)
 # export PGHOST=127.0.0.1
@@ -41,7 +58,7 @@
 # export TOPIC=
 # export GROUP=
 
-# tar / gzip (seed_host.py)
+# tar / gzip / zip (seed_host.py)
 # export SRC=.
 # export DEST=backup.tar.gz
 # export ARCHIVE=backup.tar.gz
@@ -51,6 +68,43 @@
 # export DISK=/dev/sda
 # export MNT=/
 # export SRC=.
+
+# systemd (seed_systemd.py) — follow: > journalctl -f -u $UNIT
+# export UNIT=nginx.service
+# export SINCE='1 hour ago'
+# export BOOT=0
+
+# hostinfo / lsof / strace (seed_sysinfo.py) — live attach: > strace -p $PID
+# export PID=
+# export PORT=443
+# export FILE=/var/log/syslog
+# export CMD=true
+# export PROC=sshd
+# export TRACE=network
+
+# sysstat (seed_sysstat.py) — htop/iotop: > htop
+# export DELAY=1
+# export SAMPLES=3
+# export DISK=sda
+# export PID=
+# export IFACE=eth0
+
+# L4/L7 (seed_netdbg.py) — capture is timeout + tcpdump -c; interactive: > tcpdump
+# export HOST=example.com
+# export PORT=443
+# export IFACE=any
+# export SNI=example.com
+# export COUNT=20
+
+# packages (seed_pkg.py)
+# export PKG=curl
+
+# users / perms (seed_user.py) — sudo password: > sudo -l
+# export USER=
+# export FILE=/etc/passwd
+# export MODE=644
+# export OWNER=root
+# export GROUP=root
 
 # vault (seed_vault.py) — do not put VAULT_TOKEN in this file if it is shared
 # export VAULT_ADDR=https://vault.example.com:8200
@@ -67,6 +121,10 @@
 # export REPL=
 # export SEP=,
 # export N=1
+
+# pipeline: sort/uniq/cut/jq (seed_pipe.py) — | sort -u on a journal block
+# export DEST=/tmp/out.txt
+# export JSON=.
 
 # rsync (seed_rsync.py) — trailing slash on SRC matters
 # export SRC=./

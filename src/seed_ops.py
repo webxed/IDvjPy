@@ -2,9 +2,12 @@
 """
 Seed all operational handbooks at once:
 
-  docker, helm, http (curl/nginx/traefik), netfw (ss/iptables/firewalld),
-  data (postgres/kafka), host (tar/gz), disk (df/du/lsblk/smartctl),
-  vault, text (grep/awk/sed), rsync, find, recon (dig/nmap), ssh/scp.
+  docker, helm, ansible, http (curl/nginx/traefik), netfw (ss/iptables/nft/firewalld),
+  ip/ethtool, netdbg (tcpdump/nc/mtr/tls), data (postgres/kafka), host (tar/gz/zip),
+  disk (df/du/lsblk/smartctl), systemd (systemctl/journalctl/dmesg),
+  sysinfo (lsof/strace), sysstat (vmstat/iostat), vault, text (grep/awk/sed),
+  pipe (sort/jq), rsync, find, recon (dig/nmap), ssh/scp, pkg (apt/dnf/rpm),
+  user (id/chmod).
 
 Does not run linux / k8s / git seeds.
 
@@ -13,6 +16,7 @@ Run: python3 src/seed_ops.py --seed
 import argparse
 import sys
 
+import seed_ansible
 import seed_data
 import seed_disk
 import seed_docker
@@ -20,28 +24,45 @@ import seed_find
 import seed_helm
 import seed_host
 import seed_http
+import seed_ip
+import seed_netdbg
 import seed_netfw
+import seed_pipe
+import seed_pkg
 import seed_recon
 import seed_rsync
 import seed_ssh
+import seed_sysinfo
+import seed_sysstat
+import seed_systemd
 import seed_text
+import seed_user
 import seed_vault
 from seed_lib import get_db_file
 
 MODULES = (
     ("docker", seed_docker),
     ("helm", seed_helm),
+    ("ansible", seed_ansible),
     ("http", seed_http),
     ("netfw", seed_netfw),
+    ("ip", seed_ip),
+    ("netdbg", seed_netdbg),
     ("data", seed_data),
     ("host", seed_host),
     ("disk", seed_disk),
+    ("systemd", seed_systemd),
+    ("sysinfo", seed_sysinfo),
+    ("sysstat", seed_sysstat),
     ("vault", seed_vault),
     ("text", seed_text),
+    ("pipe", seed_pipe),
     ("rsync", seed_rsync),
     ("find", seed_find),
     ("recon", seed_recon),
     ("ssh", seed_ssh),
+    ("pkg", seed_pkg),
+    ("user", seed_user),
 )
 
 
@@ -56,7 +77,7 @@ def run_seed(db_file: str) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Seed docker/helm/http/netfw/data/host/disk/vault/text/rsync/find/recon/ssh handbooks"
+        description="Seed docker/helm/ansible/http/netfw/ip/netdbg/data/host/disk/systemd/sysinfo/sysstat/vault/text/pipe/rsync/find/recon/ssh/pkg/user handbooks"
     )
     parser.add_argument(
         "--seed",

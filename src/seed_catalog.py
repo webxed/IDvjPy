@@ -18,17 +18,26 @@ SEED_HANDBOOKS_CORE = (
 SEED_HANDBOOKS_OPS = (
     ("seed_docker.py", "docker / compose: dck, dcmp, dps, dlog"),
     ("seed_helm.py", "helm: релизы, values, dry-run; hls"),
+    ("seed_ansible.py", "ansible: inventory, playbook check, vault; achk"),
     ("seed_http.py", "HTTP: curl, nginx, traefik"),
-    ("seed_netfw.py", "сокеты и firewall: ss, netstat, iptables, firewalld"),
+    ("seed_netfw.py", "сокеты и firewall: ss, iptables, nft, firewalld"),
+    ("seed_ip.py", "iproute2 / ethtool: ip, eth, ilink"),
+    ("seed_netdbg.py", "L4/L7: tcpdump, nc, mtr, TLS; npath / tlschk"),
     ("seed_data.py", "postgres и kafka: pg, kf"),
-    ("seed_host.py", "архивы: tar, gzip"),
+    ("seed_host.py", "архивы: tar, gzip, zip"),
     ("seed_disk.py", "диски: df, du, lsblk, smartctl, ncdu"),
+    ("seed_systemd.py", "systemd: systemctl, journalctl, dmesg; sstat"),
+    ("seed_sysinfo.py", "хост, lsof, strace; hstat / lport / pdbg"),
+    ("seed_sysstat.py", "sysstat: vmstat, iostat, mpstat; oload"),
     ("seed_vault.py", "HashiCorp Vault: status, kv metadata"),
     ("seed_text.py", "текст: grep, awk, sed"),
+    ("seed_pipe.py", "конвейер: sort, uniq, cut, jq; ucount"),
     ("seed_rsync.py", "rsync: dry-run / copy"),
     ("seed_find.py", "find: glob, mtime, size"),
     ("seed_recon.py", "DNS и порты: dig, nmap"),
     ("seed_ssh.py", "ssh / scp, OpenSSH-сертификаты"),
+    ("seed_pkg.py", "пакеты: apt, dnf, rpm; aptq / rpmq"),
+    ("seed_user.py", "люди и права: ident, perm; uidchk"),
 )
 
 

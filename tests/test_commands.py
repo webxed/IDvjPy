@@ -32,6 +32,15 @@ async def test_starts_without_existing_database(isolated_home):
         assert "seed_git.py --seed" in texts
         assert "seed_ops.py --seed" in texts
         assert "seed_docker.py --seed" in texts
+        assert "seed_ansible.py --seed" in texts
+        assert "seed_systemd.py --seed" in texts
+        assert "seed_sysinfo.py --seed" in texts
+        assert "seed_pipe.py --seed" in texts
+        assert "seed_ip.py --seed" in texts
+        assert "seed_sysstat.py --seed" in texts
+        assert "seed_netdbg.py --seed" in texts
+        assert "seed_pkg.py --seed" in texts
+        assert "seed_user.py --seed" in texts
         assert "seed_ssh.py --seed" in texts
         assert "Ops по отдельности" in texts
 

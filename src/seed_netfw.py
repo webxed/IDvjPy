@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Seed sockets + firewall handbook: ss, netstat, iptables, firewall-cmd
+Seed sockets + firewall handbook: ss, netstat, iptables, nftables, firewall-cmd
 (see SEED_NETFW_COMMANDS.md).
 
 Does not touch the linux `net` tag. Playbooks are inspect-only
-(no iptables -F / panic-on).
+(no iptables -F / nft flush / panic-on).
 
 Run: python3 src/seed_netfw.py --seed
 """
@@ -67,6 +67,17 @@ SEED_TAGS = {
             ),
         ],
     ),
+    "nft": (
+        "nftables: осмотр правил",
+        [
+            ("nft list tables", "таблицы"),
+            ("nft list ruleset", "весь ruleset"),
+            ("nft -a list ruleset", "с handle"),
+            ("nft list table inet filter", "inet filter (если есть)"),
+            ("nft list table ip nat", "ip nat (если есть)"),
+            ("nft list chain inet filter input", "цепочка input"),
+        ],
+    ),
     "fwd": (
         "firewall-cmd (firewalld)",
         [
@@ -103,6 +114,15 @@ SEED_TAGS = {
             ),
         ],
     ),
+    "nftstat": (
+        "обзор nftables",
+        [
+            (
+                "!nft[1] ; echo '--- ruleset ---' ; !nft[2]",
+                "tables → list ruleset (без flush)",
+            ),
+        ],
+    ),
     "fwstat": (
         "обзор firewalld",
         [
@@ -121,8 +141,8 @@ def run_seed(db_file: str) -> int:
 
 def main() -> None:
     seed_cli(
-        description="Seed IDvjPy_term DB with ss/netstat/iptables/firewalld (SEED_NETFW_COMMANDS.md)",
-        seed_help="Replace ss/nst/ipt/fwd/… (does not touch net/proc)",
+        description="Seed IDvjPy_term DB with ss/netstat/iptables/nft/firewalld (SEED_NETFW_COMMANDS.md)",
+        seed_help="Replace ss/nst/ipt/nft/fwd/… (does not touch net/proc)",
         seed_tags=SEED_TAGS,
         argv=sys.argv,
     )
