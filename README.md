@@ -17,7 +17,7 @@ IDvjPy — терминальное приложение (TUI) на Python (Text
 
 **Философия:** теги — переменные с шаблонами команд; приложение собирает их в сложные командные строки.
 
-Код приложения лежит в `src/`. В рабочей папке — данные: `settings.yml`, база тегов, `.bashrc_term*`. При пустой БД в журнале показывается каталог seed-справочников (Linux, [цепочки k8s](K8S_CHAINS.md), git, ops), чтобы выбрать набор команд.
+Код приложения лежит в `src/`. В рабочей папке — данные: `settings.yml`, база тегов, `.bashrc_term*`. При пустой БД в журнале показывается каталог seed-справочников (Linux, [цепочки k8s](K8S_CHAINS.md), git, ops): клик по зелёной `--seed` вставляет команду во ввод, клик по `.md` открывает справочник.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Справка в приложении: `:?`.
 
@@ -57,7 +57,7 @@ python3 app.py --demo ip               # myip → jq .cc → Wiki URL → hello 
 python3 app.py --demo full --demo-quit
 ```
 
-Код приложения лежит в `src/`. В корне рабочей копии — данные: `settings.yml`, база тегов, `.bashrc_term*`, `history_<instance>.txt`. Seed-справочники: `python3 src/seed_git.py --seed` и т.п. (команды также показаны при первом старте, если БД пустая).
+Код приложения лежит в `src/`. В корне рабочей копии — данные: `settings.yml`, база тегов, `.bashrc_term*`, `history_<instance>.txt`. Seed-справочники: `python3 src/seed_git.py --seed` и т.п. При пустой БД каталог в журнале: клик по `--seed` вставляет команду во ввод, клик по `.md` или `:md файл.md` открывает справочник (`terminal_mouse: true`).
 
 | Путь | Назначение |
 |------|------------|
@@ -81,7 +81,7 @@ python3 app.py --demo full --demo-quit
 | `?` / `??` / `?tag` / `?tag[tid]` | Запрос тегов / всех / по тегу / превью | `?deploy` |
 | `!tag[tid]` / `!N` | Вставить команду во ввод (не запускает) | `!deploy[1]` |
 | `!! …` | Собрать строку во вводе | `!! deploy[1] && start[1]` |
-| `:` | Команды приложения | `:q`, `:cd`, `:r`, `:/text`, `:export tag`, `:i`, `:?` |
+| `:` | Команды приложения | `:q`, `:cd`, `:r`, `:/text`, `:export tag`, `:i`, `:md`, `:?` |
 | `\| cmd` | Пайп stdout сфокусированного блока (в историю, как обычная команда) | `\| grep error` |
 | `$OUT` | По запросу: последняя непустая строка блока (не хранится) | `echo Hello, $OUT` |
 | `$VAR=val` | Локальная переменная (пишет `.bashrc_term_<instance>`) | `$EDITOR=nvim` |
@@ -100,6 +100,7 @@ python3 app.py --demo full --demo-quit
 - `:h /text` — поиск по этому файлу в подсказках (без учёта регистра, свежие сверху, одинаковые строки один раз). Esc+Enter — тем же поиском в журнал
 - `:c` — очистить блоки журнала
 - `:json` / `:json <file>` — JSON viewer (последний блок или файл)
+- `:md <file.md>` — справочник Markdown с форматированием (клик по имени в приветствии; Esc закрывает)
 - `:i …` — Kubernetes Ingress Analyzer (`:i` без аргументов — справка)
 - `:cd [path]` — показать / сменить рабочий каталог приложения (то же делает `cd path`)
 - `:r` — команда сфокусированного блока во ввод
@@ -116,7 +117,7 @@ python3 app.py --demo full --demo-quit
 | `Esc` | Фокус на ввод. В построчном режиме: сначала выключить режим, повторный Esc — во ввод |
 | `↑` / `↓` | `history_<instance>.txt` (+ сессия) во вводе; набранный текст фильтрует совпадения; прокрутка журнала, если фокус на блоке |
 | `PgUp` / `PgDn` | Прокрутка журнала на страницу; активным становится **видимый** блок (без прыжка к его началу). Из ввода — переход в просмотр |
-| клик по блоку | Фокус на блоке без прокрутки к началу (`terminal_mouse: true`) |
+| клик по блоку | Фокус на блоке без прокрутки к началу (`terminal_mouse: true`). В пустой БД: клик по `--seed` — во ввод; по `.md` — справочник |
 | `Space` / `←` `→` | Свернуть / развернуть блок |
 | `F3` | Копировать полный stdout блока |
 | `Ctrl+C` | Скопировать всю строку ввода; если фокус на блоке журнала — весь блок (как F3) |
@@ -173,7 +174,7 @@ theme: textual-dark          # `d` / `:theme`; сохраняется при с�
 
 Переменные читаются из `.bashrc_term_<instance>` (приоритет) и `.bashrc_term` (дополняет). Формат: `export VAR=val` или `VAR=val`. Если файлов нет, при старте копируется [`src/.bashrc_term.example`](src/.bashrc_term.example).
 
-Файл БД (`database_tags_file`, по умолчанию `mytags.db`) **не входит в git**. При первом запуске создаётся пустая SQLite-схема; в журнале появляется каталог seed-скриптов, чтобы выбрать набор команд. Каждый `--seed` можно ввести в том же TUI.
+Файл БД (`database_tags_file`, по умолчанию `mytags.db`) **не входит в git**. При первом запуске создаётся пустая SQLite-схема; в журнале каталог seed-скриптов (сверху, без прыжка вниз). Клик по зелёной `--seed` вставляет команду во ввод; Enter запускает; затем `??` (или ~5 с). Клик по имени `.md` или `:md файл.md` открывает справочник с форматированием (Esc закрывает). Нужен `terminal_mouse: true`.
 
 ## Архитектура
 
@@ -182,7 +183,7 @@ theme: textual-dark          # `d` / `:theme`; сохраняется при с�
 - **`CommandBlock`** / **`InfoBlock`** / **`QueryResultsBlock`** — блоки журнала
 - **`LineNavigable`** — построчный курсор в блоке
 
-Модули в [`src/`](src/): [`app.py`](src/app.py), [`database_v2.py`](src/database_v2.py), [`command_parser_v2.py`](src/command_parser_v2.py), [`json_viewer.py`](src/json_viewer.py), [`ingress_analyzer.py`](src/ingress_analyzer.py), [`app.css`](src/app.css). Корневой [`app.py`](app.py) только запускает TUI.
+Модули в [`src/`](src/): [`app.py`](src/app.py), [`database_v2.py`](src/database_v2.py), [`command_parser_v2.py`](src/command_parser_v2.py), [`json_viewer.py`](src/json_viewer.py), [`md_viewer.py`](src/md_viewer.py), [`seed_catalog.py`](src/seed_catalog.py), [`ingress_analyzer.py`](src/ingress_analyzer.py), [`app.css`](src/app.css). Корневой [`app.py`](app.py) только запускает TUI.
 
 Подробности сессии и поведения: [`COMPACT_SUMMARY.md`](COMPACT_SUMMARY.md). Как читается БД: [`DATABASE.md`](DATABASE.md).
 

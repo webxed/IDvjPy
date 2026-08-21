@@ -18,6 +18,18 @@ async def test_app_starts_with_input_focused(isolated_home):
         assert r"\]" not in welcome
 
 
+async def test_welcome_journal_starts_at_top(isolated_home):
+    from textual.containers import VerticalScroll
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        await pilot.pause()
+        container = app.query_one("#results-container", VerticalScroll)
+        assert float(container.scroll_y) <= 1
+        assert float(container.max_scroll_y) > 5
+
+
 async def test_starts_without_existing_database(isolated_home):
     db = isolated_home / "test_history.db"
     assert not db.exists()
@@ -43,6 +55,70 @@ async def test_starts_without_existing_database(isolated_home):
         assert "seed_user.py --seed" in texts
         assert "seed_ssh.py --seed" in texts
         assert "Ops по отдельности" in texts
+        assert "SEED_LINUX_COMMANDS.md" in texts
+        assert "open_handbook_md" in texts
+        assert "insert_seed_command" in texts
+
+
+async def test_colon_md_opens_formatted_handbook(isolated_home):
+    from md_viewer import HandbookMarkdownScreen
+    from textual.widgets import Markdown
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":md SEED_LINUX_COMMANDS.md")
+        await pilot.pause()
+        assert isinstance(app.screen, HandbookMarkdownScreen)
+        md = app.screen.query_one("#md-body", Markdown)
+        assert "proc" in (md.source or "").lower()
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not isinstance(app.screen, HandbookMarkdownScreen)
+
+
+async def test_insert_seed_command_puts_draft_in_input(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        app.action_insert_seed_command("seed_ops.py")
+        await pilot.pause()
+        inp = input_widget(app)
+        assert inp.value == "python3 src/seed_ops.py --seed"
+        app.action_insert_seed_command("not_a_seed.py")
+        await pilot.pause()
+        assert inp.value == "python3 src/seed_ops.py --seed"
+
+
+async def test_md_viewer_wheel_does_not_scroll_journal(isolated_home):
+    from md_viewer import HandbookMarkdownScreen
+    from textual.containers import VerticalScroll
+
+    class _Wheel:
+        def __init__(self) -> None:
+            self.stopped = False
+
+        def stop(self) -> None:
+            self.stopped = True
+
+        def prevent_default(self) -> None:
+            pass
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":md SEED_LINUX_COMMANDS.md")
+        await pilot.pause()
+        assert isinstance(app.screen, HandbookMarkdownScreen)
+        journal = app.query("#results-container")
+        y0 = journal[0].scroll_y if journal else 0
+        ev = _Wheel()
+        app.on_mouse_scroll_down(ev)
+        journal_after = app.query("#results-container")
+        y1 = journal_after[0].scroll_y if journal_after else 0
+        assert y1 == y0
+        body = app.screen.query_one("#md-scroll", VerticalScroll)
+        y_md = body.scroll_y
+        app.screen.on_mouse_scroll_down(_Wheel())
+        await pilot.pause()
+        assert body.scroll_y >= y_md
 
 
 async def test_seed_hint_skipped_when_database_has_commands(isolated_home):

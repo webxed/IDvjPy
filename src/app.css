@@ -77,3 +77,32 @@ JSONViewer Tree {
     height: 1fr;
     min-height: 8;
 }
+
+HandbookMarkdownScreen {
+    layout: vertical;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: $background 80%;
+}
+
+HandbookMarkdownScreen #md-frame {
+    width: 100%;
+    height: 1fr;
+    background: $surface;
+    border: round #6b5494;
+    padding: 0 1 1 1;
+    overflow: hidden;
+}
+
+HandbookMarkdownScreen #md-title {
+    height: 1;
+    dock: top;
+    margin-bottom: 1;
+}
+
+HandbookMarkdownScreen #md-scroll {
+    height: 1fr;
+    overflow-y: auto;
+    overflow-x: auto;
+}

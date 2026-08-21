@@ -39,7 +39,7 @@ The setup script handles dependencies and configuration. On Linux, clipboard nee
 - **`src/`** — TUI, CSS, seed scripts, `.bashrc_term.example`
 - **cwd** — `settings.yml`, SQLite command DB, `.bashrc_term*`, `history_<instance>.txt`
 - Root **`app.py`** / **`backup_db.py`** are launchers
-- Empty command DB: welcome InfoBlock lists handbook seeds (`src/seed_catalog.py`). After `--seed`, type `??` or wait ~5s
+- Empty command DB: welcome InfoBlock lists handbook seeds (`src/seed_catalog.py`). Click a `--seed` line to insert it into the input; click a `.md` name or `:md` to open the handbook. After `--seed`, type `??` or wait ~5s
 - Seeds: `python3 src/seed_linux_commands.py --seed`, `python3 src/seed_k8s_chains.py --seed` ([`K8S_CHAINS.md`](K8S_CHAINS.md)), `python3 src/seed_git.py --seed`, `python3 src/seed_ops.py --seed` (all ops except linux / k8s / git). Each `--seed` replaces only its own tags
 
 ## Architecture
@@ -58,6 +58,8 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/clipboard.py`**: CLIPBOARD / PRIMARY / OSC 52
 - **`src/shell_env.py`**: `.bashrc_term` vars, `~/.bashrc` aliases, `$1` substitution
 - **`src/json_viewer.py`**: JSON tree modal
+- **`src/md_viewer.py`**: handbook Markdown modal (`:md`, welcome `.md` clicks)
+- **`src/seed_catalog.py`**: empty-DB welcome catalog (click `--seed` → input)
 - **`src/demo.py`**: `--demo` YAML player (`src/demos/*.yml`)
 - **`src/ingress_analyzer.py`**: `:i` Kubernetes helper
 - **`src/app.css`**: Textual styling
@@ -80,7 +82,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble refs into the input line |
-| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:r`, `:/`, `:n`, `:N`, `:export`) |
+| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:r`, `:/`, `:n`, `:N`, `:export`, `:md`) |
 | `\| cmd` | Pipe stdout from the focused block, add to history |
 | `$OUT` | On demand: last line of focused/last block (not stored in `.bashrc_term`) |
 | `$VAR=val` | Set env in `.bashrc_term_<instance>` and the current session |

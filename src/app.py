@@ -93,8 +93,13 @@ try:
         parse_standalone_cd,
         substitute_variables,
     )
-    from seed_catalog import format_empty_db_hint
+    from seed_catalog import (
+        KNOWN_SEED_SCRIPTS,
+        format_empty_db_hint,
+        seed_invoke,
+    )
     from demo import load_demo_for_cli, play_demo
+    from md_viewer import HandbookMarkdownScreen, handbook_md_path
 except ImportError as e:
     print(f"Error: Missing dependency - {e}", file=sys.stderr)
     print("Please install required dependencies:", file=sys.stderr)
@@ -485,6 +490,10 @@ class LineNavigable:
 
     def on_click(self, event: events.Click) -> None:
         """Клик по блоку в журнале — выделить его, не прокручивая к началу."""
+        style = getattr(event, "style", None)
+        meta = getattr(style, "meta", None) if style is not None else None
+        if meta and meta.get("@click"):
+            return
         prev = getattr(self.app, "focused", None)
         if (
             prev is not None
@@ -1201,6 +1210,8 @@ class CommandInput(Input):
     def on_mouse_scroll_down(self, event: events.MouseScrollDown) -> None:
         """Колесо над полем ввода — прокрутка области вывода команд (не истории сессии)."""
         app = self.app
+        if getattr(app.screen, "_modal", False):
+            return
         inp = app.query_one(f"#{app.ID_INPUT}", Input)
         if inp.has_focus:
             container = app.query_one(f"#{app.ID_RESULTS_CONTAINER}", VerticalScroll)
@@ -1211,6 +1222,8 @@ class CommandInput(Input):
 
     def on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
         app = self.app
+        if getattr(app.screen, "_modal", False):
+            return
         inp = app.query_one(f"#{app.ID_INPUT}", Input)
         if inp.has_focus:
             container = app.query_one(f"#{app.ID_RESULTS_CONTAINER}", VerticalScroll)
@@ -1311,6 +1324,7 @@ class CommandRunner(App):
                 "  [dim]Define your variables, join your command.[/]",
                 "",
                 f"  [bold]{bang_ref}[/] / [bold]!![/] собирают строку, [bold]Enter[/] запускает.  Полная справка: [bold]:?[/]",
+                "  [dim]────────────────────────────────────────────────────────[/]",
                 "",
                 "  [bold]:?[/] справка      [bold]:q[/] выход       [bold]:h[/] история     [bold]:c[/] очистить",
                 f"  [bold]#tag cmd[/] сохранить    [bold]?[/] / [bold]??[/] теги БД     [bold]{bang_ref}[/] вставить",
@@ -1367,6 +1381,7 @@ class CommandRunner(App):
     CMD_EXPORT = "export"
     CMD_IMPORT = "import"
     CMD_THEME = "theme"
+    CMD_MD = "md"
     KEY_THEME = "theme"
     DEFAULT_THEME = "textual-dark"
     THEME_ALIASES = {
@@ -1795,6 +1810,8 @@ class CommandRunner(App):
 
     def on_mouse_scroll_down(self, event) -> None:
         """Скролл вниз всегда идёт в контейнер вывода."""
+        if getattr(self.screen, "_modal", False):
+            return
         inp = self.query_one(f"#{self.ID_INPUT}", Input)
         if inp.has_focus:
             container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
@@ -1805,6 +1822,8 @@ class CommandRunner(App):
 
     def on_mouse_scroll_up(self, event) -> None:
         """Скролл вверх всегда идёт в контейнер вывода."""
+        if getattr(self.screen, "_modal", False):
+            return
         inp = self.query_one(f"#{self.ID_INPUT}", Input)
         if inp.has_focus:
             container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
@@ -2035,9 +2054,10 @@ class CommandRunner(App):
 
     def on_ready(self) -> None:
         """Приветствие: короткий экран справки; при пустой БД — каталог seed."""
-        self.add_block(InfoBlock(self.format_startup_help()))
+        self.add_block(InfoBlock(self.format_startup_help()), follow_end=False)
         if getattr(self, "_fresh_command_db", False):
-            self.add_block(InfoBlock(format_empty_db_hint(self.db_file)))
+            self.add_block(InfoBlock(format_empty_db_hint(self.db_file)), follow_end=False)
+        self._schedule_journal_home()
         self._request_shift_enter_encoding()
         self._start_demo_if_requested()
 
@@ -2280,6 +2300,8 @@ class CommandRunner(App):
 
     def action_journal_page_up(self) -> None:
         """PgUp: в журнале — страница вверх и активный видимый блок; из ввода — войти в просмотр."""
+        if getattr(self.screen, "_modal", False):
+            return
         if getattr(self, "_completion_list", None) is not None:
             self._completion_list.hide()
         inp = self.query_one(f"#{self.ID_INPUT}", Input)
@@ -2290,6 +2312,8 @@ class CommandRunner(App):
 
     def action_journal_page_down(self) -> None:
         """PgDn: страница вниз, активный видимый блок; из ввода — войти в просмотр."""
+        if getattr(self.screen, "_modal", False):
+            return
         if getattr(self, "_completion_list", None) is not None:
             self._completion_list.hide()
         inp = self.query_one(f"#{self.ID_INPUT}", Input)
@@ -2330,11 +2354,28 @@ class CommandRunner(App):
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
         container.anchor(True)
 
+    def _scroll_results_home(self) -> None:
+        """Прокрутить журнал к началу (приветствие / длинный help)."""
+        container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+        try:
+            container.anchor(False)
+        except Exception:
+            pass
+        container.scroll_home(animate=False, immediate=True)
+
     def _schedule_journal_follow_end(self) -> None:
         """Два refresh: после роста блока virtual size ещё не финальный."""
         def scroll_then_repeat() -> None:
             self._scroll_results_end()
             self.call_after_refresh(self._scroll_results_end)
+
+        self.call_after_refresh(scroll_then_repeat)
+
+    def _schedule_journal_home(self) -> None:
+        """После сплэша: дождаться раскладки длинного help и остаться наверху."""
+        def scroll_then_repeat() -> None:
+            self._scroll_results_home()
+            self.call_after_refresh(self._scroll_results_home)
 
         self.call_after_refresh(scroll_then_repeat)
 
@@ -2354,17 +2395,18 @@ class CommandRunner(App):
             return True
         return float(container.scroll_y) >= max_y - 2
 
-    def add_block(self, block: Static) -> None:
+    def add_block(self, block: Static, *, follow_end: bool = True) -> None:
         """
-        Добавляет блок в UI, прокручивает вниз и возвращает фокус во ввод.
-        Прокрутка выполняется после refresh; повторная прокрутка после второго refresh
-        нужна при первом запуске, когда виртуальный размер контейнера ещё не окончателен.
+        Добавляет блок в UI и возвращает фокус во ввод.
+        По умолчанию прокручивает вниз; follow_end=False — для сплэша, который
+        потом явно ставит журнал на верх.
         """
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
         container.mount(block)
         block.focus()  # Кратковременно фокусируем, чтобы обновить active_pipe_source
         self.query_one(f"#{self.ID_INPUT}", Input).focus()
-        self._schedule_journal_follow_end()
+        if follow_end:
+            self._schedule_journal_follow_end()
 
     def clear_subtitle(self) -> None:
         """Очищает подзаголовок (статус-бар)."""
@@ -2808,8 +2850,35 @@ class CommandRunner(App):
             self._import_tag(parts[1:])
         elif command == self.CMD_THEME:
             self._handle_theme_command(parts[1:])
+        elif command == self.CMD_MD:
+            self.action_open_handbook_md(" ".join(parts[1:]))
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
+
+    def action_insert_seed_command(self, script: str = "") -> None:
+        """Insert a handbook --seed command into the input (click from welcome)."""
+        name = (script or "").strip()
+        if name not in KNOWN_SEED_SCRIPTS:
+            return
+        self.set_input_draft(seed_invoke(name))
+        self.call_after_refresh(self.action_focus_input)
+
+    def action_open_handbook_md(self, filename: str = "") -> None:
+        """Open a repo handbook .md in a formatted modal (click from welcome or :md)."""
+        name = (filename or "").strip()
+        if not name:
+            self.add_block(InfoBlock("Usage: :md SEED_LINUX_COMMANDS.md"))
+            return
+        path = handbook_md_path(name)
+        if path is None:
+            self.add_block(InfoBlock(f"[yellow]Markdown not found:[/] {name}"))
+            return
+        try:
+            text = path.read_text(encoding=self.ENCODING)
+        except OSError as e:
+            self.add_block(InfoBlock(f"Error reading {path}: {e}"))
+            return
+        self.push_screen(HandbookMarkdownScreen(path, text))
 
     def _change_cwd(self, path: str) -> None:
         """Меняет cwd процесса приложения (cd / :cd)."""
@@ -3058,6 +3127,7 @@ class CommandRunner(App):
   :c          - Clear all output blocks
   :json       - Open JSON viewer (from last block)
   :json <file>- Open JSON file in viewer
+  :md <file>  - Open a handbook .md with formatting (Esc closes)
   :i          - Kubernetes Ingress Analyzer (see :i for details)
   :cd [path]  - Show or change the app working directory (also: cd path)
   :r          - Put the focused (or last) block command into the input
@@ -3154,6 +3224,7 @@ class CommandRunner(App):
   python3 src/seed_git.py --seed
   python3 src/seed_ops.py --seed           # all ops except linux / k8s / git
   Type the command here, then ?? (or wait ~5s). Each --seed replaces only its own tags.
+  Click a green --seed line to insert it, then Enter. Click a .md name (terminal_mouse) or :md SEED_LINUX_COMMANDS.md to read the handbook.
 """
         self.add_block(InfoBlock(help_text.replace("IDvjPy_term VER", f"IDvjPy_term {self.VERSION}", 1)))
 

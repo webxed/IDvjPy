@@ -4,7 +4,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
-Пустая БД: в журнале каталог seed (`python3 src/seed_….py --seed`). Цепочки k8s: [`K8S_CHAINS.md`](K8S_CHAINS.md).
+Пустая БД: в журнале каталог seed. Клик по `--seed` вставляет команду во ввод; клик по `.md` или `:md файл.md` открывает справочник. Цепочки k8s: [`K8S_CHAINS.md`](K8S_CHAINS.md).
 
 Параллельный порт: `Idivjopy_rust` (ratatui). Поведение ниже — про Python, если не сказано иное.
 
@@ -26,7 +26,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` |
+| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -119,7 +119,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 - Root `app.py` is a launcher; the TUI module is `src/app.py`. `--instance-name` is parsed in the launcher / `src/app.py` `__main__` (pytest imports `src/app.py` via `pythonpath = src`).
 - Instance bashrc: `.bashrc_term_{instance}` in cwd. Template: `src/.bashrc_term.example`.
 - Instance history: `history_{instance}.txt` in cwd. Legacy `history.txt` is copied once if the instance file is missing.
-- Empty command DB (`has_live_commands` is false): welcome InfoBlock lists handbook seeds.
+- Empty command DB (`has_live_commands` is false): welcome InfoBlock lists handbook seeds (journal starts at the top). Click `--seed` to insert; click `.md` or `:md` to open the viewer (`terminal_mouse: true`).
 
 ---
 
@@ -129,7 +129,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 |------|----------|
 | `test_cmd.md` | Manual plan v1.5 (app v1.1.49) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
-| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog |
+| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog, `:md`, click `--seed` insert |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
 | `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
@@ -147,6 +147,8 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/app.py` | TUI (`CommandRunner`), v1.24 |
 | `src/database_v2.py` | SQLite tagged history |
 | `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
+| `src/seed_catalog.py` | Empty-DB welcome catalog (click `--seed` / `.md`) |
+| `src/md_viewer.py` | Modal Markdown viewer (`:md`, welcome links) |
 | `src/json_viewer.py` | JSON tree modal |
 | `src/ingress_analyzer.py` | `:i` k8s |
 | `src/command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
@@ -164,6 +166,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 - **Handbook hide:** `#ansible--` / `#linux--` / `#k8s--` (and other seed names) soft-deletes every tag of that handbook. `#name!!` restores. `#tag-` still hides one tag.
 - **`??` / `?` Hidden:** fully hidden tags (no live rows) are listed with `#tag!` / `#group!!`. They do not appear in `!` completion or command-prefix suggestions.
+- **Empty-DB welcome:** colored seed catalog at the top of the journal. Click a `--seed` line to insert it into the input (Enter runs it). Click a `.md` name or `:md file.md` opens a formatted Markdown viewer (Esc/q closes; wheel stays in the modal). Needs `terminal_mouse: true`.
 
 ## v1.23
 
