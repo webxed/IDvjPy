@@ -5,9 +5,12 @@ from app import CommandBlock, CommandRunner, InfoBlock
 from demo import (
     bundled_demo_names,
     collect_reset_tags,
+    dump_playbook_yaml,
     load_scenario,
     normalize_step,
     resolve_demo_path,
+    session_line_needs_wait,
+    session_to_playbook,
     _type_gap,
 )
 
@@ -42,6 +45,46 @@ def test_bundled_short_and_full_resolve():
     assert "tour" in short_tags
     assert "tourlog" in short_tags
     assert "tourpipe" in short_tags
+
+
+def test_session_to_playbook_heuristics():
+    scenario = session_to_playbook(
+        [
+            ":?",
+            "echo hi",
+            "#tour echo tagged",
+            "!tour[1]",
+            "!! tour[1]",
+            "| grep x",
+            "cd /tmp",
+            "> htop",
+            ":playbook out.yml",
+            ":q",
+            "$HOST=api",
+        ]
+    )
+    steps = scenario["steps"]
+    types = [s if isinstance(s, str) else s.get("type") for s in steps]
+    assert ":?" in types
+    assert "echo hi" in types
+    assert "#tour echo tagged" in types
+    assert "!tour[1]" in types
+    assert "| grep x" in types
+    assert "cd /tmp" in types
+    assert "> htop" in types
+    assert "$HOST=api" in types
+    assert "out.yml" not in " ".join(str(t) for t in types)
+    assert ":q" not in types
+    waits = {s["type"]: s.get("wait_command") for s in steps if isinstance(s, dict)}
+    assert waits["echo hi"] is True
+    assert waits["| grep x"] is True
+    assert session_line_needs_wait("#tour echo tagged") is False
+    assert session_line_needs_wait("cd /tmp") is False
+    assert session_line_needs_wait("> htop") is False
+    assert scenario["reset_tags"] == ["tour"]
+    yaml_text = dump_playbook_yaml(scenario)
+    assert "python3 app.py --demo" in yaml_text
+    assert "wait_command: true" in yaml_text
 
 
 def test_normalize_string_step_types_and_enters():
@@ -334,3 +377,34 @@ async def test_demo_hard_deletes_used_tags_before_playback(isolated_home):
         other = database.get_commands_by_tag(db, "other")
         assert len(other) == 1
         assert other[0]["command"] == "echo keep-other"
+
+
+async def test_playbook_writes_session_yaml(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":playbook")
+        assert "empty" in last_info(app).text_content.lower()
+
+        await submit(pilot, "echo hello-play")
+        await wait_command_done(app)
+        await submit(pilot, "#demo echo tagged")
+        await submit(pilot, ":playbook -")
+        preview = last_info(app).text_content
+        assert "echo hello-play" in preview
+        assert "wait_command" in preview
+        assert "#demo echo tagged" in preview
+
+        await submit(pilot, ":playbook tour.yml")
+        assert "tour.yml" in last_info(app).text_content
+        scenario = load_scenario(isolated_home / "tour.yml")
+        types = [s if isinstance(s, str) else s.get("type") for s in scenario["steps"]]
+        assert "echo hello-play" in types
+        assert "#demo echo tagged" in types
+        assert not any(isinstance(t, str) and t.startswith(":playbook") for t in types)
+        assert scenario["reset_tags"] == ["demo"]
+
+        await submit(pilot, ":playbook clear")
+        assert "cleared" in last_info(app).text_content.lower()
+        await submit(pilot, ":playbook")
+        assert "empty" in last_info(app).text_content.lower()
+

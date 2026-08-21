@@ -26,7 +26,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` |
+| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -167,6 +167,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 - **Handbook hide:** `#ansible--` / `#linux--` / `#k8s--` (and other seed names) soft-deletes every tag of that handbook. `#name!!` restores. `#tag-` still hides one tag.
 - **`??` / `?` Hidden:** fully hidden tags (no live rows) are listed with `#tag!` / `#group!!`. They do not appear in `!` completion or command-prefix suggestions.
 - **Empty-DB welcome:** colored seed catalog at the top of the journal. Click a `--seed` line to insert it into the input (Enter runs it). Click a `.md` name or `:md file.md` opens a formatted Markdown viewer (Esc/q closes; wheel stays in the modal). Needs `terminal_mouse: true`.
+- **`:playbook`:** dump this session's Enter-submitted lines to YAML for `python3 app.py --demo file.yml`. `:playbook -` previews; `:playbook clear` resets. Keys/mouse/TTY are not recorded.
 
 ## v1.23
 

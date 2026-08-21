@@ -98,7 +98,7 @@ try:
         format_empty_db_hint,
         seed_invoke,
     )
-    from demo import load_demo_for_cli, play_demo
+    from demo import dump_playbook_yaml, load_demo_for_cli, play_demo, session_to_playbook
     from md_viewer import HandbookMarkdownScreen, handbook_md_path
 except ImportError as e:
     print(f"Error: Missing dependency - {e}", file=sys.stderr)
@@ -1382,6 +1382,7 @@ class CommandRunner(App):
     CMD_IMPORT = "import"
     CMD_THEME = "theme"
     CMD_MD = "md"
+    CMD_PLAYBOOK = "playbook"
     KEY_THEME = "theme"
     DEFAULT_THEME = "textual-dark"
     THEME_ALIASES = {
@@ -1404,6 +1405,7 @@ class CommandRunner(App):
         self._demo_pressing = False
         self._demo_worker_started = False
         self.session_history: List[str] = []
+        self._playbook_log: List[str] = []
         self.session_history_pos: int = 0
         self._history_walking: bool = False
         self._history_needle: str = ""
@@ -2669,6 +2671,11 @@ class CommandRunner(App):
         if not user_input:
             return
 
+        if not (self._demo_active or self._demo_pressing):
+            colon = user_input[1:].split()[:1] if user_input.startswith(":") else []
+            if not colon or colon[0] not in {self.CMD_PLAYBOOK, self.CMD_QUIT}:
+                self._playbook_log.append(user_input)
+
         self.log_to_history(user_input)
         if self._is_history_comment(user_input):
             self._park_history_comment(user_input)
@@ -2852,6 +2859,8 @@ class CommandRunner(App):
             self._handle_theme_command(parts[1:])
         elif command == self.CMD_MD:
             self.action_open_handbook_md(" ".join(parts[1:]))
+        elif command == self.CMD_PLAYBOOK:
+            self._handle_playbook_command(parts[1:])
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
 
@@ -2992,6 +3001,40 @@ class CommandRunner(App):
                 pass
         self.sub_title = f"search {self._search_index + 1}/{n}"
         self.set_timer(3, self.clear_subtitle)
+
+    def _handle_playbook_command(self, args: List[str]) -> None:
+        """Write this session's typed commands as a --demo YAML playbook."""
+        if args and args[0] == "clear":
+            n = len(self._playbook_log)
+            self._playbook_log.clear()
+            self.add_block(InfoBlock(f"Playbook log cleared ({n} line(s))."))
+            return
+        if not self._playbook_log:
+            self.add_block(InfoBlock(
+                "Playbook log is empty. Type commands (Enter), then "
+                ":playbook [file.yml]  or  :playbook -  to preview."
+            ))
+            return
+        try:
+            scenario = session_to_playbook(self._playbook_log)
+        except ValueError as e:
+            self.add_block(InfoBlock(str(e)))
+            return
+        text = dump_playbook_yaml(scenario)
+        if args and args[0] == "-":
+            self.add_block(InfoBlock(escape(text)))
+            return
+        path = args[0] if args else "playbook.yml"
+        try:
+            with open(path, "w", encoding=self.ENCODING) as fh:
+                fh.write(text)
+        except OSError as e:
+            self.add_block(InfoBlock(f"Playbook error: {e}"))
+            return
+        n = len(scenario["steps"])
+        self.add_block(InfoBlock(
+            f"Wrote {n} step(s) to {path}. Replay: python3 app.py --demo {path}"
+        ))
 
     def _export_tag(self, args: List[str]) -> None:
         if not args:
@@ -3135,6 +3178,8 @@ class CommandRunner(App):
   :export tag [file] - Write one tag to JSON
   :import file       - Insert commands from that JSON (new tids)
   :theme [name] - Show or set TUI theme (saved in settings.yml)
+  :playbook [file] - Write this session's commands as a --demo YAML (default playbook.yml)
+  :playbook - / clear - Preview YAML in the journal / forget recorded lines
 
 [bold]Kubernetes Commands (prefix :i)[/bold]
   :i list             - List all ingresses
@@ -3216,6 +3261,9 @@ class CommandRunner(App):
   python3 app.py --demo full --demo-quit
   python3 app.py --demo path.yml --demo-speed 1.5
   Scenario YAML: src/demos/*.yml (type / keys / wait_command). Manual script: DEMO.md
+  :playbook [file.yml]  - Dump this session's typed lines as YAML; --demo that file
+  :playbook -           - Preview in the journal.  :playbook clear — reset the log
+  Keys (Tab/F5) and mouse are not recorded; edit the YAML if the tour needs them.
 
 [bold]Handbooks (empty database)[/bold]
   First start with no commands lists seed scripts in the journal.

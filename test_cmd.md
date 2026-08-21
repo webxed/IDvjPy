@@ -551,6 +551,22 @@ cd /tmp
 
 ---
 
+## Секция 26: Плейбук из обычной сессии (`:playbook`)
+
+```
+echo hello-play
+#demo echo tagged
+:playbook -
+:playbook tour.yml
+:playbook clear
+```
+
+**Ожидание:** `:playbook -` показывает YAML в журнале (`echo hello-play` с `wait_command`, `#demo echo tagged` без). Файл `tour.yml` пишется в cwd. Replay: `python3 app.py --demo tour.yml`. Tab / F5 / клик / `> htop` в YAML не попадают. Пустой лог — подсказка, не файл. `:playbook` само в шаги не пишется.
+
+Автотесты: `test_session_to_playbook_heuristics`, `test_playbook_writes_session_yaml`.
+
+---
+
 ## Критерии успеха
 
 - Команды сохраняются с корректным `tid`; `-`/`=`/`+` внутри текста не ломают парсер
@@ -560,7 +576,7 @@ cd /tmp
 - `!! tag[tid]` работает сразу; `!! 1 2` — из кэша (старт или `??`)
 - `| cmd` берёт stdout сфокусированного/последнего блока
 - `$VAR` подставляется; `$JSON` после Enter в viewer; `$OUT` — последняя строка блока по запросу
-- `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:r` `:theme` работают
+- `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:r` `:theme` `:playbook` работают
 - Soft-delete `#tag-` / `#tag-tid`; handbook hide `#name--` / `#name!!`; `# command` паркуется без запуска
 - Пустая БД: каталог сверху; клик `--seed` → ввод; `.md` / `:md` — Markdown-viewer (колесо не крутит журнал)
 - Большой вывод не вешает UI (обрезка + полный `raw_stdout`)

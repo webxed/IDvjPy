@@ -82,7 +82,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble refs into the input line |
-| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:r`, `:/`, `:n`, `:N`, `:export`, `:md`) |
+| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:r`, `:/`, `:n`, `:N`, `:export`, `:md`, `:playbook`) |
 | `\| cmd` | Pipe stdout from the focused block, add to history |
 | `$OUT` | On demand: last line of focused/last block (not stored in `.bashrc_term`) |
 | `$VAR=val` | Set env in `.bashrc_term_<instance>` and the current session |

@@ -112,6 +112,95 @@ def collect_reset_tags(scenario: Dict[str, Any]) -> List[str]:
     return tags
 
 
+PLAYBOOK_SKIP_COLON = frozenset({"playbook", "q"})
+
+
+def is_playbook_skip_line(line: str) -> bool:
+    """Lines that should not become demo steps (empty, :playbook, :q)."""
+    text = (line or "").strip()
+    if not text:
+        return True
+    if text.startswith(":") and len(text) > 1:
+        cmd = text[1:].split()[0]
+        if cmd in PLAYBOOK_SKIP_COLON:
+            return True
+    return False
+
+
+def session_line_needs_wait(text: str) -> bool:
+    """True if playback should wait for a new command block (shell / pipe)."""
+    s = (text or "").strip()
+    if not s:
+        return False
+    if s.startswith(">>"):
+        return True
+    if s.startswith(">"):
+        return False
+    if s.startswith((":", "?", "$")):
+        return False
+    if s.startswith("!!"):
+        return False
+    if s.startswith("!") and not re.search(r"[&|;]", s):
+        return False
+    if s.startswith("#"):
+        return False
+    from shell_env import parse_standalone_cd
+
+    if parse_standalone_cd(s) is not None:
+        return False
+    return True
+
+
+def playbook_steps_from_lines(lines: Iterable[str]) -> List[Any]:
+    """Turn submitted input lines into YAML steps (string or wait_command map)."""
+    steps: List[Any] = []
+    for raw in lines:
+        text = (raw or "").strip()
+        if is_playbook_skip_line(text):
+            continue
+        if session_line_needs_wait(text):
+            steps.append({"type": text, "wait_command": True})
+        else:
+            steps.append(text)
+    return steps
+
+
+def session_to_playbook(
+    lines: Iterable[str], *, title: str = "session playbook"
+) -> Dict[str, Any]:
+    """Build a loadable demo scenario from a normal-session command log."""
+    steps = playbook_steps_from_lines(lines)
+    if not steps:
+        raise ValueError("No commands to record")
+    scenario: Dict[str, Any] = {
+        "title": title,
+        "start_pause": DEFAULTS["start_pause"],
+        "type_delay": DEFAULTS["type_delay"],
+        "pause": DEFAULTS["pause"],
+        "command_timeout": DEFAULTS["command_timeout"],
+        "steps": steps,
+    }
+    tags = collect_reset_tags(scenario)
+    if tags:
+        scenario["reset_tags"] = tags
+    return scenario
+
+
+def dump_playbook_yaml(scenario: Dict[str, Any]) -> str:
+    """Serialize a session playbook with a short how-to header."""
+    body = yaml.safe_dump(
+        scenario,
+        allow_unicode=True,
+        sort_keys=False,
+        default_flow_style=False,
+    )
+    header = (
+        "# Session playbook. Replay: python3 app.py --demo this.yml\n"
+        "# Typed Enter lines only. Tab / F5 / mouse / TTY are not recorded.\n"
+    )
+    return header + body
+
+
 def _reset_demo_tags(app: Any, tags: List[str]) -> None:
     if not tags:
         return
