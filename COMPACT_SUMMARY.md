@@ -127,7 +127,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.5 (app v1.1.49) |
+| `test_cmd.md` | Manual plan v1.6 (app v1.24) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog, `:md`, click `--seed` insert |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |

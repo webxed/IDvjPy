@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.1.49
+# План тестирования IDvjPy_term v1.24
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -7,12 +7,12 @@
 ```bash
 python3 app.py                          # ручной прогон
 python3 -m pytest tests/test_cmd_scenarios.py -v
-python3 -m pytest tests/ -v             # весь набор, включая JSON/completion
+python3 -m pytest tests/ -v             # весь набор, включая JSON/completion/seeds
 ```
 
 Команды ниже безопасны (`echo`/`printf`/`seq`). Боевые `systemctl`/`nginx` не обязательны.
 
-**Важно (отличие от v1.1.5):** `#tag` сохраняет команду **как есть**. Ссылки `!tag[tid]` / `!ID` / `!!` раскрываются при **просмотре** `?tag[tid]` и при **выполнении**, не при сохранении.
+**Важно:** `#tag` сохраняет команду **как есть**. Ссылки `!tag[tid]` / `!ID` / `!!` раскрываются при **просмотре** `?tag[tid]` и при **выполнении**, не при сохранении.
 
 ---
 
@@ -22,22 +22,26 @@ python3 -m pytest tests/ -v             # весь набор, включая JS
 python3 app.py
 ```
 
-Автотесты поднимают приложение сами, в изолированной tmp-директории (своя БД, не `mytags.db`).
+При пустой БД журнал открывается **сверху**: баннер, затем каталог seed (ядро / `seed_ops` / ops по отдельности). Автотесты поднимают приложение сами, в изолированной tmp-директории (своя БД, не `mytags.db`). История сессии — `history_default.txt` (не `history.txt`).
+
+Нужен `terminal_mouse: true` (по умолчанию) для кликов по блокам, `--seed` и `.md`.
 
 | Клавиша | Действие |
 |---------|----------|
 | `Enter` | Отправить команду. Если открыт список подсказок — вставить кандидата, **не** запускать |
-| `Esc` | Скрыть подсказки / вернуть фокус во ввод |
-| `Tab` | Вставить выбранную подсказку |
-| `Up`/`Down` | История сессии (если список подсказок закрыт) |
-| `PageUp`/`PageDown` | Прокрутка журнала; активным становится видимый блок |
-| клик по блоку | Фокус на блоке (`terminal_mouse: true`) |
+| `Esc` | Скрыть подсказки / вернуть фокус во ввод. В Markdown-viewer — закрыть |
+| `Tab` | Из ввода — на последний блок журнала; если открыт список подсказок — вставить кандидата |
+| `Up`/`Down` | `history_<instance>.txt` во вводе (набранный текст фильтрует); прокрутка журнала, если фокус на блоке |
+| `PageUp`/`PageDown` | Прокрутка журнала; активным становится видимый блок (без прыжка к началу) |
+| клик по блоку | Фокус на блоке. В пустой БД: `--seed` → во ввод; `.md` → справочник |
 | `F2` | Построчный режим |
 | `F3` | Копировать stdout сфокусированного блока |
+| `Ctrl+C` | Скопировать всю строку ввода; на блоке журнала — весь stdout (как F3) |
 | `F5` | JSON viewer для сфокусированного (или последнего) блока |
 | `F6` | Simple output |
-| `Shift+Insert` / `Ctrl+V` | Вставка из буфера |
+| `Shift+Insert` / `Ctrl+V` | Вставка во ввод (не затирает уже набранное) |
 | `Ctrl+D` | Очистить строку ввода |
+| `d` | Тёмная / светлая тема (когда фокус не во вводе) |
 
 ---
 
@@ -52,7 +56,7 @@ echo $EDITOR
 
 **Ожидание:** `Variable $PROJECT set to ...`; `echo $PROJECT` печатает `/tmp/idivjopy_test`.
 
-Синтаксис: `$VAR=value` или `$ VAR=value`. Локальные переменные приоритетнее `os.environ`.
+Синтаксис: `$VAR=value` или `$ VAR=value`. Локальные переменные приоритетнее `os.environ`. `$OUT` — не переменная сессии, см. секцию 23.
 
 Автотест: `test_s01_variables`.
 
@@ -149,9 +153,9 @@ Enter (если открылись подсказки — сначала Esc).
 ?missing
 ```
 
-**Ожидание:** список тегов; все команды с `<gid>` и `tag[tid]`; пустой тег — `(None found)`.
+**Ожидание:** список тегов; все команды с `<gid>` и `tag[tid]`; пустой тег — `(None found)`. После `#name--` в `??` / `?` блок Hidden (`#tag!` / `#group!!`); спрятанные теги не в `!`-подсказках.
 
-Автотест: `test_s06_query`.
+Автотест: `test_s06_query`. Hide: `test_hide_and_restore_handbook_group`.
 
 ---
 
@@ -233,22 +237,22 @@ PageUp на этот блок (или просто последний блок):
 
 ---
 
-## Секция 11: Навигация, история, F3
+## Секция 11: Навигация, история, F3 / Ctrl+C
 
 ```
 echo first
 echo second
 ```
 
-Up / Esc / Up — `echo second`, затем `echo first`.
+Up / Esc / Up — `echo second`, затем `echo first`. Набранный префикс фильтрует историю (`echo` + Up).
 
 PageUp / PageDown — прокрутка журнала, активен видимый блок (без прыжка к началу). Esc — обратно во ввод.
 
-На блоке `echo first`: F3.
+На блоке `echo first`: F3 или Ctrl+C.
 
-**Ожидание:** в буфере `first` (полный raw_stdout, без заголовка).
+**Ожидание:** в буфере `first` (полный raw_stdout, без заголовка). Ctrl+C во вводе копирует весь черновик, не только выделение.
 
-Автотест: `test_s11_nav_history_copy`.
+Автотесты: `test_s11_nav_history_copy`, `test_history_up_filters_by_typed_text`, `test_ctrl_c_copies_whole_input_line`, `test_ctrl_c_on_block_copies_stdout`.
 
 ---
 
@@ -257,17 +261,19 @@ PageUp / PageDown — прокрутка журнала, активен види
 ```
 echo hist-line
 :h
+:h /hist
 :w test_output.txt
 :?
 :i
+:md SEED_LINUX_COMMANDS.md
 :c
 ```
 
-**Ожидание:** `:h` показывает `hist-line` в одном блоке; `test_output.txt` создан; `:?` — help; `:i` — help ingress; `:c` — `All blocks cleared.`
+**Ожидание:** `:h` показывает `hist-line` в одном блоке; `:h /hist` — уникальные совпадения в подсказках (свежие сверху); `test_output.txt` создан; `:?` — help (есть `:md`); `:i` — help ingress; `:md` — модалка Markdown (Esc / `q` закрывает, колесо не крутит журнал); `:c` — `All blocks cleared.`
 
-`:q` — выход (в конце сессии).
+`:q` — выход (в конце сессии). `:cd`, `:r`, `:theme` — секция 25.
 
-Автотест: `test_s12_colon_commands`.
+Автотесты: `test_s12_colon_commands`, `test_colon_h_search_newest_first`, `test_colon_md_opens_formatted_handbook`, `test_md_viewer_wheel_does_not_scroll_journal`.
 
 ---
 
@@ -282,9 +288,24 @@ echo hist-line
 ?cleanup
 ```
 
-**Ожидание:** soft-delete: `cleanup[1]` пропал; после `#cleanup-` тег пустой / `(None found)`.
+**Ожидание:** soft-delete: `cleanup[1]` пропал; после `#cleanup-` тег пустой / `(None found)`. `#cleanup!` возвращает тег.
 
-Автотест: `test_s13_delete`.
+Автотест: `test_s13_delete`. Restore: `test_restore_soft_deleted_command`.
+
+### 13.1. Спрятать справочник (`#name--` / `#name!!`)
+
+После `python3 src/seed_helm.py --seed` (или клик по `--seed` из каталога):
+
+```
+#helm--
+??
+#helm!!
+??
+```
+
+**Ожидание:** `#helm--` прячет все теги handbook (`helm`, `hls`, `hvars`, …), не один тег. В `??` блок Hidden с `#helm!!`. В `!`-подсказках helm нет. `#helm!!` возвращает. `#helm-` по-прежнему один тег. Неизвестное имя — ошибка, не hide.
+
+Автотесты: `test_hide_and_restore_handbook_group`, `test_handbook_hide_unknown_and_single_tag_untouched`.
 
 ---
 
@@ -460,6 +481,76 @@ cat ./al<Tab>
 
 ---
 
+## Секция 22: Пустая БД, клик `--seed`, Markdown
+
+Первый старт без живых команд (чистый cwd / пустой `mytags.db`; `:c` только чистит журнал, каталог от этого не появляется):
+
+1. Журнал на **верхней** строке каталога, не прокручен вниз.
+2. Есть ядро (`seed_linux_commands.py`, `seed_k8s_chains.py`, `seed_git.py`), `python3 src/seed_ops.py --seed`, ops по отдельности, имена `.md`.
+3. Клик по зелёной `--seed` (например `python3 src/seed_ops.py --seed`) вставляет команду во ввод, **не** запускает. Enter — выполнить; затем `??` (или ~5 с).
+4. Клик по `SEED_LINUX_COMMANDS.md` открывает formatted viewer. Esc / `q` закрывает. Колесо крутит только модалку.
+5. Без мыши: `:md SEED_LINUX_COMMANDS.md`. Несуществующий файл — предупреждение, не краш. `../etc/passwd` не открывается.
+6. Если в БД уже есть живые команды — каталог seed **не** показывается.
+
+Автотесты: `test_welcome_journal_starts_at_top`, `test_starts_without_existing_database`, `test_insert_seed_command_puts_draft_in_input`, `test_colon_md_opens_formatted_handbook`, `test_md_viewer_wheel_does_not_scroll_journal`, `test_seed_hint_skipped_when_database_has_commands`, `test_handbook_md_path_resolves_repo_docs`.
+
+---
+
+## Секция 23: `$OUT`
+
+```
+echo Hello
+echo Hello, $OUT
+$OUT
+$OUT=nope
+```
+
+**Ожидание:** второй echo печатает `Hello, Hello` (последняя непустая строка сфокусированного / последнего блока). Считается только если в команде есть `$OUT` / `${OUT}`. Не пишется в `.bashrc_term`. `$OUT` без аргументов — peek. `$OUT=` — отказ.
+
+Автотест: `test_out_placeholder_is_lazy_last_line`.
+
+---
+
+## Секция 24: `# comment` и файлы истории
+
+```
+# curl https://example.com
+#logs echo still-a-tag
+```
+
+**Ожидание:** `# ` + пробел — строка в журнале и в `history_default.txt`, **без** запуска и без тега. `#logs echo …` — обычный save. Up поднимает parked-строку.
+
+`python3 app.py --instance-name=user1` пишет `history_user1.txt` и `.bashrc_term_user1`. Старый `history.txt` копируется один раз, если instance-файла ещё нет.
+
+Автотесты: `test_hash_space_parks_in_history_without_running`, `test_default_instance_writes_history_default`, `test_instance_name_uses_separate_history_file`, `test_migrates_legacy_history_txt`.
+
+---
+
+## Секция 25: `:cd`, `:r`, `:theme`, `:export`
+
+```
+echo replay-me
+:r
+cd /tmp
+:cd
+:cd /no-such-idivjopy-dir
+:theme
+:theme textual-dark
+```
+
+**Ожидание:** `:r` кладёт команду сфокусированного (или последнего) блока во ввод. `cd` / `:cd` меняет cwd приложения; нет каталога — ошибка, не молчание. `:theme` показывает / ставит тему в `settings.yml`. `d` на журнале переключает dark/light.
+
+```
+#demo echo one
+:export demo
+```
+
+**Ожидание:** JSON с тегом; `:import` создаёт новые tid (не затирает).
+
+Автотесты: `test_replay_puts_command_in_input`, `test_cd_changes_app_cwd`, `test_colon_cd_and_missing_dir`, `test_colon_theme_sets_and_lists`, `test_toggle_dark_saves_theme`, `test_export_and_import_tag`.
+
+---
+
 ## Критерии успеха
 
 - Команды сохраняются с корректным `tid`; `-`/`=`/`+` внутри текста не ломают парсер
@@ -468,9 +559,10 @@ cat ./al<Tab>
 - `!tag[tid]` и `!ID` вставляют во ввод
 - `!! tag[tid]` работает сразу; `!! 1 2` — из кэша (старт или `??`)
 - `| cmd` берёт stdout сфокусированного/последнего блока
-- `$VAR` подставляется; `$JSON` после Enter в viewer
-- `:q` `:w` `:h` `:c` `:?` работают
-- Soft-delete `#tag-` / `#tag-tid`; handbook hide `#name--` / `#name!!`
+- `$VAR` подставляется; `$JSON` после Enter в viewer; `$OUT` — последняя строка блока по запросу
+- `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:r` `:theme` работают
+- Soft-delete `#tag-` / `#tag-tid`; handbook hide `#name--` / `#name!!`; `# command` паркуется без запуска
+- Пустая БД: каталог сверху; клик `--seed` → ввод; `.md` / `:md` — Markdown-viewer (колесо не крутит журнал)
 - Большой вывод не вешает UI (обрезка + полный `raw_stdout`)
 - JSON viewer и path-completion без крашей
 
@@ -482,12 +574,12 @@ cat ./al<Tab>
 sqlite3 mytags.db "SELECT tag, tid, command, comment FROM commands WHERE deleted = 0 ORDER BY tag, tid;"
 sqlite3 mytags.db "SELECT tag, comment FROM tags ORDER BY tag;"
 cat .bashrc_term_default
-cat history.txt
+cat history_default.txt
 ```
 
 ---
 
-**Версия документа**: v1.5  
-**Версия приложения**: v1.1.49  
-**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`  
-**Дата**: 2026-08-15
+**Версия документа**: v1.6  
+**Версия приложения**: v1.24  
+**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`  
+**Дата**: 2026-08-21
