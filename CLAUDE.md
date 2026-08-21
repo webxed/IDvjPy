@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.23) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.24) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
@@ -75,6 +75,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `#tag=` / `#tag=ID=` | Tag / command comment (ID = tid or global `<id>`) |
 | `#tag+` / `#tag+ID` | Load last / by tid into input for editing |
 | `#tag-` / `#tag-tid` | Soft-delete |
+| `#name--` / `#name!!` | Hide / restore a handbook's tags (`ansible`, `linux`, `k8s`, …) |
 | `#tag!` / `#tag!tid` | Restore soft-deleted tag / command |
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
@@ -104,7 +105,7 @@ Aliases load from `~/.bashrc`. If the body contains `$1` / `$2` / `$@` / `$*`, a
 File: `settings.yml` → `database_tags_file` (default `mytags.db`).
 
 - Global `id` (`!1`, `!! 1`) and per-tag `tid` (`!deploy[1]`)
-- Soft-delete flag (`deleted = 0` in queries)
+- Soft-delete flag (`deleted = 0` in queries). `#name--` / `#name!!` hide/restore a seed handbook's tags. Hidden tags appear in `??` / `?`, not in `!` completion.
 - In-memory cache `last_query_results` filled on start, every 5s, and on `?`/`??`/`?tag`
 
 Details: `DATABASE.md`. User-facing summary: `COMPACT_SUMMARY.md`, `README.md`.

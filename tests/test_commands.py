@@ -11,7 +11,7 @@ async def test_app_starts_with_input_focused(isolated_home):
         assert input_widget(app).has_focus
         welcome = " ".join(block.text_content for block in app.query(InfoBlock))
         assert "IDvjPy_term" in welcome
-        assert "v1.23" in welcome
+        assert "v1.24" in welcome
         assert ":?" in welcome
         assert "#tag cmd" in welcome
         assert "Define your variables" in welcome

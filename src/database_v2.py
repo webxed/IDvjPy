@@ -107,12 +107,17 @@ def add_command(db_file: str, command: str, tag: str) -> int:
     conn.close()
     return tid
 
-def delete_commands_by_tag(db_file: str, tag: str):
-    """Marks all commands with a given tag as deleted."""
+def delete_commands_by_tag(db_file: str, tag: str) -> int:
+    """Marks live commands with a given tag as deleted. Returns row count."""
     conn = get_db_connection(db_file)
-    conn.execute("UPDATE commands SET deleted = 1 WHERE tag = ?", (tag,))
+    cursor = conn.execute(
+        "UPDATE commands SET deleted = 1 WHERE tag = ? AND deleted = 0",
+        (tag,),
+    )
     conn.commit()
+    n = cursor.rowcount
     conn.close()
+    return n
 
 def hard_delete_commands_by_tag(db_file: str, tag: str) -> None:
     """Remove a tag completely so the next add_command starts at tid 1."""
@@ -146,6 +151,22 @@ def get_all_tags(db_file: str):
         "SELECT DISTINCT tag FROM commands WHERE deleted = 0 ORDER BY tag ASC"
     )
     tags = [row['tag'] for row in cursor.fetchall()]
+    conn.close()
+    return tags
+
+
+def get_hidden_tags(db_file: str) -> list[str]:
+    """Tags that have only soft-deleted commands (nothing live)."""
+    conn = get_db_connection(db_file)
+    cursor = conn.execute(
+        """
+        SELECT DISTINCT tag FROM commands
+        WHERE deleted = 1
+          AND tag NOT IN (SELECT DISTINCT tag FROM commands WHERE deleted = 0)
+        ORDER BY tag ASC
+        """
+    )
+    tags = [row["tag"] for row in cursor.fetchall()]
     conn.close()
     return tags
 

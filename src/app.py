@@ -1290,7 +1290,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.23"
+    VERSION = "v1.24"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -3079,7 +3079,8 @@ class CommandRunner(App):
   #<tag>     - Save command to database with tag (`#tag cmd`, no space after #)
   # command  - Park a line in history without running (bash-style; space after #)
   #tag! / #tag!tid - Restore soft-deleted tag / command
-  ?          - Query database (? all, ?<tag>, ?? grouped)
+  #name-- / #name!! - Hide / restore a handbook's tags (ansible, linux, k8s, …)
+  ?          - Query database (? tags, ?<tag>, ?? grouped; ?? lists hidden tags)
   !tag / !tag[tid] - Type ! to list tags [file, kube, log]; Tab picks a tag
                Then commands show as `<id> tag[tid]  full command`; Tab inserts `!tag[tid]`
                Compose pipes/saves: `#file !file[1] | !file[2]` (preview expands refs)
@@ -3497,6 +3498,8 @@ class CommandRunner(App):
         - #tag <cmd>           - сохранить команду с тегом
         - #tag-                - удалить все команды с тегом
         - #tag-tid             - удалить конкретную команду по tid
+        - #name--              - спрятать все теги справочника (ansible, linux, …)
+        - #name!!              - вернуть теги справочника
         - #tag+ID              - редактировать команду (v1.1.9+)
         - #tag+                - редактировать последнюю команду тега (v1.1.9+)
         - #tag=comment         - установить комментарий к тегу
@@ -3588,6 +3591,57 @@ class CommandRunner(App):
                 self.add_block(InfoBlock(f"Database error: {e}"))
             return
 
+        # Формат: #name--  /  #name!!  — спрятать / вернуть все теги справочника
+        m = re.match(r"^([a-zA-Z_0-9]+)(--|!!)$", content)
+        if m:
+            name, op = m.groups()
+            try:
+                from seed_groups import group_tags, known_group_names
+
+                tags = group_tags(name)
+                if tags is None:
+                    known = ", ".join(known_group_names())
+                    self.add_block(InfoBlock(
+                        f"Unknown handbook '{name}'. Known groups: {known}."
+                    ))
+                    return
+                touched: list[str] = []
+                n = 0
+                if op == "--":
+                    for tag in tags:
+                        c = database.delete_commands_by_tag(self.db_file, tag)
+                        if c:
+                            touched.append(tag)
+                            n += c
+                    if n:
+                        self.add_block(InfoBlock(
+                            f"Hid {n} command(s) in '{name}' "
+                            f"(tags: {', '.join(touched)}). Restore: #{name}!!"
+                        ))
+                    else:
+                        self.add_block(InfoBlock(
+                            f"No live commands in handbook '{name}'."
+                        ))
+                else:
+                    for tag in tags:
+                        c = database.restore_commands_by_tag(self.db_file, tag)
+                        if c:
+                            touched.append(tag)
+                            n += c
+                    if n:
+                        self.add_block(InfoBlock(
+                            f"Restored {n} command(s) in '{name}' "
+                            f"(tags: {', '.join(touched)})."
+                        ))
+                    else:
+                        self.add_block(InfoBlock(
+                            f"No hidden commands in handbook '{name}'."
+                        ))
+                self._populate_query_results()
+            except Exception as e:
+                self.add_block(InfoBlock(f"Database error: {e}"))
+            return
+
         # Формат: #tag!  или  #tag!tid  — восстановить soft-delete
         m = re.match(r"^([a-zA-Z_0-9]+)!(?:(\d+))?$", content)
         if m:
@@ -3657,6 +3711,29 @@ class CommandRunner(App):
             line += f"  [dim]# {escape(comment)}[/dim]"
         return line
 
+    def _hidden_tags_section(self) -> str:
+        """?? / ? footer: fully hidden tags and how to restore them."""
+        hidden = database.get_hidden_tags(self.db_file)
+        if not hidden:
+            return ""
+        from seed_groups import group_for_tag
+
+        by_group: dict[str, list[str]] = {}
+        other: list[str] = []
+        for tag in hidden:
+            group = group_for_tag(tag)
+            if group:
+                by_group.setdefault(group, []).append(tag)
+            else:
+                other.append(tag)
+        lines = ["", "Hidden tags — restore with #tag! or #group!!:"]
+        for group in sorted(by_group):
+            tags = ", ".join(by_group[group])
+            lines.append(f"  {group} (#{group}!!): {tags}")
+        if other:
+            lines.append(f"  (other): {', '.join(other)}")
+        return "\n".join(lines)
+
     def handle_query_command(self, user_input: str) -> None:
         """
         Поиск команд в БД.
@@ -3723,6 +3800,7 @@ class CommandRunner(App):
 
                 content += "\n\nType `? <tag>` to see commands or `??` to see all."
                 content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
+                content += self._hidden_tags_section()
                 self.add_block(InfoBlock(content))
             elif tag_part == '?':
                 # Вывод всех команд с группировкой по тегам
@@ -3760,6 +3838,7 @@ class CommandRunner(App):
                             ) + "\n"
                 content += "\nUse `!tag[tid]` or `!ID` to execute a command."
                 content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
+                content += self._hidden_tags_section()
                 self.add_block(InfoBlock(content))
             else:
                 # Поиск по тегу

@@ -68,6 +68,58 @@ async def test_restore_soft_deleted_command(isolated_home):
         assert "restore-me" in row["command"]
 
 
+async def test_hide_and_restore_handbook_group(isolated_home):
+    import seed_helm
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        seed_helm.run_seed(app.db_file)
+        await submit(pilot, "#helm--")
+        text = last_info(app).text_content
+        assert "Hid" in text
+        assert "#helm!!" in text
+        assert database.get_command_by_tid(app.db_file, "helm", 1) is None
+        assert database.get_command_by_tid(app.db_file, "hls", 1) is None
+        assert database.get_command_by_tid(app.db_file, "hvars", 1) is None
+        assert "helm" in database.get_hidden_tags(app.db_file)
+        assert "hls" in database.get_hidden_tags(app.db_file)
+
+        await submit(pilot, "??")
+        listed = last_info(app).text_content
+        assert "Hidden tags" in listed
+        hidden_part = listed.split("Hidden tags", 1)[1]
+        assert "#helm!!" in hidden_part
+        assert "hls" in hidden_part
+        live_part = listed.split("Hidden tags", 1)[0]
+        assert "- helm:" not in live_part
+        assert "- hls:" not in live_part
+
+        await submit(pilot, "#helm!!")
+        assert "Restored" in last_info(app).text_content
+        assert database.get_command_by_tid(app.db_file, "helm", 1) is not None
+        assert database.get_command_by_tid(app.db_file, "hls", 1) is not None
+        await submit(pilot, "??")
+        assert "Hidden tags" not in last_info(app).text_content
+
+
+async def test_handbook_hide_unknown_and_single_tag_untouched(isolated_home):
+    import seed_helm
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        seed_helm.run_seed(app.db_file)
+        await submit(pilot, "#nonesuch--")
+        assert "Unknown handbook" in last_info(app).text_content
+        await submit(pilot, "#helm-")
+        assert database.get_command_by_tid(app.db_file, "helm", 1) is None
+        assert database.get_command_by_tid(app.db_file, "hls", 1) is not None
+        await submit(pilot, "??")
+        listed = last_info(app).text_content
+        assert "Hidden tags" in listed
+        assert "(#helm!!)" in listed
+        assert "helm" in listed.split("Hidden tags")[-1]
+
+
 async def test_export_and_import_tag(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(120, 40)) as pilot:

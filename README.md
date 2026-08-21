@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.23 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.24 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -76,6 +76,7 @@ python3 app.py --demo full --demo-quit
 | `#tag=` / `#tag=ID=` | Комментарий к тегу / команде | `#deploy=prod rsync` |
 | `#tag+` / `#tag+ID` | Подставить на редактирование | `#deploy+1` |
 | `#tag-` / `#tag-tid` | Мягкое удаление | `#deploy-` / `#deploy-1` |
+| `#name--` / `#name!!` | Спрятать / вернуть все теги справочника | `#ansible--` / `#ansible!!` |
 | `#tag!` / `#tag!tid` | Восстановить после удаления | `#deploy!` / `#deploy!1` |
 | `?` / `??` / `?tag` / `?tag[tid]` | Запрос тегов / всех / по тегу / превью | `?deploy` |
 | `!tag[tid]` / `!N` | Вставить команду во ввод (не запускает) | `!deploy[1]` |
@@ -84,6 +85,8 @@ python3 app.py --demo full --demo-quit
 | `\| cmd` | Пайп stdout сфокусированного блока (в историю, как обычная команда) | `\| grep error` |
 | `$OUT` | По запросу: последняя непустая строка блока (не хранится) | `echo Hello, $OUT` |
 | `$VAR=val` | Локальная переменная (пишет `.bashrc_term_<instance>`) | `$EDITOR=nvim` |
+
+`#name--` прячет все теги справочника (`linux`, `k8s`, `git` и ops: `ansible`, `helm`, …). `#name!!` возвращает. В `??` / `?` спрятанные теги видны в блоке Hidden; в `!`-автоподсказках и completion по тексту команды их нет. `#tag-` по-прежнему прячет один тег.
 
 `!` и `!!` подставляют текст во ввод. Запуск — отдельным Enter.
 

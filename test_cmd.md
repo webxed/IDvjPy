@@ -470,7 +470,7 @@ cat ./al<Tab>
 - `| cmd` берёт stdout сфокусированного/последнего блока
 - `$VAR` подставляется; `$JSON` после Enter в viewer
 - `:q` `:w` `:h` `:c` `:?` работают
-- Soft-delete `#tag-` / `#tag-tid`
+- Soft-delete `#tag-` / `#tag-tid`; handbook hide `#name--` / `#name!!`
 - Большой вывод не вешает UI (обрезка + полный `raw_stdout`)
 - JSON viewer и path-completion без крашей
 

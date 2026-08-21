@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.23**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.24**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -21,6 +21,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `#tag=` / `#tag=ID=` | Tag / command comment (ID = tid or global `<id>`) |
 | `#tag+` / `#tag+ID` | Edit last / by tid |
 | `#tag-` / `#tag-tid` | Soft-delete (strict `#tag-` only, not `-` inside cmd) |
+| `#name--` / `#name!!` | Hide / restore a handbook's tags (`ansible`, `linux`, `k8s`, …) |
 | `#tag!` / `#tag!tid` | Restore soft-deleted tag / command |
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
@@ -44,7 +45,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 - Each call opens SQLite, queries, closes. Filter `deleted = 0`.
 - In-memory cache `last_query_results`: `{global_id: command}`. Filled on start, every 5s, and replaced on `?`/`??`/`?tag`.
 - `!! tag[tid]` hits DB immediately. `!! 1` needs cache (start load, `??`, or 5s reload).
-- Tab completion: DB `command LIKE prefix%` + session history; path context uses cwd files only (not mixed with full commands). Typing `!file` / `!kube` lists tagged commands (`<id> tag[tid]  cmd`) and inserts `!tag[tid]` only.
+- Tab completion: DB `command LIKE prefix%` (`deleted = 0`) + session history; path context uses cwd files only (not mixed with full commands). Typing `!file` / `!kube` lists tagged commands (`<id> tag[tid]  cmd`) and inserts `!tag[tid]` only. Hidden handbook tags (`#name--`) stay out of these lists; `??` / `?` show them under Hidden.
 
 ---
 
@@ -129,7 +130,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 | `test_cmd.md` | Manual plan v1.5 (app v1.1.49) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog |
-| `tests/test_tags.py` | save with `-`/`=`, bang, delete |
+| `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
 | `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
 | `tests/test_seed_*.py` | linux / k8s chains / git / ops handbooks; empty-DB catalog text |
@@ -143,8 +144,9 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | File | Purpose |
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
-| `src/app.py` | TUI (`CommandRunner`), v1.23 |
+| `src/app.py` | TUI (`CommandRunner`), v1.24 |
 | `src/database_v2.py` | SQLite tagged history |
+| `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
 | `src/json_viewer.py` | JSON tree modal |
 | `src/ingress_analyzer.py` | `:i` k8s |
 | `src/command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
@@ -157,6 +159,11 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.24
+
+- **Handbook hide:** `#ansible--` / `#linux--` / `#k8s--` (and other seed names) soft-deletes every tag of that handbook. `#name!!` restores. `#tag-` still hides one tag.
+- **`??` / `?` Hidden:** fully hidden tags (no live rows) are listed with `#tag!` / `#group!!`. They do not appear in `!` completion or command-prefix suggestions.
 
 ## v1.23
 
