@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.25**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.26**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -128,12 +128,13 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.6 (app v1.25) |
+| `test_cmd.md` | Manual plan v1.6 (app v1.26) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog, `:md`, click `--seed` insert, history compact |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
 | `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
+| `tests/test_demo.py` | YAML `--demo`, `:playbook`, `loop: N` / `loop: true` |
 | `tests/test_update_check.py` | parse GitHub `VERSION`, `:update` |
 | `tests/test_seed_*.py` | linux / k8s chains / git / ops handbooks; empty-DB catalog text |
 
@@ -146,7 +147,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | File | Purpose |
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
-| `src/app.py` | TUI (`CommandRunner`), v1.25 |
+| `src/app.py` | TUI (`CommandRunner`), v1.26 |
 | `src/database_v2.py` | SQLite tagged history |
 | `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
 | `src/seed_catalog.py` | Empty-DB welcome catalog (click `--seed` / `.md`) |
@@ -164,6 +165,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.26
+
+- **Playbook `loop`:** `loop: true` (until Esc) or `loop: N` at the top of a YAML, or a step `loop: 10` with `type:` / nested `steps:`. For polling a health URL without re-running setup.
 
 ## v1.25
 

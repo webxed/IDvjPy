@@ -1,13 +1,18 @@
 """Демо-режим: YAML-сценарий печатает команды в живом TUI."""
 import time
 
+import pytest
+
 from app import CommandBlock, CommandRunner, InfoBlock
+
 from demo import (
+    KIND_LOOP,
     bundled_demo_names,
     collect_reset_tags,
     dump_playbook_yaml,
     load_scenario,
     normalize_step,
+    parse_loop_count,
     resolve_demo_path,
     session_line_needs_wait,
     session_to_playbook,
@@ -85,6 +90,7 @@ def test_session_to_playbook_heuristics():
     yaml_text = dump_playbook_yaml(scenario)
     assert "python3 app.py --demo" in yaml_text
     assert "wait_command: true" in yaml_text
+    assert "loop: true" in yaml_text
 
 
 def test_normalize_string_step_types_and_enters():
@@ -113,6 +119,64 @@ def test_normalize_step_type_delay():
     step = normalize_step({"type": "echo x", "type_delay": 0.04})
     assert step["type_delay"] == 0.04
     assert normalize_step("echo x")["type_delay"] is None
+
+
+def test_parse_loop_count():
+    assert parse_loop_count(True) is None
+    assert parse_loop_count("forever") is None
+    assert parse_loop_count(0) is None
+    assert parse_loop_count(-1) is None
+    assert parse_loop_count(5) == 5
+    assert parse_loop_count("10") == 10
+    assert parse_loop_count(False) == 1
+    with pytest.raises(ValueError, match="loop"):
+        parse_loop_count("often")
+
+
+def test_normalize_loop_shorthand_and_nested_steps():
+    short = normalize_step(
+        {"loop": 3, "type": "curl -s localhost/health", "wait_command": True, "pause": 5}
+    )
+    assert short["kind"] == KIND_LOOP
+    assert short["times"] == 3
+    assert len(short["steps"]) == 1
+    assert short["steps"][0]["type"] == "curl -s localhost/health"
+    assert short["steps"][0]["wait_command"] is True
+    assert short["steps"][0]["pause"] == 5
+    assert short["pause"] is None
+
+    nested = normalize_step(
+        {
+            "loop": True,
+            "caption": "health",
+            "pause": 2,
+            "steps": [
+                "echo a",
+                {"type": "echo b", "wait_command": True},
+            ],
+        }
+    )
+    assert nested["times"] is None
+    assert nested["caption"] == "health"
+    assert nested["pause"] == 2
+    assert [step["type"] for step in nested["steps"]] == ["echo a", "echo b"]
+    with pytest.raises(ValueError, match="loop"):
+        normalize_step({"loop": True})
+
+
+def test_collect_reset_tags_walks_loop_steps():
+    scenario = {
+        "steps": [
+            {
+                "loop": 2,
+                "steps": [
+                    {"type": "#hello curl -s $HOST"},
+                    {"type": "# parked stays out"},
+                ],
+            }
+        ]
+    }
+    assert collect_reset_tags(scenario) == ["hello"]
 
 
 def test_collect_reset_tags_skips_parked_comments():
@@ -377,6 +441,70 @@ async def test_demo_hard_deletes_used_tags_before_playback(isolated_home):
         other = database.get_commands_by_tag(db, "other")
         assert len(other) == 1
         assert other[0]["command"] == "echo keep-other"
+
+
+async def test_demo_loop_repeats_command(isolated_home):
+    scenario = {
+        "title": "loop-n",
+        "start_pause": 0,
+        "type_delay": 0,
+        "pause": 0,
+        "command_timeout": 8,
+        "steps": [
+            {
+                "loop": 3,
+                "type": "echo loop-mark",
+                "enter": True,
+                "wait_command": True,
+                "pause": 0,
+            },
+        ],
+    }
+    app = CommandRunner(demo=scenario, demo_speed=20)
+    async with app.run_test(size=(120, 40)) as pilot:
+        deadline = time.monotonic() + 15
+        while app._demo_active and time.monotonic() < deadline:
+            await pilot.pause()
+        assert app._demo_active is False
+        assert "Demo error" not in (app.sub_title or "")
+        marks = [
+            block.raw_stdout
+            for block in app.query(CommandBlock)
+            if "loop-mark" in (block.raw_stdout or "")
+        ]
+        assert len(marks) == 3
+
+
+async def test_demo_top_level_loop_stops_on_escape(isolated_home):
+    scenario = {
+        "title": "poll",
+        "start_pause": 0,
+        "type_delay": 0,
+        "pause": 0,
+        "command_timeout": 8,
+        "loop": True,
+        "steps": [
+            {"type": "echo forever-x", "enter": True, "wait_command": True, "pause": 0},
+        ],
+    }
+    app = CommandRunner(demo=scenario, demo_speed=20)
+    async with app.run_test(size=(120, 40)) as pilot:
+        deadline = time.monotonic() + 12
+        while time.monotonic() < deadline:
+            blocks = [
+                block
+                for block in app.query(CommandBlock)
+                if "forever-x" in (block.raw_stdout or "")
+            ]
+            if len(blocks) >= 2:
+                break
+            await pilot.pause()
+        else:
+            raise AssertionError("loop never produced a second command block")
+        app._stop_demo("stopped-by-test")
+        await pilot.pause()
+        assert app._demo_active is False
+        assert "stopped-by-test" in (app.sub_title or "")
 
 
 async def test_playbook_writes_session_yaml(isolated_home):

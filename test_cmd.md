@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.25
+# План тестирования IDvjPy_term v1.26
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -580,6 +580,33 @@ echo hello-play
 
 ---
 
+## Секция 28: Плейбук `loop` (мониторинг)
+
+В YAML после `:playbook` (или в своём файле):
+
+```yaml
+loop: 3
+steps:
+  - type: echo loop-mark
+    wait_command: true
+    pause: 0
+```
+
+Или шаг:
+
+```yaml
+- loop: true
+  type: curl -sS http://127.0.0.1:8080/health
+  wait_command: true
+  pause: 5
+```
+
+**Ожидание:** `loop: N` повторяет шаги N раз и заканчивается. `loop: true` / `0` / `forever` крутит до **Esc** (сессия остаётся). `--demo-quit` не выходит из бесконечного цикла. Подпись в subtitle: `DEMO · … 2/∞ · Esc stops`.
+
+Автотесты: `test_normalize_loop_shorthand_and_nested_steps`, `test_demo_loop_repeats_command`, `test_demo_top_level_loop_stops_on_escape`.
+
+---
+
 ## Критерии успеха
 
 - Команды сохраняются с корректным `tid`; `-`/`=`/`+` внутри текста не ломают парсер
@@ -590,6 +617,7 @@ echo hello-play
 - `| cmd` берёт stdout сфокусированного/последнего блока
 - `$VAR` подставляется; `$JSON` после Enter в viewer; `$OUT` — последняя строка блока по запросу
 - `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:r` `:theme` `:playbook` `:update` работают
+- YAML `--demo` / `:playbook`: `loop: true` / `loop: N` крутит шаги, Esc останавливает
 - Soft-delete `#tag-` / `#tag-tid`; handbook hide `#name--` / `#name!!`; `# command` паркуется без запуска
 - Пустая БД: каталог сверху; клик `--seed` → ввод; `.md` / `:md` — Markdown-viewer (колесо не крутит журнал)
 - Большой вывод не вешает UI (обрезка + полный `raw_stdout`)
@@ -609,6 +637,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.25  
-**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`  
-**Дата**: 2026-08-21
+**Версия приложения**: v1.26  
+**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`  
+**Дата**: 2026-08-24

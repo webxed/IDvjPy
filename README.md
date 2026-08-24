@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.25 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.26 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -107,7 +107,7 @@ python3 app.py --demo full --demo-quit
 - `:r` — команда сфокусированного блока во ввод
 - `:/text` / `:g` / `:n` / `:N` — поиск по строкам журнала (с блока `/` открывает `:/`; `n`/`N` — следующее / предыдущее)
 - `:export tag [file]` / `:import file` — один тег в JSON и обратно
-- `:playbook [file.yml]` — записать команды этой сессии (Enter) как YAML для `--demo` (по умолчанию `playbook.yml`). `:playbook -` — превью в журнале; `:playbook clear` — забыть записанное. Клавиши (Tab/F5) и мышь не пишутся.
+- `:playbook [file.yml]` — записать команды этой сессии (Enter) как YAML для `--demo` (по умолчанию `playbook.yml`). `:playbook -` — превью в журнале; `:playbook clear` — забыть записанное. Клавиши (Tab/F5) и мышь не пишутся. В YAML: `loop: true` / `loop: N` — крутить шаги (Esc — стоп); см. [DEMO.md](DEMO.md).
 - `:update` — сверить `VERSION` с GitHub [`webxed/IDvjPy`](https://github.com/webxed/IDvjPy) `main`. При старте то же самое, если `check_updates: true` (пишет в журнал только если на GitHub новее).
 - `:theme [name]` — тема TUI (`dark` / `light` / `nord` / …); пишется в `settings.yml`. Клавиша `d` — dark/light
 - `:?` — эта справка внутри TUI

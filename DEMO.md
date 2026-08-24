@@ -1,6 +1,6 @@
 # Сценарий демонстрации IDvjPy_term
 
-Версия приложения: **v1.25**. Длительность живого рассказа: **12–15 минут**.
+Версия приложения: **v1.26**. Длительность живого рассказа: **12–15 минут**.
 
 Тезис для зрителя: теги — переменные с шаблонами команд; приложение собирает их в строку. `!` / `!!` только подставляют текст во ввод, запуск — отдельным Enter.
 
@@ -70,6 +70,44 @@ steps:
     enter: true
 ```
 
+Повтор шагов (мониторинг). **Esc** останавливает, в том числе бесконечный цикл. `--demo-quit` сработает только когда конечный `loop: N` закончится.
+
+```yaml
+title: poll health
+loop: true                 # или loop: 20 — столько кругов, 0/forever = бесконечно
+pause: 0
+command_timeout: 12
+steps:
+  - type: "curl -sS http://127.0.0.1:8080/health"
+    wait_command: true
+    pause: 5                 # пауза после команды = интервал опроса
+```
+
+Кусок сценария, не весь файл:
+
+```yaml
+  - type: "$HOST=http://127.0.0.1:8080"
+  - loop: 10
+    caption: health
+    pause: 5                 # пауза между кругами (если есть вложенные steps:)
+    steps:
+      - type: "curl -sS $HOST/health"
+        wait_command: true
+        pause: 0
+      - type: "date"
+        wait_command: true
+        pause: 0
+```
+
+Команда без вложенного списка — тот же `loop:` на шаге с `type:`:
+
+```yaml
+  - loop: true
+    type: "curl -sS http://127.0.0.1:8080/health"
+    wait_command: true
+    pause: 5
+```
+
 - Перед проигрыванием теги из `#tag cmd` (и опционально `reset_tags: [hello]`) **удаляются из БД**, чтобы повторный `--demo` не плодил `hello[4]`.
 - `caption` / `say` — подпись шага в subtitle.
 - `keys`: `enter`, `escape`/`esc`, `tab`, `f2`…`f6`, `up`/`down`, `home`/`end`, `pageup`/`pagedown`, `ctrl+c`, `ctrl+d`, `ctrl+v`, или список. После `tab` в журнале следующий `type` снова берёт строку ввода (иначе Enter включит курсор строк, как F2).
@@ -87,7 +125,7 @@ steps:
 :playbook clear        # забыть лог и начать набор заново
 ```
 
-Потом: `python3 app.py --demo tour.yml`. Shell-команды получают `wait_command: true`; `#tag`, `?`, `!`, `:` — нет. Теги из `#tag cmd` попадают в `reset_tags`. После записи YAML можно дописать `keys` / `caption` руками.
+Потом: `python3 app.py --demo tour.yml`. Shell-команды получают `wait_command: true`; `#tag`, `?`, `!`, `:` — нет. Теги из `#tag cmd` попадают в `reset_tags`. После записи YAML можно дописать `keys` / `caption` / `loop:` руками.
 
 Ниже — ручной сценарий, если ведёте демо сами (с паузами и словами).
 

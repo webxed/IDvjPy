@@ -36,6 +36,10 @@ DEFAULTS = {
     "command_timeout": 12.0,
 }
 
+KIND_LOOP = "loop"
+LOOP_FOREVER_NAMES = frozenset({"true", "forever", "inf", "infinite", "yes", "on"})
+MAX_LOOP_DEPTH = 8
+
 
 def bundled_demo_names() -> List[str]:
     if not BUNDLED_DEMOS_DIR.is_dir():
@@ -84,6 +88,24 @@ def load_scenario(path: Union[str, Path]) -> Dict[str, Any]:
     return data
 
 
+def iter_typed_lines(steps: Iterable[Any]) -> Iterable[str]:
+    """Yield ``type`` / string lines, including nested ``loop`` steps."""
+    for step in steps or []:
+        if isinstance(step, str):
+            text = step.strip()
+            if text:
+                yield text
+            continue
+        if not isinstance(step, dict):
+            continue
+        nested = step.get("steps")
+        if nested:
+            yield from iter_typed_lines(nested)
+        text = str(step.get("type") or step.get("text") or "").strip()
+        if text:
+            yield text
+
+
 def collect_reset_tags(scenario: Dict[str, Any]) -> List[str]:
     """Tags the scenario will `#tag cmd`-save. Cleared before playback so tids restart at 1."""
     tags: List[str] = []
@@ -93,11 +115,7 @@ def collect_reset_tags(scenario: Dict[str, Any]) -> List[str]:
         if name and name not in seen:
             seen.add(name)
             tags.append(name)
-    for step in scenario.get("steps") or []:
-        if isinstance(step, str):
-            text = step.strip()
-        else:
-            text = (step.get("type") or "").strip()
+    for text in iter_typed_lines(scenario.get("steps") or []):
         if len(text) < 2 or not text.startswith("#"):
             continue
         if text[1] in " \t":
@@ -197,6 +215,8 @@ def dump_playbook_yaml(scenario: Dict[str, Any]) -> str:
     header = (
         "# Session playbook. Replay: python3 app.py --demo this.yml\n"
         "# Typed Enter lines only. Tab / F5 / mouse / TTY are not recorded.\n"
+        "# Repeat: top-level `loop: true` (Esc stops) or `loop: 10`, "
+        "or a step with loop: and steps:.\n"
     )
     return header + body
 
@@ -234,7 +254,55 @@ def load_demo_for_cli(name: str) -> Dict[str, Any]:
         sys.exit(2)
 
 
-def normalize_step(raw: Any) -> Dict[str, Any]:
+def parse_loop_count(value: Any) -> Optional[int]:
+    """How many times to repeat. ``None`` means until Esc."""
+    if isinstance(value, bool):
+        return None if value else 1
+    if isinstance(value, (int, float)):
+        count = int(value)
+        return None if count <= 0 else count
+    text = str(value).strip().lower()
+    if not text:
+        raise ValueError("loop: expected a count or true/forever")
+    if text in LOOP_FOREVER_NAMES:
+        return None
+    if text in {"false", "no", "off"}:
+        return 1
+    try:
+        count = int(text)
+    except ValueError as exc:
+        raise ValueError(
+            f"loop: expected a number or true/forever, got {value!r}"
+        ) from exc
+    return None if count <= 0 else count
+
+
+def _make_loop_step(
+    times: Optional[int],
+    inner: List[Dict[str, Any]],
+    *,
+    caption: str = "",
+    pause: Optional[float] = None,
+) -> Dict[str, Any]:
+    if not inner:
+        raise ValueError("loop has no steps")
+    return {
+        "kind": KIND_LOOP,
+        "times": times,
+        "caption": caption,
+        "pause": pause,
+        "steps": inner,
+        "type": "",
+        "keys": [],
+        "enter": False,
+        "clear": False,
+        "wait_command": False,
+        "paste": False,
+        "type_delay": None,
+    }
+
+
+def normalize_step(raw: Any, *, _depth: int = 0) -> Dict[str, Any]:
     """Turn a YAML step (string or mapping) into a playback dict."""
     if isinstance(raw, str):
         return {
@@ -250,7 +318,36 @@ def normalize_step(raw: Any) -> Dict[str, Any]:
         }
     if not isinstance(raw, dict):
         raise ValueError(f"Demo step must be a string or mapping, got {type(raw).__name__}")
+    if _depth > MAX_LOOP_DEPTH:
+        raise ValueError("loop nesting is too deep")
+    if "loop" in raw:
+        return _normalize_loop_step(raw, _depth=_depth)
+    return _normalize_plain_step(raw)
 
+
+def _normalize_loop_step(raw: Dict[str, Any], *, _depth: int) -> Dict[str, Any]:
+    times = parse_loop_count(raw.get("loop"))
+    caption = str(raw.get("caption", raw.get("say", "")) or "")
+    inner_raw = raw.get("steps")
+    if inner_raw is not None:
+        if not isinstance(inner_raw, list):
+            raise ValueError("loop steps must be a list")
+        inner = [normalize_step(step, _depth=_depth + 1) for step in inner_raw]
+        pause = raw.get("pause", raw.get("wait"))
+        loop_pause = None if pause is None else float(pause)
+    else:
+        body = {key: value for key, value in raw.items() if key != "loop"}
+        playable = any(
+            body.get(key) for key in ("type", "text", "keys", "paste")
+        )
+        if not playable:
+            raise ValueError("loop: add steps: or type: (a command to repeat)")
+        inner = [normalize_step(body, _depth=_depth + 1)]
+        loop_pause = None
+    return _make_loop_step(times, inner, caption=caption, pause=loop_pause)
+
+
+def _normalize_plain_step(raw: Dict[str, Any]) -> Dict[str, Any]:
     type_text = raw.get("type", raw.get("text", "")) or ""
     if not isinstance(type_text, str):
         type_text = str(type_text)
@@ -297,31 +394,31 @@ async def play_demo(app: Any, scenario: Dict[str, Any], speed: float = 1.0, quit
     type_delay = float(scenario.get("type_delay", DEFAULTS["type_delay"]))
     default_pause = float(scenario.get("pause", DEFAULTS["pause"]))
     command_timeout = float(scenario.get("command_timeout", DEFAULTS["command_timeout"]))
-    steps: List[Dict[str, Any]] = list(scenario.get("steps") or [])
+    steps = [_ensure_step(step) for step in (scenario.get("steps") or [])]
+    if scenario.get("loop") not in (None, False):
+        steps = [
+            _make_loop_step(
+                parse_loop_count(scenario["loop"]),
+                steps,
+                caption=title,
+            )
+        ]
 
     app._demo_active = True
     app.sub_title = f"DEMO · {title} · Esc stops"
     try:
         _reset_demo_tags(app, collect_reset_tags(scenario))
         await asyncio.sleep(_delay(start_pause, speed))
-        for index, step in enumerate(steps, start=1):
-            if not getattr(app, "_demo_active", False):
-                return
-            caption = step.get("caption") or f"step {index}/{len(steps)}"
-            app.sub_title = f"DEMO · {caption} · Esc stops"
-            step_delay = step.get("type_delay")
-            delay = type_delay if step_delay is None else float(step_delay)
-            await _play_step(
-                app,
-                step,
-                type_delay=_delay(delay, speed),
-                command_timeout=command_timeout,
-            )
-            app._demo_pressing = False
-            if not getattr(app, "_demo_active", False):
-                return
-            pause = default_pause if step.get("pause") is None else float(step["pause"])
-            await asyncio.sleep(_delay(pause, speed))
+        await _play_steps_sequence(
+            app,
+            steps,
+            type_delay=type_delay,
+            default_pause=default_pause,
+            command_timeout=command_timeout,
+            speed=speed,
+        )
+        if not getattr(app, "_demo_active", False):
+            return
         app.sub_title = "Demo finished. You can type now."
         if quit_when_done or scenario.get("quit"):
             await asyncio.sleep(_delay(1.2, speed))
@@ -334,6 +431,104 @@ async def play_demo(app: Any, scenario: Dict[str, Any], speed: float = 1.0, quit
         app.sub_title = f"Demo error: {exc}"
     finally:
         app._demo_active = False
+
+
+def _ensure_step(raw: Any) -> Dict[str, Any]:
+    """Normalize a step unless it is already a loop dict from ``normalize_step``."""
+    if isinstance(raw, dict) and raw.get("kind") == KIND_LOOP:
+        inner = [_ensure_step(step) for step in (raw.get("steps") or [])]
+        prepared = dict(raw)
+        prepared["steps"] = inner
+        return prepared
+    return normalize_step(raw)
+
+
+def _loop_total_label(times: Optional[int]) -> str:
+    return "∞" if times is None else str(times)
+
+
+async def _play_steps_sequence(
+    app: Any,
+    steps: List[Dict[str, Any]],
+    *,
+    type_delay: float,
+    default_pause: float,
+    command_timeout: float,
+    speed: float,
+    banner: str = "",
+) -> None:
+    total = len(steps)
+    for index, step in enumerate(steps, start=1):
+        if not getattr(app, "_demo_active", False):
+            return
+        if step.get("kind") == KIND_LOOP:
+            await _play_loop_step(
+                app,
+                step,
+                type_delay=type_delay,
+                default_pause=default_pause,
+                command_timeout=command_timeout,
+                speed=speed,
+            )
+            continue
+        caption = step.get("caption") or f"step {index}/{total}"
+        if banner:
+            caption = f"{banner} · {caption}"
+        app.sub_title = f"DEMO · {caption} · Esc stops"
+        step_delay = step.get("type_delay")
+        delay = type_delay if step_delay is None else float(step_delay)
+        await _play_step(
+            app,
+            step,
+            type_delay=_delay(delay, speed),
+            command_timeout=command_timeout,
+        )
+        app._demo_pressing = False
+        if not getattr(app, "_demo_active", False):
+            return
+        pause = default_pause if step.get("pause") is None else float(step["pause"])
+        await asyncio.sleep(_delay(pause, speed))
+
+
+async def _play_loop_step(
+    app: Any,
+    step: Dict[str, Any],
+    *,
+    type_delay: float,
+    default_pause: float,
+    command_timeout: float,
+    speed: float,
+) -> None:
+    times = step.get("times")
+    inner = list(step.get("steps") or [])
+    if not inner:
+        return
+    label = step.get("caption") or "loop"
+    total = _loop_total_label(times)
+    iteration = 0
+    while getattr(app, "_demo_active", False):
+        iteration += 1
+        if times is not None and iteration > times:
+            return
+        banner = f"{label} {iteration}/{total}"
+        app.sub_title = f"DEMO · {banner} · Esc stops"
+        await _play_steps_sequence(
+            app,
+            inner,
+            type_delay=type_delay,
+            default_pause=default_pause,
+            command_timeout=command_timeout,
+            speed=speed,
+            banner=banner,
+        )
+        if not getattr(app, "_demo_active", False):
+            return
+        if times is not None and iteration >= times:
+            return
+        extra = step.get("pause")
+        if extra is None:
+            extra = 0.0 if times is not None else 0.05
+        await asyncio.sleep(_delay(max(float(extra), 0.0), speed))
 
 
 async def _play_step(

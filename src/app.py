@@ -1387,7 +1387,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.25"
+    VERSION = "v1.26"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -3446,7 +3446,8 @@ class CommandRunner(App):
   python3 app.py --demo              - Play bundled short tour (Esc stops)
   python3 app.py --demo full --demo-quit
   python3 app.py --demo path.yml --demo-speed 1.5
-  Scenario YAML: src/demos/*.yml (type / keys / wait_command). Manual script: DEMO.md
+  Scenario YAML: src/demos/*.yml (type / keys / wait_command / loop). Manual script: DEMO.md
+  loop: true / loop: N  - Repeat steps (forever or N times). Esc stops. Also a step: loop: 10
   :playbook [file.yml]  - Dump this session's typed lines as YAML; --demo that file
   :playbook -           - Preview in the journal.  :playbook clear — reset the log
   Keys (Tab/F5) and mouse are not recorded; edit the YAML if the tour needs them.
