@@ -1,6 +1,7 @@
 # Maximum number of lines to keep in the output buffer.
 max_lines: 100000
 history_lines: 20
+history_keep: 500   # recent history stays a sequence; older duplicates are dropped. 0 = off. :h compact
 database_tags_file: mytags.db
 backup_dir: backups
 
@@ -15,3 +16,6 @@ terminal_mouse: true
 # Цветовая тема TUI. `d` переключает textual-dark / textual-light и сохраняет сюда.
 # Другие имена: :theme  (nord, dracula, gruvbox, catppuccin-mocha, …)
 theme: textual-dark
+
+# Сверять VERSION с GitHub main при старте. :update проверяет всегда.
+check_updates: true

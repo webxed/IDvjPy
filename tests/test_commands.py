@@ -11,7 +11,7 @@ async def test_app_starts_with_input_focused(isolated_home):
         assert input_widget(app).has_focus
         welcome = " ".join(block.text_content for block in app.query(InfoBlock))
         assert "IDvjPy_term" in welcome
-        assert "v1.24" in welcome
+        assert CommandRunner.VERSION in welcome
         assert ":?" in welcome
         assert "#tag cmd" in welcome
         assert "Define your variables" in welcome
@@ -385,6 +385,113 @@ def test_history_concurrent_appends(isolated_home):
     expected = {f"w{w}-{i}" for w in range(workers) for i in range(each)}
     assert set(lines) == expected
     assert len(lines) == workers * each
+
+
+def test_compact_history_lines_keeps_recent_sequence():
+    from app import compact_history_lines
+
+    lines = [
+        "ls",
+        "cd /a",
+        "ls",
+        "echo old",
+        "ls",
+        "echo y",
+        "echo y",
+    ]
+    assert compact_history_lines(lines, keep=3) == [
+        "cd /a",
+        "echo old",
+        "ls",
+        "echo y",
+        "echo y",
+    ]
+    assert compact_history_lines(lines, keep=500) == lines
+    assert compact_history_lines(lines, keep=0) == lines
+    assert compact_history_lines(["  a  ", "", "a", "b"], keep=1) == ["a", "b"]
+
+
+def test_compact_history_file_respects_hysteresis(isolated_home):
+    from app import compact_history_file, read_history_file_lines
+
+    path = str(isolated_home / "history.txt")
+    (isolated_home / "history.txt").write_text(
+        "a\na\nb\nc\nd\n",
+        encoding="utf-8",
+    )
+    before, after, changed = compact_history_file(path, keep=3, force=False, hysteresis=2)
+    assert changed is False
+    assert before == after == 5
+    lines, _ = read_history_file_lines(path)
+    assert lines == ["a", "a", "b", "c", "d"]
+
+    before, after, changed = compact_history_file(path, keep=3, force=True)
+    assert changed is True
+    assert before == 5
+    lines, _ = read_history_file_lines(path)
+    assert lines == ["a", "b", "c", "d"]
+    assert after == 4
+
+
+async def test_colon_h_compact_uniques_old_keeps_tail(isolated_home):
+    path = isolated_home / CommandRunner.FILE_HISTORY
+    path.write_text(
+        "ls-old\n"
+        "cd-old\n"
+        "ls-old\n"
+        "echo-old\n"
+        "ls-tail\n"
+        "echo-tail\n"
+        "echo-tail\n",
+        encoding="utf-8",
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        app.history_keep = 3
+        await submit(pilot, ":h compact")
+        text = last_info(app).text_content
+        assert "Compacted" in text
+        assert "6 lines" in text
+        lines = path.read_text(encoding="utf-8").splitlines()
+        assert lines == ["cd-old", "ls-old", "echo-old", "ls-tail", "echo-tail", "echo-tail"]
+        await submit(pilot, ":h compact")
+        assert "already compact" in last_info(app).text_content
+
+
+async def test_history_auto_compact_on_start_when_over_threshold(isolated_home):
+    settings = isolated_home / "settings.yml"
+    settings.write_text(
+        settings.read_text(encoding="utf-8") + "history_keep: 3\n",
+        encoding="utf-8",
+    )
+    path = isolated_home / CommandRunner.FILE_HISTORY
+    path.write_text(
+        "\n".join(["dup"] * 5 + ["t1", "t2", "t3"]) + "\n",
+        encoding="utf-8",
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        assert app.history_keep == 3
+        lines = path.read_text(encoding="utf-8").splitlines()
+        assert lines == ["dup", "t1", "t2", "t3"]
+        assert "Compacted" in " ".join(block.text_content for block in app.query(InfoBlock))
+
+
+async def test_history_auto_compact_skips_under_threshold(isolated_home):
+    settings = isolated_home / "settings.yml"
+    settings.write_text(
+        settings.read_text(encoding="utf-8") + "history_keep: 3\n",
+        encoding="utf-8",
+    )
+    path = isolated_home / CommandRunner.FILE_HISTORY
+    original = "dup\ndup\na\nb\nc\n"
+    path.write_text(original, encoding="utf-8")
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        assert path.read_text(encoding="utf-8") == original
+        assert app.history_keep == 3
 
 
 async def test_variable_assignment_and_substitution(isolated_home):

@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.24
+# План тестирования IDvjPy_term v1.25
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -262,6 +262,7 @@ PageUp / PageDown — прокрутка журнала, активен види
 echo hist-line
 :h
 :h /hist
+:h compact
 :w test_output.txt
 :?
 :i
@@ -269,11 +270,11 @@ echo hist-line
 :c
 ```
 
-**Ожидание:** `:h` показывает `hist-line` в одном блоке; `:h /hist` — уникальные совпадения в подсказках (свежие сверху); `test_output.txt` создан; `:?` — help (есть `:md`); `:i` — help ingress; `:md` — модалка Markdown (Esc / `q` закрывает, колесо не крутит журнал); `:c` — `All blocks cleared.`
+**Ожидание:** `:h` показывает `hist-line` в одном блоке; `:h /hist` — уникальные совпадения в подсказках (свежие сверху); `:h compact` ужимает старые повторы, хвост `history_keep` не трогает; `test_output.txt` создан; `:?` — help (есть `:md`); `:i` — help ingress; `:md` — модалка Markdown (Esc / `q` закрывает, колесо не крутит журнал); `:c` — `All blocks cleared.`
 
 `:q` — выход (в конце сессии). `:cd`, `:r`, `:theme` — секция 25.
 
-Автотесты: `test_s12_colon_commands`, `test_colon_h_search_newest_first`, `test_colon_md_opens_formatted_handbook`, `test_md_viewer_wheel_does_not_scroll_journal`.
+Автотесты: `test_s12_colon_commands`, `test_colon_h_search_newest_first`, `test_colon_h_compact_uniques_old_keeps_tail`, `test_colon_md_opens_formatted_handbook`, `test_md_viewer_wheel_does_not_scroll_journal`.
 
 ---
 
@@ -567,6 +568,18 @@ echo hello-play
 
 ---
 
+## Секция 27: Проверка обновлений (`:update`)
+
+```
+:update
+```
+
+**Ожидание:** сверка с GitHub `main` (`src/app.py` → `VERSION`). Если на GitHub новее — `Update available` и `git pull`. Если совпадает — `Up to date`. Старт с `check_updates: true` пишет в журнал только при наличии обновления. Без сети `:update` показывает ошибку, не падает.
+
+Автотест: `test_colon_update_reports_newer_remote`.
+
+---
+
 ## Критерии успеха
 
 - Команды сохраняются с корректным `tid`; `-`/`=`/`+` внутри текста не ломают парсер
@@ -576,7 +589,7 @@ echo hello-play
 - `!! tag[tid]` работает сразу; `!! 1 2` — из кэша (старт или `??`)
 - `| cmd` берёт stdout сфокусированного/последнего блока
 - `$VAR` подставляется; `$JSON` после Enter в viewer; `$OUT` — последняя строка блока по запросу
-- `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:r` `:theme` `:playbook` работают
+- `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:r` `:theme` `:playbook` `:update` работают
 - Soft-delete `#tag-` / `#tag-tid`; handbook hide `#name--` / `#name!!`; `# command` паркуется без запуска
 - Пустая БД: каталог сверху; клик `--seed` → ввод; `.md` / `:md` — Markdown-viewer (колесо не крутит журнал)
 - Большой вывод не вешает UI (обрезка + полный `raw_stdout`)
@@ -596,6 +609,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.24  
+**Версия приложения**: v1.25  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`  
 **Дата**: 2026-08-21

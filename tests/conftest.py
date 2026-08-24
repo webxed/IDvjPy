@@ -22,6 +22,7 @@ history_lines: 20
 database_tags_file: test_history.db
 command_timeout: 5
 terminal_mouse: false
+check_updates: false
 """
 
 

@@ -100,6 +100,11 @@ try:
     )
     from demo import dump_playbook_yaml, load_demo_for_cli, play_demo, session_to_playbook
     from md_viewer import HandbookMarkdownScreen, handbook_md_path
+    from update_check import (
+        KIND_AVAILABLE,
+        fetch_remote_version,
+        format_update_status,
+    )
 except ImportError as e:
     print(f"Error: Missing dependency - {e}", file=sys.stderr)
     print("Please install required dependencies:", file=sys.stderr)
@@ -280,6 +285,85 @@ def append_history_file_line(
                     release_file_lock(f)
     except OSError:
         return False
+
+
+DEFAULT_HISTORY_KEEP = 500
+HISTORY_COMPACT_HYSTERESIS = 2
+
+
+def compact_history_lines(lines: List[str], keep: int) -> List[str]:
+    """Unique the old prefix; keep the last ``keep`` lines verbatim.
+
+    In the prefix, last occurrence wins. A line that already appears in the
+    recent tail is dropped from the prefix so Up/Down does not repeat it.
+    ``keep <= 0`` leaves the list unchanged (compaction disabled).
+    """
+    cleaned = [str(line).strip() for line in lines if str(line).strip()]
+    if keep <= 0 or len(cleaned) <= keep:
+        return cleaned
+    tail = cleaned[-keep:]
+    prefix = cleaned[:-keep]
+    in_tail = set(tail)
+    seen = set()
+    kept_rev: List[str] = []
+    for line in reversed(prefix):
+        if line in in_tail or line in seen:
+            continue
+        seen.add(line)
+        kept_rev.append(line)
+    return list(reversed(kept_rev)) + tail
+
+
+def compact_history_file(
+    path: str,
+    keep: int,
+    encoding: str = "utf-8",
+    lock_timeout: int = 5,
+    *,
+    force: bool = False,
+    hysteresis: int = HISTORY_COMPACT_HYSTERESIS,
+) -> Tuple[int, int, bool]:
+    """Rewrite history.txt under an exclusive lock.
+
+    Auto mode (``force=False``) runs only when ``len(lines) > keep * hysteresis``.
+    Returns ``(before, after, changed)``. On lock/IO failure: ``(0, 0, False)``.
+    """
+    try:
+        f = open(path, "r+", encoding=encoding)
+    except FileNotFoundError:
+        return 0, 0, False
+    except OSError:
+        return 0, 0, False
+    with f:
+        locked = False
+        try:
+            acquire_file_lock(f, lock_timeout)
+            locked = True
+        except (FileLockTimeoutError, IOError):
+            return 0, 0, False
+        try:
+            lines = [line.strip() for line in f if line.strip()]
+            before = len(lines)
+            if keep <= 0:
+                return before, before, False
+            if not force and before <= keep * max(1, int(hysteresis)):
+                return before, before, False
+            compacted = compact_history_lines(lines, keep)
+            after = len(compacted)
+            if compacted == lines:
+                return before, after, False
+            f.seek(0)
+            f.truncate()
+            f.write("".join(f"{line}\n" for line in compacted))
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except OSError:
+                pass
+            return before, after, True
+        finally:
+            if locked:
+                release_file_lock(f)
 
 
 class LineNavigable:
@@ -1303,7 +1387,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.24"
+    VERSION = "v1.25"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1345,6 +1429,7 @@ class CommandRunner(App):
     ID_INPUT = "command-input"
     ID_RESULTS_CONTAINER = "results-container"
     KEY_HISTORY_LINES = "history_lines"
+    KEY_HISTORY_KEEP = "history_keep"
     HISTORY_SEARCH_LIMIT = 50
     ENCODING = "utf-8"
     TIMER_DELAY = 2
@@ -1383,6 +1468,8 @@ class CommandRunner(App):
     CMD_THEME = "theme"
     CMD_MD = "md"
     CMD_PLAYBOOK = "playbook"
+    CMD_UPDATE = "update"
+    KEY_CHECK_UPDATES = "check_updates"
     KEY_THEME = "theme"
     DEFAULT_THEME = "textual-dark"
     THEME_ALIASES = {
@@ -1417,6 +1504,8 @@ class CommandRunner(App):
         # Словарь для хранения результатов поиска {ID: Command}
         self.last_query_results: Dict[int, str] = {}
         self.history_lines: int = 20
+        self.history_keep: int = DEFAULT_HISTORY_KEEP
+        self.check_updates: bool = False
         self.db_file = self.FILE_DATABASE
         self.active_pipe_source: Optional[CommandBlock] = None
         self.simple_output_mode: bool = False
@@ -1849,8 +1938,15 @@ class CommandRunner(App):
                 settings = yaml.safe_load(f)
                 if settings:
                     self.history_lines = settings.get(self.KEY_HISTORY_LINES, 20)
+                    try:
+                        self.history_keep = int(
+                            settings.get(self.KEY_HISTORY_KEEP, DEFAULT_HISTORY_KEEP)
+                        )
+                    except (TypeError, ValueError):
+                        self.history_keep = DEFAULT_HISTORY_KEEP
                     self.COMMAND_TIMEOUT = settings.get("command_timeout", 10)
                     self.db_file = settings.get("database_tags_file", self.FILE_DATABASE)
+                    self.check_updates = bool(settings.get(self.KEY_CHECK_UPDATES, True))
                     self._apply_theme_name(settings.get(self.KEY_THEME))
         except (FileNotFoundError, KeyError, yaml.YAMLError):
             pass
@@ -1877,6 +1973,13 @@ class CommandRunner(App):
                     pass  # Ошибка миграции не критична
 
         self._migrate_legacy_history()
+        compacted = self._maybe_compact_history(force=False)
+        if compacted and compacted[2]:
+            before, after, _ = compacted
+            self.add_block(InfoBlock(
+                f"Compacted {self.FILE_HISTORY}: {before} → {after} lines "
+                f"(keep {self.history_keep})"
+            ))
 
         # 3. Загрузка переменных из файла .bashrc_term
         self.load_bashrc()
@@ -1970,6 +2073,44 @@ class CommandRunner(App):
         except OSError:
             pass
 
+    def _maybe_compact_history(self, *, force: bool = False) -> Optional[Tuple[int, int, bool]]:
+        """Shrink old duplicate lines in history_<instance>.txt. None if the file is missing."""
+        if not os.path.exists(self.FILE_HISTORY):
+            return None
+        before, after, changed = compact_history_file(
+            self.FILE_HISTORY,
+            self.history_keep,
+            encoding=self.ENCODING,
+            lock_timeout=self.FILE_LOCK_TIMEOUT,
+            force=force,
+        )
+        if changed:
+            self._history_file_stat = None
+        return before, after, changed
+
+    def _handle_history_compact(self) -> None:
+        """`:h compact` — unique old history; keep the recent tail intact."""
+        if self.history_keep <= 0:
+            self.add_block(InfoBlock(
+                "History compaction is off (history_keep: 0 in settings.yml)."
+            ))
+            return
+        result = self._maybe_compact_history(force=True)
+        if result is None:
+            self.add_block(InfoBlock(f"{self.FILE_HISTORY} not found."))
+            return
+        before, after, changed = result
+        if not changed:
+            self.add_block(InfoBlock(
+                f"{self.FILE_HISTORY}: already compact ({before} lines, "
+                f"keep {self.history_keep})."
+            ))
+            return
+        self.add_block(InfoBlock(
+            f"Compacted {self.FILE_HISTORY}: {before} → {after} lines "
+            f"(kept last {self.history_keep} verbatim)."
+        ))
+
     def _parse_bashrc_assignment(self, line: str) -> Optional[tuple]:
         return parse_bashrc_assignment(line)
 
@@ -2062,6 +2203,7 @@ class CommandRunner(App):
         self._schedule_journal_home()
         self._request_shift_enter_encoding()
         self._start_demo_if_requested()
+        self._start_update_check(always_report=False)
 
     def _start_demo_if_requested(self) -> None:
         """Запускает YAML-тур после сплэша, если передан ``--demo`` / demo=."""
@@ -2673,7 +2815,7 @@ class CommandRunner(App):
 
         if not (self._demo_active or self._demo_pressing):
             colon = user_input[1:].split()[:1] if user_input.startswith(":") else []
-            if not colon or colon[0] not in {self.CMD_PLAYBOOK, self.CMD_QUIT}:
+            if not colon or colon[0] not in {self.CMD_PLAYBOOK, self.CMD_QUIT, self.CMD_UPDATE}:
                 self._playbook_log.append(user_input)
 
         self.log_to_history(user_input)
@@ -2806,7 +2948,9 @@ class CommandRunner(App):
                 self.add_block(InfoBlock("Error: Filename required for :w command."))
         elif command == self.CMD_HISTORY:
             rest = " ".join(parts[1:]) if len(parts) > 1 else ""
-            if rest.startswith("/") and rest[1:].strip():
+            if rest.strip().lower() == "compact":
+                self._handle_history_compact()
+            elif rest.startswith("/") and rest[1:].strip():
                 self._show_history_search(rest[1:])
             else:
                 try:
@@ -2861,6 +3005,8 @@ class CommandRunner(App):
             self.action_open_handbook_md(" ".join(parts[1:]))
         elif command == self.CMD_PLAYBOOK:
             self._handle_playbook_command(parts[1:])
+        elif command == self.CMD_UPDATE:
+            self._handle_update_command()
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
 
@@ -3036,6 +3182,44 @@ class CommandRunner(App):
             f"Wrote {n} step(s) to {path}. Replay: python3 app.py --demo {path}"
         ))
 
+    def _start_update_check(self, *, always_report: bool) -> None:
+        """Background GitHub version check. Startup only notifies if main is newer."""
+        if not always_report:
+            if not self.check_updates or self._demo_scenario:
+                return
+        thread = threading.Thread(
+            target=self._update_check_worker,
+            args=(always_report,),
+            daemon=True,
+        )
+        thread.start()
+
+    def _handle_update_command(self) -> None:
+        self.sub_title = "Checking GitHub…"
+        self.set_timer(3, self.clear_subtitle)
+        self._start_update_check(always_report=True)
+
+    def _update_check_worker(self, always_report: bool) -> None:
+        try:
+            remote = fetch_remote_version(
+                timeout=5.0,
+                user_agent=f"IDvjPy-term/{self.VERSION}",
+            )
+            text, kind = format_update_status(self.VERSION, remote)
+        except Exception as exc:
+            if not always_report:
+                return
+            text = f"Could not check updates: {exc}"
+            kind = "error"
+        if always_report or kind == KIND_AVAILABLE:
+            try:
+                self.call_from_thread(self._show_update_result, text)
+            except Exception:
+                pass
+
+    def _show_update_result(self, text: str) -> None:
+        self.add_block(InfoBlock(text))
+
     def _export_tag(self, args: List[str]) -> None:
         if not args:
             self.add_block(InfoBlock("Usage: :export <tag> [file.json]"))
@@ -3167,6 +3351,7 @@ class CommandRunner(App):
   :w <file>   - Write output to file
   :h [N]      - Last N lines of history_<instance>.txt (default: 20)
   :h /text    - Search that file in completions (unique lines, newest first); Enter dumps a block
+  :h compact  - Unique old history; keep the last history_keep lines as a sequence
   :c          - Clear all output blocks
   :json       - Open JSON viewer (from last block)
   :json <file>- Open JSON file in viewer
@@ -3180,6 +3365,7 @@ class CommandRunner(App):
   :theme [name] - Show or set TUI theme (saved in settings.yml)
   :playbook [file] - Write this session's commands as a --demo YAML (default playbook.yml)
   :playbook - / clear - Preview YAML in the journal / forget recorded lines
+  :update     - Compare this VERSION with GitHub main (webxed/IDvjPy)
 
 [bold]Kubernetes Commands (prefix :i)[/bold]
   :i list             - List all ingresses

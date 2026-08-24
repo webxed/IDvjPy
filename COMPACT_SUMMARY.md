@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.24**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.25**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -26,7 +26,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` |
+| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:update` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -70,6 +70,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 ### `:h` history
 - `:h [N]` shows the last N lines of `history_<instance>.txt` as **one** multiline `InfoBlock` (line-cursor can copy/append individual commands). Empty file → one info message.
 - `:h /text` greps that file in the completion list (case-insensitive, newest first, duplicate lines merged). Esc then Enter dumps a journal block (`shown/total`, cap 50). Empty `:h /` still tails the file like `:h`.
+- `:h compact` uniques the old prefix (last occurrence wins; lines also present in the tail are dropped from the prefix). The last `history_keep` lines (default 500, `settings.yml`) stay a verbatim sequence. Startup does this only when the file is longer than `2 × history_keep`. `history_keep: 0` disables.
 - `↑`/`↓` in the input walk the instance history file plus session commands. Typed text freezes as a needle; empty input walks everything. Down past the newest line restores the draft.
 - `--instance-name=user1` uses `history_user1.txt` (and `.bashrc_term_user1`). Missing instance file is filled once from legacy `history.txt`.
 
@@ -127,12 +128,13 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.6 (app v1.24) |
+| `test_cmd.md` | Manual plan v1.6 (app v1.25) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
-| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog, `:md`, click `--seed` insert |
+| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog, `:md`, click `--seed` insert, history compact |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
 | `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
+| `tests/test_update_check.py` | parse GitHub `VERSION`, `:update` |
 | `tests/test_seed_*.py` | linux / k8s chains / git / ops handbooks; empty-DB catalog text |
 
 Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then Enter.
@@ -144,23 +146,30 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | File | Purpose |
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
-| `src/app.py` | TUI (`CommandRunner`), v1.24 |
+| `src/app.py` | TUI (`CommandRunner`), v1.25 |
 | `src/database_v2.py` | SQLite tagged history |
 | `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
 | `src/seed_catalog.py` | Empty-DB welcome catalog (click `--seed` / `.md`) |
 | `src/md_viewer.py` | Modal Markdown viewer (`:md`, welcome links) |
+| `src/update_check.py` | Compare `VERSION` with GitHub main (`:update`) |
 | `src/json_viewer.py` | JSON tree modal |
 | `src/ingress_analyzer.py` | `:i` k8s |
 | `src/command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
 | `src/seed_*.py` | Handbook seeds (linux, k8s, git, ops, …) |
 | `src/app.css` | Styles (JSON viewer, line-nav border, block focus) |
-| `settings.yml` | DB path, timeout, `terminal_mouse`, `theme` (cwd) |
+| `settings.yml` | DB path, timeout, `terminal_mouse`, `theme`, `check_updates`, `history_keep` (cwd) |
 | `K8S_CHAINS.md` | k8s investigation overview |
 | `SEED_*_COMMANDS.md` | Canonical tids per handbook |
 | `DATABASE.md` | How commands are read from SQLite |
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.25
+
+- **History compact:** `:h compact` uniques old `history_*.txt` lines; the last `history_keep` lines stay a sequence. Startup compact only if the file is longer than `2 × history_keep`.
+- **`:update`:** compare local `VERSION` with `src/app.py` on GitHub `main`. Startup notifies only when remote is newer (`check_updates: true`).
+- **Versioning:** bump the minor `CommandRunner.VERSION` (`v1.N`) on every commit.
 
 ## v1.24
 

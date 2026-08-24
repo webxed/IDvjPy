@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.24 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.25 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -98,6 +98,7 @@ python3 app.py --demo full --demo-quit
 - `:w file` — записать вывод в файл
 - `:h [N]` — последние N строк `history_<instance>.txt` одним блоком (по умолчанию из `settings.yml`; строки можно брать построчным режимом)
 - `:h /text` — поиск по этому файлу в подсказках (без учёта регистра, свежие сверху, одинаковые строки один раз). Esc+Enter — тем же поиском в журнал
+- `:h compact` — ужать старую историю (уникальные строки); последние `history_keep` строк не трогает. На старте — только если файл длиннее `2 × history_keep`
 - `:c` — очистить блоки журнала
 - `:json` / `:json <file>` — JSON viewer (последний блок или файл)
 - `:md <file.md>` — справочник Markdown с форматированием (клик по имени в приветствии; Esc закрывает)
@@ -107,6 +108,7 @@ python3 app.py --demo full --demo-quit
 - `:/text` / `:g` / `:n` / `:N` — поиск по строкам журнала (с блока `/` открывает `:/`; `n`/`N` — следующее / предыдущее)
 - `:export tag [file]` / `:import file` — один тег в JSON и обратно
 - `:playbook [file.yml]` — записать команды этой сессии (Enter) как YAML для `--demo` (по умолчанию `playbook.yml`). `:playbook -` — превью в журнале; `:playbook clear` — забыть записанное. Клавиши (Tab/F5) и мышь не пишутся.
+- `:update` — сверить `VERSION` с GitHub [`webxed/IDvjPy`](https://github.com/webxed/IDvjPy) `main`. При старте то же самое, если `check_updates: true` (пишет в журнал только если на GitHub новее).
 - `:theme [name]` — тема TUI (`dark` / `light` / `nord` / …); пишется в `settings.yml`. Клавиша `d` — dark/light
 - `:?` — эта справка внутри TUI
 
@@ -169,8 +171,10 @@ max_lines: 100000
 history_lines: 20
 database_tags_file: mytags.db
 command_timeout: 10          # 0 = без таймаута
+history_keep: 500            # хвост истории как лента; старше — без повторов. 0 = не сжимать. :h compact
 terminal_mouse: true         # клик выделяет блок; false — выделение текста ОС
 theme: textual-dark          # `d` / `:theme`; сохраняется при смене
+check_updates: true          # старт: сверка VERSION с GitHub main; :update всегда
 ```
 
 Переменные читаются из `.bashrc_term_<instance>` (приоритет) и `.bashrc_term` (дополняет). Формат: `export VAR=val` или `VAR=val`. Если файлов нет, при старте копируется [`src/.bashrc_term.example`](src/.bashrc_term.example).
