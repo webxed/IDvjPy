@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.26**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.27**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -26,7 +26,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:update` |
+| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:session` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:update` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -128,9 +128,9 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.6 (app v1.26) |
+| `test_cmd.md` | Manual plan v1.6 (app v1.27) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
-| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog, `:md`, click `--seed` insert, history compact |
+| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog, `:md`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
 | `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
@@ -147,7 +147,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | File | Purpose |
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
-| `src/app.py` | TUI (`CommandRunner`), v1.26 |
+| `src/app.py` | TUI (`CommandRunner`), v1.27 |
 | `src/database_v2.py` | SQLite tagged history |
 | `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
 | `src/seed_catalog.py` | Empty-DB welcome catalog (click `--seed` / `.md`) |
@@ -165,6 +165,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.27
+
+- **`:session`:** show the current instance (`:session`) or switch/create one (`:session ops`). Per-instance `history_*.txt` and `.bashrc_term_*`; tags DB stays shared. Journal stays; playbook log clears.
 
 ## v1.26
 

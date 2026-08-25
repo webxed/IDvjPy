@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.26
+# План тестирования IDvjPy_term v1.27
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -521,7 +521,7 @@ $OUT=nope
 
 **Ожидание:** `# ` + пробел — строка в журнале и в `history_default.txt`, **без** запуска и без тега. `#logs echo …` — обычный save. Up поднимает parked-строку.
 
-`python3 app.py --instance-name=user1` пишет `history_user1.txt` и `.bashrc_term_user1`. Старый `history.txt` копируется один раз, если instance-файла ещё нет.
+`python3 app.py --instance-name=user1` пишет `history_user1.txt` и `.bashrc_term_user1`. Старый `history.txt` копируется один раз, если instance-файла ещё нет. В уже запущенном TUI то же делает `:session user1`.
 
 Автотесты: `test_hash_space_parks_in_history_without_running`, `test_default_instance_writes_history_default`, `test_instance_name_uses_separate_history_file`, `test_migrates_legacy_history_txt`.
 
@@ -607,6 +607,23 @@ steps:
 
 ---
 
+## Секция 29: Сессии на лету (`:session`)
+
+```
+:session
+$ALPHA=from-default
+:session ops
+:session
+:session default
+:session ../oops
+```
+
+**Ожидание:** `:session` показывает текущий инстанс и список. `:session ops` создаёт `.bashrc_term_ops` / пишет в `history_ops.txt`; `$ALPHA` из default не течёт в ops. Журнал не очищается, БД тегов общая. Плейбук-лог сбрасывается. Неверное имя — `Usage:`. Демо (`--demo`) — нельзя переключить, пока тур идёт.
+
+Автотест: `test_colon_session_creates_and_switches`.
+
+---
+
 ## Критерии успеха
 
 - Команды сохраняются с корректным `tid`; `-`/`=`/`+` внутри текста не ломают парсер
@@ -616,7 +633,7 @@ steps:
 - `!! tag[tid]` работает сразу; `!! 1 2` — из кэша (старт или `??`)
 - `| cmd` берёт stdout сфокусированного/последнего блока
 - `$VAR` подставляется; `$JSON` после Enter в viewer; `$OUT` — последняя строка блока по запросу
-- `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:r` `:theme` `:playbook` `:update` работают
+- `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:session` `:r` `:theme` `:playbook` `:update` работают
 - YAML `--demo` / `:playbook`: `loop: true` / `loop: N` крутит шаги, Esc останавливает
 - Soft-delete `#tag-` / `#tag-tid`; handbook hide `#name--` / `#name!!`; `# command` паркуется без запуска
 - Пустая БД: каталог сверху; клик `--seed` → ввод; `.md` / `:md` — Markdown-viewer (колесо не крутит журнал)
@@ -637,6 +654,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.26  
+**Версия приложения**: v1.27  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`  
-**Дата**: 2026-08-24
+**Дата**: 2026-08-25

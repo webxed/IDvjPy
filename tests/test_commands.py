@@ -321,6 +321,59 @@ async def test_instance_name_uses_separate_history_file(isolated_home, monkeypat
         assert "echo inst-only" not in shared
 
 
+async def test_colon_session_creates_and_switches(isolated_home):
+    """`:session NAME` creates files on the fly; env and history stay per instance."""
+    from app import apply_instance_name
+
+    try:
+        app = CommandRunner()
+        async with app.run_test(size=(120, 40)) as pilot:
+            await submit(pilot, ":session")
+            status = last_info(app).text_content
+            assert "Session: default" in status
+            assert "history_default.txt" in status
+            assert "Usage: :session NAME" in status
+
+            await submit(pilot, "$ALPHA=from-default")
+            await submit(pilot, "echo in-default")
+            await wait_command_done(app)
+
+            await submit(pilot, ":session ../oops")
+            assert "Usage: :session" in last_info(app).text_content
+
+            await submit(pilot, ":session ops")
+            switched = last_info(app).text_content
+            assert "Created session ops" in switched
+            assert app.instance_name == "ops"
+            assert app.FILE_HISTORY == "history_ops.txt"
+            assert app.FILE_BASHRC == ".bashrc_term_ops"
+            assert (isolated_home / ".bashrc_term_ops").is_file()
+            assert app.local_env.get("ALPHA") != "from-default"
+
+            await submit(pilot, "$BETA=from-ops")
+            await submit(pilot, "echo in-ops")
+            await wait_command_done(app)
+            ops_hist = (isolated_home / "history_ops.txt").read_text(encoding="utf-8")
+            assert "echo in-ops" in ops_hist
+            assert "echo in-default" not in ops_hist
+
+            await submit(pilot, ":session")
+            listed = last_info(app).text_content
+            assert "Session: ops" in listed
+            assert "ops" in listed and "default" in listed
+
+            await submit(pilot, ":session default")
+            assert "Switched to session default" in last_info(app).text_content
+            assert app.instance_name == "default"
+            assert app.local_env.get("ALPHA") == "from-default"
+            assert app.local_env.get("BETA") != "from-ops"
+            default_hist = (isolated_home / "history_default.txt").read_text(encoding="utf-8")
+            assert "echo in-default" in default_hist
+            assert "echo in-ops" not in default_hist
+    finally:
+        apply_instance_name("default")
+
+
 async def test_hash_space_parks_in_history_without_running(isolated_home):
     """`# command` — в journal и history_*, без запуска и без тега."""
     app = CommandRunner()

@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.26) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.27) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.26` → `v1.27`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.27` → `v1.28`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -85,7 +85,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble refs into the input line |
-| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:r`, `:/`, `:n`, `:N`, `:export`, `:md`, `:playbook`, `:update`) |
+| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:session`, `:r`, `:/`, `:n`, `:N`, `:export`, `:md`, `:playbook`, `:update`) |
 | `\| cmd` | Pipe stdout from the focused block, add to history |
 | `$OUT` | On demand: last line of focused/last block (not stored in `.bashrc_term`) |
 | `$VAR=val` | Set env in `.bashrc_term_<instance>` and the current session |
@@ -96,7 +96,7 @@ Aliases load from `~/.bashrc`. If the body contains `$1` / `$2` / `$@` / `$*`, a
 
 ### Key Behaviors
 
-1. **Shell history**: Up/Down in the input walk `history_<instance>.txt` (plus this session). Typed text filters matches; empty input walks all lines (newest at the end). `:h /text` lists unique matching lines in the completion dropdown (newest first). Legacy `history.txt` is copied once if the instance file is missing. `:h compact` uniques the old prefix; the last `history_keep` lines stay a sequence. Startup compact only if the file is longer than `2 × history_keep`.
+1. **Shell history**: Up/Down in the input walk `history_<instance>.txt` (plus this session). Typed text filters matches; empty input walks all lines (newest at the end). `:h /text` lists unique matching lines in the completion dropdown (newest first). Legacy `history.txt` is copied once if the instance file is missing. `:h compact` uniques the old prefix; the last `history_keep` lines stay a sequence. Startup compact only if the file is longer than `2 × history_keep`. `:session NAME` switches or creates an instance (history + `.bashrc_term_*`); the tags DB stays shared.
 2. **Journal**: PgUp/PgDn / arrows (when a block is focused) scroll the journal; the **visible** block becomes active (no jump to its first line). Click a block to focus it (`terminal_mouse: true`)
 3. **Tab** from the input focuses the last journal block (`:h` / `:?` included)
 4. **Focused block as pipe source**: `|` uses the focused block's stdout. `$OUT` is that block's last non-empty line, computed only when the command contains `$OUT` / `${OUT}`

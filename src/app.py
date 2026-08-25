@@ -11,6 +11,7 @@ Usage:
 import subprocess
 import sys
 import argparse
+import re
 
 # Parse command-line arguments BEFORE importing dependencies
 def parse_arguments():
@@ -55,6 +56,7 @@ Examples:
 # Default instance name. CLI --instance-name is applied only in __main__,
 # so the app module can be imported by tests without argparse fighting pytest.
 INSTANCE_NAME = "default"
+RE_INSTANCE_NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$")
 
 # Check dependencies before importing
 try:
@@ -1387,7 +1389,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.26"
+    VERSION = "v1.27"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1469,6 +1471,7 @@ class CommandRunner(App):
     CMD_MD = "md"
     CMD_PLAYBOOK = "playbook"
     CMD_UPDATE = "update"
+    CMD_SESSION = "session"
     KEY_CHECK_UPDATES = "check_updates"
     KEY_THEME = "theme"
     DEFAULT_THEME = "textual-dark"
@@ -1493,6 +1496,7 @@ class CommandRunner(App):
         self._demo_worker_started = False
         self.session_history: List[str] = []
         self._playbook_log: List[str] = []
+        self.instance_name: str = INSTANCE_NAME
         self.session_history_pos: int = 0
         self._history_walking: bool = False
         self._history_needle: str = ""
@@ -2815,7 +2819,9 @@ class CommandRunner(App):
 
         if not (self._demo_active or self._demo_pressing):
             colon = user_input[1:].split()[:1] if user_input.startswith(":") else []
-            if not colon or colon[0] not in {self.CMD_PLAYBOOK, self.CMD_QUIT, self.CMD_UPDATE}:
+            if not colon or colon[0] not in {
+                self.CMD_PLAYBOOK, self.CMD_QUIT, self.CMD_UPDATE, self.CMD_SESSION,
+            }:
                 self._playbook_log.append(user_input)
 
         self.log_to_history(user_input)
@@ -3007,6 +3013,8 @@ class CommandRunner(App):
             self._handle_playbook_command(parts[1:])
         elif command == self.CMD_UPDATE:
             self._handle_update_command()
+        elif command == self.CMD_SESSION:
+            self._handle_session_command(parts[1:])
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
 
@@ -3181,6 +3189,79 @@ class CommandRunner(App):
         self.add_block(InfoBlock(
             f"Wrote {n} step(s) to {path}. Replay: python3 app.py --demo {path}"
         ))
+
+    def _session_status_text(self) -> str:
+        name = getattr(self, "instance_name", INSTANCE_NAME) or INSTANCE_NAME
+        names = ", ".join(list_session_names())
+        return (
+            f"Session: {name}\n"
+            f"  {self.FILE_BASHRC}  {self.FILE_HISTORY}\n"
+            f"  Tags DB is shared ({self.db_file}).\n"
+            f"Sessions: {names}\n"
+            "Usage: :session NAME"
+        )
+
+    def _unload_session_env(self) -> None:
+        """Drop instance env so the next load_bashrc does not leak old $VAR."""
+        for key, value in list(self.local_env.items()):
+            if os.environ.get(key) == value:
+                os.environ.pop(key, None)
+        self.local_env.clear()
+
+    def _handle_session_command(self, args: List[str]) -> None:
+        """`:session` — show; `:session NAME` — switch or create."""
+        if not args:
+            self.add_block(InfoBlock(self._session_status_text()))
+            return
+        if len(args) > 1:
+            self.add_block(InfoBlock("Usage: :session [NAME]"))
+            return
+        self._switch_session(args[0])
+
+    def _switch_session(self, raw_name: str) -> None:
+        if self._demo_active or self._demo_pressing:
+            self.add_block(InfoBlock(
+                "Cannot change session while a demo is playing (Esc first)."
+            ))
+            return
+        name = validate_instance_name(raw_name)
+        if name is None:
+            self.add_block(InfoBlock(
+                "Usage: :session [NAME]  "
+                "NAME: letters, digits, _ - (no path, max 64)"
+            ))
+            return
+        current = getattr(self, "instance_name", INSTANCE_NAME) or INSTANCE_NAME
+        if name == current:
+            self.add_block(InfoBlock(self._session_status_text()))
+            return
+        created = (
+            not os.path.exists(history_file_for(name))
+            and not os.path.exists(bashrc_file_for(name))
+        )
+        self._unload_session_env()
+        apply_instance_name(name)
+        self.instance_name = name
+        self.session_history = []
+        self.session_history_pos = 0
+        self._playbook_log.clear()
+        self._reset_history_walk()
+        self._history_file_lines = []
+        self._history_file_stat = None
+        self.load_bashrc()
+        compacted = self._maybe_compact_history(force=False)
+        extra = ""
+        if compacted and compacted[2]:
+            before, after, _ = compacted
+            extra = f"\n  Compacted history: {before} → {after} lines"
+        verb = "Created" if created else "Switched to"
+        self.add_block(InfoBlock(
+            f"{verb} session {name}\n"
+            f"  {self.FILE_BASHRC}  {self.FILE_HISTORY}\n"
+            f"  Tags DB is shared. Journal stays. Playbook log cleared.{extra}"
+        ))
+        self.sub_title = f"Session {name}"
+        self.set_timer(3, self.clear_subtitle)
 
     def _start_update_check(self, *, always_report: bool) -> None:
         """Background GitHub version check. Startup only notifies if main is newer."""
@@ -3358,6 +3439,8 @@ class CommandRunner(App):
   :md <file>  - Open a handbook .md with formatting (Esc closes)
   :i          - Kubernetes Ingress Analyzer (see :i for details)
   :cd [path]  - Show or change the app working directory (also: cd path)
+  :session    - Show the current instance (history + .bashrc_term files)
+  :session NAME - Switch to that instance or create it (tags DB stays shared)
   :r          - Put the focused (or last) block command into the input
   :/text  :g  - Search journal lines; :n / n next, :N / N prev. / on a block starts :/
   :export tag [file] - Write one tag to JSON
@@ -4787,12 +4870,45 @@ class CommandRunner(App):
         return super().run(**kwargs)
 
 
+def bashrc_file_for(name: str) -> str:
+    return f".bashrc_term_{name}"
+
+
+def history_file_for(name: str) -> str:
+    return f"history_{name}.txt"
+
+
+def validate_instance_name(name: str) -> Optional[str]:
+    text = (name or "").strip()
+    if not text or not RE_INSTANCE_NAME.match(text):
+        return None
+    return text
+
+
+def list_session_names() -> List[str]:
+    """Names that already have history or bashrc files in cwd, plus the current one."""
+    names = {INSTANCE_NAME}
+    try:
+        for entry in os.listdir("."):
+            if entry.startswith("history_") and entry.endswith(".txt"):
+                stem = entry[len("history_"):-len(".txt")]
+                if stem:
+                    names.add(stem)
+            elif entry.startswith(".bashrc_term_"):
+                stem = entry[len(".bashrc_term_"):]
+                if stem:
+                    names.add(stem)
+    except OSError:
+        pass
+    return sorted(names)
+
+
 def apply_instance_name(name: str) -> None:
     """Суффикс инстанса: `.bashrc_term_<name>` и `history_<name>.txt`."""
     global INSTANCE_NAME
     INSTANCE_NAME = name
-    CommandRunner.FILE_BASHRC = f".bashrc_term_{name}"
-    CommandRunner.FILE_HISTORY = f"history_{name}.txt"
+    CommandRunner.FILE_BASHRC = bashrc_file_for(name)
+    CommandRunner.FILE_HISTORY = history_file_for(name)
 
 
 if __name__ == "__main__":

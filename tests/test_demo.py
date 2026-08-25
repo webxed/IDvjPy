@@ -64,6 +64,7 @@ def test_session_to_playbook_heuristics():
             "cd /tmp",
             "> htop",
             ":playbook out.yml",
+            ":session ops",
             ":q",
             "$HOST=api",
         ]
@@ -80,6 +81,8 @@ def test_session_to_playbook_heuristics():
     assert "$HOST=api" in types
     assert "out.yml" not in " ".join(str(t) for t in types)
     assert ":q" not in types
+    assert ":session ops" not in types
+    assert not any(isinstance(t, str) and str(t).startswith(":session") for t in types)
     waits = {s["type"]: s.get("wait_command") for s in steps if isinstance(s, dict)}
     assert waits["echo hi"] is True
     assert waits["| grep x"] is True

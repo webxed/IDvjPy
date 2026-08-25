@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.26 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.27 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -81,7 +81,7 @@ python3 app.py --demo full --demo-quit
 | `?` / `??` / `?tag` / `?tag[tid]` | Запрос тегов / всех / по тегу / превью | `?deploy` |
 | `!tag[tid]` / `!N` | Вставить команду во ввод (не запускает) | `!deploy[1]` |
 | `!! …` | Собрать строку во вводе | `!! deploy[1] && start[1]` |
-| `:` | Команды приложения | `:q`, `:cd`, `:r`, `:playbook`, `:md`, `:?` |
+| `:` | Команды приложения | `:q`, `:cd`, `:session`, `:r`, `:playbook`, `:md`, `:?` |
 | `\| cmd` | Пайп stdout сфокусированного блока (в историю, как обычная команда) | `\| grep error` |
 | `$OUT` | По запросу: последняя непустая строка блока (не хранится) | `echo Hello, $OUT` |
 | `$VAR=val` | Локальная переменная (пишет `.bashrc_term_<instance>`) | `$EDITOR=nvim` |
@@ -104,6 +104,7 @@ python3 app.py --demo full --demo-quit
 - `:md <file.md>` — справочник Markdown с форматированием (клик по имени в приветствии; Esc закрывает)
 - `:i …` — Kubernetes Ingress Analyzer (`:i` без аргументов — справка)
 - `:cd [path]` — показать / сменить рабочий каталог приложения (то же делает `cd path`)
+- `:session` — текущий инстанс (история + `.bashrc_term_*`). `:session NAME` — переключить или создать (БД тегов общая)
 - `:r` — команда сфокусированного блока во ввод
 - `:/text` / `:g` / `:n` / `:N` — поиск по строкам журнала (с блока `/` открывает `:/`; `n`/`N` — следующее / предыдущее)
 - `:export tag [file]` / `:import file` — один тег в JSON и обратно
