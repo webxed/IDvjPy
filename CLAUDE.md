@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.28) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.29) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.28` → `v1.29`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.29` → `v1.30`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -41,8 +41,8 @@ The setup script handles dependencies and configuration. On Linux, clipboard nee
 - **`src/`** — TUI, CSS, seed scripts, `.bashrc_term.example`
 - **cwd** — `settings.yml`, SQLite command DB, `.bashrc_term*`, `history_<instance>.txt`
 - Root **`app.py`** / **`backup_db.py`** are launchers
-- Empty command DB: welcome InfoBlock lists handbook seeds (`src/seed_catalog.py`). Click a `--seed` line to insert it into the input; click a `.md` name or `:md` to open the handbook. After `--seed`, type `??` or wait ~5s
-- Seeds: `python3 src/seed_linux_commands.py --seed`, `python3 src/seed_k8s_chains.py --seed` ([`K8S_CHAINS.md`](K8S_CHAINS.md)), `python3 src/seed_git.py --seed`, `python3 src/seed_ops.py --seed` (all ops except linux / k8s / git). Each `--seed` replaces only its own tags
+- Empty command DB: welcome InfoBlock lists handbook seeds (`src/seed_catalog.py`). Click a `--seed` line to insert it into the input; click a `.md` name or `:md` to open the handbook. After `--seed`, type `??` or wait ~5s. `:welcome` shows that catalog again. Non-empty DB: startup lists loaded tag sections (`linux`, `k8s`, `свои`, …).
+- Seeds: `python3 src/seed_linux_commands.py --seed`, `python3 src/seed_k8s_chains.py --seed` ([`K8S_CHAINS.md`](K8S_CHAINS.md)), `python3 src/seed_git.py --seed`, `python3 src/seed_ops.py --seed` (all ops except linux / k8s / git). Each `--seed` replaces only its own tags. A live DB is copied first to `backup_dir` (`backups/<stem>-pre-<label>-<timestamp>.db`); empty DB is skipped; `seed_ops` snapshots once.
 
 ## Architecture
 
@@ -62,7 +62,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/json_viewer.py`**: JSON tree modal
 - **`src/md_viewer.py`**: handbook Markdown modal (`:md`, welcome `.md` clicks)
 - **`src/update_check.py`**: GitHub `VERSION` check (`:update`)
-- **`src/screensaver.py`**: idle DevOps starfield (`:screensaver`; `screensaver_idle` seconds, `0` = off)
+- **`src/screensaver.py`**: idle starfield (`:screensaver`); green ticker of live tags/commands from the DB; `screensaver_idle` seconds, `0` = off
 - **`src/seed_catalog.py`**: empty-DB welcome catalog (click `--seed` → input)
 - **`src/demo.py`**: `--demo` YAML player (`src/demos/*.yml`); `loop: true` / `loop: N` (Esc stops)
 - **`src/ingress_analyzer.py`**: `:i` Kubernetes helper
@@ -86,7 +86,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble refs into the input line |
-| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:session`, `:screensaver`, `:r`, `:/`, `:n`, `:N`, `:export`, `:md`, `:playbook`, `:update`) |
+| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:session`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:/`, `:n`, `:N`, `:export`, `:md`, `:playbook`, `:update`) |
 | `\| cmd` | Pipe stdout from the focused block, add to history |
 | `$OUT` | On demand: last line of focused/last block (not stored in `.bashrc_term`) |
 | `$VAR=val` | Set env in `.bashrc_term_<instance>` and the current session |
@@ -136,5 +136,5 @@ Edit `settings.yml`:
 - `command_timeout`: seconds; `0` = no timeout (default: 10)
 - `terminal_mouse`: `true` — click focuses a block, wheel scrolls the journal; `false` — OS text selection (clicks do not focus)
 - `theme`: Textual theme name (`textual-dark` default). `d` toggles dark/light and writes this key; `:theme nord` picks a named theme
-- `check_updates`: `true` (default) — on start, compare `VERSION` with GitHub main. `:update` always checks. Tests set this to `false`.
+- `check_updates`: `true` (default) — on start, compare `VERSION` with GitHub main. `:update` always checks. Tests set this to `false`. Proxy 407: `$PROXY_USER` / `$PROXY_PASS` in `.bashrc_term` (and `HTTPS_PROXY`).
 - `screensaver_idle`: seconds of no keys/clicks before the DevOps starfield (default 120). `0` disables. Tests set this to `0`. `:screensaver` starts it now; `:screensaver 0` / `:screensaver 120` change idle for this session.

@@ -147,6 +147,9 @@ def hard_delete_commands_by_tag(db_file: str, tag: str) -> None:
 
 
 def run_seed(db_file: str) -> int:
+    from seed_lib import backup_sqlite_before_seed
+
+    backup_sqlite_before_seed(db_file, "git")
     database.init_db(db_file)
     n = 0
     for tag, (tag_comment, commands) in SEED_TAGS.items():

@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.28 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.29 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -81,7 +81,7 @@ python3 app.py --demo full --demo-quit
 | `?` / `??` / `?tag` / `?tag[tid]` | Запрос тегов / всех / по тегу / превью | `?deploy` |
 | `!tag[tid]` / `!N` | Вставить команду во ввод (не запускает) | `!deploy[1]` |
 | `!! …` | Собрать строку во вводе | `!! deploy[1] && start[1]` |
-| `:` | Команды приложения | `:q`, `:cd`, `:session`, `:screensaver`, `:r`, `:playbook`, `:md`, `:?` |
+| `:` | Команды приложения | `:q`, `:cd`, `:session`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:playbook`, `:md`, `:?` |
 | `\| cmd` | Пайп stdout сфокусированного блока (в историю, как обычная команда) | `\| grep error` |
 | `$OUT` | По запросу: последняя непустая строка блока (не хранится) | `echo Hello, $OUT` |
 | `$VAR=val` | Локальная переменная (пишет `.bashrc_term_<instance>`) | `$EDITOR=nvim` |
@@ -105,12 +105,14 @@ python3 app.py --demo full --demo-quit
 - `:i …` — Kubernetes Ingress Analyzer (`:i` без аргументов — справка)
 - `:cd [path]` — показать / сменить рабочий каталог приложения (то же делает `cd path`)
 - `:session` — текущий инстанс (история + `.bashrc_term_*`). `:session NAME` — переключить или создать (БД тегов общая)
-- `:screensaver` — DevOps starfield сразу. Простой как в Norton Commander: звёзды летят на зрителя, ближе — `k8s` / `git` / `!tag` / `!!`. Любая клавиша или клик закрывает (в ввод не попадает). Таймаут: `screensaver_idle` в `settings.yml` (секунды, `0` = выкл). `:screensaver 0` / `:screensaver 120` — на эту сессию
+- `:welcome` — каталог seed, как при пустой БД (клик `--seed` / `.md`). На старте при непустой БД — блок **Разделы** с живыми тегами по handbook (`linux`, `k8s`, `git`, ops, `свои`)
+- `:backup` — снимок SQLite в `backups/` (как перед `--seed`). Пустую базу не копирует. Вернуть: скопировать файл поверх рабочей БД.
+- `:screensaver` — DevOps starfield сразу. Простой как в Norton Commander: звёзды летят на зрителя; ближе — `k8s` / `git` / `!!`. Сверху ярко-зелёная бегущая строка с перемешанными командами из БД (`!tag[tid]  cmd`). Спрятанные справочники (`#name--`) не показываются. Любая клавиша или клик закрывает (в ввод не попадает). Таймаут: `screensaver_idle` в `settings.yml` (секунды, `0` = выкл). `:screensaver 0` / `:screensaver 120` — на эту сессию
 - `:r` — команда сфокусированного блока во ввод
 - `:/text` / `:g` / `:n` / `:N` — поиск по строкам журнала (с блока `/` открывает `:/`; `n`/`N` — следующее / предыдущее)
 - `:export tag [file]` / `:import file` — один тег в JSON и обратно
 - `:playbook [file.yml]` — записать команды этой сессии (Enter) как YAML для `--demo` (по умолчанию `playbook.yml`). `:playbook -` — превью в журнале; `:playbook clear` — забыть записанное. Клавиши (Tab/F5) и мышь не пишутся. В YAML: `loop: true` / `loop: N` — крутить шаги (Esc — стоп); см. [DEMO.md](DEMO.md).
-- `:update` — сверить `VERSION` с GitHub [`webxed/IDvjPy`](https://github.com/webxed/IDvjPy) `main`. При старте то же самое, если `check_updates: true` (пишет в журнал только если на GitHub новее).
+- `:update` — сверить `VERSION` с GitHub [`webxed/IDvjPy`](https://github.com/webxed/IDvjPy) `main`. При старте то же самое, если `check_updates: true` (пишет в журнал только если на GitHub новее). Прокси с логином: `$PROXY_USER` / `$PROXY_PASS` в `.bashrc_term` (плюс `HTTPS_PROXY` / `HTTP_PROXY`).
 - `:theme [name]` — тема TUI (`dark` / `light` / `nord` / …); пишется в `settings.yml`. Клавиша `d` — dark/light
 - `:?` — эта справка внутри TUI
 
@@ -203,7 +205,7 @@ python3 -m pytest tests/ -v
 
 ## Справочники команд
 
-Каждый сид перезаписывает **только свои** теги.
+Каждый сид перезаписывает **только свои** теги. Если в БД уже есть команды, перед заменой пишется снимок SQLite в `backups/` (`mytags-pre-git-YYYYMMDD-HHMMSS.db` и т.п.; каталог — `backup_dir` в `settings.yml`). То же вручную: `:backup` → `mytags-manual-….db`. Пустую базу не копирует. `seed_ops.py` делает **один** снимок на все модули. Вернуть: скопировать файл поверх `mytags.db`.
 
 Цепочки для расследования k8s: [`K8S_CHAINS.md`](K8S_CHAINS.md). `python3 src/seed_k8s_chains.py --seed` (не трогает `proc` / `file` / `net` / `kube`).
 

@@ -58,6 +58,65 @@ async def test_starts_without_existing_database(isolated_home):
         assert "SEED_LINUX_COMMANDS.md" in texts
         assert "open_handbook_md" in texts
         assert "insert_seed_command" in texts
+        assert ":welcome" in texts
+
+
+async def test_startup_shows_sections_when_db_has_tags(isolated_home):
+    import database_v2 as database
+
+    db = isolated_home / "test_history.db"
+    database.init_db(str(db))
+    database.add_command(str(db), "ps aux", "proc")
+    database.add_command(str(db), "echo hi", "mine")
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        texts = " ".join(block.text_content for block in app.query(InfoBlock))
+        assert "Разделы" in texts
+        assert "linux" in texts
+        assert "proc" in texts
+        assert "свои" in texts
+        assert "mine" in texts
+        assert "Empty command database" not in texts
+
+
+async def test_colon_welcome_shows_seed_catalog(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "#mine echo already-have-tags")
+        await submit(pilot, ":welcome")
+        texts = " ".join(block.text_content for block in app.query(InfoBlock))
+        assert "Empty command database" in texts
+        assert "seed_linux_commands.py --seed" in texts
+        assert "insert_seed_command" in texts
+
+
+async def test_colon_backup_empty_db(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, ":backup")
+        assert "Empty database, nothing to backup" in last_info(app).text_content
+        backup_dir = isolated_home / "backups"
+        assert not backup_dir.exists() or not list(backup_dir.glob("*.db"))
+
+
+async def test_colon_backup_writes_sqlite_copy(isolated_home):
+    import database_v2 as database
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, ":backup extra")
+        assert "Usage: :backup" in last_info(app).text_content
+        await submit(pilot, "#keep echo still-here")
+        await submit(pilot, ":backup")
+        text = last_info(app).text_content
+        assert text.startswith("Backup: ")
+        snaps = list((isolated_home / "backups").glob("test_history-manual-*.db"))
+        assert len(snaps) == 1
+        assert str(snaps[0]) in text
+        row = database.get_command_by_tid(str(snaps[0]), "keep", 1)
+        assert row is not None
+        assert "still-here" in row["command"]
 
 
 async def test_colon_md_opens_formatted_handbook(isolated_home):

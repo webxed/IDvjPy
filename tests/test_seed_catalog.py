@@ -17,12 +17,34 @@ def test_format_empty_db_hint_lists_core_ops_and_bundle():
     assert "insert_seed_command" in text
     assert "insert_seed_command('seed_ops.py')" in text
     assert ":md файл.md" in text
+    assert ":welcome" in text
+    assert "backups/" in text
+    assert ":backup" in text
     for script, desc, doc in SEED_HANDBOOKS_CORE + SEED_HANDBOOKS_OPS:
         assert seed_invoke(script) in text
         assert desc in text
         assert doc in text
         assert f"open_handbook_md('{doc}')" in text
         assert f"insert_seed_command('{script}')" in text
+
+
+def test_format_library_overview_groups_handbook_and_custom():
+    from seed_catalog import format_library_overview
+
+    text = format_library_overview(["proc", "kpod", "mine", "hls"])
+    assert "Разделы" in text
+    assert ":welcome" in text
+    assert "linux" in text
+    assert "proc" in text
+    assert "k8s" in text
+    assert "kpod" in text
+    assert "helm" in text
+    assert "hls" in text
+    assert "свои" in text
+    assert "mine" in text
+    assert "file" not in text
+    assert "Empty command database" not in text
+    assert format_library_overview([]) == ""
 
 
 def test_handbook_groups_cover_core_and_ops():

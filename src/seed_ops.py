@@ -16,6 +16,7 @@ Run: python3 src/seed_ops.py --seed
 import argparse
 import sys
 
+import database_v2 as database
 import seed_ansible
 import seed_data
 import seed_disk
@@ -38,7 +39,7 @@ import seed_systemd
 import seed_text
 import seed_user
 import seed_vault
-from seed_lib import get_db_file
+from seed_lib import backup_sqlite_before_seed, get_db_file
 
 MODULES = (
     ("docker", seed_docker),
@@ -67,6 +68,8 @@ MODULES = (
 
 
 def run_seed(db_file: str) -> int:
+    database.init_db(db_file)
+    backup_sqlite_before_seed(db_file, "ops", remember_empty=True)
     total = 0
     for name, mod in MODULES:
         n = mod.run_seed(db_file)

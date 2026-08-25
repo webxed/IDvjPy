@@ -89,9 +89,10 @@ def format_empty_db_hint(db_file: str) -> str:
         f"[bold {_ACCENT}]Empty command database[/]  [dim]({db_file})[/]",
         "",
         f"[bold]Теги пустые.[/]  Свои команды: [bold {_CMD}]#tag cmd[/]",
-        "[dim]Каждый --seed перезаписывает только свои теги.[/]",
+        "[dim]Каждый --seed перезаписывает только свои теги; перед этим копия БД в backups/. Вручную:[/] [bold]:backup[/]",
         f"Клик по зелёной команде — во ввод, [bold]Enter[/], затем [bold]??[/] [dim](или ~5 с).[/]",
         f"[dim]Клик по имени .md (нужен terminal_mouse) или[/] [bold]:md файл.md[/][dim] — справочник с форматированием.[/]",
+        "[dim]Показать этот каталог снова:[/] [bold]:welcome[/]",
         "",
         _section("Ядро"),
     ]
@@ -108,4 +109,34 @@ def format_empty_db_hint(db_file: str) -> str:
     )
     for script, desc, doc in SEED_HANDBOOKS_OPS:
         lines.extend(_entry(script, desc, doc))
+    return "\n".join(lines)
+
+
+def _handbook_section_order() -> list[str]:
+    import seed_ops
+
+    return ["linux", "k8s", "git", *(name for name, _ in seed_ops.MODULES)]
+
+
+def format_library_overview(live_tags: list[str]) -> str:
+    """Compact map of loaded handbook sections (non-empty DB startup)."""
+    from seed_groups import group_for_tag, handbook_groups
+
+    live = [tag for tag in live_tags if tag]
+    if not live:
+        return ""
+    live_set = set(live)
+    groups = handbook_groups()
+    lines = [
+        f"[bold {_ACCENT}]Разделы[/]  [dim]?tag · ?? · :welcome — каталог seed[/]",
+        "",
+    ]
+    for name in _handbook_section_order():
+        tags = [tag for tag in groups.get(name, ()) if tag in live_set]
+        if not tags:
+            continue
+        lines.append(f"  [bold]{name}[/]  [dim]{' '.join(tags)}[/]")
+    custom = [tag for tag in live if group_for_tag(tag) is None]
+    if custom:
+        lines.append(f"  [bold]свои[/]  [dim]{' '.join(custom)}[/]")
     return "\n".join(lines)

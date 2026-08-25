@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.28**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.29**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -26,7 +26,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:session` `:screensaver` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:update` |
+| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:session` `:welcome` `:backup` `:screensaver` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:update` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -120,7 +120,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 - Root `app.py` is a launcher; the TUI module is `src/app.py`. `--instance-name` is parsed in the launcher / `src/app.py` `__main__` (pytest imports `src/app.py` via `pythonpath = src`).
 - Instance bashrc: `.bashrc_term_{instance}` in cwd. Template: `src/.bashrc_term.example`.
 - Instance history: `history_{instance}.txt` in cwd. Legacy `history.txt` is copied once if the instance file is missing.
-- Empty command DB (`has_live_commands` is false): welcome InfoBlock lists handbook seeds (journal starts at the top). Click `--seed` to insert; click `.md` or `:md` to open the viewer (`terminal_mouse: true`).
+- Empty command DB (`has_live_commands` is false): welcome InfoBlock lists handbook seeds (journal starts at the top). Click `--seed` to insert; click `.md` or `:md` to open the viewer (`terminal_mouse: true`). A live DB is snapshotted to `backups/` before `--seed` replaces its tags (`:backup` does the same by hand).
 
 ---
 
@@ -128,16 +128,16 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.6 (app v1.28) |
+| `test_cmd.md` | Manual plan v1.6 (app v1.29) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
-| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog, `:md`, click `--seed` insert, history compact, `:session` |
+| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog, `:md`, `:backup`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
 | `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
 | `tests/test_demo.py` | YAML `--demo`, `:playbook`, `loop: N` / `loop: true` |
 | `tests/test_update_check.py` | parse GitHub `VERSION`, `:update` |
 | `tests/test_screensaver.py` | starfield, `:screensaver`, idle timer, key swallowed |
-| `tests/test_seed_*.py` | linux / k8s chains / git / ops handbooks; empty-DB catalog text |
+| `tests/test_seed_*.py` | linux / k8s chains / git / ops handbooks; pre-seed SQLite backup; empty-DB catalog text |
 
 Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then Enter.
 
@@ -148,8 +148,8 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | File | Purpose |
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
-| `src/app.py` | TUI (`CommandRunner`), v1.28 |
-| `src/screensaver.py` | Idle DevOps starfield (`:screensaver`) |
+| `src/app.py` | TUI (`CommandRunner`), v1.29 |
+| `src/screensaver.py` | Idle starfield + green library ticker (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
 | `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
 | `src/seed_catalog.py` | Empty-DB welcome catalog (click `--seed` / `.md`) |
@@ -167,6 +167,13 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.29
+
+- **Screensaver library:** сверху starfield — ярко-зелёная бегущая строка с перемешанными командами из БД (`!tag[tid]  cmd`). Спрятанные handbook-теги (`#name--`) пропускаются. Пустая БД — только звёзды.
+- **`:welcome` / разделы:** каталог seed по `:welcome` (как при пустой БД). Старт с непустой БД показывает живые теги по разделам handbook.
+- **`:backup`:** снимок SQLite в `backups/` (`mytags-manual-….db`). `--seed` делает такой же снимок сам (`*-pre-<seed>-….db`).
+- **`:update` proxy:** `$PROXY_USER` / `$PROXY_PASS` in `.bashrc_term` are inserted into `HTTPS_PROXY` / `HTTP_PROXY` so a 407 authenticating proxy can fetch GitHub. If those vars are unset and the proxy returns 407, `:update` prints how to set them.
 
 ## v1.28
 

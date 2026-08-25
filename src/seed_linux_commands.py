@@ -143,6 +143,9 @@ def _seed_items(tag: str):
 
 def run_seed(db_file: str) -> int:
     """(Re)seed seed tags: hard-delete then add commands in order."""
+    from seed_lib import backup_sqlite_before_seed
+
+    backup_sqlite_before_seed(db_file, "linux")
     database.init_db(db_file)
     n = 0
     for tag in SEED_COMMANDS:

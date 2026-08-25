@@ -115,6 +115,20 @@ DevopsScreensaver {
     overflow: hidden;
 }
 
+DevopsScreensaver #ss-ticker {
+    dock: top;
+    height: 1;
+    width: 100%;
+    background: #000000;
+    color: #00ff5f;
+    overflow: hidden;
+}
+
+DevopsScreensaver #ss-ticker.-empty {
+    height: 0;
+    display: none;
+}
+
 DevopsScreensaver #ss-canvas {
     width: 100%;
     height: 1fr;

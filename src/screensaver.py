@@ -1,14 +1,15 @@
 """Norton Commander-style starfield, DevOps-themed.
 
 Stars fly toward the viewer (classic NC screensaver). Closer particles
-become kubectl/git/helm tokens and IDvjPy command fragments. Any key
-or click dismisses the overlay; that key is not typed into the prompt.
+become kubectl/git/helm tokens and IDvjPy fragments. Live tags/commands
+from the library scroll as a bright-green ticker at the top. Any key or
+click dismisses the overlay; that key is not typed into the prompt.
 """
 from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import Iterable, List, Sequence, Tuple
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -50,7 +51,95 @@ STYLES_FAR = ("dim #334155", "dim #475569")
 STYLES_MID = ("#64748b", "#22d3ee", "#a78bfa")
 STYLES_NEAR = ("bold #e2e8f0", "bold #5eead4", "bold #c4b5fd", "bold #86efac")
 STYLE_COMET = "bold #fbbf24"
+STYLE_TICKER = "bold #00ff5f"
 HINT = "any key"
+TICKER_SEP = "    ·    "
+TICKER_CPS = 2.5  # characters per second; slow crawl so it stays readable
+
+
+def flatten_command(text: str) -> str:
+    """Collapse a command to a single ticker-friendly line."""
+    return " ".join((text or "").split())
+
+
+def ticker_items_from_commands(
+    rows: Iterable[Tuple[str, int, str]],
+) -> Tuple[str, ...]:
+    """Live (tag, tid, command) rows → `!tag[tid]  cmd` ticker entries."""
+    items: List[str] = []
+    for tag, tid, command in rows:
+        name = (tag or "").strip()
+        if not name:
+            continue
+        body = flatten_command(str(command or ""))
+        if body:
+            items.append(f"!{name}[{int(tid)}]  {body}")
+        else:
+            items.append(f"!{name}[{int(tid)}]")
+    return tuple(items)
+
+
+def load_library_reminders(db_file: str | None) -> Tuple[str, ...]:
+    """Snapshot live commands from SQLite. Hidden handbook tags stay out."""
+    rows: List[Tuple[str, int, str]] = []
+    if db_file:
+        try:
+            import database_v2 as database
+
+            hidden = set(database.get_hidden_tags(db_file))
+            for row in database.get_all_commands_with_ids(db_file):
+                tag = row["tag"]
+                if tag in hidden:
+                    continue
+                rows.append((tag, int(row["tid"]), row["command"] or ""))
+        except Exception:
+            rows = []
+    return ticker_items_from_commands(rows)
+
+
+class LibraryTicker:
+    """Infinite marquee of shuffled library commands. Unit-testable."""
+
+    def __init__(
+        self,
+        items: Sequence[str],
+        *,
+        seed: int | None = None,
+        speed: float = TICKER_CPS,
+    ) -> None:
+        self.rng = random.Random(seed)
+        self.speed = speed
+        self.offset = 0.0
+        self.items: Tuple[str, ...] = tuple(items)
+        self.order: List[str] = []
+        self._tape = ""
+        self._reshuffle()
+
+    def _reshuffle(self) -> None:
+        self.order = list(self.items)
+        self.rng.shuffle(self.order)
+        if not self.order:
+            self._tape = ""
+            return
+        self._tape = TICKER_SEP.join(self.order) + TICKER_SEP
+
+    def tick(self, dt: float) -> None:
+        if not self._tape:
+            return
+        self.offset += self.speed * dt
+
+    def render_line(self, width: int) -> Text:
+        width = max(1, width)
+        if not self._tape:
+            return Text(" " * width)
+        tape = self._tape
+        while len(tape) < width * 2:
+            tape += self._tape
+        start = int(self.offset) % len(tape)
+        window = (tape + tape)[start : start + width]
+        if len(window) < width:
+            window = (window + tape)[:width]
+        return Text(window, style=STYLE_TICKER)
 
 
 @dataclass
@@ -66,10 +155,20 @@ class Star:
 class StarField:
     """Pure simulation: tick + render. Safe to unit-test without Textual."""
 
-    def __init__(self, width: int, height: int, *, seed: int | None = None) -> None:
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        *,
+        seed: int | None = None,
+        tokens: Sequence[str] | None = None,
+        comets: Sequence[str] | None = None,
+    ) -> None:
         self.width = max(8, width)
         self.height = max(4, height)
         self.rng = random.Random(seed)
+        self.tokens: Tuple[str, ...] = tuple(tokens) if tokens else TOKENS
+        self.comets: Tuple[str, ...] = tuple(comets) if comets else COMETS
         self.stars: List[Star] = []
         self._seed_stars()
 
@@ -130,10 +229,12 @@ class StarField:
 
     def _spawn(self, *, far: bool) -> Star:
         roll = self.rng.random()
+        tokens = self.tokens or TOKENS
+        comets = self.comets or COMETS
         if roll > 0.94:
-            kind, glyph = "comet", self.rng.choice(COMETS)
+            kind, glyph = "comet", self.rng.choice(comets)
         elif roll > 0.62:
-            kind, glyph = "token", self.rng.choice(TOKENS)
+            kind, glyph = "token", self.rng.choice(tokens)
         else:
             kind, glyph = "dust", self.rng.choice(DUST)
         z = self.rng.uniform(0.55, 1.0) if far else self.rng.uniform(0.12, 0.95)
@@ -216,6 +317,18 @@ class DevopsScreensaver(ModalScreen[None]):
         background: #000000;
         overflow: hidden;
     }
+    DevopsScreensaver #ss-ticker {
+        dock: top;
+        height: 1;
+        width: 100%;
+        background: #000000;
+        color: #00ff5f;
+        overflow: hidden;
+    }
+    DevopsScreensaver #ss-ticker.-empty {
+        height: 0;
+        display: none;
+    }
     DevopsScreensaver #ss-canvas {
         width: 100%;
         height: 1fr;
@@ -225,16 +338,41 @@ class DevopsScreensaver(ModalScreen[None]):
     }
     """
 
-    def __init__(self, *, seed: int | None = None, **kwargs) -> None:
+    def __init__(
+        self,
+        *,
+        seed: int | None = None,
+        tokens: Sequence[str] | None = None,
+        comets: Sequence[str] | None = None,
+        ticker_items: Sequence[str] | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self._seed = seed
-        self._field = StarField(80, 24, seed=seed)
+        self._tokens = tokens
+        self._comets = comets
+        self._ticker_items = ticker_items
+        self._field = StarField(80, 24, seed=seed, tokens=tokens, comets=comets)
+        self._ticker = LibraryTicker((), seed=seed)
         self._timer = None
 
     def compose(self) -> ComposeResult:
+        yield Static(id="ss-ticker", classes="-empty")
         yield Static(id="ss-canvas")
 
     def on_mount(self) -> None:
+        if self._ticker_items is None:
+            items = load_library_reminders(getattr(self.app, "db_file", None))
+        else:
+            items = tuple(self._ticker_items)
+        self._ticker = LibraryTicker(items, seed=self._seed)
+        self._field = StarField(
+            max(8, self.size.width or 80),
+            max(4, (self.size.height or 24) - (1 if items else 0)),
+            seed=self._seed,
+            tokens=self._tokens,
+            comets=self._comets,
+        )
         canvas = self.query_one("#ss-canvas", Static)
         canvas.can_focus = True
         canvas.focus()
@@ -254,17 +392,34 @@ class DevopsScreensaver(ModalScreen[None]):
         self._sync_size()
 
     def _sync_size(self) -> None:
-        width = max(8, self.size.width or 80)
-        height = max(4, self.size.height or 24)
+        try:
+            canvas = self.query_one("#ss-canvas", Static)
+            width = max(8, canvas.size.width or self.size.width or 80)
+            height = max(4, canvas.size.height or self.size.height or 24)
+        except Exception:
+            width = max(8, self.size.width or 80)
+            height = max(4, self.size.height or 24)
         self._field.resize(width, height)
 
     def _tick(self) -> None:
         self._field.tick(0.08)
+        self._ticker.tick(0.08)
         self._paint()
 
     def _paint(self) -> None:
         try:
             self.query_one("#ss-canvas", Static).update(self._field.render_text())
+        except Exception:
+            pass
+        try:
+            bar = self.query_one("#ss-ticker", Static)
+            if self._ticker.items:
+                bar.remove_class("-empty")
+                width = max(8, bar.size.width or self.size.width or 80)
+                bar.update(self._ticker.render_line(width))
+            else:
+                bar.add_class("-empty")
+                bar.update("")
         except Exception:
             pass
 

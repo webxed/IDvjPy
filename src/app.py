@@ -98,15 +98,18 @@ try:
     from seed_catalog import (
         KNOWN_SEED_SCRIPTS,
         format_empty_db_hint,
+        format_library_overview,
         seed_invoke,
     )
     from demo import dump_playbook_yaml, load_demo_for_cli, play_demo, session_to_playbook
+    from seed_lib import backup_sqlite
     from md_viewer import HandbookMarkdownScreen, handbook_md_path
     from screensaver import DevopsScreensaver
     from update_check import (
         KIND_AVAILABLE,
         fetch_remote_version,
         format_update_status,
+        format_update_fetch_error,
     )
 except ImportError as e:
     print(f"Error: Missing dependency - {e}", file=sys.stderr)
@@ -1393,7 +1396,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.28"
+    VERSION = "v1.29"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1416,7 +1419,7 @@ class CommandRunner(App):
                 f"  [bold]{bang_ref}[/] / [bold]!![/] собирают строку, [bold]Enter[/] запускает.  Полная справка: [bold]:?[/]",
                 "  [dim]────────────────────────────────────────────────────────[/]",
                 "",
-                "  [bold]:?[/] справка      [bold]:q[/] выход       [bold]:h[/] история     [bold]:c[/] очистить",
+                "  [bold]:?[/] справка  [bold]:q[/] выход  [bold]:h[/] история  [bold]:c[/] очистить  [bold]:welcome[/] seed",
                 f"  [bold]#tag cmd[/] сохранить    [bold]?[/] / [bold]??[/] теги БД     [bold]{bang_ref}[/] вставить",
                 "  [bold]$VAR=val[/] переменная   [bold]$OUT[/] последняя строка блока   [bold]| cmd[/] пайп",
                 "  [bold]Tab[/] журнал  [bold]F2[/] строки  [bold]F3[/] копия  [bold]F5[/] JSON  [bold]d[/] / [bold]:theme[/] тема",
@@ -1477,6 +1480,8 @@ class CommandRunner(App):
     CMD_UPDATE = "update"
     CMD_SESSION = "session"
     CMD_SCREENSAVER = "screensaver"
+    CMD_WELCOME = "welcome"
+    CMD_BACKUP = "backup"
     KEY_CHECK_UPDATES = "check_updates"
     KEY_THEME = "theme"
     KEY_SCREENSAVER_IDLE = "screensaver_idle"
@@ -2219,10 +2224,12 @@ class CommandRunner(App):
             self.add_block(InfoBlock(f"Warning: Error loading aliases from {alias_file}: {e}"))
 
     def on_ready(self) -> None:
-        """Приветствие: короткий экран справки; при пустой БД — каталог seed."""
+        """Приветствие: справка; пустая БД — каталог seed; иначе — разделы тегов."""
         self.add_block(InfoBlock(self.format_startup_help()), follow_end=False)
         if getattr(self, "_fresh_command_db", False):
             self.add_block(InfoBlock(format_empty_db_hint(self.db_file)), follow_end=False)
+        else:
+            self._show_library_overview(follow_end=False)
         self._schedule_journal_home()
         self._request_shift_enter_encoding()
         self._start_demo_if_requested()
@@ -2841,7 +2848,7 @@ class CommandRunner(App):
             colon = user_input[1:].split()[:1] if user_input.startswith(":") else []
             if not colon or colon[0] not in {
                 self.CMD_PLAYBOOK, self.CMD_QUIT, self.CMD_UPDATE, self.CMD_SESSION,
-                self.CMD_SCREENSAVER,
+                self.CMD_SCREENSAVER, self.CMD_WELCOME,
             }:
                 self._playbook_log.append(user_input)
 
@@ -3038,8 +3045,41 @@ class CommandRunner(App):
             self._handle_session_command(parts[1:])
         elif command == self.CMD_SCREENSAVER:
             self._handle_screensaver_command(parts[1:])
+        elif command == self.CMD_WELCOME:
+            self._show_welcome_catalog()
+        elif command == self.CMD_BACKUP:
+            self._handle_backup_command(parts[1:])
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
+
+    def _show_welcome_catalog(self) -> None:
+        """Same seed catalog as a fresh empty database."""
+        self.add_block(InfoBlock(format_empty_db_hint(self.db_file)))
+
+    def _handle_backup_command(self, args: List[str]) -> None:
+        if args:
+            self.add_block(InfoBlock("Usage: :backup"))
+            return
+        if not os.path.isfile(self.db_file):
+            self.add_block(InfoBlock(f"Database not found: {self.db_file}"))
+            return
+        if not database.has_live_commands(self.db_file):
+            self.add_block(InfoBlock("Empty database, nothing to backup"))
+            return
+        dest = backup_sqlite(self.db_file, "manual", quiet=True)
+        if dest is None:
+            self.add_block(InfoBlock("Backup failed"))
+            return
+        self.add_block(InfoBlock(f"Backup: {dest}"))
+
+    def _show_library_overview(self, *, follow_end: bool = True) -> None:
+        try:
+            tags = database.get_all_tags(self.db_file)
+        except Exception:
+            return
+        text = format_library_overview(tags)
+        if text:
+            self.add_block(InfoBlock(text), follow_end=follow_end)
 
     def action_insert_seed_command(self, script: str = "") -> None:
         """Insert a handbook --seed command into the input (click from welcome)."""
@@ -3369,16 +3409,18 @@ class CommandRunner(App):
         self._start_update_check(always_report=True)
 
     def _update_check_worker(self, always_report: bool) -> None:
+        env = {**os.environ, **self.local_env}
         try:
             remote = fetch_remote_version(
                 timeout=5.0,
                 user_agent=f"IDvjPy-term/{self.VERSION}",
+                environ=env,
             )
             text, kind = format_update_status(self.VERSION, remote)
         except Exception as exc:
             if not always_report:
                 return
-            text = f"Could not check updates: {exc}"
+            text = format_update_fetch_error(exc, env)
             kind = "error"
         if always_report or kind == KIND_AVAILABLE:
             try:
@@ -3529,7 +3571,9 @@ class CommandRunner(App):
   :cd [path]  - Show or change the app working directory (also: cd path)
   :session    - Show the current instance (history + .bashrc_term files)
   :session NAME - Switch to that instance or create it (tags DB stays shared)
-  :screensaver  - DevOps starfield (idle: screensaver_idle in settings.yml; 0 = off)
+  :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
+  :backup       - Copy the command DB into backups/ (same snapshot as --seed)
+  :screensaver  - Starfield; green ticker of your tags (idle: screensaver_idle; 0 = off)
   :r          - Put the focused (or last) block command into the input
   :/text  :g  - Search journal lines; :n / n next, :N / N prev. / on a block starts :/
   :export tag [file] - Write one tag to JSON
@@ -3538,6 +3582,7 @@ class CommandRunner(App):
   :playbook [file] - Write this session's commands as a --demo YAML (default playbook.yml)
   :playbook - / clear - Preview YAML in the journal / forget recorded lines
   :update     - Compare this VERSION with GitHub main (webxed/IDvjPy)
+                Proxy 407: set $PROXY_USER / $PROXY_PASS (and HTTPS_PROXY)
 
 [bold]Kubernetes Commands (prefix :i)[/bold]
   :i list             - List all ingresses
@@ -3631,6 +3676,7 @@ class CommandRunner(App):
   python3 src/seed_git.py --seed
   python3 src/seed_ops.py --seed           # all ops except linux / k8s / git
   Type the command here, then ?? (or wait ~5s). Each --seed replaces only its own tags.
+  Live DB is copied to backups/ first; :backup does the same snapshot by hand.
   Click a green --seed line to insert it, then Enter. Click a .md name (terminal_mouse) or :md SEED_LINUX_COMMANDS.md to read the handbook.
 """
         self.add_block(InfoBlock(help_text.replace("IDvjPy_term VER", f"IDvjPy_term {self.VERSION}", 1)))

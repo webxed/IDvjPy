@@ -5,6 +5,12 @@
 # export EDITOR=nvim
 # export HOST=api.example.local
 
+# :update through an HTTP proxy that asks for a login (407 Proxy Authentication Required).
+# Proxy host comes from HTTPS_PROXY / HTTP_PROXY (system env or here).
+# export HTTPS_PROXY=http://proxy.example:8080
+# export PROXY_USER=
+# export PROXY_PASS=
+
 # git seed (seed_git.py): $BRANCH $COMMIT $FILE $MSG $REMOTE
 # export BRANCH=
 # export COMMIT=HEAD
