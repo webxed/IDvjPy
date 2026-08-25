@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.27
+# План тестирования IDvjPy_term v1.28
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -624,6 +624,20 @@ $ALPHA=from-default
 
 ---
 
+## Секция 30: Screensaver (`:screensaver`)
+
+```
+:screensaver
+x
+:screensaver 0
+```
+
+**Ожидание:** `:screensaver` открывает полноэкранный starfield (звёзды + devops-токены). `x` закрывает его и **не** попадает во ввод. После `screensaver_idle` секунд без клавиш/клика то же самое само (в тестах `screensaver_idle: 0` — выкл). `:screensaver 0` выключает на сессию. Во время `--demo` idle-скринсейвер не стартует.
+
+Автотест: `tests/test_screensaver.py`.
+
+---
+
 ## Критерии успеха
 
 - Команды сохраняются с корректным `tid`; `-`/`=`/`+` внутри текста не ломают парсер
@@ -633,7 +647,7 @@ $ALPHA=from-default
 - `!! tag[tid]` работает сразу; `!! 1 2` — из кэша (старт или `??`)
 - `| cmd` берёт stdout сфокусированного/последнего блока
 - `$VAR` подставляется; `$JSON` после Enter в viewer; `$OUT` — последняя строка блока по запросу
-- `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:session` `:r` `:theme` `:playbook` `:update` работают
+- `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:session` `:screensaver` `:r` `:theme` `:playbook` `:update` работают
 - YAML `--demo` / `:playbook`: `loop: true` / `loop: N` крутит шаги, Esc останавливает
 - Soft-delete `#tag-` / `#tag-tid`; handbook hide `#name--` / `#name!!`; `# command` паркуется без запуска
 - Пустая БД: каталог сверху; клик `--seed` → ввод; `.md` / `:md` — Markdown-viewer (колесо не крутит журнал)
@@ -654,6 +668,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.27  
-**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`  
+**Версия приложения**: v1.28  
+**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-25

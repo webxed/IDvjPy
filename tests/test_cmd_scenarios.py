@@ -1,4 +1,4 @@
-"""Автотесты по сценариям test_cmd.md (IDvjPy_term v1.27)."""
+"""Автотесты по сценариям test_cmd.md (IDvjPy_term v1.28)."""
 from pathlib import Path
 
 import database_v2 as database

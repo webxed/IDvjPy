@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.27**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.28**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -26,7 +26,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:session` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:update` |
+| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:session` `:screensaver` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:update` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -128,7 +128,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.6 (app v1.27) |
+| `test_cmd.md` | Manual plan v1.6 (app v1.28) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog, `:md`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -136,6 +136,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
 | `tests/test_demo.py` | YAML `--demo`, `:playbook`, `loop: N` / `loop: true` |
 | `tests/test_update_check.py` | parse GitHub `VERSION`, `:update` |
+| `tests/test_screensaver.py` | starfield, `:screensaver`, idle timer, key swallowed |
 | `tests/test_seed_*.py` | linux / k8s chains / git / ops handbooks; empty-DB catalog text |
 
 Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then Enter.
@@ -147,7 +148,8 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | File | Purpose |
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
-| `src/app.py` | TUI (`CommandRunner`), v1.27 |
+| `src/app.py` | TUI (`CommandRunner`), v1.28 |
+| `src/screensaver.py` | Idle DevOps starfield (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
 | `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
 | `src/seed_catalog.py` | Empty-DB welcome catalog (click `--seed` / `.md`) |
@@ -158,13 +160,17 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
 | `src/seed_*.py` | Handbook seeds (linux, k8s, git, ops, …) |
 | `src/app.css` | Styles (JSON viewer, line-nav border, block focus) |
-| `settings.yml` | DB path, timeout, `terminal_mouse`, `theme`, `check_updates`, `history_keep` (cwd) |
+| `settings.yml` | DB path, timeout, `terminal_mouse`, `theme`, `check_updates`, `history_keep`, `screensaver_idle` (cwd) |
 | `K8S_CHAINS.md` | k8s investigation overview |
 | `SEED_*_COMMANDS.md` | Canonical tids per handbook |
 | `DATABASE.md` | How commands are read from SQLite |
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.28
+
+- **Screensaver:** после `screensaver_idle` секунд простоя (по умолчанию 120, `0` = выкл) — полноэкранный starfield в духе Norton Commander, ближе к зрителю токены `k8s` / `git` / `!tag` / `!!`. `:screensaver` — сразу; любая клавиша или клик закрывает и не попадает во ввод. Во время `--demo` не стартует.
 
 ## v1.27
 

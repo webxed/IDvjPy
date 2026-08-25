@@ -130,7 +130,7 @@ def collect_reset_tags(scenario: Dict[str, Any]) -> List[str]:
     return tags
 
 
-PLAYBOOK_SKIP_COLON = frozenset({"playbook", "q", "session"})
+PLAYBOOK_SKIP_COLON = frozenset({"playbook", "q", "session", "screensaver"})
 
 
 def is_playbook_skip_line(line: str) -> bool:

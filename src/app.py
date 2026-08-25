@@ -102,6 +102,7 @@ try:
     )
     from demo import dump_playbook_yaml, load_demo_for_cli, play_demo, session_to_playbook
     from md_viewer import HandbookMarkdownScreen, handbook_md_path
+    from screensaver import DevopsScreensaver
     from update_check import (
         KIND_AVAILABLE,
         fetch_remote_version,
@@ -291,6 +292,7 @@ def append_history_file_line(
 
 DEFAULT_HISTORY_KEEP = 500
 HISTORY_COMPACT_HYSTERESIS = 2
+DEFAULT_SCREENSAVER_IDLE = 120
 
 
 def compact_history_lines(lines: List[str], keep: int) -> List[str]:
@@ -1245,6 +1247,8 @@ class CommandInput(Input):
         app = self.app
         if hasattr(app, "_reset_history_walk"):
             app._reset_history_walk()
+        if hasattr(app, "_bump_screensaver_idle"):
+            app._bump_screensaver_idle()
         # Затем показываем подсказки
         self.call_after_refresh(self._show_completions)
 
@@ -1389,7 +1393,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.27"
+    VERSION = "v1.28"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1472,8 +1476,10 @@ class CommandRunner(App):
     CMD_PLAYBOOK = "playbook"
     CMD_UPDATE = "update"
     CMD_SESSION = "session"
+    CMD_SCREENSAVER = "screensaver"
     KEY_CHECK_UPDATES = "check_updates"
     KEY_THEME = "theme"
+    KEY_SCREENSAVER_IDLE = "screensaver_idle"
     DEFAULT_THEME = "textual-dark"
     THEME_ALIASES = {
         "dark": "textual-dark",
@@ -1526,6 +1532,8 @@ class CommandRunner(App):
         self._search_hits: List[Tuple[Static, int]] = []
         self._search_index: int = -1
         self._fresh_command_db: bool = False
+        self.screensaver_idle: float = 0
+        self._ss_timer = None
 
     def _extract_path_token(self, text: str) -> str:
         """Возвращает последний токен для path completion."""
@@ -1847,6 +1855,7 @@ class CommandRunner(App):
 
     def on_key(self, event: events.Key) -> None:
         """Перехват клавиш для автофокуса на поле ввода."""
+        self._bump_screensaver_idle()
         # Явная вставка из буфера для терминалов, где Shift+Insert ловится нестабильно.
         if event.key in ("shift+insert", "ctrl+v"):
             self.action_paste_clipboard()
@@ -1867,6 +1876,7 @@ class CommandRunner(App):
 
     def on_paste(self, event: events.Paste) -> None:
         """Ctrl+V в терминале часто приходит как Paste, не как клавиша ctrl+v."""
+        self._bump_screensaver_idle()
         focused = self.focused
         if isinstance(focused, LineNavigable) and getattr(focused, "line_nav_active", False):
             focused.append_current_line_to_input()
@@ -1902,6 +1912,9 @@ class CommandRunner(App):
     def copy_text(self, text: str) -> None:
         """Копирует текст в CLIPBOARD, PRIMARY и внутренний буфер Textual."""
         copy_text_to_clipboards(text or "", self)
+
+    def on_mouse_down(self, event: events.MouseDown) -> None:
+        self._bump_screensaver_idle()
 
     def on_mouse_scroll_down(self, event) -> None:
         """Скролл вниз всегда идёт в контейнер вывода."""
@@ -1952,6 +1965,12 @@ class CommandRunner(App):
                     self.db_file = settings.get("database_tags_file", self.FILE_DATABASE)
                     self.check_updates = bool(settings.get(self.KEY_CHECK_UPDATES, True))
                     self._apply_theme_name(settings.get(self.KEY_THEME))
+                    try:
+                        self.screensaver_idle = int(
+                            settings.get(self.KEY_SCREENSAVER_IDLE, DEFAULT_SCREENSAVER_IDLE)
+                        )
+                    except (TypeError, ValueError):
+                        self.screensaver_idle = DEFAULT_SCREENSAVER_IDLE
         except (FileNotFoundError, KeyError, yaml.YAMLError):
             pass
 
@@ -2208,6 +2227,7 @@ class CommandRunner(App):
         self._request_shift_enter_encoding()
         self._start_demo_if_requested()
         self._start_update_check(always_report=False)
+        self._bump_screensaver_idle()
 
     def _start_demo_if_requested(self) -> None:
         """Запускает YAML-тур после сплэша, если передан ``--demo`` / demo=."""
@@ -2821,6 +2841,7 @@ class CommandRunner(App):
             colon = user_input[1:].split()[:1] if user_input.startswith(":") else []
             if not colon or colon[0] not in {
                 self.CMD_PLAYBOOK, self.CMD_QUIT, self.CMD_UPDATE, self.CMD_SESSION,
+                self.CMD_SCREENSAVER,
             }:
                 self._playbook_log.append(user_input)
 
@@ -3015,6 +3036,8 @@ class CommandRunner(App):
             self._handle_update_command()
         elif command == self.CMD_SESSION:
             self._handle_session_command(parts[1:])
+        elif command == self.CMD_SCREENSAVER:
+            self._handle_screensaver_command(parts[1:])
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
 
@@ -3263,6 +3286,71 @@ class CommandRunner(App):
         self.sub_title = f"Session {name}"
         self.set_timer(3, self.clear_subtitle)
 
+    def _screensaver_idle_seconds(self) -> float:
+        try:
+            idle = float(self.screensaver_idle or 0)
+        except (TypeError, ValueError):
+            return 0.0
+        return idle if idle > 0 else 0.0
+
+    def _bump_screensaver_idle(self) -> None:
+        """Restart the idle timer. 0 in settings.yml disables the screensaver."""
+        if self._ss_timer is not None:
+            try:
+                self._ss_timer.stop()
+            except Exception:
+                pass
+            self._ss_timer = None
+        idle = self._screensaver_idle_seconds()
+        if idle <= 0:
+            return
+        if self._demo_active or self._demo_pressing:
+            return
+        self._ss_timer = self.set_timer(idle, self._launch_screensaver)
+
+    def _launch_screensaver(self) -> None:
+        if self._screensaver_idle_seconds() <= 0:
+            return
+        if self._demo_active or self._demo_pressing:
+            self._bump_screensaver_idle()
+            return
+        if getattr(self.screen, "_modal", False):
+            self._bump_screensaver_idle()
+            return
+        if isinstance(self.screen, DevopsScreensaver):
+            return
+        self.push_screen(DevopsScreensaver())
+
+    def _handle_screensaver_command(self, args: List[str]) -> None:
+        """`:screensaver` preview; `:screensaver 0` / `:screensaver 120` set idle seconds."""
+        if args:
+            raw = args[0].strip().lower()
+            if raw in {"off", "0"}:
+                self.screensaver_idle = 0
+                self._bump_screensaver_idle()
+                self.add_block(InfoBlock("Screensaver off (this session). settings.yml: screensaver_idle"))
+                return
+            try:
+                seconds = int(raw)
+            except ValueError:
+                self.add_block(InfoBlock(
+                    "Usage: :screensaver  |  :screensaver 120  |  :screensaver 0"
+                ))
+                return
+            if seconds < 0:
+                self.add_block(InfoBlock("Usage: :screensaver [SECONDS]  (0 = off)"))
+                return
+            self.screensaver_idle = seconds
+            self._bump_screensaver_idle()
+            self.add_block(InfoBlock(
+                f"Screensaver idle {seconds}s (this session). Persist: screensaver_idle in settings.yml"
+            ))
+            return
+        if self._demo_active:
+            self.add_block(InfoBlock("Cannot start screensaver while a demo is playing (Esc first)."))
+            return
+        self.push_screen(DevopsScreensaver())
+
     def _start_update_check(self, *, always_report: bool) -> None:
         """Background GitHub version check. Startup only notifies if main is newer."""
         if not always_report:
@@ -3441,6 +3529,7 @@ class CommandRunner(App):
   :cd [path]  - Show or change the app working directory (also: cd path)
   :session    - Show the current instance (history + .bashrc_term files)
   :session NAME - Switch to that instance or create it (tags DB stays shared)
+  :screensaver  - DevOps starfield (idle: screensaver_idle in settings.yml; 0 = off)
   :r          - Put the focused (or last) block command into the input
   :/text  :g  - Search journal lines; :n / n next, :N / N prev. / on a block starts :/
   :export tag [file] - Write one tag to JSON

@@ -106,3 +106,17 @@ HandbookMarkdownScreen #md-scroll {
     overflow-y: auto;
     overflow-x: auto;
 }
+
+DevopsScreensaver {
+    layout: vertical;
+    width: 100%;
+    height: 100%;
+    background: #000000;
+    overflow: hidden;
+}
+
+DevopsScreensaver #ss-canvas {
+    width: 100%;
+    height: 1fr;
+    background: #000000;
+}

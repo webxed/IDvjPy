@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.27 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.28 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -81,7 +81,7 @@ python3 app.py --demo full --demo-quit
 | `?` / `??` / `?tag` / `?tag[tid]` | Запрос тегов / всех / по тегу / превью | `?deploy` |
 | `!tag[tid]` / `!N` | Вставить команду во ввод (не запускает) | `!deploy[1]` |
 | `!! …` | Собрать строку во вводе | `!! deploy[1] && start[1]` |
-| `:` | Команды приложения | `:q`, `:cd`, `:session`, `:r`, `:playbook`, `:md`, `:?` |
+| `:` | Команды приложения | `:q`, `:cd`, `:session`, `:screensaver`, `:r`, `:playbook`, `:md`, `:?` |
 | `\| cmd` | Пайп stdout сфокусированного блока (в историю, как обычная команда) | `\| grep error` |
 | `$OUT` | По запросу: последняя непустая строка блока (не хранится) | `echo Hello, $OUT` |
 | `$VAR=val` | Локальная переменная (пишет `.bashrc_term_<instance>`) | `$EDITOR=nvim` |
@@ -105,6 +105,7 @@ python3 app.py --demo full --demo-quit
 - `:i …` — Kubernetes Ingress Analyzer (`:i` без аргументов — справка)
 - `:cd [path]` — показать / сменить рабочий каталог приложения (то же делает `cd path`)
 - `:session` — текущий инстанс (история + `.bashrc_term_*`). `:session NAME` — переключить или создать (БД тегов общая)
+- `:screensaver` — DevOps starfield сразу. Простой как в Norton Commander: звёзды летят на зрителя, ближе — `k8s` / `git` / `!tag` / `!!`. Любая клавиша или клик закрывает (в ввод не попадает). Таймаут: `screensaver_idle` в `settings.yml` (секунды, `0` = выкл). `:screensaver 0` / `:screensaver 120` — на эту сессию
 - `:r` — команда сфокусированного блока во ввод
 - `:/text` / `:g` / `:n` / `:N` — поиск по строкам журнала (с блока `/` открывает `:/`; `n`/`N` — следующее / предыдущее)
 - `:export tag [file]` / `:import file` — один тег в JSON и обратно
@@ -176,6 +177,7 @@ history_keep: 500            # хвост истории как лента; ст
 terminal_mouse: true         # клик выделяет блок; false — выделение текста ОС
 theme: textual-dark          # `d` / `:theme`; сохраняется при смене
 check_updates: true          # старт: сверка VERSION с GitHub main; :update всегда
+screensaver_idle: 120        # простой → starfield; 0 = выкл. :screensaver — сразу
 ```
 
 Переменные читаются из `.bashrc_term_<instance>` (приоритет) и `.bashrc_term` (дополняет). Формат: `export VAR=val` или `VAR=val`. Если файлов нет, при старте копируется [`src/.bashrc_term.example`](src/.bashrc_term.example).
@@ -189,7 +191,7 @@ check_updates: true          # старт: сверка VERSION с GitHub main; 
 - **`CommandBlock`** / **`InfoBlock`** / **`QueryResultsBlock`** — блоки журнала
 - **`LineNavigable`** — построчный курсор в блоке
 
-Модули в [`src/`](src/): [`app.py`](src/app.py), [`database_v2.py`](src/database_v2.py), [`command_parser_v2.py`](src/command_parser_v2.py), [`json_viewer.py`](src/json_viewer.py), [`md_viewer.py`](src/md_viewer.py), [`seed_catalog.py`](src/seed_catalog.py), [`ingress_analyzer.py`](src/ingress_analyzer.py), [`app.css`](src/app.css). Корневой [`app.py`](app.py) только запускает TUI.
+Модули в [`src/`](src/): [`app.py`](src/app.py), [`database_v2.py`](src/database_v2.py), [`command_parser_v2.py`](src/command_parser_v2.py), [`json_viewer.py`](src/json_viewer.py), [`md_viewer.py`](src/md_viewer.py), [`screensaver.py`](src/screensaver.py), [`seed_catalog.py`](src/seed_catalog.py), [`ingress_analyzer.py`](src/ingress_analyzer.py), [`app.css`](src/app.css). Корневой [`app.py`](app.py) только запускает TUI.
 
 Подробности сессии и поведения: [`COMPACT_SUMMARY.md`](COMPACT_SUMMARY.md). Как читается БД: [`DATABASE.md`](DATABASE.md).
 
