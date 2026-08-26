@@ -55,6 +55,36 @@ async def test_delete_tag_id_and_bang_execute(isolated_home):
         assert "marked as deleted" in last_info(app).text_content
 
 
+async def test_query_all_tag_click_inserts_bang_draft(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "#clickme echo from-query")
+        await submit(pilot, "??")
+        listed = last_info(app).text_content
+        assert "insert_bang_draft('clickme')" in listed
+        assert "insert_bang_draft('clickme', '1')" in listed
+        app.action_insert_bang_draft("clickme")
+        await pilot.pause()
+        inp = input_widget(app)
+        assert inp.value == "!clickme "
+        app.action_insert_bang_draft("clickme", "1")
+        await pilot.pause()
+        assert inp.value == "!clickme !clickme[1] "
+        app.action_insert_bang_draft("not a tag")
+        await pilot.pause()
+        assert inp.value == "!clickme !clickme[1] "
+        inp.value = "!! "
+        inp.cursor_position = 3
+        app.action_insert_bang_draft("clickme", "1")
+        await pilot.pause()
+        assert inp.value == "!! !clickme[1] "
+        inp.value = "echo|"
+        inp.cursor_position = 4
+        app.action_insert_bang_draft("clickme")
+        await pilot.pause()
+        assert inp.value == "echo !clickme |"
+
+
 async def test_restore_soft_deleted_command(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(120, 40)) as pilot:

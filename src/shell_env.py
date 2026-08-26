@@ -1,10 +1,11 @@
 """Переменные .bashrc_term, алиасы из ~/.bashrc и подстановка $1."""
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
-from typing import Dict, Mapping, Optional, Tuple
+from typing import Dict, List, Mapping, Optional, Tuple
 
 RE_VAR_SUBST = re.compile(
     r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)\b"
@@ -13,6 +14,27 @@ RE_ALIAS_POS = re.compile(r'\$\{(\d+|[@*])\}|\$(\d+|[@*])')
 RE_VAR_NAME = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
 RE_OUT_PLACEHOLDER = re.compile(r"\$\{OUT\}|\$OUT\b")
 LAZY_PLACEHOLDERS = frozenset({"OUT"})
+
+# Shell/TTY bookkeeping — do not copy back into the TUI process.
+TTY_ENV_SKIP = frozenset({
+    "_",
+    "SHLVL",
+    "BASHPID",
+    "PPID",
+    "PWD",
+    "OLDPWD",
+    "COLUMNS",
+    "LINES",
+    "PIPESTATUS",
+    "SHELLOPTS",
+    "BASHOPTS",
+    "BASH_ARGV0",
+    "HISTCMD",
+    "PS1",
+    "PS2",
+    "PS4",
+    "PROMPT_COMMAND",
+})
 
 
 def parse_bashrc_assignment(line: str) -> Optional[Tuple[str, str]]:
@@ -177,3 +199,88 @@ def parse_standalone_cd(command: str) -> Optional[str]:
     if args[0] == "--":
         return args[1] if len(args) > 1 else ""
     return args[0]
+
+
+def skip_tty_env_key(key: str) -> bool:
+    """True for keys that must not be imported from a TTY child dump."""
+    if not key or key in TTY_ENV_SKIP:
+        return True
+    if key.startswith("BASH_FUNC_"):
+        return True
+    return not bool(RE_VAR_NAME.match(key))
+
+
+def load_env_dump(path: str) -> Optional[Dict[str, str]]:
+    """JSON object of KEY→value from a child shell. None if missing or invalid."""
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError):
+        return None
+    if not isinstance(data, dict) or not data:
+        return None
+    out: Dict[str, str] = {}
+    for key, value in data.items():
+        name = str(key)
+        if skip_tty_env_key(name):
+            continue
+        out[name] = "" if value is None else str(value)
+    return out
+
+
+def diff_exported_env(
+    before: Mapping[str, str],
+    after: Mapping[str, str],
+) -> Tuple[Dict[str, str], List[str]]:
+    """Changed/new keys and keys unset in the child (skip list already applied)."""
+    updates: Dict[str, str] = {}
+    for key, value in after.items():
+        if skip_tty_env_key(key):
+            continue
+        if before.get(key) != value:
+            updates[key] = value
+    removed: List[str] = []
+    for key in before:
+        if skip_tty_env_key(key):
+            continue
+        if key not in after:
+            removed.append(key)
+    return updates, removed
+
+
+def wrap_tty_command(
+    command: str,
+    env_path: str,
+    pwd_path: str,
+    python_exe: str,
+) -> str:
+    """Bash script: run ``command``, then dump env/PWD on EXIT (keeps $? )."""
+    dump_py = (
+        "import json,os,sys;"
+        "json.dump(dict(os.environ), open(sys.argv[1],'w'), ensure_ascii=False)"
+    )
+    q_env = shlex.quote(env_path)
+    q_pwd = shlex.quote(pwd_path)
+    q_py = shlex.quote(python_exe)
+    q_code = shlex.quote(dump_py)
+    return (
+        "_idvjopy_dump_env() {\n"
+        f"  printf '%s' \"$PWD\" > {q_pwd} || true\n"
+        f"  {q_py} -c {q_code} {q_env} || true\n"
+        "}\n"
+        "trap _idvjopy_dump_env EXIT\n"
+        "set +e\n"
+        f"{command}\n"
+    )
+
+
+def format_env_followup(names: List[str], cwd: Optional[str] = None) -> List[str]:
+    """Short journal lines after TTY: env names and optional cwd."""
+    lines: List[str] = []
+    if names:
+        shown = names[:12]
+        extra = f" (+{len(names) - 12})" if len(names) > 12 else ""
+        lines.append(f"env: {', '.join(shown)}{extra}")
+    if cwd:
+        lines.append(f"cwd: {cwd}")
+    return lines

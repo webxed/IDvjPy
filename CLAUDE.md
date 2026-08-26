@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.30) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.31) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.30` → `v1.31`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.31` → `v1.32`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -39,7 +39,7 @@ The setup script handles dependencies and configuration. On Linux, clipboard nee
 ## Layout
 
 - **`src/`** — TUI, CSS, seed scripts, `.bashrc_term.example`
-- **cwd** — `settings.yml`, SQLite command DB, `.bashrc_term*`, `history_<instance>.txt`
+- **launch cwd** — `settings.yml`, SQLite command DB, `.bashrc_term*`, `history_<instance>.txt`. `:cd` / `cd` change the process cwd for shell commands; they do not move or recreate the tags DB.
 - Root **`app.py`** / **`backup_db.py`** are launchers
 - Empty command DB: welcome InfoBlock lists handbook seeds (`src/seed_catalog.py`). Click a `--seed` line to insert it into the input; click a `.md` name or `:md` to open the handbook. After `--seed`, type `??` or wait ~5s. `:welcome` shows that catalog again. Non-empty DB: startup lists loaded tag sections (`linux`, `k8s`, `свои`, …).
 - Seeds: `python3 src/seed_linux_commands.py --seed`, `python3 src/seed_k8s_chains.py --seed` ([`K8S_CHAINS.md`](K8S_CHAINS.md)), `python3 src/seed_git.py --seed`, `python3 src/seed_ops.py --seed` (all ops except linux / k8s / git). Each `--seed` replaces only its own tags. A live DB is copied first to `backup_dir` (`backups/<stem>-pre-<label>-<timestamp>.db`); empty DB is skipped; `seed_ops` snapshots once.
@@ -63,7 +63,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/md_viewer.py`**: handbook Markdown modal (`:md`, welcome `.md` clicks)
 - **`src/update_check.py`**: GitHub `VERSION` check (`:update`)
 - **`src/gui_open.py`**: `:fm` / `:term` — detach a file manager or system terminal (Linux / macOS / Windows; `$FILEMAN` / `$TERMINAL` override)
-- **`src/screensaver.py`**: idle starfield (`:screensaver`); flying live clock/date; green ticker of live tags/commands from the DB; `screensaver_idle` seconds, `0` = off
+- **`src/screensaver.py`**: idle starfield (`:screensaver`); flying live clock/date; full-width green library ticker; bottom-left command-help typewriter and bottom-right load/RAM (1s `/proc`; may overlap when the window is narrow); `screensaver_idle` seconds, `0` = off
 - **`src/seed_catalog.py`**: empty-DB welcome catalog (click `--seed` → input)
 - **`src/demo.py`**: `--demo` YAML player (`src/demos/*.yml`); `loop: true` / `loop: N` (Esc stops)
 - **`src/ingress_analyzer.py`**: `:i` Kubernetes helper
@@ -76,7 +76,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | Prefix | Purpose |
 |--------|---------|
 | (none) | Execute shell command via subprocess, add to session history |
-| `> cmd` | Suspend TUI (`App.suspend()`), run with a real TTY (`htop`, `vim`, `ssh`). No timeout, stdout not captured. `>>` is left to the shell. |
+| `> cmd` | Suspend TUI (`App.suspend()`), run with a real TTY (`htop`, `vim`, `ssh`). No timeout, stdout not captured. `>>` is left to the shell. On exit: dump that bash's env/`$PWD` into the TUI. Nested `> bash` exports are not visible. |
 | `#tag cmd` | Save command to database with tag (literal text; refs not expanded on save) |
 | `# command` | Park the line in `history_<instance>.txt` and the journal; do not run (`#` + space, like bash) |
 | `#tag=` / `#tag=ID=` | Tag / command comment (ID = tid or global `<id>`) |
@@ -84,13 +84,13 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `#tag-` / `#tag-tid` | Soft-delete |
 | `#name--` / `#name!!` | Hide / restore a handbook's tags (`ansible`, `linux`, `k8s`, …) |
 | `#tag!` / `#tag!tid` | Restore soft-deleted tag / command |
-| `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
+| `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. Click tag in `??` inserts `!tag ` at the cursor (does not replace the line, does not run). |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble refs into the input line |
-| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:fm`, `:term`, `:session`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:/`, `:n`, `:N`, `:export`, `:md`, `:playbook`, `:update`) |
+| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:fm`, `:term`, `:env`, `:session`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:/`, `:n`, `:N`, `:export`, `:md`, `:playbook`, `:update`) |
 | `\| cmd` | Pipe stdout from the focused block, add to history |
 | `$OUT` | On demand: last line of focused/last block (not stored in `.bashrc_term`) |
-| `$VAR=val` | Set env in `.bashrc_term_<instance>` and the current session |
+| `$VAR=val` | Set env in `.bashrc_term_<instance>` and the current session. `:env` re-reads the files. |
 
 `!` / `!!` only insert text. Run with a separate Enter.
 

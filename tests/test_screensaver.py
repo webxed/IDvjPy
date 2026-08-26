@@ -4,15 +4,24 @@ import time
 
 from datetime import datetime
 
+from rich.text import Text
 from app import CommandRunner
 from screensaver import (
+    COMMAND_HELP_LINES,
     TICKER_SEP,
     DevopsScreensaver,
+    HelpTypewriter,
+    HostSnapshot,
+    HostStats,
     LibraryTicker,
     StarField,
     clock_glyph,
     flatten_command,
+    format_bytes_short,
     load_library_reminders,
+    parse_meminfo,
+    overlay_host_on_help,
+    render_host_line,
     ticker_items_from_commands,
 )
 
@@ -75,6 +84,132 @@ def test_ticker_shuffles_and_scrolls():
     assert TICKER_SEP.strip() in (one._tape)
 
 
+def test_help_typewriter_overwrites_left_to_right():
+    tw = HelpTypewriter(("AAAA", "BB"), seed=1, type_cps=1, pause=30)
+    tw.previous = "AAAA"
+    tw.current = "BB"
+    tw.typed = 1
+    tw.phase = "type"
+    vis = tw.visible()
+    assert vis[0] == "B"
+    assert vis[1] == "A"
+    tw.typed = 4
+    vis = tw.visible()
+    assert vis.startswith("BB")
+    assert vis[2:4] == "  "
+    tw.phase = "pause"
+    assert tw.visible() == "BB"
+
+
+def test_help_typewriter_shuffles_pauses_and_cycles():
+    lines = tuple(f"L{i}  — d{i}" for i in range(8))
+    a = HelpTypewriter(lines, seed=1, type_cps=500, pause=0.01)
+    b = HelpTypewriter(lines, seed=2, type_cps=500, pause=0.01)
+    seen = [a.current]
+    for _ in range(7):
+        a.tick(1.0)
+        assert a.phase == "pause"
+        assert a.visible() == a.current
+        a.tick(0.02)
+        seen.append(a.current)
+    assert sorted(seen) == sorted(lines)
+    assert seen != list(lines)
+    assert a.current != b.current or a._deck != b._deck
+    assert all("  — " in line for line in COMMAND_HELP_LINES)
+
+
+def test_help_typewriter_indents_from_left_edge():
+    tw = HelpTypewriter((":?  — full command help",), seed=1, type_cps=1000, pause=30)
+    tw.tick(1.0)
+    plain = tw.render_line(80).plain
+    assert len(plain) == 80
+    pad = len(plain) - len(plain.lstrip())
+    assert 8 <= pad <= 24
+    assert pad < 40
+    assert plain.lstrip().startswith(":?")
+
+
+def test_parse_meminfo_uses_available():
+    used, total = parse_meminfo(
+        "MemTotal:       16384000 kB\n"
+        "MemFree:         1000000 kB\n"
+        "MemAvailable:    8192000 kB\n"
+        "Buffers:          100000 kB\n"
+        "Cached:          2000000 kB\n"
+    )
+    assert total == 16384000 * 1024
+    assert used == (16384000 - 8192000) * 1024
+
+
+def test_parse_meminfo_falls_back_without_available():
+    used, total = parse_meminfo(
+        "MemTotal:        2000000 kB\n"
+        "MemFree:          500000 kB\n"
+        "Buffers:          100000 kB\n"
+        "Cached:           200000 kB\n"
+    )
+    assert total == 2000000 * 1024
+    assert used == (2000000 - 800000) * 1024
+
+
+def test_format_bytes_short():
+    assert format_bytes_short(4 * 1024 ** 3) == "4.0G"
+    assert format_bytes_short(16 * 1024 ** 3) == "16G"
+    assert format_bytes_short(512 * 1024 ** 2) == "512M"
+
+
+def test_host_stats_polls_once_per_second():
+    calls = {"n": 0}
+
+    def reader():
+        calls["n"] += 1
+        return HostSnapshot(
+            load1=0.15, load5=0.10, load15=0.05,
+            mem_used=4 * 1024 ** 3, mem_total=16 * 1024 ** 3,
+        )
+
+    hs = HostStats(reader=reader, poll=1.0)
+    assert calls["n"] == 1
+    for _ in range(12):
+        assert hs.tick(0.08) is False
+    assert calls["n"] == 1
+    assert hs.tick(0.08) is True
+    assert calls["n"] == 2
+
+
+def test_host_line_is_right_inset():
+    snap = HostSnapshot(
+        load1=0.15, load5=0.10, load15=0.05,
+        mem_used=4 * 1024 ** 3, mem_total=16 * 1024 ** 3,
+    )
+    plain = render_host_line(snap, 80).plain
+    assert len(plain) == 80
+    right_pad = len(plain) - len(plain.rstrip())
+    assert 8 <= right_pad <= 24
+    assert right_pad < 40
+    assert not plain.startswith("load")
+    assert "load avg" in plain
+    assert "0.15" in plain
+    assert "mem" in plain
+    assert "4.0G/16G" in plain
+    assert plain.rstrip().endswith("25%")
+
+
+def test_host_overlays_help_on_a_narrow_row():
+    snap = HostSnapshot(
+        load1=1.0, load5=0.5, load15=0.25,
+        mem_used=1024 ** 3, mem_total=2 * 1024 ** 3,
+    )
+    help_line = Text(" " * 8 + ":q  — quit")
+    wide = overlay_host_on_help(help_line, snap, 80).plain
+    assert ":q" in wide
+    assert "load avg 1.00" in wide
+    assert wide.rstrip().endswith("%")
+    narrow = overlay_host_on_help(help_line, snap, 36).plain
+    assert "load avg" in narrow
+    assert len(narrow) == 36
+
+
 def test_starfield_tick_renders_rows():
     field = StarField(40, 12, seed=7)
     for _ in range(40):
@@ -84,7 +219,7 @@ def test_starfield_tick_renders_rows():
     lines = plain.splitlines()
     assert len(lines) == 12
     assert any(ch not in " " for ch in plain)
-    assert "any key" in plain
+    assert "any key" not in plain
 
 
 def test_starfield_has_no_comets():
@@ -195,6 +330,42 @@ async def test_screensaver_ticker_loads_library(isolated_home):
         assert not bar.has_class("-empty")
         line = app.screen._ticker.render_line(80).plain
         assert len(line) == 80
+        assert not line.startswith("load")
+
+
+async def test_screensaver_help_bar_types_command_help(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, ":screensaver")
+        await pilot.pause()
+        assert isinstance(app.screen, DevopsScreensaver)
+        help_bar = app.screen.query_one("#ss-help")
+        assert app.screen._help.current in COMMAND_HELP_LINES
+        for _ in range(8):
+            app.screen._tick()
+        line = app.screen._help.render_line(80).plain
+        assert len(line) == 80
+        assert help_bar.visible
+
+
+async def test_screensaver_host_bar_shows_load_and_mem(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, ":screensaver")
+        await pilot.pause()
+        assert isinstance(app.screen, DevopsScreensaver)
+        help_bar = app.screen.query_one("#ss-help")
+        app.screen._paint()
+        line = overlay_host_on_help(
+            app.screen._help.render_line(80),
+            app.screen._host.snapshot,
+            80,
+        ).plain
+        assert len(line) == 80
+        assert "load" in line
+        assert "mem" in line
+        assert not line.startswith("load")
+        assert help_bar.visible
 
 
 async def test_colon_screensaver_off(isolated_home):

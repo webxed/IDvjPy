@@ -1,5 +1,7 @@
 # Template copied to .bashrc_term_<instance> in the working directory on first start.
 # These variables are loaded at startup and can be used as $VAR in commands.
+# :env re-reads this file in a running app. After `> cmd`, that shell's
+# exports are imported (same bash only — not a nested `> bash`).
 
 # :fm / :term — file manager / system terminal in a new window (cwd or path).
 # Linux: xdg-open / first of xdg-terminal-exec, gnome-terminal, kgx, konsole, …

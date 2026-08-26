@@ -12,6 +12,7 @@ import subprocess
 import sys
 import argparse
 import re
+import tempfile
 
 # Parse command-line arguments BEFORE importing dependencies
 def parse_arguments():
@@ -69,7 +70,7 @@ try:
     import re
     import time
     import portalocker
-    from typing import Any, List, Optional, Dict, Tuple, Union
+    from typing import Any, List, Mapping, Optional, Dict, Tuple, Union
     from command_parser_v2 import CommandParser
     from textual import events
     from textual.app import App, ComposeResult, InvalidThemeError, SuspendNotSupported
@@ -88,12 +89,16 @@ try:
         RE_VAR_NAME,
         LAZY_PLACEHOLDERS,
         command_requests_placeholder,
+        diff_exported_env,
         expand_aliases,
+        format_env_followup,
         last_nonempty_line,
         load_aliases_from_file,
+        load_env_dump,
         parse_bashrc_assignment,
         parse_standalone_cd,
         substitute_variables,
+        wrap_tty_command,
     )
     from seed_catalog import (
         KNOWN_SEED_SCRIPTS,
@@ -139,7 +144,15 @@ RE_BANG_PARTIAL = re.compile(
     r'^!([A-Za-z_][A-Za-z0-9_]*)(\[(\d*)(\]?))?$'
 )
 RE_COLON_H_SEARCH = re.compile(r"^:h\s*/(.*)$")
+RE_HELP_KEEP_MARKUP = re.compile(r"(\[/?bold\])")
+RE_TAG_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 TOKEN_SEPS = frozenset(" \t|&;")
+
+
+def escape_help_markup(text: str) -> str:
+    """Keep ``[bold]`` tags; escape other ``[brackets]`` so Rich does not swallow them."""
+    parts = RE_HELP_KEEP_MARKUP.split(text)
+    return "".join(part if i % 2 else escape(part) for i, part in enumerate(parts))
 
 
 # ============================================================================
@@ -1397,7 +1410,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.30"
+    VERSION = "v1.31"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1485,6 +1498,7 @@ class CommandRunner(App):
     CMD_BACKUP = "backup"
     CMD_FM = "fm"
     CMD_TERM = "term"
+    CMD_ENV = "env"
     KEY_CHECK_UPDATES = "check_updates"
     KEY_THEME = "theme"
     KEY_SCREENSAVER_IDLE = "screensaver_idle"
@@ -1536,6 +1550,7 @@ class CommandRunner(App):
         # Kubernetes Ingress Analyzer
         self.ingress_analyzer: Optional[IngressAnalyzer] = None
         self._old_cwd: Optional[str] = None
+        self._data_dir: str = os.getcwd()
         self._search_pattern: str = ""
         self._search_hits: List[Tuple[Static, int]] = []
         self._search_index: int = -1
@@ -1948,11 +1963,33 @@ class CommandRunner(App):
             self._scroll_journal_and_focus(-1)
         event.stop()
 
+    def _data_path(self, name: str) -> str:
+        """Resolve an app data file against the launch directory, not the shell cwd."""
+        raw = os.path.expanduser((name or "").strip() or ".")
+        if os.path.isabs(raw):
+            return os.path.normpath(raw)
+        home = getattr(self, "_data_dir", None) or os.getcwd()
+        return os.path.abspath(os.path.join(home, raw))
+
+    def _pin_instance_files(self) -> None:
+        """Keep settings / history / bashrc in the launch dir after ``:cd``."""
+        name = getattr(self, "instance_name", None) or INSTANCE_NAME
+        self.FILE_SETTINGS = self._data_path("settings.yml")
+        self.FILE_HISTORY_LEGACY = self._data_path("history.txt")
+        self.FILE_HISTORY = self._data_path(history_file_for(name))
+        self.FILE_BASHRC = self._data_path(bashrc_file_for(name))
+
+    def _shared_bashrc_path(self) -> str:
+        return self._data_path(".bashrc_term")
+
     def on_mount(self) -> None:
         """
         Вызывается при старте приложения.
         Загружает настройки, базу данных и переменные окружения.
         """
+        self._data_dir = os.getcwd()
+        self._pin_instance_files()
+
         # 0. Привязать список подсказок к полю ввода
         cmd_input = self.query_one(f"#{self.ID_INPUT}", CommandInput)
         cmd_input.set_completion_list(self._completion_list)
@@ -1982,6 +2019,9 @@ class CommandRunner(App):
         except (FileNotFoundError, KeyError, yaml.YAMLError):
             pass
 
+        # Tags DB is the library, not the shell cwd. Pin before init/connect.
+        self.db_file = self._data_path(self.db_file or self.FILE_DATABASE)
+
         # 2. Инициализация базы данных (файл создаётся, если его нет в клоне)
         try:
             database.init_db(self.db_file)
@@ -1994,11 +2034,12 @@ class CommandRunner(App):
         # 2.5. Миграция .bashrc_term -> .bashrc_term_{INSTANCE_NAME} для обратной совместимости
         if INSTANCE_NAME != "default":
             # Если существует старый .bashrc_term и нет нового с суффиксом, копируем
-            if os.path.exists(".bashrc_term") and not os.path.exists(self.FILE_BASHRC):
+            shared_bashrc = self._shared_bashrc_path()
+            if os.path.exists(shared_bashrc) and not os.path.exists(self.FILE_BASHRC):
                 try:
                     import shutil
-                    shutil.copy(".bashrc_term", self.FILE_BASHRC)
-                    self.add_block(InfoBlock(f"Migrated .bashrc_term -> {self.FILE_BASHRC}"))
+                    shutil.copy(shared_bashrc, self.FILE_BASHRC)
+                    self.add_block(InfoBlock(f"Migrated .bashrc_term -> {os.path.basename(self.FILE_BASHRC)}"))
                     self.set_timer(3, self.clear_subtitle)
                 except Exception as e:
                     pass  # Ошибка миграции не критична
@@ -2008,7 +2049,7 @@ class CommandRunner(App):
         if compacted and compacted[2]:
             before, after, _ = compacted
             self.add_block(InfoBlock(
-                f"Compacted {self.FILE_HISTORY}: {before} → {after} lines "
+                f"Compacted {os.path.basename(self.FILE_HISTORY)}: {before} → {after} lines "
                 f"(keep {self.history_keep})"
             ))
 
@@ -2176,8 +2217,9 @@ class CommandRunner(App):
 
         try:
             bashrc_files = [self.FILE_BASHRC]
-            if self.FILE_BASHRC != ".bashrc_term" and os.path.exists(".bashrc_term"):
-                bashrc_files.append(".bashrc_term")
+            shared_bashrc = self._shared_bashrc_path()
+            if os.path.abspath(self.FILE_BASHRC) != os.path.abspath(shared_bashrc) and os.path.exists(shared_bashrc):
+                bashrc_files.append(shared_bashrc)
 
             seen_keys = set()
             for bashrc_file in bashrc_files:
@@ -2311,6 +2353,29 @@ class CommandRunner(App):
         inp.value = text
         inp.cursor_position = len(text)
         inp.focus()
+        if getattr(self, "_completion_list", None) is not None:
+            self._completion_list.hide()
+
+    def insert_input_at_cursor(self, text: str) -> None:
+        """Insert text at the input cursor. Does not replace the line or steal focus."""
+        chunk = text or ""
+        if not chunk:
+            return
+        inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        current = inp.value or ""
+        pos = inp.cursor_position
+        if pos < 0 or pos > len(current):
+            pos = len(current)
+        before = current[:pos]
+        after = current[pos:]
+        if before and not before.endswith((" ", "\t")):
+            chunk = " " + chunk
+        if after.startswith((" ", "\t")):
+            chunk = chunk.rstrip()
+        new_val = before + chunk + after
+        inp._applying_completion = True
+        inp.value = new_val
+        inp.cursor_position = len(before) + len(chunk)
         if getattr(self, "_completion_list", None) is not None:
             self._completion_list.hide()
 
@@ -2581,7 +2646,9 @@ class CommandRunner(App):
         """
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
         container.mount(block)
-        block.focus()  # Кратковременно фокусируем, чтобы обновить active_pipe_source
+        # Не скроллить весь блок в кадр: длинный :? / ?? с height:auto иначе
+        # подвисает на layout. Фокус нужен, чтобы on_focus выставил pipe-source.
+        block.focus(scroll_visible=False)
         self.query_one(f"#{self.ID_INPUT}", Input).focus()
         if follow_end:
             self._schedule_journal_follow_end()
@@ -3056,6 +3123,8 @@ class CommandRunner(App):
             self._handle_gui_open(self.CMD_FM, parts[1:])
         elif command == self.CMD_TERM:
             self._handle_gui_open(self.CMD_TERM, parts[1:])
+        elif command == self.CMD_ENV:
+            self._handle_env_reload(parts[1:])
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
 
@@ -3082,6 +3151,64 @@ class CommandRunner(App):
             self.add_block(InfoBlock(str(exc)))
             return
         self.add_block(InfoBlock(format_opened(argv, proc.pid)))
+
+    def _handle_env_reload(self, args: List[str]) -> None:
+        """Re-read `.bashrc_term*` (and `~/.bashrc` aliases) into this process."""
+        if args:
+            self.add_block(InfoBlock("Usage: :env"))
+            return
+        self.load_bashrc()
+        self.load_aliases()
+        extra = ""
+        shared_bashrc = self._shared_bashrc_path()
+        if os.path.abspath(self.FILE_BASHRC) != os.path.abspath(shared_bashrc) and os.path.exists(shared_bashrc):
+            extra = " (+ .bashrc_term)"
+        self.add_block(InfoBlock(
+            f"Reloaded {os.path.basename(self.FILE_BASHRC)}{extra}: {len(self.local_env)} vars"
+        ))
+
+    def _apply_env_diff(self, updates: Dict[str, str], removed: List[str]) -> None:
+        for key, value in updates.items():
+            self.local_env[key] = value
+            os.environ[key] = value
+        for key in removed:
+            self.local_env.pop(key, None)
+            os.environ.pop(key, None)
+
+    def _adopt_tty_cwd(self, pwd: str) -> Optional[str]:
+        """Match the TUI cwd to the TTY shell's $PWD. None if unchanged/invalid."""
+        if not pwd or not os.path.isdir(pwd):
+            return None
+        target = os.path.abspath(pwd)
+        if target == os.path.abspath(os.getcwd()):
+            return None
+        old = os.getcwd()
+        try:
+            os.chdir(target)
+        except OSError:
+            return None
+        self._old_cwd = old
+        os.environ["OLDPWD"] = old
+        os.environ["PWD"] = os.getcwd()
+        return os.getcwd()
+
+    def _ingest_tty_session(self, env_path: str, pwd_path: str, before: Mapping[str, str]) -> List[str]:
+        """Reload `.bashrc_term*`, overlay TTY exports, adopt child cwd."""
+        self.load_bashrc()
+        dumped = load_env_dump(env_path)
+        updates: Dict[str, str] = {}
+        removed: List[str] = []
+        if dumped is not None:
+            updates, removed = diff_exported_env(before, dumped)
+            self._apply_env_diff(updates, removed)
+        new_cwd = None
+        try:
+            with open(pwd_path, "r", encoding=self.ENCODING) as fh:
+                new_cwd = self._adopt_tty_cwd(fh.read())
+        except OSError:
+            new_cwd = None
+        names = sorted(set(updates) | set(removed))
+        return format_env_followup(names, new_cwd)
 
     def _handle_backup_command(self, args: List[str]) -> None:
         if args:
@@ -3116,6 +3243,24 @@ class CommandRunner(App):
         self.set_input_draft(seed_invoke(name))
         self.call_after_refresh(self.action_focus_input)
 
+    def action_insert_bang_draft(self, tag: str = "", tid: str = "") -> None:
+        """Click a tag / tag[tid] in ?? — insert ``!tag `` or ``!tag[tid] `` at the cursor.
+
+        Never replaces the input line (so assembling a command is not wiped).
+        Does not run the command. Focus stays on the journal.
+        """
+        name = (tag or "").strip()
+        if not RE_TAG_NAME.match(name):
+            return
+        extra = (tid or "").strip()
+        if extra:
+            if not extra.isdigit():
+                return
+            draft = f"!{name}[{int(extra)}] "
+        else:
+            draft = f"!{name} "
+        self.insert_input_at_cursor(draft)
+
     def action_open_handbook_md(self, filename: str = "") -> None:
         """Open a repo handbook .md in a formatted modal (click from welcome or :md)."""
         name = (filename or "").strip()
@@ -3134,7 +3279,7 @@ class CommandRunner(App):
         self.push_screen(HandbookMarkdownScreen(path, text))
 
     def _change_cwd(self, path: str) -> None:
-        """Меняет cwd процесса приложения (cd / :cd)."""
+        """Меняет cwd процесса для shell-команд. Библиотека тегов остаётся в каталоге запуска."""
         if path == "-":
             target = self._old_cwd or os.environ.get("OLDPWD")
             if not target:
@@ -3282,11 +3427,11 @@ class CommandRunner(App):
 
     def _session_status_text(self) -> str:
         name = getattr(self, "instance_name", INSTANCE_NAME) or INSTANCE_NAME
-        names = ", ".join(list_session_names())
+        names = ", ".join(list_session_names(getattr(self, "_data_dir", ".") or "."))
         return (
             f"Session: {name}\n"
-            f"  {self.FILE_BASHRC}  {self.FILE_HISTORY}\n"
-            f"  Tags DB is shared ({self.db_file}).\n"
+            f"  {os.path.basename(self.FILE_BASHRC)}  {os.path.basename(self.FILE_HISTORY)}\n"
+            f"  Tags DB is shared ({os.path.basename(self.db_file)}).\n"
             f"Sessions: {names}\n"
             "Usage: :session NAME"
         )
@@ -3326,12 +3471,13 @@ class CommandRunner(App):
             self.add_block(InfoBlock(self._session_status_text()))
             return
         created = (
-            not os.path.exists(history_file_for(name))
-            and not os.path.exists(bashrc_file_for(name))
+            not os.path.exists(self._data_path(history_file_for(name)))
+            and not os.path.exists(self._data_path(bashrc_file_for(name)))
         )
         self._unload_session_env()
         apply_instance_name(name)
         self.instance_name = name
+        self._pin_instance_files()
         self.session_history = []
         self.session_history_pos = 0
         self._playbook_log.clear()
@@ -3347,7 +3493,7 @@ class CommandRunner(App):
         verb = "Created" if created else "Switched to"
         self.add_block(InfoBlock(
             f"{verb} session {name}\n"
-            f"  {self.FILE_BASHRC}  {self.FILE_HISTORY}\n"
+            f"  {os.path.basename(self.FILE_BASHRC)}  {os.path.basename(self.FILE_HISTORY)}\n"
             f"  Tags DB is shared. Journal stays. Playbook log cleared.{extra}"
         ))
         self.sub_title = f"Session {name}"
@@ -3595,15 +3741,16 @@ class CommandRunner(App):
   :json <file>- Open JSON file in viewer
   :md <file>  - Open a handbook .md with formatting (Esc closes)
   :i          - Kubernetes Ingress Analyzer (see :i for details)
-  :cd [path]  - Show or change the app working directory (also: cd path)
+  :cd [path]  - Show or change the shell cwd (tags DB / history stay at launch dir)
   :fm [path]  - Open the OS file manager in a new window (cwd or path)
   :term [path] - Open a system terminal in a new window (cwd or path)
                 $FILEMAN / $TERMINAL override the OS default
+  :env        - Re-read .bashrc_term* (and ~/.bashrc aliases) into this process
   :session    - Show the current instance (history + .bashrc_term files)
   :session NAME - Switch to that instance or create it (tags DB stays shared)
   :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
-  :screensaver  - Starfield; flying clock/date; green ticker (idle: screensaver_idle; 0 = off)
+  :screensaver  - Starfield; full-width ticker; bottom-left help; bottom-right load/mem (idle: screensaver_idle; 0 = off)
   :r          - Put the focused (or last) block command into the input
   :/text  :g  - Search journal lines; :n / n next, :N / N prev. / on a block starts :/
   :export tag [file] - Write one tag to JSON
@@ -3624,11 +3771,14 @@ class CommandRunner(App):
 [bold]Command Prefixes[/bold]
   (none)     - Execute shell command
   > <cmd>    - Suspend TUI and run with a real TTY (htop, vim, ssh, less)
+               After exit: import that shell's export/unset and $PWD; also :env
   #<tag>     - Save command to database with tag (`#tag cmd`, no space after #)
   # command  - Park a line in history without running (bash-style; space after #)
   #tag! / #tag!tid - Restore soft-deleted tag / command
   #name-- / #name!! - Hide / restore a handbook's tags (ansible, linux, k8s, …)
   ?          - Query database (? tags, ?<tag>, ?? grouped; ?? lists hidden tags)
+               In ?? click a tag → insert `!tag ` / `!tag[tid] ` at the cursor
+               (does not replace the line; terminal_mouse). Esc → input, then Enter.
   !tag / !tag[tid] - Type ! to list tags [file, kube, log]; Tab picks a tag
                Then commands show as `<id> tag[tid]  full command`; Tab inserts `!tag[tid]`
                Compose pipes/saves: `#file !file[1] | !file[2]` (preview expands refs)
@@ -3688,6 +3838,9 @@ class CommandRunner(App):
   $OUT is the last line of the focused/last command block, computed only when
   the command contains $OUT / ${OUT} (not kept in memory as a variable)
   $VAR also loaded from .bashrc_term and .bashrc_term_<instance>
+  :env re-reads those files. After `> cmd`, exports from that same bash
+  are imported (nested `> bash` then export inside does not: same-shell only).
+  TTY exports stay in this session; `$VAR=val` still writes .bashrc_term_*
 
 [bold]Demo mode[/bold]
   python3 app.py --demo              - Play bundled short tour (Esc stops)
@@ -3709,7 +3862,15 @@ class CommandRunner(App):
   Live DB is copied to backups/ first; :backup does the same snapshot by hand.
   Click a green --seed line to insert it, then Enter. Click a .md name (terminal_mouse) or :md SEED_LINUX_COMMANDS.md to read the handbook.
 """
-        self.add_block(InfoBlock(help_text.replace("IDvjPy_term VER", f"IDvjPy_term {self.VERSION}", 1)))
+        self.add_block(
+            InfoBlock(
+                escape_help_markup(
+                    help_text.replace("IDvjPy_term VER", f"IDvjPy_term {self.VERSION}", 1)
+                )
+            ),
+            follow_end=False,
+        )
+        self._schedule_journal_home()
 
     def _show_ingress_help(self) -> None:
         """Show ingress command help."""
@@ -4248,6 +4409,19 @@ class CommandRunner(App):
         else:
             self.add_block(InfoBlock("Invalid syntax. Use: #tag <command> or #tag=<comment>"))
 
+    def _clickable_bang_ref(self, tag: str, tid: Optional[int] = None) -> str:
+        """Rich ``@click`` that inserts ``!tag `` or ``!tag[tid] `` at the input cursor."""
+        if tid is None:
+            action = f"app.insert_bang_draft('{tag}')"
+            label = tag
+        else:
+            action = f"app.insert_bang_draft('{tag}', '{int(tid)}')"
+            label = f"{tag}[{tid}]"
+        return (
+            f"[@click={action}]"
+            f"[bold underline #8a6bb5]{escape(label)}[/][/]"
+        )
+
     def _format_tagged_command_line(
         self,
         gid: int,
@@ -4257,9 +4431,8 @@ class CommandRunner(App):
         cmd_comment: str = "",
     ) -> str:
         """Строка для ?? / ?tag. escape, иначе Rich съедает `[tid]` и комментарий."""
-        ref = escape(f"{tag}[{tid}]")
         cmd = escape(command or "")
-        line = f"  [dim]<{gid}>[/dim] [bold]{ref}[/bold]  {cmd}"
+        line = f"  [dim]<{gid}>[/dim] {self._clickable_bang_ref(tag, tid)}  {cmd}"
         comment = (cmd_comment or "").strip()
         if comment:
             line += f"  [dim]# {escape(comment)}[/dim]"
@@ -4382,10 +4555,11 @@ class CommandRunner(App):
 
                     for tag, items in sorted(commands_by_tag.items()):
                         comment = comments_dict.get(tag, "")
+                        heading = self._clickable_bang_ref(tag)
                         if comment:
-                            content += f"\n- {tag} ({comment}):\n"
+                            content += f"\n- {heading} ({escape(comment)}):\n"
                         else:
-                            content += f"\n- {tag}:\n"
+                            content += f"\n- {heading}:\n"
                         for gid, tid, cmd, cmd_comment in items:
                             content += self._format_tagged_command_line(
                                 gid, tag, tid, cmd, cmd_comment
@@ -4644,6 +4818,7 @@ class CommandRunner(App):
         self.session_history_pos = len(self.session_history)
 
         final_command = self._expand_aliases(self._substitute_variables(command))
+        self._tty_followup_lines: List[str] = []
         try:
             return_code = self._run_in_tty(final_command)
         except SuspendNotSupported:
@@ -4654,20 +4829,44 @@ class CommandRunner(App):
         except Exception as e:
             self.add_block(InfoBlock(f"TTY error: {e}"))
             return
-        self.add_block(InfoBlock(
-            f"TTY: {escape(final_command)}\nExit code: {return_code}"
-        ))
+        extra = getattr(self, "_tty_followup_lines", None) or []
+        self._tty_followup_lines = []
+        text = f"TTY: {escape(final_command)}\nExit code: {return_code}"
+        if extra:
+            text += "\n" + "\n".join(extra)
+        self.add_block(InfoBlock(text))
         self._request_shift_enter_encoding()
 
     def _run_in_tty(self, command: str) -> int:
-        """Отдаёт терминал дочернему процессу (без таймаута и захвата stdout)."""
-        with self.suspend():
-            completed = subprocess.run(
-                command,
-                shell=True,
-                executable="/bin/bash",
+        """Отдаёт терминал дочернему процессу; после выхода подхватывает env/PWD."""
+        env_path = ""
+        pwd_path = ""
+        before = {**os.environ, **self.local_env}
+        child_env = {**os.environ, **self.local_env}
+        try:
+            fd, env_path = tempfile.mkstemp(prefix="idvjopy_env_", suffix=".json")
+            os.close(fd)
+            fd, pwd_path = tempfile.mkstemp(prefix="idvjopy_pwd_")
+            os.close(fd)
+            wrapper = wrap_tty_command(command, env_path, pwd_path, sys.executable)
+            with self.suspend():
+                completed = subprocess.run(
+                    wrapper,
+                    shell=True,
+                    executable="/bin/bash",
+                    env=child_env,
+                )
+            self._tty_followup_lines = self._ingest_tty_session(
+                env_path, pwd_path, before
             )
             return completed.returncode
+        finally:
+            for path in (env_path, pwd_path):
+                if path:
+                    try:
+                        os.unlink(path)
+                    except OSError:
+                        pass
 
     def handle_normal_command(self, command: str, stdin_data: Optional[str] = None, record_history: bool = True) -> None:
         """
@@ -5050,11 +5249,11 @@ def validate_instance_name(name: str) -> Optional[str]:
     return text
 
 
-def list_session_names() -> List[str]:
-    """Names that already have history or bashrc files in cwd, plus the current one."""
+def list_session_names(directory: str = ".") -> List[str]:
+    """Names that already have history or bashrc files in the data dir, plus the current one."""
     names = {INSTANCE_NAME}
     try:
-        for entry in os.listdir("."):
+        for entry in os.listdir(directory):
             if entry.startswith("history_") and entry.endswith(".txt"):
                 stem = entry[len("history_"):-len(".txt")]
                 if stem:

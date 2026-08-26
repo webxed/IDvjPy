@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.30**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.31**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -15,7 +15,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | Prefix | Action |
 |--------|--------|
 | (none) | Execute shell command |
-| `> cmd` | Suspend TUI, run with a real TTY (`htop`, `vim`, `ssh`) |
+| `> cmd` | Suspend TUI, run with a real TTY (`htop`, `vim`, `ssh`). On exit: import that shell's env and `$PWD` |
 | `#tag cmd` | Save (literal text; refs `!tag[tid]` not expanded on save) |
 | `# command` | Park in instance history + journal, do not run (`#` + space) |
 | `#tag=` / `#tag=ID=` | Tag / command comment (ID = tid or global `<id>`) |
@@ -26,7 +26,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:fm` `:term` `:session` `:welcome` `:backup` `:screensaver` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:update` |
+| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:fm` `:term` `:env` `:session` `:welcome` `:backup` `:screensaver` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:update` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -113,6 +113,8 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 - `$JSON` from viewer; `$NS` from `:i … -n`.
 - `$OUT` is the last non-empty line of the focused (or last) command block, computed only when the typed command contains `$OUT` / `${OUT}`. Not written to `.bashrc_term` / `local_env`. `$OUT=` is rejected.
 - Env files **merged**: `.bashrc_term_<instance>` wins on name clash; extras from `.bashrc_term` still load (`MYVAR` in `.bashrc_term` + `NS` in `_default`). Also accepts `VAR=val` without `export`.
+- `:env` re-reads those files (and `~/.bashrc` aliases) in a running app.
+- After `> cmd`, the same bash dumps its environment: new/changed exports overlay `local_env` / `os.environ` for this session (not written to `.bashrc_term`). `$PWD` is adopted if the TTY shell `cd`'d. Nested `> bash` then `export` inside that inner shell is not visible.
 - `$VAR=val` writes the instance file (`.bashrc_term_default` by default).
 - `-n` without value → explicit error (no silent fallback).
 
@@ -128,9 +130,9 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.6 (app v1.30) |
+| `test_cmd.md` | Manual plan v1.6 (app v1.31) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
-| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
+| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
 | `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
@@ -148,8 +150,8 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | File | Purpose |
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
-| `src/app.py` | TUI (`CommandRunner`), v1.30 |
-| `src/screensaver.py` | Idle starfield + flying clock/date + green library ticker (`:screensaver`) |
+| `src/app.py` | TUI (`CommandRunner`), v1.31 |
+| `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
 | `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
 | `src/seed_catalog.py` | Empty-DB welcome catalog (click `--seed` / `.md`) |
@@ -169,6 +171,13 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 ---
 
+## v1.31
+
+- **Screensaver:** снизу слева печать справки команд; снизу справа `load avg` и `mem` (опрос `/proc` раз в секунду). Зелёная лента тегов — на всю ширину сверху.
+- **`:cd`:** меняет cwd для shell; `mytags.db`, история и `.bashrc_term*` остаются в каталоге запуска.
+- **`> cmd` / `:env`:** после TTY подхватываются `export` и `$PWD` той же оболочки; `:env` перечитывает `.bashrc_term*`.
+- **`??`:** клик по тегу вставляет `!tag` в позицию курсора, не затирает строку.
+
 ## v1.30
 
 - **`:fm` / `:term`:** проводник и системный терминал в новом окне (cwd или путь). Не ждут GUI и не забирают этот TTY. Linux / macOS / Windows; `$FILEMAN` / `$TERMINAL` перекрывают дефолт.
@@ -183,7 +192,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 ## v1.28
 
-- **Screensaver:** после `screensaver_idle` секунд простоя (по умолчанию 120, `0` = выкл) — полноэкранный starfield в духе Norton Commander, ближе к зрителю токены `k8s` / `git` / `!tag` / `!!`. `:screensaver` — сразу; любая клавиша или клик закрывает и не попадает во ввод. Во время `--demo` не стартует.
+- **Screensaver:** после `screensaver_idle` секунд простоя (по умолчанию 120, `0` = выкл) — полноэкранный starfield в духе Norton Commander, ближе к зрителю токены `k8s` / `git` / `!tag` / `!!`. Сверху зелёная лента библиотеки; снизу справка команд (печать слева направо, пауза, случайный порядок). `:screensaver` — сразу; любая клавиша или клик закрывает и не попадает во ввод. Во время `--demo` не стартует.
 
 ## v1.27
 
@@ -249,13 +258,13 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 - **Ctrl+V** in line-cursor mode also handles terminal **Paste** events (many emulators send paste instead of the `ctrl+v` key; that is why Ctrl+J worked and Ctrl+V did not).
 - **Ctrl+D** in the input clears the entire line (overrides Textual's delete-char-right).
 - **`!file` / `!kube` completion**: type `!` to list tags `[file, kube, log]`; then commands as `<id> tag[tid]  full command`; Tab inserts only `!tag[tid]`. Preview expands refs while composing `#file !file[1] | !file[2]`.
-- **`??` / `?tag`**: command comments (`#tag=ID=comment`) are shown as dim `# comment`. Tag refs `tag[tid]` are Rich-escaped so `[tid]` does not swallow the rest of the line.
+- **`??` / `?tag`**: command comments (`#tag=ID=comment`) are shown as dim `# comment`. Tag refs `tag[tid]` are Rich-escaped so `[tid]` does not swallow the rest of the line. Click a tag header / `tag[tid]` inserts `!tag ` / `!tag[tid] ` at the input cursor (does not replace the line; `terminal_mouse: true`).
 - **`#tag=ID=comment`**: ID is tid first, then global `<id>` from `??`. Missing command → error (no fake success). UPDATE only live rows.
 - **Completion list** grows with the number of hints (up to 24 / terminal height). Footer always shows whether the list is complete (`8/8 all`) or truncated (`1–16 / 40 ↓24 more`).
 - **Line-cursor toggle** is **F2** (was F7).
 - **Copy block** is **F3** (was F5). JSON viewer is **F5**.
 - Footer hints: Esc Focus Input, F2 Line cursor, F3 Copy Block, F5 JSON Viewer, F6 Simple output.
-- **`> cmd`**: suspend the TUI and run with a real TTY (`> htop`, `> vim file`). No timeout, stdout is not captured. `>>` is left to the shell.
+- **`> cmd`**: suspend the TUI and run with a real TTY (`> htop`, `> vim file`). No timeout, stdout is not captured. `>>` is left to the shell. On exit the same bash's `export`/`unset` and `$PWD` are imported; `:env` re-reads `.bashrc_term*` without a TTY.
 - Click a journal block to focus it. Arrows / PgUp / PgDn scroll the journal and activate the **visible** block without jumping to its first line. `terminal_mouse: true` is required for clicks.
 - Alias bodies with `$1` / `$2` / `$@` substitute arguments (`klogin cluster` → `tsh kube login cluster`). Aliases without `$1` still append the rest of the line.
-- **`cd` / `:cd`**: change the app process cwd (standalone `cd`, no `&&`). `:fm` / `:term` open the OS file manager or a system terminal in a new window (detached; `$FILEMAN` / `$TERMINAL` override). `:r` puts the focused block command into the input. `:/text` / `:g` / `:n` / `:N` search journal **lines** (line-cursor on the hit; `n`/`N` on a focused block). `/` on a block starts `:/`. `#tag!` restores soft-delete. `:export` / `:import` one tag as JSON.
+- **`cd` / `:cd`**: change the process cwd for shell commands (standalone `cd`, no `&&`). Tags DB, history, and `.bashrc_term*` stay in the launch directory. `:fm` / `:term` open the OS file manager or a system terminal in a new window (detached; `$FILEMAN` / `$TERMINAL` override). `:r` puts the focused block command into the input. `:/text` / `:g` / `:n` / `:N` search journal **lines** (line-cursor on the hit; `n`/`N` on a focused block). `/` on a block starts `:/`. `#tag!` restores soft-delete. `:export` / `:import` one tag as JSON.

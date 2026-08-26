@@ -1,5 +1,5 @@
 """Базовые сценарии: ввод, выполнение, история, переменные, выход."""
-from app import CommandBlock, CommandRunner, InfoBlock
+from app import CommandBlock, CommandRunner, InfoBlock, escape_help_markup
 
 from tests.conftest import input_widget, last_info, submit, type_keys, wait_command_done
 
@@ -382,6 +382,8 @@ async def test_instance_name_uses_separate_history_file(isolated_home, monkeypat
 
 async def test_colon_session_creates_and_switches(isolated_home):
     """`:session NAME` creates files on the fly; env and history stay per instance."""
+    import os
+    from pathlib import Path
     from app import apply_instance_name
 
     try:
@@ -404,8 +406,9 @@ async def test_colon_session_creates_and_switches(isolated_home):
             switched = last_info(app).text_content
             assert "Created session ops" in switched
             assert app.instance_name == "ops"
-            assert app.FILE_HISTORY == "history_ops.txt"
-            assert app.FILE_BASHRC == ".bashrc_term_ops"
+            assert os.path.basename(app.FILE_HISTORY) == "history_ops.txt"
+            assert os.path.basename(app.FILE_BASHRC) == ".bashrc_term_ops"
+            assert Path(app.FILE_HISTORY).resolve() == (isolated_home / "history_ops.txt").resolve()
             assert (isolated_home / ".bashrc_term_ops").is_file()
             assert app.local_env.get("ALPHA") != "from-default"
 
@@ -767,6 +770,37 @@ async def test_tty_prefix_no_space(isolated_home, monkeypatch):
         assert "Exit code: 3" in last_info(app).text_content
 
 
+async def test_tty_imports_same_shell_export(isolated_home, monkeypatch):
+    """After `> export`, the TUI process sees the child's variable."""
+    from contextlib import nullcontext
+    import os
+
+    monkeypatch.setattr(CommandRunner, "suspend", lambda self: nullcontext())
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "> export IDVJOPY_TTY_VAR=from-child")
+        assert app.local_env.get("IDVJOPY_TTY_VAR") == "from-child"
+        assert os.environ.get("IDVJOPY_TTY_VAR") == "from-child"
+        text = last_info(app).text_content
+        assert "Exit code: 0" in text
+        assert "env: IDVJOPY_TTY_VAR" in text
+
+
+async def test_colon_env_reloads_bashrc(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":env extra")
+        assert "Usage: :env" in last_info(app).text_content
+        path = isolated_home / CommandRunner.FILE_BASHRC
+        path.write_text("export FROMFILE=after-edit\n", encoding="utf-8")
+        await submit(pilot, ":env")
+        assert app.local_env.get("FROMFILE") == "after-edit"
+        text = last_info(app).text_content
+        assert "Reloaded" in text
+        assert "vars" in text
+        assert app.local_env.get("FROMFILE") == "after-edit"
+
+
 async def test_cd_changes_app_cwd(isolated_home):
     import os
     from pathlib import Path
@@ -794,6 +828,31 @@ async def test_colon_cd_and_missing_dir(isolated_home):
         await submit(pilot, ":cd no-such-idivjopy-dir")
         assert "not a directory" in last_info(app).text_content
         assert os.getcwd() == here
+
+
+async def test_cd_keeps_tags_db_in_launch_dir(isolated_home):
+    """Relative mytags.db / test_history.db must not be created after :cd."""
+    import os
+    from pathlib import Path
+    import database_v2 as database
+
+    sub = isolated_home / "inner"
+    sub.mkdir()
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "#keep echo stay-in-launch-db")
+        home_db = isolated_home / "test_history.db"
+        assert home_db.is_file()
+        await submit(pilot, "cd inner")
+        app._periodic_db_reload()
+        await submit(pilot, "??")
+        assert os.path.abspath(app.db_file) == str(home_db.resolve())
+        assert not (sub / "test_history.db").exists()
+        assert not (sub / "mytags.db").exists()
+        rows = database.get_commands_by_tag(app.db_file, "keep")
+        assert any("stay-in-launch-db" in (row["command"] or "") for row in rows)
+        hist_name = Path(app.FILE_HISTORY).name
+        assert not (sub / hist_name).exists()
 
 
 def _patch_gui_spawn(monkeypatch, which_names):
@@ -893,6 +952,35 @@ async def test_colon_term_no_default_binary(isolated_home, monkeypatch):
         await submit(pilot, ":term")
         assert "set $TERMINAL=" in last_info(app).text_content
         assert "argv" not in captured
+
+
+async def test_colon_help_stays_responsive(isolated_home):
+    """:? must not freeze the TUI; input keeps focus and [path] stays visible."""
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, ":?")
+        assert input_widget(app).has_focus
+        text = last_info(app).text_content
+        assert "Commands Help" in text
+        assert ":fm" in text
+        assert ":term" in text
+        assert ":env" in text
+        assert "[path]" in text
+        await submit(pilot, "echo after-help")
+        block = await wait_command_done(app)
+        assert "after-help" in block.raw_stdout
+
+
+def test_escape_help_markup_keeps_bold_and_brackets():
+    from rich.text import Text
+
+    raw = "[bold]Title[/bold]\n  :fm [path] - open\n  !tag[tid]"
+    marked = escape_help_markup(raw)
+    plain = Text.from_markup(marked).plain
+    assert "Title" in plain
+    assert "[path]" in plain
+    assert "!tag[tid]" in plain
+    assert "[bold]" not in plain
 
 
 async def test_replay_puts_command_in_input(isolated_home):

@@ -2,16 +2,19 @@
 
 Stars fly toward the viewer (classic NC screensaver). Closer particles
 become kubectl/git/helm tokens and IDvjPy fragments. Live clock and date
-drift with them. Live tags/commands from the library scroll as a bright-green
-ticker at the top. Any key or click dismisses the overlay; that key is not
+drift with them. Live tags/commands from the library scroll full-width at
+the top. Command help types along the bottom left; load 1/5/15 and RAM sit
+on the bottom right with the same corner inset (they may overlap in a
+narrow terminal). Any key or click dismisses the overlay; that key is not
 typed into the prompt.
 """
 from __future__ import annotations
 
+import os
 import random
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable, Iterable, List, Sequence, Tuple
+from typing import Callable, Iterable, List, Optional, Sequence, Tuple
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -48,10 +51,56 @@ STYLES_NEAR = ("bold #e2e8f0", "bold #5eead4", "bold #c4b5fd", "bold #86efac")
 STYLE_CLOCK_TIME = "bold #fde047"
 STYLE_CLOCK_DATE = "bold #67e8f9"
 STYLE_TICKER = "bold #00ff5f"
-HINT = "any key"
+STYLE_HELP = "#67e8f9"
+STYLE_HELP_CMD = "bold #67e8f9"
+STYLE_HOST_LOAD = "bold #fde047"
+STYLE_HOST_MEM = "bold #67e8f9"
 TICKER_SEP = "    ·    "
 TICKER_CPS = 2.5  # characters per second; slow crawl so it stays readable
+HELP_TYPE_CPS = 22.0
+HELP_PAUSE_SEC = 2.2
+HELP_INDENT_RATIO = 0.2  # off the left edge, left of center
+HOST_POLL_SEC = 1.0  # /proc reads; not every starfield frame
 CLOCK_LABELS = ("time", "date")
+
+# One-line Command help for the bottom typewriter (:? prefixes and :commands).
+COMMAND_HELP_LINES = (
+    ":?  — full command help",
+    ":q  — quit",
+    ":w file  — write journal to a file",
+    ":h [N]  — last N history lines",
+    ":h /text  — search history in completions",
+    ":c  — clear journal blocks",
+    ":json  — JSON viewer (last block or file)",
+    ":md file.md  — handbook Markdown viewer",
+    ":cd [path]  — show or change shell cwd (tags DB stays at launch dir)",
+    ":fm [path]  — OS file manager (new window)",
+    ":term [path]  — system terminal (new window)",
+    ":env  — re-read .bashrc_term* into this process",
+    ":session [NAME]  — show or switch instance",
+    ":welcome  — seed catalog",
+    ":backup  — snapshot the tags DB",
+    ":screensaver  — starfield now (idle: screensaver_idle)",
+    ":r  — focused block command into the input",
+    ":/text  — search journal lines; :n / :N next/prev",
+    ":theme [name]  — TUI theme (saved in settings.yml)",
+    ":playbook [file]  — dump this session as --demo YAML",
+    ":update  — compare VERSION with GitHub main",
+    ":i  — Kubernetes Ingress Analyzer",
+    "> cmd  — real TTY (htop, vim, ssh); env/$PWD come back",
+    "#tag cmd  — save literal template (refs not expanded)",
+    "# command  — park a line in history, do not run",
+    "#tag- / #tag!  — soft-delete / restore a tag",
+    "? / ??  — query tags; click inserts !tag at the cursor",
+    "!tag[tid]  — insert a template (does not run)",
+    "!!  — assemble refs into the input line",
+    "| cmd  — pipe focused block stdout",
+    "$VAR=val  — set env in .bashrc_term_<instance>",
+    "$OUT  — last line of the focused/last block (on demand)",
+    "Enter  — run the assembled line; ! / !! only insert",
+    "Tab  — focus last journal block (from input)",
+    "F2  — line-cursor in a block; F3 copy; F5 JSON",
+)
 
 
 def clock_glyph(moment: datetime, label: str) -> str:
@@ -64,6 +113,201 @@ def clock_glyph(moment: datetime, label: str) -> str:
 def flatten_command(text: str) -> str:
     """Collapse a command to a single ticker-friendly line."""
     return " ".join((text or "").split())
+
+
+@dataclass(frozen=True)
+class HostSnapshot:
+    load1: Optional[float] = None
+    load5: Optional[float] = None
+    load15: Optional[float] = None
+    mem_used: Optional[int] = None
+    mem_total: Optional[int] = None
+
+
+def format_bytes_short(n: int) -> str:
+    n = max(0, int(n))
+    gib = 1024 ** 3
+    mib = 1024 ** 2
+    if n >= gib:
+        val = n / gib
+        return f"{val:.1f}G" if val < 10 else f"{val:.0f}G"
+    if n >= mib:
+        return f"{n / mib:.0f}M"
+    if n >= 1024:
+        return f"{n / 1024:.0f}K"
+    return f"{n}B"
+
+
+def parse_meminfo(text: str) -> Tuple[Optional[int], Optional[int]]:
+    """Parse `/proc/meminfo` body → ``(used_bytes, total_bytes)``."""
+    kb: dict[str, int] = {}
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        key = parts[0].rstrip(":")
+        try:
+            kb[key] = int(parts[1])
+        except ValueError:
+            continue
+    total_kb = kb.get("MemTotal")
+    if not total_kb:
+        return None, None
+    avail_kb = kb.get("MemAvailable")
+    if avail_kb is None:
+        avail_kb = kb.get("MemFree", 0) + kb.get("Buffers", 0) + kb.get("Cached", 0)
+    return max(0, (total_kb - avail_kb) * 1024), total_kb * 1024
+
+
+def read_meminfo(path: str = "/proc/meminfo") -> Tuple[Optional[int], Optional[int]]:
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return parse_meminfo(fh.read())
+    except OSError:
+        return None, None
+
+
+def read_loadavg() -> Optional[Tuple[float, float, float]]:
+    try:
+        return os.getloadavg()
+    except (OSError, AttributeError):
+        return None
+
+
+def read_host_snapshot(*, meminfo_path: str = "/proc/meminfo") -> HostSnapshot:
+    """Cheap kernel counters: loadavg + MemAvailable. No subprocess."""
+    load = read_loadavg()
+    used, total = read_meminfo(meminfo_path)
+    return HostSnapshot(
+        load1=None if load is None else load[0],
+        load5=None if load is None else load[1],
+        load15=None if load is None else load[2],
+        mem_used=used,
+        mem_total=total,
+    )
+
+
+def format_host_text(snap: HostSnapshot) -> Text:
+    """Compact ``load avg …  mem …`` for the bottom-right status."""
+    if snap.load1 is None or snap.load5 is None or snap.load15 is None:
+        load_s = "—"
+    else:
+        load_s = f"{snap.load1:.2f} {snap.load5:.2f} {snap.load15:.2f}"
+    if snap.mem_total:
+        pct = int(round(100.0 * (snap.mem_used or 0) / snap.mem_total))
+        mem_s = f"{format_bytes_short(snap.mem_used or 0)}/{format_bytes_short(snap.mem_total)} {pct}%"
+    else:
+        mem_s = "—"
+    line = Text()
+    line.append("load avg ", style=STYLE_HOST_LOAD)
+    line.append(load_s, style=STYLE_HOST_LOAD)
+    line.append("  mem ", style=STYLE_HOST_MEM)
+    line.append(mem_s, style=STYLE_HOST_MEM)
+    return line
+
+
+def _edge_pad(width: int) -> int:
+    """Same corner inset as the command-help typewriter."""
+    return min(max(2, int(width * HELP_INDENT_RATIO)), max(0, width - 4))
+
+
+def _text_cells(text: Text, width: int) -> List[Tuple[str, str]]:
+    padded = Text()
+    padded.append_text(text)
+    if padded.cell_len < width:
+        padded.append(" " * (width - padded.cell_len))
+    clipped = padded[:width]
+    plain = clipped.plain
+    styles = [""] * len(plain)
+    for span in clipped.spans:
+        style = str(span.style) if span.style else ""
+        for i in range(span.start, min(span.end, len(styles))):
+            styles[i] = style
+    cells = [(ch, styles[i] if i < len(styles) else "") for i, ch in enumerate(plain)]
+    if len(cells) < width:
+        cells.extend((" ", "") for _ in range(width - len(cells)))
+    return cells[:width]
+
+
+def _cells_to_text(cells: List[Tuple[str, str]]) -> Text:
+    line = Text()
+    buf: List[str] = []
+    prev = None
+    for ch, style in cells:
+        if style != prev:
+            if buf:
+                line.append("".join(buf), style=prev or None)
+                buf = []
+            prev = style
+        buf.append(ch)
+    if buf:
+        line.append("".join(buf), style=prev or None)
+    return line
+
+
+def render_host_line(snap: HostSnapshot, width: int) -> Text:
+    """Right-aligned load/mem with the same corner inset as command help."""
+    width = max(1, width)
+    pad = _edge_pad(width)
+    body = format_host_text(snap)
+    room = max(1, width - pad)
+    if body.cell_len > room:
+        body = body[:room]
+    left = max(0, width - pad - body.cell_len)
+    line = Text(" " * left)
+    line.append_text(body)
+    if line.cell_len < width:
+        line.append(" " * (width - line.cell_len))
+    return line[:width]
+
+
+def overlay_host_on_help(help_line: Text, snap: HostSnapshot, width: int) -> Text:
+    """Help on the left, host on the right; a narrow row may let host cover help."""
+    width = max(1, width)
+    pad = _edge_pad(width)
+    cells = _text_cells(help_line, width)
+    body = format_host_text(snap)
+    room = max(1, width - pad)
+    if body.cell_len > room:
+        body = body[:room]
+    start = max(0, width - pad - body.cell_len)
+    for i, cell in enumerate(_text_cells(body, body.cell_len)):
+        idx = start + i
+        if 0 <= idx < width:
+            cells[idx] = cell
+    return _cells_to_text(cells)
+
+
+class HostStats:
+    """Sample host load/RAM at ``poll`` seconds, not on every starfield frame."""
+
+    def __init__(
+        self,
+        *,
+        reader: Optional[Callable[[], HostSnapshot]] = None,
+        poll: float = HOST_POLL_SEC,
+    ) -> None:
+        self._reader = reader or read_host_snapshot
+        self.poll = poll
+        self._age = 0.0
+        self.snapshot = self._refresh()
+
+    def _refresh(self) -> HostSnapshot:
+        try:
+            return self._reader()
+        except Exception:
+            return HostSnapshot()
+
+    def tick(self, dt: float) -> bool:
+        self._age += dt
+        if self._age < self.poll:
+            return False
+        self._age = 0.0
+        self.snapshot = self._refresh()
+        return True
+
+    def render_line(self, width: int) -> Text:
+        return render_host_line(self.snapshot, width)
 
 
 def ticker_items_from_commands(
@@ -146,6 +390,103 @@ class LibraryTicker:
         return Text(window, style=STYLE_TICKER)
 
 
+class HelpTypewriter:
+    """Bottom help: type LTR over the previous line, pause, next in shuffle order."""
+
+    def __init__(
+        self,
+        lines: Sequence[str] | None = None,
+        *,
+        seed: int | None = None,
+        type_cps: float = HELP_TYPE_CPS,
+        pause: float = HELP_PAUSE_SEC,
+    ) -> None:
+        self.rng = random.Random(seed)
+        self.lines: Tuple[str, ...] = tuple(lines) if lines else COMMAND_HELP_LINES
+        self.type_cps = type_cps
+        self.pause = pause
+        self.phase = "type"
+        self.typed = 0.0
+        self.pause_left = 0.0
+        self.current = ""
+        self.previous = ""
+        self._deck: List[str] = []
+        self._pick()
+
+    def _pick(self) -> None:
+        if not self.lines:
+            self.current = ""
+            self.previous = ""
+            self.typed = 0.0
+            self.phase = "pause"
+            self.pause_left = self.pause
+            return
+        last = self.current
+        if not self._deck:
+            self._deck = list(self.lines)
+            self.rng.shuffle(self._deck)
+        nxt = self._deck.pop()
+        if nxt == last and self._deck:
+            self._deck.insert(0, nxt)
+            nxt = self._deck.pop()
+        self.previous = self.current
+        self.current = nxt
+        self.typed = 0.0
+        self.phase = "type"
+
+    def tick(self, dt: float) -> None:
+        if not self.current and not self.previous:
+            return
+        if self.phase == "pause":
+            self.pause_left -= dt
+            if self.pause_left <= 0:
+                self._pick()
+            return
+        self.typed += max(0.0, self.type_cps) * dt
+        limit = max(len(self.current), len(self.previous), 1)
+        if self.typed >= limit:
+            self.typed = float(limit)
+            self.phase = "pause"
+            self.pause_left = self.pause
+
+    def visible(self) -> str:
+        if self.phase == "pause":
+            return self.current
+        n = int(self.typed)
+        cur, prev = self.current, self.previous
+        span = max(len(cur), len(prev))
+        n = min(n, span)
+        chars: List[str] = []
+        for i in range(span):
+            if i < n:
+                chars.append(cur[i] if i < len(cur) else " ")
+            else:
+                chars.append(prev[i] if i < len(prev) else " ")
+        return "".join(chars)
+
+    def render_line(self, width: int) -> Text:
+        width = max(1, width)
+        pad = _edge_pad(width)
+        inner = max(1, width - pad)
+        raw = self.visible()
+        if len(raw) < inner:
+            raw = raw + " " * (inner - len(raw))
+        else:
+            raw = raw[:inner]
+        sep = "  — "
+        line = Text(" " * pad)
+        if sep in raw:
+            cmd, rest = raw.split(sep, 1)
+            line.append(cmd, style=STYLE_HELP_CMD)
+            line.append(sep, style="dim #334155")
+            line.append(rest, style=STYLE_HELP)
+        else:
+            line.append(raw, style=STYLE_HELP)
+        if line.cell_len < width:
+            line.append(" " * (width - line.cell_len))
+        return line[:width]
+
+
 @dataclass
 class Star:
     x: float
@@ -204,7 +545,6 @@ class StarField:
 
     def render_text(self) -> Text:
         width, height = self.width, self.height
-        hint_row = height - 1
         cells: List[List[Tuple[str, str]]] = [
             [(" ", "")] * width for _ in range(height)
         ]
@@ -218,15 +558,11 @@ class StarField:
             if star.kind == "dust" and z > 0.55:
                 glyph = self._dust_for(z)
             style = self._style_for(star, z)
-            self._blit(cells, int(sx), int(sy), glyph, style, hint_row)
+            self._blit(cells, int(sx), int(sy), glyph, style)
         canvas = Text()
         for y, row in enumerate(cells):
             if y:
                 canvas.append("\n")
-            if y == hint_row:
-                line = self._hint_line(width)
-                canvas.append_text(line)
-                continue
             for ch, style in row:
                 if style:
                     canvas.append(ch, style=style)
@@ -285,7 +621,7 @@ class StarField:
     def _project(self, star: Star) -> Tuple[float, float]:
         z = max(star.z, 0.04)
         cx = (self.width - 1) / 2.0
-        cy = (self.height - 2) / 2.0
+        cy = (self.height - 1) / 2.0
         scale = min(self.width, self.height) * 0.42
         return cx + star.x / z * scale, cy + star.y / z * scale
 
@@ -312,9 +648,8 @@ class StarField:
         y: int,
         glyph: str,
         style: str,
-        hint_row: int,
     ) -> None:
-        if y < 0 or y >= hint_row or y >= len(cells):
+        if y < 0 or y >= len(cells):
             return
         row = cells[y]
         width = len(row)
@@ -322,14 +657,6 @@ class StarField:
             px = x + i
             if 0 <= px < width:
                 row[px] = (ch, style)
-
-    def _hint_line(self, width: int) -> Text:
-        pad = max(0, (width - len(HINT)) // 2)
-        line = Text(" " * pad)
-        line.append(HINT, style="dim #334155")
-        if line.cell_len < width:
-            line.append(" " * (width - line.cell_len))
-        return line[:width]
 
 
 class DevopsScreensaver(ModalScreen[None]):
@@ -363,6 +690,14 @@ class DevopsScreensaver(ModalScreen[None]):
         color: #cbd5e1;
         overflow: hidden;
     }
+    DevopsScreensaver #ss-help {
+        dock: bottom;
+        height: 1;
+        width: 100%;
+        background: #000000;
+        color: #67e8f9;
+        overflow: hidden;
+    }
     """
 
     def __init__(
@@ -371,19 +706,25 @@ class DevopsScreensaver(ModalScreen[None]):
         seed: int | None = None,
         tokens: Sequence[str] | None = None,
         ticker_items: Sequence[str] | None = None,
+        help_lines: Sequence[str] | None = None,
+        host_reader: Callable[[], HostSnapshot] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self._seed = seed
         self._tokens = tokens
         self._ticker_items = ticker_items
+        self._help_lines = help_lines
         self._field = StarField(80, 24, seed=seed, tokens=tokens)
         self._ticker = LibraryTicker((), seed=seed)
+        self._help = HelpTypewriter(help_lines, seed=seed)
+        self._host = HostStats(reader=host_reader)
         self._timer = None
 
     def compose(self) -> ComposeResult:
         yield Static(id="ss-ticker", classes="-empty")
         yield Static(id="ss-canvas")
+        yield Static(id="ss-help")
 
     def on_mount(self) -> None:
         if self._ticker_items is None:
@@ -391,6 +732,7 @@ class DevopsScreensaver(ModalScreen[None]):
         else:
             items = tuple(self._ticker_items)
         self._ticker = LibraryTicker(items, seed=self._seed)
+        self._help = HelpTypewriter(self._help_lines, seed=self._seed)
         self._field = StarField(
             max(8, self.size.width or 80),
             max(4, (self.size.height or 24) - (1 if items else 0)),
@@ -428,6 +770,8 @@ class DevopsScreensaver(ModalScreen[None]):
     def _tick(self) -> None:
         self._field.tick(0.08)
         self._ticker.tick(0.08)
+        self._help.tick(0.08)
+        self._host.tick(0.08)
         self._paint()
 
     def _paint(self) -> None:
@@ -444,6 +788,18 @@ class DevopsScreensaver(ModalScreen[None]):
             else:
                 bar.add_class("-empty")
                 bar.update("")
+        except Exception:
+            pass
+        try:
+            help_bar = self.query_one("#ss-help", Static)
+            width = max(8, help_bar.size.width or self.size.width or 80)
+            help_bar.update(
+                overlay_host_on_help(
+                    self._help.render_line(width),
+                    self._host.snapshot,
+                    width,
+                )
+            )
         except Exception:
             pass
 

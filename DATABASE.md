@@ -154,7 +154,7 @@ ORDER BY command
 
 - Обычный ввод без префикса (`echo …`) — subprocess, без SQL
 - `#tag cmd` — запись (`add_command`), не чтение (кроме `#tag+` / `#tag-` / `#name--` / `#name!!`)
-- `$VAR=value` — `.bashrc_term_*` и `local_env`, не SQLite
+- `$VAR=value` — `.bashrc_term_*` и `local_env`, не SQLite. `:env` перечитывает файлы; после `> cmd` — export той же оболочки.
 - JSON viewer / `$JSON` — не БД команд
 
 ---

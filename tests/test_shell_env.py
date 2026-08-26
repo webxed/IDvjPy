@@ -61,6 +61,47 @@ def test_expand_aliases_positional_and_classic():
     assert expand_aliases("echo hi", aliases) == "echo hi"
 
 
+def test_diff_exported_env_skips_shell_bookkeeping():
+    from shell_env import diff_exported_env, skip_tty_env_key
+
+    assert skip_tty_env_key("SHLVL")
+    assert skip_tty_env_key("BASH_FUNC_foo%%")
+    assert not skip_tty_env_key("KUBECONFIG")
+    before = {"PATH": "/a", "SHLVL": "1", "KUBECONFIG": "old"}
+    after = {"PATH": "/a", "SHLVL": "2", "KUBECONFIG": "/x", "NEW": "1"}
+    updates, removed = diff_exported_env(before, after)
+    assert updates == {"KUBECONFIG": "/x", "NEW": "1"}
+    assert removed == []
+    updates, removed = diff_exported_env(
+        {"KEEP": "1", "GONE": "x", "SHLVL": "1"},
+        {"KEEP": "1"},
+    )
+    assert updates == {}
+    assert removed == ["GONE"]
+
+
+def test_wrap_tty_command_dumps_exports(tmp_path):
+    import json
+    import subprocess
+    import sys
+
+    from shell_env import wrap_tty_command
+
+    env_path = tmp_path / "env.json"
+    pwd_path = tmp_path / "pwd"
+    script = wrap_tty_command(
+        "export IDVJOPY_TTY_VAR=from-child; exit 7",
+        str(env_path),
+        str(pwd_path),
+        sys.executable,
+    )
+    completed = subprocess.run(["bash", "-c", script], check=False)
+    assert completed.returncode == 7
+    data = json.loads(env_path.read_text(encoding="utf-8"))
+    assert data["IDVJOPY_TTY_VAR"] == "from-child"
+    assert pwd_path.read_text(encoding="utf-8")
+
+
 def test_parse_standalone_cd():
     from shell_env import parse_standalone_cd
 
