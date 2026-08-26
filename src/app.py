@@ -111,6 +111,7 @@ try:
         format_update_status,
         format_update_fetch_error,
     )
+    from gui_open import GuiOpenError, format_opened, open_file_manager, open_terminal
 except ImportError as e:
     print(f"Error: Missing dependency - {e}", file=sys.stderr)
     print("Please install required dependencies:", file=sys.stderr)
@@ -1396,7 +1397,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.29"
+    VERSION = "v1.30"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1482,6 +1483,8 @@ class CommandRunner(App):
     CMD_SCREENSAVER = "screensaver"
     CMD_WELCOME = "welcome"
     CMD_BACKUP = "backup"
+    CMD_FM = "fm"
+    CMD_TERM = "term"
     KEY_CHECK_UPDATES = "check_updates"
     KEY_THEME = "theme"
     KEY_SCREENSAVER_IDLE = "screensaver_idle"
@@ -3049,12 +3052,36 @@ class CommandRunner(App):
             self._show_welcome_catalog()
         elif command == self.CMD_BACKUP:
             self._handle_backup_command(parts[1:])
+        elif command == self.CMD_FM:
+            self._handle_gui_open(self.CMD_FM, parts[1:])
+        elif command == self.CMD_TERM:
+            self._handle_gui_open(self.CMD_TERM, parts[1:])
         else:
             self.add_block(InfoBlock(f"Unknown command: '{command}'"))
 
     def _show_welcome_catalog(self) -> None:
         """Same seed catalog as a fresh empty database."""
         self.add_block(InfoBlock(format_empty_db_hint(self.db_file)))
+
+    def _handle_gui_open(self, command: str, args: List[str]) -> None:
+        """Open a file manager or system terminal in a new window at cwd or path."""
+        if len(args) > 1:
+            self.add_block(InfoBlock(f"Usage: :{command} [path]"))
+            return
+        path_arg = args[0] if args else None
+        env = {**os.environ, **self.local_env}
+        try:
+            if command == self.CMD_FM:
+                argv, proc = open_file_manager(path_arg, env)
+            else:
+                argv, proc = open_terminal(path_arg, env)
+        except GuiOpenError as exc:
+            self.add_block(InfoBlock(str(exc)))
+            return
+        except OSError as exc:
+            self.add_block(InfoBlock(str(exc)))
+            return
+        self.add_block(InfoBlock(format_opened(argv, proc.pid)))
 
     def _handle_backup_command(self, args: List[str]) -> None:
         if args:
@@ -3569,11 +3596,14 @@ class CommandRunner(App):
   :md <file>  - Open a handbook .md with formatting (Esc closes)
   :i          - Kubernetes Ingress Analyzer (see :i for details)
   :cd [path]  - Show or change the app working directory (also: cd path)
+  :fm [path]  - Open the OS file manager in a new window (cwd or path)
+  :term [path] - Open a system terminal in a new window (cwd or path)
+                $FILEMAN / $TERMINAL override the OS default
   :session    - Show the current instance (history + .bashrc_term files)
   :session NAME - Switch to that instance or create it (tags DB stays shared)
   :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
-  :screensaver  - Starfield; green ticker of your tags (idle: screensaver_idle; 0 = off)
+  :screensaver  - Starfield; flying clock/date; green ticker (idle: screensaver_idle; 0 = off)
   :r          - Put the focused (or last) block command into the input
   :/text  :g  - Search journal lines; :n / n next, :N / N prev. / on a block starts :/
   :export tag [file] - Write one tag to JSON

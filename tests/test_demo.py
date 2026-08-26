@@ -66,6 +66,8 @@ def test_session_to_playbook_heuristics():
             ":playbook out.yml",
             ":session ops",
             ":backup",
+            ":fm",
+            ":term /tmp",
             ":q",
             "$HOST=api",
         ]
@@ -84,6 +86,8 @@ def test_session_to_playbook_heuristics():
     assert ":q" not in types
     assert ":session ops" not in types
     assert ":backup" not in types
+    assert ":fm" not in types
+    assert ":term /tmp" not in types
     assert not any(isinstance(t, str) and str(t).startswith(":session") for t in types)
     waits = {s["type"]: s.get("wait_command") for s in steps if isinstance(s, dict)}
     assert waits["echo hi"] is True

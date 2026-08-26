@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.29 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.30 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -81,7 +81,7 @@ python3 app.py --demo full --demo-quit
 | `?` / `??` / `?tag` / `?tag[tid]` | Запрос тегов / всех / по тегу / превью | `?deploy` |
 | `!tag[tid]` / `!N` | Вставить команду во ввод (не запускает) | `!deploy[1]` |
 | `!! …` | Собрать строку во вводе | `!! deploy[1] && start[1]` |
-| `:` | Команды приложения | `:q`, `:cd`, `:session`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:playbook`, `:md`, `:?` |
+| `:` | Команды приложения | `:q`, `:cd`, `:fm`, `:term`, `:session`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:playbook`, `:md`, `:?` |
 | `\| cmd` | Пайп stdout сфокусированного блока (в историю, как обычная команда) | `\| grep error` |
 | `$OUT` | По запросу: последняя непустая строка блока (не хранится) | `echo Hello, $OUT` |
 | `$VAR=val` | Локальная переменная (пишет `.bashrc_term_<instance>`) | `$EDITOR=nvim` |
@@ -104,10 +104,12 @@ python3 app.py --demo full --demo-quit
 - `:md <file.md>` — справочник Markdown с форматированием (клик по имени в приветствии; Esc закрывает)
 - `:i …` — Kubernetes Ingress Analyzer (`:i` без аргументов — справка)
 - `:cd [path]` — показать / сменить рабочий каталог приложения (то же делает `cd path`)
+- `:fm [path]` — проводник ОС в новом окне (cwd или путь). Linux: `xdg-open`; macOS: `open`; Windows: `explorer`. Свой: `$FILEMAN`
+- `:term [path]` — системный терминал в новом окне. Linux: `xdg-terminal-exec` / `gnome-terminal` / …; macOS: Terminal.app; Windows: `wt` или `cmd`. Свой: `$TERMINAL`
 - `:session` — текущий инстанс (история + `.bashrc_term_*`). `:session NAME` — переключить или создать (БД тегов общая)
 - `:welcome` — каталог seed, как при пустой БД (клик `--seed` / `.md`). На старте при непустой БД — блок **Разделы** с живыми тегами по handbook (`linux`, `k8s`, `git`, ops, `свои`)
 - `:backup` — снимок SQLite в `backups/` (как перед `--seed`). Пустую базу не копирует. Вернуть: скопировать файл поверх рабочей БД.
-- `:screensaver` — DevOps starfield сразу. Простой как в Norton Commander: звёзды летят на зрителя; ближе — `k8s` / `git` / `!!`. Сверху ярко-зелёная бегущая строка с перемешанными командами из БД (`!tag[tid]  cmd`). Спрятанные справочники (`#name--`) не показываются. Любая клавиша или клик закрывает (в ввод не попадает). Таймаут: `screensaver_idle` в `settings.yml` (секунды, `0` = выкл). `:screensaver 0` / `:screensaver 120` — на эту сессию
+- `:screensaver` — DevOps starfield сразу. Простой как в Norton Commander: звёзды летят на зрителя; ближе — `k8s` / `git` / `!!`. Вместе с ними летают живые часы (`15:35:42`) и дата (`2026-08-26`). Сверху ярко-зелёная бегущая строка с перемешанными командами из БД (`!tag[tid]  cmd`). Спрятанные справочники (`#name--`) не показываются. Любая клавиша или клик закрывает (в ввод не попадает). Таймаут: `screensaver_idle` в `settings.yml` (секунды, `0` = выкл). `:screensaver 0` / `:screensaver 120` — на эту сессию
 - `:r` — команда сфокусированного блока во ввод
 - `:/text` / `:g` / `:n` / `:N` — поиск по строкам журнала (с блока `/` открывает `:/`; `n`/`N` — следующее / предыдущее)
 - `:export tag [file]` / `:import file` — один тег в JSON и обратно

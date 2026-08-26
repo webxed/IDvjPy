@@ -1,6 +1,16 @@
 # Template copied to .bashrc_term_<instance> in the working directory on first start.
 # These variables are loaded at startup and can be used as $VAR in commands.
 
+# :fm / :term — file manager / system terminal in a new window (cwd or path).
+# Linux: xdg-open / first of xdg-terminal-exec, gnome-terminal, kgx, konsole, …
+# macOS: open / open -a Terminal     Windows: explorer / wt or cmd
+# export FILEMAN=nautilus
+# export TERMINAL=kitty
+# export FILEMAN=open -a ForkLift
+# export TERMINAL=open -a iTerm
+# export FILEMAN=explorer
+# export TERMINAL=wt
+
 # export NS=default
 # export EDITOR=nvim
 # export HOST=api.example.local

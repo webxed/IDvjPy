@@ -1,15 +1,17 @@
 """Norton Commander-style starfield, DevOps-themed.
 
 Stars fly toward the viewer (classic NC screensaver). Closer particles
-become kubectl/git/helm tokens and IDvjPy fragments. Live tags/commands
-from the library scroll as a bright-green ticker at the top. Any key or
-click dismisses the overlay; that key is not typed into the prompt.
+become kubectl/git/helm tokens and IDvjPy fragments. Live clock and date
+drift with them. Live tags/commands from the library scroll as a bright-green
+ticker at the top. Any key or click dismisses the overlay; that key is not
+typed into the prompt.
 """
 from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import Iterable, List, Sequence, Tuple
+from datetime import datetime
+from typing import Callable, Iterable, List, Sequence, Tuple
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -40,21 +42,23 @@ TOKENS = (
     ":?",
     "ship",
 )
-COMETS = (
-    "lint → test → ship",
-    "plan → apply",
-    "build → push → deploy",
-    "observe → alert → fix",
-    "define → join → run",
-)
 STYLES_FAR = ("dim #334155", "dim #475569")
 STYLES_MID = ("#64748b", "#22d3ee", "#a78bfa")
 STYLES_NEAR = ("bold #e2e8f0", "bold #5eead4", "bold #c4b5fd", "bold #86efac")
-STYLE_COMET = "bold #fbbf24"
+STYLE_CLOCK_TIME = "bold #fde047"
+STYLE_CLOCK_DATE = "bold #67e8f9"
 STYLE_TICKER = "bold #00ff5f"
 HINT = "any key"
 TICKER_SEP = "    ·    "
 TICKER_CPS = 2.5  # characters per second; slow crawl so it stays readable
+CLOCK_LABELS = ("time", "date")
+
+
+def clock_glyph(moment: datetime, label: str) -> str:
+    """``time`` → 24h clock with seconds; ``date`` → ISO calendar day."""
+    if label == "time":
+        return moment.strftime("%H:%M:%S")
+    return moment.strftime("%Y-%m-%d")
 
 
 def flatten_command(text: str) -> str:
@@ -149,7 +153,8 @@ class Star:
     z: float
     speed: float
     glyph: str
-    kind: str  # dust / token / comet
+    kind: str  # dust / token / clock
+    label: str = ""
 
 
 class StarField:
@@ -162,29 +167,38 @@ class StarField:
         *,
         seed: int | None = None,
         tokens: Sequence[str] | None = None,
-        comets: Sequence[str] | None = None,
+        now: Callable[[], datetime] | None = None,
     ) -> None:
         self.width = max(8, width)
         self.height = max(4, height)
         self.rng = random.Random(seed)
         self.tokens: Tuple[str, ...] = tuple(tokens) if tokens else TOKENS
-        self.comets: Tuple[str, ...] = tuple(comets) if comets else COMETS
+        self._now = now or datetime.now
         self.stars: List[Star] = []
         self._seed_stars()
 
     def resize(self, width: int, height: int) -> None:
         self.width = max(8, width)
         self.height = max(4, height)
+        clocks = [star for star in self.stars if star.kind == "clock"]
+        others = [star for star in self.stars if star.kind != "clock"]
         n = self._budget()
-        if len(self.stars) < n:
-            for _ in range(n - len(self.stars)):
-                self.stars.append(self._spawn(far=True))
-        elif len(self.stars) > n:
-            self.stars = self.stars[:n]
+        if len(others) < n:
+            for _ in range(n - len(others)):
+                others.append(self._spawn(far=True))
+        elif len(others) > n:
+            others = others[:n]
+        have = {star.label for star in clocks}
+        for label in CLOCK_LABELS:
+            if label not in have:
+                clocks.append(self._spawn_clock(label))
+        self.stars = others + clocks
 
     def tick(self, dt: float = 0.08) -> None:
         for star in self.stars:
             star.z -= star.speed * dt
+            if star.kind == "clock":
+                star.glyph = clock_glyph(self._now(), star.label)
             if star.z <= 0.04:
                 self._respawn(star)
 
@@ -226,21 +240,17 @@ class StarField:
 
     def _seed_stars(self) -> None:
         self.stars = [self._spawn(far=self.rng.random() > 0.35) for _ in range(self._budget())]
+        self.stars.extend(self._spawn_clock(label) for label in CLOCK_LABELS)
 
     def _spawn(self, *, far: bool) -> Star:
         roll = self.rng.random()
         tokens = self.tokens or TOKENS
-        comets = self.comets or COMETS
-        if roll > 0.94:
-            kind, glyph = "comet", self.rng.choice(comets)
-        elif roll > 0.62:
+        if roll > 0.62:
             kind, glyph = "token", self.rng.choice(tokens)
         else:
             kind, glyph = "dust", self.rng.choice(DUST)
         z = self.rng.uniform(0.55, 1.0) if far else self.rng.uniform(0.12, 0.95)
-        speed = self.rng.uniform(0.18, 0.55)
-        if kind == "comet":
-            speed *= 0.7
+        speed = self.rng.uniform(0.06, 0.18)
         return Star(
             x=self.rng.uniform(-0.85, 0.85),
             y=self.rng.uniform(-0.7, 0.7),
@@ -250,7 +260,24 @@ class StarField:
             kind=kind,
         )
 
+    def _spawn_clock(self, label: str, *, far: bool = True) -> Star:
+        z = self.rng.uniform(0.62, 1.0) if far else self.rng.uniform(0.18, 0.9)
+        return Star(
+            x=self.rng.uniform(-0.5, 0.5),
+            y=self.rng.uniform(-0.4, 0.4),
+            z=z,
+            speed=self.rng.uniform(0.03, 0.08),
+            glyph=clock_glyph(self._now(), label),
+            kind="clock",
+            label=label,
+        )
+
     def _respawn(self, star: Star) -> None:
+        if star.kind == "clock":
+            fresh = self._spawn_clock(star.label, far=True)
+            star.x, star.y, star.z = fresh.x, fresh.y, fresh.z
+            star.speed, star.glyph = fresh.speed, fresh.glyph
+            return
         fresh = self._spawn(far=True)
         star.x, star.y, star.z = fresh.x, fresh.y, fresh.z
         star.speed, star.glyph, star.kind = fresh.speed, fresh.glyph, fresh.kind
@@ -270,8 +297,8 @@ class StarField:
         return "*"
 
     def _style_for(self, star: Star, z: float) -> str:
-        if star.kind == "comet":
-            return STYLE_COMET
+        if star.kind == "clock":
+            return STYLE_CLOCK_TIME if star.label == "time" else STYLE_CLOCK_DATE
         if z > 0.7:
             return STYLES_FAR[0]
         if z > 0.38:
@@ -343,16 +370,14 @@ class DevopsScreensaver(ModalScreen[None]):
         *,
         seed: int | None = None,
         tokens: Sequence[str] | None = None,
-        comets: Sequence[str] | None = None,
         ticker_items: Sequence[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self._seed = seed
         self._tokens = tokens
-        self._comets = comets
         self._ticker_items = ticker_items
-        self._field = StarField(80, 24, seed=seed, tokens=tokens, comets=comets)
+        self._field = StarField(80, 24, seed=seed, tokens=tokens)
         self._ticker = LibraryTicker((), seed=seed)
         self._timer = None
 
@@ -371,7 +396,6 @@ class DevopsScreensaver(ModalScreen[None]):
             max(4, (self.size.height or 24) - (1 if items else 0)),
             seed=self._seed,
             tokens=self._tokens,
-            comets=self._comets,
         )
         canvas = self.query_one("#ss-canvas", Static)
         canvas.can_focus = True

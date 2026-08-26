@@ -2,12 +2,15 @@
 import asyncio
 import time
 
+from datetime import datetime
+
 from app import CommandRunner
 from screensaver import (
     TICKER_SEP,
     DevopsScreensaver,
     LibraryTicker,
     StarField,
+    clock_glyph,
     flatten_command,
     load_library_reminders,
     ticker_items_from_commands,
@@ -82,6 +85,61 @@ def test_starfield_tick_renders_rows():
     assert len(lines) == 12
     assert any(ch not in " " for ch in plain)
     assert "any key" in plain
+
+
+def test_starfield_has_no_comets():
+    field = StarField(80, 24, seed=1)
+    for _ in range(200):
+        field.tick(0.08)
+        kinds = {star.kind for star in field.stars}
+        assert "comet" not in kinds
+        for star in field.stars:
+            assert "→" not in star.glyph
+
+
+def test_starfield_stars_are_slow():
+    field = StarField(60, 20, seed=11)
+    dust = [star for star in field.stars if star.kind != "clock"]
+    clocks = [star for star in field.stars if star.kind == "clock"]
+    assert dust
+    assert all(0.06 <= star.speed <= 0.18 for star in dust)
+    assert all(0.03 <= star.speed <= 0.08 for star in clocks)
+
+
+def test_clock_glyph_formats_time_and_date():
+    moment = datetime(2026, 8, 26, 15, 35, 7)
+    assert clock_glyph(moment, "time") == "15:35:07"
+    assert clock_glyph(moment, "date") == "2026-08-26"
+
+
+def test_starfield_clocks_fly_and_update():
+    current = {"t": datetime(2026, 8, 26, 15, 35, 1)}
+
+    def now():
+        return current["t"]
+
+    field = StarField(50, 16, seed=3, now=now)
+    clocks = [star for star in field.stars if star.kind == "clock"]
+    assert {star.label for star in clocks} == {"time", "date"}
+    assert any(star.glyph == "15:35:01" for star in clocks)
+    assert any(star.glyph == "2026-08-26" for star in clocks)
+    before = {star.label: star.z for star in clocks}
+    field.tick(0.5)
+    for star in clocks:
+        assert star.z != before[star.label] or star.z > 0.5
+    current["t"] = datetime(2026, 8, 26, 15, 36, 9)
+    field.tick(0.08)
+    by_label = {star.label: star for star in field.stars if star.kind == "clock"}
+    assert by_label["time"].glyph == "15:36:09"
+    assert by_label["date"].glyph == "2026-08-26"
+    by_label["time"].x, by_label["time"].y, by_label["time"].z = 0.0, -0.12, 0.22
+    by_label["date"].x, by_label["date"].y, by_label["date"].z = 0.0, 0.18, 0.22
+    plain = field.render_text().plain
+    assert "15:36:09" in plain
+    assert "2026-08-26" in plain
+    field.resize(80, 24)
+    labels = [star.label for star in field.stars if star.kind == "clock"]
+    assert sorted(labels) == ["date", "time"]
 
 
 async def test_colon_screensaver_opens_and_key_does_not_type(isolated_home):

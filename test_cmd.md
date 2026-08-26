@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.29
+# План тестирования IDvjPy_term v1.30
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -650,6 +650,24 @@ $ALPHA=from-default
 
 ---
 
+## Секция 33: Проводник и терминал (`:fm`, `:term`)
+
+```
+:fm extra arg
+:fm
+:fm inner
+$FILEMAN=nautilus
+:fm
+:term extra arg
+:term
+```
+
+**Ожидание:** лишние аргументы — `Usage: :fm [path]` / `Usage: :term [path]`. Без пути открывает проводник / системный терминал в cwd приложения (новое окно, TUI не ждёт). Путь — тот каталог. Нет бинарника — `not found` и `set $FILEMAN=` / `set $TERMINAL=`. `$FILEMAN` / `$TERMINAL` перекрывают дефолт ОС (Linux `xdg-open`, macOS `open`, Windows `explorer` / `wt`). В YAML-плейбук `:fm` / `:term` не пишутся.
+
+Автотест: `tests/test_gui_open.py`, `test_colon_fm_spawns_detached`, `test_colon_fm_path_usage_and_override`, `test_colon_fm_missing_binary`, `test_colon_term_override_and_missing`, `test_colon_term_no_default_binary`, `test_session_to_playbook_heuristics`.
+
+---
+
 ## Секция 30: Screensaver (`:screensaver`)
 
 ```
@@ -658,7 +676,7 @@ x
 :screensaver 0
 ```
 
-**Ожидание:** `:screensaver` открывает полноэкранный starfield. Если в БД есть команды — сверху ярко-зелёная бегущая строка с перемешанными `!tag[tid]  cmd`. `x` закрывает его и **не** попадает во ввод. После `screensaver_idle` секунд без клавиш/клика то же самое само (в тестах `screensaver_idle: 0` — выкл). `:screensaver 0` выключает на сессию. Во время `--demo` idle-скринсейвер не стартует.
+**Ожидание:** `:screensaver` открывает полноэкранный starfield. Среди звёзд летают живые часы (`HH:MM:SS`) и дата (`YYYY-MM-DD`). Если в БД есть команды — сверху ярко-зелёная бегущая строка с перемешанными `!tag[tid]  cmd`. `x` закрывает его и **не** попадает во ввод. После `screensaver_idle` секунд без клавиш/клика то же самое само (в тестах `screensaver_idle: 0` — выкл). `:screensaver 0` выключает на сессию. Во время `--demo` idle-скринсейвер не стартует.
 
 Автотест: `tests/test_screensaver.py`.
 
@@ -673,7 +691,7 @@ x
 - `!! tag[tid]` работает сразу; `!! 1 2` — из кэша (старт или `??`)
 - `| cmd` берёт stdout сфокусированного/последнего блока
 - `$VAR` подставляется; `$JSON` после Enter в viewer; `$OUT` — последняя строка блока по запросу
-- `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:session` `:welcome` `:backup` `:screensaver` `:r` `:theme` `:playbook` `:update` работают
+- `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:fm` `:term` `:session` `:welcome` `:backup` `:screensaver` `:r` `:theme` `:playbook` `:update` работают
 - YAML `--demo` / `:playbook`: `loop: true` / `loop: N` крутит шаги, Esc останавливает
 - Soft-delete `#tag-` / `#tag-tid`; handbook hide `#name--` / `#name!!`; `# command` паркуется без запуска
 - Пустая БД: каталог сверху; клик `--seed` → ввод; `.md` / `:md` — Markdown-viewer (колесо не крутит журнал)
@@ -694,6 +712,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.29  
+**Версия приложения**: v1.30  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-25

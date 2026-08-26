@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.29**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.30**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -26,7 +26,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:session` `:welcome` `:backup` `:screensaver` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:update` |
+| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:fm` `:term` `:session` `:welcome` `:backup` `:screensaver` `:r` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:update` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -128,14 +128,14 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unus
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.6 (app v1.29) |
+| `test_cmd.md` | Manual plan v1.6 (app v1.30) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
-| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog, `:md`, `:backup`, click `--seed` insert, history compact, `:session` |
+| `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
 | `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
 | `tests/test_demo.py` | YAML `--demo`, `:playbook`, `loop: N` / `loop: true` |
-| `tests/test_update_check.py` | parse GitHub `VERSION`, `:update` |
+| `tests/test_gui_open.py` | `:fm` / `:term` argv by OS, `$FILEMAN` / `$TERMINAL`, detached spawn |
 | `tests/test_screensaver.py` | starfield, `:screensaver`, idle timer, key swallowed |
 | `tests/test_seed_*.py` | linux / k8s chains / git / ops handbooks; pre-seed SQLite backup; empty-DB catalog text |
 
@@ -148,13 +148,14 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | File | Purpose |
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
-| `src/app.py` | TUI (`CommandRunner`), v1.29 |
-| `src/screensaver.py` | Idle starfield + green library ticker (`:screensaver`) |
+| `src/app.py` | TUI (`CommandRunner`), v1.30 |
+| `src/screensaver.py` | Idle starfield + flying clock/date + green library ticker (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
 | `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
 | `src/seed_catalog.py` | Empty-DB welcome catalog (click `--seed` / `.md`) |
 | `src/md_viewer.py` | Modal Markdown viewer (`:md`, welcome links) |
 | `src/update_check.py` | Compare `VERSION` with GitHub main (`:update`) |
+| `src/gui_open.py` | `:fm` / `:term` detached file manager / terminal |
 | `src/json_viewer.py` | JSON tree modal |
 | `src/ingress_analyzer.py` | `:i` k8s |
 | `src/command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
@@ -167,6 +168,11 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.30
+
+- **`:fm` / `:term`:** проводник и системный терминал в новом окне (cwd или путь). Не ждут GUI и не забирают этот TTY. Linux / macOS / Windows; `$FILEMAN` / `$TERMINAL` перекрывают дефолт.
+- **Screensaver:** среди звёзд летают живые часы и дата; слоган-кометы убраны; звёзды медленнее.
 
 ## v1.29
 
@@ -252,4 +258,4 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 - **`> cmd`**: suspend the TUI and run with a real TTY (`> htop`, `> vim file`). No timeout, stdout is not captured. `>>` is left to the shell.
 - Click a journal block to focus it. Arrows / PgUp / PgDn scroll the journal and activate the **visible** block without jumping to its first line. `terminal_mouse: true` is required for clicks.
 - Alias bodies with `$1` / `$2` / `$@` substitute arguments (`klogin cluster` → `tsh kube login cluster`). Aliases without `$1` still append the rest of the line.
-- **`cd` / `:cd`**: change the app process cwd (standalone `cd`, no `&&`). `:r` puts the focused block command into the input. `:/text` / `:g` / `:n` / `:N` search journal **lines** (line-cursor on the hit; `n`/`N` on a focused block). `/` on a block starts `:/`. `#tag!` restores soft-delete. `:export` / `:import` one tag as JSON.
+- **`cd` / `:cd`**: change the app process cwd (standalone `cd`, no `&&`). `:fm` / `:term` open the OS file manager or a system terminal in a new window (detached; `$FILEMAN` / `$TERMINAL` override). `:r` puts the focused block command into the input. `:/text` / `:g` / `:n` / `:N` search journal **lines** (line-cursor on the hit; `n`/`N` on a focused block). `/` on a block starts `:/`. `#tag!` restores soft-delete. `:export` / `:import` one tag as JSON.

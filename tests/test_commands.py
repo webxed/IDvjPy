@@ -796,6 +796,105 @@ async def test_colon_cd_and_missing_dir(isolated_home):
         assert os.getcwd() == here
 
 
+def _patch_gui_spawn(monkeypatch, which_names):
+    captured = {}
+    names = set(which_names)
+    monkeypatch.delenv("FILEMAN", raising=False)
+    monkeypatch.delenv("TERMINAL", raising=False)
+
+    def fake_which(name):
+        return f"/usr/bin/{name}" if name in names else None
+
+    class FakeProc:
+        pid = 4242
+
+    def fake_popen(argv, **kwargs):
+        captured["argv"] = list(argv)
+        captured["kwargs"] = kwargs
+        return FakeProc()
+
+    monkeypatch.setattr("gui_open.shutil.which", fake_which)
+    monkeypatch.setattr("gui_open.subprocess.Popen", fake_popen)
+    return captured
+
+
+async def test_colon_fm_spawns_detached(isolated_home, monkeypatch):
+    import os
+
+    captured = _patch_gui_spawn(monkeypatch, {"xdg-open"})
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        here = os.getcwd()
+        await submit(pilot, ":fm")
+        text = last_info(app).text_content
+        assert text.startswith("Opened:")
+        assert "xdg-open" in text
+        assert "pid 4242" in text
+        assert captured["argv"] == ["xdg-open", here]
+        assert captured["kwargs"]["start_new_session"] is True
+        assert captured["kwargs"]["cwd"] == here
+
+
+async def test_colon_fm_path_usage_and_override(isolated_home, monkeypatch):
+    captured = _patch_gui_spawn(monkeypatch, {"xdg-open", "nautilus"})
+    sub = isolated_home / "inner"
+    sub.mkdir()
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":fm extra arg")
+        assert "Usage: :fm [path]" in last_info(app).text_content
+        await submit(pilot, ":fm inner")
+        assert captured["argv"] == ["xdg-open", str(sub.resolve())]
+        assert captured["kwargs"]["cwd"] == str(sub.resolve())
+        await submit(pilot, ":fm no-such-idivjopy-dir")
+        assert "not a directory" in last_info(app).text_content
+        await submit(pilot, "$FILEMAN=nautilus")
+        await submit(pilot, ":fm")
+        assert captured["argv"][0] == "nautilus"
+
+
+async def test_colon_fm_missing_binary(isolated_home, monkeypatch):
+    captured = _patch_gui_spawn(monkeypatch, set())
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":fm")
+        text = last_info(app).text_content
+        assert "xdg-open not found" in text
+        assert "FILEMAN" in text
+        assert "argv" not in captured
+
+
+async def test_colon_term_override_and_missing(isolated_home, monkeypatch):
+    import os
+
+    captured = _patch_gui_spawn(monkeypatch, {"gnome-terminal", "kitty"})
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":term extra arg")
+        assert "Usage: :term [path]" in last_info(app).text_content
+        await submit(pilot, ":term")
+        assert captured["argv"] == ["gnome-terminal"]
+        assert captured["kwargs"]["cwd"] == os.getcwd()
+        assert "Opened:" in last_info(app).text_content
+        await submit(pilot, "$TERMINAL=kitty")
+        await submit(pilot, ":term")
+        assert captured["argv"] == ["kitty"]
+        await submit(pilot, "$TERMINAL=missing-term-bin")
+        await submit(pilot, ":term")
+        text = last_info(app).text_content
+        assert "not found" in text
+        assert "TERMINAL" in text
+
+
+async def test_colon_term_no_default_binary(isolated_home, monkeypatch):
+    captured = _patch_gui_spawn(monkeypatch, set())
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":term")
+        assert "set $TERMINAL=" in last_info(app).text_content
+        assert "argv" not in captured
+
+
 async def test_replay_puts_command_in_input(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(120, 40)) as pilot:
