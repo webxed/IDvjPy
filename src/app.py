@@ -1328,6 +1328,7 @@ class CommandRunner(App):
         self.last_query_results: dict[int, str] = {}
         # Кэш live-команд библиотеки для автодополнения (список dict).
         self._library_cache: list[dict] | None = None
+        self._db_stat: tuple[int, int] | None = None
         self.history_lines: int = 20
         self.history_keep: int = DEFAULT_HISTORY_KEEP
         self.check_updates: bool = False
@@ -1882,6 +1883,7 @@ class CommandRunner(App):
         """Перечитать live-команды в _library_cache (один SQL-запрос)."""
         try:
             self._library_cache = self._read_library_rows()
+            self._db_stat = history_file_stat_key(self.db_file)
         except Exception:
             self._library_cache = self._library_cache or []
 
@@ -1916,6 +1918,7 @@ class CommandRunner(App):
         try:
             rows = self._read_library_rows()
             self._library_cache = rows
+            self._db_stat = history_file_stat_key(self.db_file)
             self.last_query_results = {row["id"]: row["command"] for row in rows}
         except Exception:
             # Если база недоступна или есть ошибка, оставляем словарь пустым
@@ -1925,20 +1928,27 @@ class CommandRunner(App):
 
     def _periodic_db_reload(self) -> None:
         """
-        Периодическая перезагрузка last_query_results для актуальности.
+        Периодическая перезагрузка кэша команд при изменении БД.
 
-        Вызывается каждые DB_RELOAD_INTERVAL секунд для обновления кэша команд.
-        Это обеспечивает актуальность данных при работе нескольких копий приложения
-        с общей базой данных.
-
-        Не прерывает работу пользователя, выполняется тихо в фоне.
+        Гейтится по mtime/size файла БД: если ничего не менялось, читать таблицу
+        не нужно. При изменении пересобирает _library_cache и last_query_results
+        целиком — так id, удалённые в другой копии приложения, не остаются в кэше.
         """
+        try:
+            stat = history_file_stat_key(self.db_file)
+            if (
+                stat is not None
+                and stat == self._db_stat
+                and self._library_cache is not None
+            ):
+                return
+        except Exception:
+            stat = None
         try:
             rows = self._read_library_rows()
             self._library_cache = rows
-            # Обновляем словарь результатов (не очищая, чтобы не терять текущий контекст)
-            for row in rows:
-                self.last_query_results[row["id"]] = row["command"]
+            self._db_stat = stat
+            self.last_query_results = {row["id"]: row["command"] for row in rows}
         except Exception:
             # При ошибке просто пропускаем эту перезагрузку
             # Следующая попытка будет через DB_RELOAD_INTERVAL секунд
