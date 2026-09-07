@@ -23,12 +23,8 @@ __pycache__/
 .bashrc_term_*
 !.bashrc_term.example
 !src/.bashrc_term.example
-history.txt
-history_*.txt
-log*.txt
-tt.txt
-ns_*.txt
-todo.txt
+*.txt
+test*.*
 
 # Exports / backups produced by the app
 *.json
@@ -38,3 +34,4 @@ backups/
 # OS / editor
 .DS_Store
 *.swp
+.codegraph
