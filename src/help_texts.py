@@ -165,5 +165,5 @@ INGRESS_HELP_TEXT = """[bold]Kubernetes Ingress Analyzer[/bold]
 
 [bold]Prerequisites:[/bold]
   • kubectl configured with cluster access
-  • crossplane: pip install crossplane
+  • crossplane CLI (https://github.com/crossplane/crossplane) — optional, for nginx config parsing
 """

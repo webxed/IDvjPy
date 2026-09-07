@@ -173,32 +173,18 @@ class IngressAnalyzer:
             return False, "crossplane not found"
         except FileNotFoundError:
             self._crossplane_available = False
-            return False, "crossplane not installed. Run: pip install crossplane"
+            return False, "crossplane CLI not installed. Install it from https://github.com/crossplane/crossplane"
         except subprocess.TimeoutExpired:
             return False, "crossplane check timed out"
 
     def install_crossplane(self) -> tuple[bool, str]:
         """
-        Install crossplane via pip.
+        The crossplane CLI is a Go tool, not a pip package.
 
         Returns:
             Tuple of (success, message)
         """
-        try:
-            result = subprocess.run(
-                ["pip", "install", "crossplane"],
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-            if result.returncode == 0:
-                self._crossplane_available = True
-                return True, "crossplane installed successfully"
-            return False, f"pip install failed: {result.stderr}"
-        except subprocess.TimeoutExpired:
-            return False, "Installation timed out"
-        except Exception as e:
-            return False, f"Installation error: {e}"
+        return (False, "crossplane CLI is not on PyPI; install it from https://github.com/crossplane/crossplane")
 
     def list_ingresses(self, namespace: str | None = None) -> list[IngressInfo]:
         """
@@ -455,7 +441,7 @@ class IngressAnalyzer:
         available, _ = self.check_crossplane()
         if not available:
             raise CrossplaneNotInstalledError(
-                "crossplane not installed. Run: pip install crossplane"
+                "crossplane CLI not installed. Install it from https://github.com/crossplane/crossplane"
             )
 
         # Write config to temp file
@@ -766,7 +752,7 @@ class IngressAnalyzer:
 
             except CrossplaneNotInstalledError:
                 result["warnings"].append(
-                    "crossplane not installed. Run: pip install crossplane"
+                    "crossplane CLI not installed (https://github.com/crossplane/crossplane)"
                 )
             except KubectlError as e:
                 result["warnings"].append(f"Could not get nginx config: {e}")
