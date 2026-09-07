@@ -173,7 +173,7 @@ class IngressAnalyzer:
             return False, "crossplane not found"
         except FileNotFoundError:
             self._crossplane_available = False
-            return False, "crossplane CLI not installed. Install it from https://github.com/crossplane/crossplane"
+            return False, "crossplane CLI not installed. Install it from https://github.com/nginxinc/crossplane"
         except subprocess.TimeoutExpired:
             return False, "crossplane check timed out"
 
@@ -184,7 +184,7 @@ class IngressAnalyzer:
         Returns:
             Tuple of (success, message)
         """
-        return (False, "crossplane CLI is not on PyPI; install it from https://github.com/crossplane/crossplane")
+        return (False, "crossplane CLI is not on PyPI; install it from https://github.com/nginxinc/crossplane")
 
     def list_ingresses(self, namespace: str | None = None) -> list[IngressInfo]:
         """
@@ -441,7 +441,7 @@ class IngressAnalyzer:
         available, _ = self.check_crossplane()
         if not available:
             raise CrossplaneNotInstalledError(
-                "crossplane CLI not installed. Install it from https://github.com/crossplane/crossplane"
+                "crossplane CLI not installed. Install it from https://github.com/nginxinc/crossplane"
             )
 
         # Write config to temp file
@@ -752,7 +752,7 @@ class IngressAnalyzer:
 
             except CrossplaneNotInstalledError:
                 result["warnings"].append(
-                    "crossplane CLI not installed (https://github.com/crossplane/crossplane)"
+                    "crossplane CLI not installed (https://github.com/nginxinc/crossplane)"
                 )
             except KubectlError as e:
                 result["warnings"].append(f"Could not get nginx config: {e}")
