@@ -1326,6 +1326,8 @@ class CommandRunner(App):
         self._history_file_stat: tuple[int, int] | None = None
         # Словарь для хранения результатов поиска {ID: Command}
         self.last_query_results: dict[int, str] = {}
+        # Кэш live-команд библиотеки для автодополнения (список dict).
+        self._library_cache: list[dict] | None = None
         self.history_lines: int = 20
         self.history_keep: int = DEFAULT_HISTORY_KEEP
         self.check_updates: bool = False
@@ -1557,9 +1559,10 @@ class CommandRunner(App):
             return [], preview
 
         try:
-            tags = database.get_all_tags(self.db_file)
+            lib = self._library()
         except Exception:
             return [], preview
+        tags = sorted({entry["tag"] for entry in lib})
 
         if token == "!":
             items = self._tag_completion_items(tags)
@@ -1585,19 +1588,14 @@ class CommandRunner(App):
 
         if command_tags:
             tag = command_tags[0]
-            try:
-                rows = database.get_commands_by_tag(self.db_file, tag)
-            except Exception:
-                rows = []
+            rows = [entry for entry in lib if entry["tag"] == tag]
             for row in rows:
                 tid = row["tid"]
                 if tid_prefix and not str(tid).startswith(tid_prefix):
                     continue
                 insert = f"!{tag}[{tid}]"
                 display = f"<{row['id']}> {tag}[{tid}]  {row['command']}"
-                comment = ""
-                if "comment" in row.keys() and row["comment"]:
-                    comment = str(row["comment"]).strip()
+                comment = (row["comment"] or "").strip()
                 if comment:
                     display += f"  # {comment}"
                 items.append(
@@ -1659,7 +1657,11 @@ class CommandRunner(App):
 
         candidates: list[str] = []
         try:
-            from_db = database.get_commands_by_prefix(self.db_file, prefix)
+            from_db = {
+                entry["command"]
+                for entry in self._library()
+                if entry["command"].startswith(prefix)
+            }
             candidates.extend(from_db)
         except Exception:
             pass
@@ -1862,6 +1864,36 @@ class CommandRunner(App):
             self._periodic_db_reload
         )
 
+    def _read_library_rows(self) -> list[dict]:
+        """Все live-команды БД как dict-строки (id/tag/tid/command/comment)."""
+        return [
+            {
+                "id": row["id"],
+                "tag": row["tag"],
+                "tid": row["tid"],
+                "command": row["command"],
+                "comment": row["comment"] or "",
+            }
+            for row in database.get_all_commands_with_ids(self.db_file)
+        ]
+
+    def _reload_library_cache(self) -> None:
+        """Перечитать live-команды в _library_cache (один SQL-запрос)."""
+        try:
+            self._library_cache = self._read_library_rows()
+        except Exception:
+            self._library_cache = self._library_cache or []
+
+    def _invalidate_library(self) -> None:
+        """Сбросить кэш после мутации; следующая подсказка перечитает БД."""
+        self._library_cache = None
+
+    def _library(self) -> list[dict]:
+        """Кэш live-команд; лениво перечитывается после инвалидации."""
+        if self._library_cache is None:
+            self._reload_library_cache()
+        return self._library_cache or []
+
     def _populate_query_results(self) -> None:
         """
         Загружает все команды из БД в last_query_results для работы !! команды.
@@ -1881,18 +1913,13 @@ class CommandRunner(App):
         будет выполнить ?? или ?tag перед использованием !!.
         """
         try:
-            # Получаем все активные команды из базы данных
-            all_commands = database.get_all_commands_with_ids(self.db_file)
-
-            # Очищаем и заполняем словарь результатов
-            self.last_query_results = {}
-            for row in all_commands:
-                # row['id'] - глобальный уникальный ID
-                # row['command'] - текст команды для выполнения
-                self.last_query_results[row['id']] = row['command']
+            rows = self._read_library_rows()
+            self._library_cache = rows
+            self.last_query_results = {row["id"]: row["command"] for row in rows}
         except Exception:
             # Если база недоступна или есть ошибка, оставляем словарь пустым
             # Пользователь увидит ошибку при попытке использовать !!
+            self._library_cache = []
             self.last_query_results = {}
 
     def _periodic_db_reload(self) -> None:
@@ -1906,18 +1933,11 @@ class CommandRunner(App):
         Не прерывает работу пользователя, выполняется тихо в фоне.
         """
         try:
-            # Получаем все активные команды из базы данных
-            all_commands = database.get_all_commands_with_ids(self.db_file)
-
+            rows = self._read_library_rows()
+            self._library_cache = rows
             # Обновляем словарь результатов (не очищая, чтобы не терять текущий контекст)
-            len(self.last_query_results)
-            for row in all_commands:
-                # row['id'] - глобальный уникальный ID
-                # row['command'] - текст команды для выполнения
-                self.last_query_results[row['id']] = row['command']
-
-            # Если количество команд изменилось, можно оповестить пользователя (опционально)
-            # Но пока делаем это тихо, чтобы не отвлекать
+            for row in rows:
+                self.last_query_results[row["id"]] = row["command"]
         except Exception:
             # При ошибке просто пропускаем эту перезагрузку
             # Следующая попытка будет через DB_RELOAD_INTERVAL секунд
@@ -3448,6 +3468,7 @@ class CommandRunner(App):
         path = args[0]
         try:
             tag, n = database.import_tag_from_file(self.db_file, path)
+            self._invalidate_library()
             self.add_block(InfoBlock(f"Imported {n} command(s) into tag '{tag}'"))
         except FileNotFoundError:
             self.add_block(InfoBlock(f"Error: file '{path}' not found."))
@@ -3892,6 +3913,7 @@ class CommandRunner(App):
         5. Иначе -> сохранение новой команды
         """
         content = user_input[1:].strip()
+        self._invalidate_library()
 
         # Формат: #tag=ID=comment  (ID = tid или глобальный <id> из ??)
         m = re.match(r"^([a-zA-Z_0-9]+)=(\d+)=(.*)$", content)
