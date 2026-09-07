@@ -971,6 +971,33 @@ async def test_colon_help_stays_responsive(isolated_home):
         assert "after-help" in block.raw_stdout
 
 
+async def test_colon_help_scrolls_to_help_not_journal_top(isolated_home):
+    """:? shows the start of the new help block, not the welcome splash."""
+    from textual.containers import VerticalScroll
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "seq 1 80")
+        await wait_command_done(app)
+        await submit(pilot, "seq 81 160")
+        await wait_command_done(app)
+        container = app.query_one("#results-container", VerticalScroll)
+        await pilot.pause()
+        assert float(container.scroll_y) > 5
+        await submit(pilot, ":?")
+        await pilot.pause()
+        await pilot.pause()
+        help_block = last_info(app)
+        assert "Commands Help" in help_block.text_content
+        region = getattr(help_block, "virtual_region", help_block.region)
+        help_y = float(region.y)
+        scroll_y = float(container.scroll_y)
+        assert scroll_y > 5
+        assert abs(scroll_y - help_y) < 3
+        assert scroll_y < float(container.max_scroll_y) - 2
+        assert input_widget(app).has_focus
+
+
 def test_escape_help_markup_keeps_bold_and_brackets():
     from rich.text import Text
 

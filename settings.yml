@@ -22,3 +22,5 @@ check_updates: true
 
 # Скринсейвер (starfield). Секунды простоя; 0 = выкл. :screensaver — сразу.
 screensaver_idle: 120
+# Летающие звёзды (пыль + k8s/git/…). false — чёрный холст; часы, лента и load остаются.
+screensaver_stars: true

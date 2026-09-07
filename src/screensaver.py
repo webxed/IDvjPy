@@ -80,7 +80,7 @@ COMMAND_HELP_LINES = (
     ":session [NAME]  — show or switch instance",
     ":welcome  — seed catalog",
     ":backup  — snapshot the tags DB",
-    ":screensaver  — starfield now (idle: screensaver_idle)",
+    ":screensaver  — starfield now (idle: screensaver_idle; stars: screensaver_stars)",
     ":r  — focused block command into the input",
     ":/text  — search journal lines; :n / :N next/prev",
     ":theme [name]  — TUI theme (saved in settings.yml)",
@@ -509,12 +509,14 @@ class StarField:
         seed: int | None = None,
         tokens: Sequence[str] | None = None,
         now: Callable[[], datetime] | None = None,
+        stars: bool = True,
     ) -> None:
         self.width = max(8, width)
         self.height = max(4, height)
         self.rng = random.Random(seed)
         self.tokens: Tuple[str, ...] = tuple(tokens) if tokens else TOKENS
         self._now = now or datetime.now
+        self.stars_enabled = bool(stars)
         self.stars: List[Star] = []
         self._seed_stars()
 
@@ -571,6 +573,8 @@ class StarField:
         return canvas
 
     def _budget(self) -> int:
+        if not self.stars_enabled:
+            return 0
         area = self.width * self.height
         return min(90, max(28, area // 28))
 
@@ -708,6 +712,7 @@ class DevopsScreensaver(ModalScreen[None]):
         ticker_items: Sequence[str] | None = None,
         help_lines: Sequence[str] | None = None,
         host_reader: Callable[[], HostSnapshot] | None = None,
+        stars: bool | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -715,7 +720,8 @@ class DevopsScreensaver(ModalScreen[None]):
         self._tokens = tokens
         self._ticker_items = ticker_items
         self._help_lines = help_lines
-        self._field = StarField(80, 24, seed=seed, tokens=tokens)
+        self._stars = stars
+        self._field = StarField(80, 24, seed=seed, tokens=tokens, stars=stars is not False)
         self._ticker = LibraryTicker((), seed=seed)
         self._help = HelpTypewriter(help_lines, seed=seed)
         self._host = HostStats(reader=host_reader)
@@ -733,11 +739,14 @@ class DevopsScreensaver(ModalScreen[None]):
             items = tuple(self._ticker_items)
         self._ticker = LibraryTicker(items, seed=self._seed)
         self._help = HelpTypewriter(self._help_lines, seed=self._seed)
+        if self._stars is None:
+            self._stars = bool(getattr(self.app, "screensaver_stars", True))
         self._field = StarField(
             max(8, self.size.width or 80),
             max(4, (self.size.height or 24) - (1 if items else 0)),
             seed=self._seed,
             tokens=self._tokens,
+            stars=self._stars,
         )
         canvas = self.query_one("#ss-canvas", Static)
         canvas.can_focus = True

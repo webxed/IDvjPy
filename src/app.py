@@ -1410,7 +1410,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.31"
+    VERSION = "v1.32"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1502,6 +1502,7 @@ class CommandRunner(App):
     KEY_CHECK_UPDATES = "check_updates"
     KEY_THEME = "theme"
     KEY_SCREENSAVER_IDLE = "screensaver_idle"
+    KEY_SCREENSAVER_STARS = "screensaver_stars"
     DEFAULT_THEME = "textual-dark"
     THEME_ALIASES = {
         "dark": "textual-dark",
@@ -1556,6 +1557,7 @@ class CommandRunner(App):
         self._search_index: int = -1
         self._fresh_command_db: bool = False
         self.screensaver_idle: float = 0
+        self.screensaver_stars: bool = True
         self._ss_timer = None
 
     def _extract_path_token(self, text: str) -> str:
@@ -2016,6 +2018,9 @@ class CommandRunner(App):
                         )
                     except (TypeError, ValueError):
                         self.screensaver_idle = DEFAULT_SCREENSAVER_IDLE
+                    self.screensaver_stars = bool(
+                        settings.get(self.KEY_SCREENSAVER_STARS, True)
+                    )
         except (FileNotFoundError, KeyError, yaml.YAMLError):
             pass
 
@@ -2598,13 +2603,27 @@ class CommandRunner(App):
         container.anchor(True)
 
     def _scroll_results_home(self) -> None:
-        """Прокрутить журнал к началу (приветствие / длинный help)."""
+        """Прокрутить журнал к началу (приветствие на старте)."""
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
         try:
             container.anchor(False)
         except Exception:
             pass
         container.scroll_home(animate=False, immediate=True)
+
+    def _scroll_results_to_block(self, block: Static) -> None:
+        """Поставить верх блока в кадр. Не scroll_to_widget: длинный :? вешает layout."""
+        container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+        try:
+            container.anchor(False)
+        except Exception:
+            pass
+        try:
+            region = getattr(block, "virtual_region", None) or block.region
+            y = int(region.y)
+        except Exception:
+            return
+        container.scroll_to(y=y, animate=False, immediate=True)
 
     def _schedule_journal_follow_end(self) -> None:
         """Два refresh: после роста блока virtual size ещё не финальный."""
@@ -2615,10 +2634,18 @@ class CommandRunner(App):
         self.call_after_refresh(scroll_then_repeat)
 
     def _schedule_journal_home(self) -> None:
-        """После сплэша: дождаться раскладки длинного help и остаться наверху."""
+        """После сплэша: дождаться раскладки и остаться наверху журнала."""
         def scroll_then_repeat() -> None:
             self._scroll_results_home()
             self.call_after_refresh(self._scroll_results_home)
+
+        self.call_after_refresh(scroll_then_repeat)
+
+    def _schedule_journal_to_block(self, block: Static) -> None:
+        """После раскладки длинного :? показать начало блока, не весь журнал сверху."""
+        def scroll_then_repeat() -> None:
+            self._scroll_results_to_block(block)
+            self.call_after_refresh(lambda: self._scroll_results_to_block(block))
 
         self.call_after_refresh(scroll_then_repeat)
 
@@ -3527,12 +3554,16 @@ class CommandRunner(App):
         if self._demo_active or self._demo_pressing:
             self._bump_screensaver_idle()
             return
-        if getattr(self.screen, "_modal", False):
+        try:
+            current = self.screen
+        except Exception:
+            return
+        if getattr(current, "_modal", False):
             self._bump_screensaver_idle()
             return
-        if isinstance(self.screen, DevopsScreensaver):
+        if isinstance(current, DevopsScreensaver):
             return
-        self.push_screen(DevopsScreensaver())
+        self.push_screen(DevopsScreensaver(stars=self.screensaver_stars))
 
     def _handle_screensaver_command(self, args: List[str]) -> None:
         """`:screensaver` preview; `:screensaver 0` / `:screensaver 120` set idle seconds."""
@@ -3562,7 +3593,7 @@ class CommandRunner(App):
         if self._demo_active:
             self.add_block(InfoBlock("Cannot start screensaver while a demo is playing (Esc first)."))
             return
-        self.push_screen(DevopsScreensaver())
+        self.push_screen(DevopsScreensaver(stars=self.screensaver_stars))
 
     def _start_update_check(self, *, always_report: bool) -> None:
         """Background GitHub version check. Startup only notifies if main is newer."""
@@ -3750,7 +3781,7 @@ class CommandRunner(App):
   :session NAME - Switch to that instance or create it (tags DB stays shared)
   :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
-  :screensaver  - Starfield; full-width ticker; bottom-left help; bottom-right load/mem (idle: screensaver_idle; 0 = off)
+  :screensaver  - Starfield; full-width ticker; bottom-left help; bottom-right load/mem (idle: screensaver_idle; 0 = off; screensaver_stars: false hides flying dust)
   :r          - Put the focused (or last) block command into the input
   :/text  :g  - Search journal lines; :n / n next, :N / N prev. / on a block starts :/
   :export tag [file] - Write one tag to JSON
@@ -3862,15 +3893,13 @@ class CommandRunner(App):
   Live DB is copied to backups/ first; :backup does the same snapshot by hand.
   Click a green --seed line to insert it, then Enter. Click a .md name (terminal_mouse) or :md SEED_LINUX_COMMANDS.md to read the handbook.
 """
-        self.add_block(
-            InfoBlock(
-                escape_help_markup(
-                    help_text.replace("IDvjPy_term VER", f"IDvjPy_term {self.VERSION}", 1)
-                )
-            ),
-            follow_end=False,
+        block = InfoBlock(
+            escape_help_markup(
+                help_text.replace("IDvjPy_term VER", f"IDvjPy_term {self.VERSION}", 1)
+            )
         )
-        self._schedule_journal_home()
+        self.add_block(block, follow_end=False)
+        self._schedule_journal_to_block(block)
 
     def _show_ingress_help(self) -> None:
         """Show ingress command help."""

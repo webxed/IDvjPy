@@ -241,6 +241,17 @@ def test_starfield_stars_are_slow():
     assert all(0.03 <= star.speed <= 0.08 for star in clocks)
 
 
+def test_starfield_can_disable_flying_stars():
+    field = StarField(60, 20, seed=4, stars=False)
+    kinds = {star.kind for star in field.stars}
+    assert "dust" not in kinds
+    assert "token" not in kinds
+    assert kinds == {"clock"}
+    field.resize(80, 24)
+    assert all(star.kind == "clock" for star in field.stars)
+    assert {star.label for star in field.stars} == {"time", "date"}
+
+
 def test_clock_glyph_formats_time_and_date():
     moment = datetime(2026, 8, 26, 15, 35, 7)
     assert clock_glyph(moment, "time") == "15:35:07"
@@ -366,6 +377,22 @@ async def test_screensaver_host_bar_shows_load_and_mem(isolated_home):
         assert "mem" in line
         assert not line.startswith("load")
         assert help_bar.visible
+
+
+async def test_screensaver_stars_off_from_settings(isolated_home):
+    settings = isolated_home / "settings.yml"
+    settings.write_text(
+        settings.read_text(encoding="utf-8") + "screensaver_stars: false\n",
+        encoding="utf-8",
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, ":screensaver")
+        await pilot.pause()
+        assert isinstance(app.screen, DevopsScreensaver)
+        assert app.screensaver_stars is False
+        assert app.screen._field.stars_enabled is False
+        assert all(star.kind == "clock" for star in app.screen._field.stars)
 
 
 async def test_colon_screensaver_off(isolated_home):
