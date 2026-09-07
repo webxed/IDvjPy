@@ -21,7 +21,7 @@ def _data_dir() -> Path:
     return Path.cwd()
 
 
-def load_settings():
+def load_settings() -> str:
     """Load database filename from settings.yml."""
     settings_path = _data_dir() / "settings.yml"
     if settings_path.exists():
@@ -31,7 +31,7 @@ def load_settings():
     return 'mytags.db'
 
 
-def load_backup_dir():
+def load_backup_dir() -> str:
     """Load backup directory from settings.yml."""
     settings_path = _data_dir() / "settings.yml"
     if settings_path.exists():
@@ -45,7 +45,7 @@ def load_backup_dir():
     return 'backups'
 
 
-def resolve_backup_path(filename: str, backup_dir: str = None) -> Path:
+def resolve_backup_path(filename: str, backup_dir: str | None = None) -> Path:
     """
     Resolve backup file path - use backup_dir if path is relative.
 
@@ -79,7 +79,7 @@ def get_db_connection(db_file: str):
     return conn
 
 
-def export_db(db_file: str, output_file: str, tag: str = None, include_deleted: bool = False, use_backup_dir: bool = True):
+def export_db(db_file: str, output_file: str, tag: str | None = None, include_deleted: bool = False, use_backup_dir: bool = True):
     """
     Export commands from database to JSON file.
 
@@ -394,7 +394,7 @@ def import_tag(db_file: str, input_file: str, mode: str = 'merge'):
     import_db(db_file, input_file, mode=mode, skip_existing=(mode == 'merge'), preserve_tid=True)
 
 
-def export_csv(db_file: str, output_file: str, tag: str = None, include_deleted: bool = False, use_backup_dir: bool = True):
+def export_csv(db_file: str, output_file: str, tag: str | None = None, include_deleted: bool = False, use_backup_dir: bool = True):
     """
     Export commands from database to CSV file for editing in spreadsheet software.
 
