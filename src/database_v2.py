@@ -97,15 +97,20 @@ def add_command(db_file: str, command: str, tag: str) -> int:
         The tid (tag-local ID) assigned to the command.
     """
     conn = get_db_connection(db_file)
-    tid = _get_next_tid(conn, tag)
-
-    conn.execute(
-        "INSERT INTO commands (tag, tid, command, timestamp) VALUES (?, ?, ?, ?)",
-        (tag, tid, command, datetime.datetime.now())
-    )
-    conn.commit()
-    conn.close()
-    return tid
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        tid = _get_next_tid(conn, tag)
+        conn.execute(
+            "INSERT INTO commands (tag, tid, command, timestamp) VALUES (?, ?, ?, ?)",
+            (tag, tid, command, datetime.datetime.now())
+        )
+        conn.commit()
+        return tid
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 def delete_commands_by_tag(db_file: str, tag: str) -> int:
     """Marks live commands with a given tag as deleted. Returns row count."""
@@ -434,17 +439,33 @@ def import_tag_from_file(db_file: str, path: str) -> tuple[str, int]:
     comment = comments.get(tag) or ""
     if comment:
         set_tag_comment(db_file, tag, comment)
-    n = 0
-    for item in commands:
-        if item.get("deleted"):
-            continue
-        cmd = (item.get("command") or "").strip()
-        if not cmd:
-            continue
-        tid = add_command(db_file, cmd, tag)
-        cmd_comment = (item.get("comment") or "").strip()
-        if cmd_comment:
-            set_command_comment(db_file, tag, tid, cmd_comment)
-        n += 1
-    return tag, n
+    conn = get_db_connection(db_file)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        n = 0
+        for item in commands:
+            if item.get("deleted"):
+                continue
+            cmd = (item.get("command") or "").strip()
+            if not cmd:
+                continue
+            tid = _get_next_tid(conn, tag)
+            cursor = conn.execute(
+                "INSERT INTO commands (tag, tid, command, timestamp) VALUES (?, ?, ?, ?)",
+                (tag, tid, cmd, datetime.datetime.now()),
+            )
+            cmd_comment = (item.get("comment") or "").strip()
+            if cmd_comment:
+                conn.execute(
+                    "UPDATE commands SET comment = ? WHERE id = ? AND deleted = 0",
+                    (cmd_comment, cursor.lastrowid),
+                )
+            n += 1
+        conn.commit()
+        return tag, n
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
