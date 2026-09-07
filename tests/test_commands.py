@@ -457,6 +457,19 @@ async def test_hash_space_parks_in_history_without_running(isolated_home):
         assert "#logs echo still-a-tag" not in hist
 
 
+async def test_at_prefix_runs_without_timeout(isolated_home):
+    """`@ cmd` strips the prefix and skips command_timeout; history keeps `@`."""
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "@echo at-no-timeout")
+        block = await wait_command_done(app)
+        assert "at-no-timeout" in block.raw_stdout
+        assert block.source_command == "echo at-no-timeout"
+        assert "@echo" not in block.header
+        hist = (isolated_home / CommandRunner.FILE_HISTORY).read_text(encoding="utf-8")
+        assert "@echo at-no-timeout" in hist
+
+
 def test_history_append_skips_consecutive_duplicate(isolated_home):
     from history_store import append_history_file_line, read_history_file_lines
 

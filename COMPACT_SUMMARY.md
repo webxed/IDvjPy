@@ -16,6 +16,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 |--------|--------|
 | (none) | Execute shell command |
 | `> cmd` | Suspend TUI, run with a real TTY (`htop`, `vim`, `ssh`). On exit: import that shell's env and `$PWD` |
+| `@ cmd` | Run without `command_timeout` (long non-TTY jobs; stdout captured) |
 | `#tag cmd` | Save (literal text; refs `!tag[tid]` not expanded on save) |
 | `# command` | Park in instance history + journal, do not run (`#` + space) |
 | `#tag=` / `#tag=ID=` | Tag / command comment (ID = tid or global `<id>`) |

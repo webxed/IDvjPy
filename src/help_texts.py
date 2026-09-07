@@ -49,6 +49,7 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   (none)     - Execute shell command
   > <cmd>    - Suspend TUI and run with a real TTY (htop, vim, ssh, less)
                After exit: import that shell's export/unset and $PWD; also :env
+  @ <cmd>    - Run without command_timeout (long non-TTY jobs; stdout captured)
   #<tag>     - Save command to database with tag (`#tag cmd`, no space after #)
   # command  - Park a line in history without running (bash-style; space after #)
   #tag! / #tag!tid - Restore soft-deleted tag / command

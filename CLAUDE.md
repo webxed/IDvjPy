@@ -81,6 +81,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 |--------|---------|
 | (none) | Execute shell command via subprocess, add to session history |
 | `> cmd` | Suspend TUI (`App.suspend()`), run with a real TTY (`htop`, `vim`, `ssh`). No timeout, stdout not captured. `>>` is left to the shell. On exit: dump that bash's env/`$PWD` into the TUI. Nested `> bash` exports are not visible. |
+| `@ cmd` | Run without `command_timeout` (long non-TTY jobs; still captures stdout) |
 | `#tag cmd` | Save command to database with tag (literal text; refs not expanded on save) |
 | `# command` | Park the line in `history_<instance>.txt` and the journal; do not run (`#` + space, like bash) |
 | `#tag=` / `#tag=ID=` | Tag / command comment (ID = tid or global `<id>`) |

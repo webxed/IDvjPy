@@ -1260,6 +1260,7 @@ class CommandRunner(App):
     PREFIX_PIPE = "|"
     PREFIX_VAR = "$" # Новый префикс для переменных
     PREFIX_TTY = ">"
+    PREFIX_NO_TIMEOUT = "@"  # run the rest of the line without command_timeout
     
     CMD_QUIT = "q"
     CMD_WRITE = "w"
@@ -2736,6 +2737,14 @@ class CommandRunner(App):
             self._park_history_comment(user_input)
             return
 
+        # `@ cmd` — выполнить без command_timeout (долгие не-TTY задачи).
+        # История хранит исходную строку с `@`; повтор по ↑ вернёт её как есть.
+        no_timeout = user_input.startswith(self.PREFIX_NO_TIMEOUT)
+        if no_timeout:
+            user_input = user_input[1:].lstrip()
+            if not user_input:
+                return
+
         # v1.1.9+: Проверяем, содержит ли команда ссылки на другие команды
         # Ссылки: !tag[tid] или !ID (но не !!)
         has_command_refs = bool(RE_COMMAND_REFS.search(user_input))
@@ -2798,7 +2807,7 @@ class CommandRunner(App):
                 return
         else:
             # Обычные команды без ссылок
-            self.handle_normal_command(user_input)
+            self.handle_normal_command(user_input, no_timeout=no_timeout, record_history=not no_timeout)
 
     def log_to_history(self, command: str) -> None:
         """
@@ -4520,7 +4529,7 @@ class CommandRunner(App):
                     except OSError:
                         pass
 
-    def handle_normal_command(self, command: str, stdin_data: Optional[str] = None, record_history: bool = True) -> None:
+    def handle_normal_command(self, command: str, stdin_data: Optional[str] = None, record_history: bool = True, *, no_timeout: bool = False) -> None:
         """
         Обертка для выполнения обычной команды с обновлением истории.
 
@@ -4536,7 +4545,7 @@ class CommandRunner(App):
         if cd_path is not None:
             self._change_cwd(cd_path)
             return
-        self.run_command(command, stdin_data)
+        self.run_command(command, stdin_data, no_timeout=no_timeout)
 
     def _scroll_results(self, delta: int) -> None:
         """Прокрутка журнала команд (когда фокус не на поле ввода)."""
@@ -4715,10 +4724,10 @@ class CommandRunner(App):
     def _expand_aliases(self, command: str) -> str:
         return expand_aliases(command, self.aliases)
 
-    def _execute_in_thread(self, block: CommandBlock, command: str, stdin_data: Optional[str]) -> None:
+    def _execute_in_thread(self, block: CommandBlock, command: str, stdin_data: Optional[str], no_timeout: bool = False) -> None:
         """
         Выполняет команду в отдельном потоке.
-        Таймаут отключается при command_timeout: 0 в settings.yml.
+        Таймаут отключается при command_timeout: 0 в settings.yml или по `@ cmd`.
         """
         raw_stdout, raw_stderr, return_code = "", "", 0
         if command:
@@ -4732,7 +4741,7 @@ class CommandRunner(App):
                     errors="replace",
                     input=stdin_data,
                 )
-                if self.COMMAND_TIMEOUT and self.COMMAND_TIMEOUT > 0:
+                if self.COMMAND_TIMEOUT and self.COMMAND_TIMEOUT > 0 and not no_timeout:
                     kwargs["timeout"] = self.COMMAND_TIMEOUT
                 process = subprocess.run(command, **kwargs)
                 raw_stdout = process.stdout.strip()
@@ -4746,7 +4755,7 @@ class CommandRunner(App):
                 return_code = -1
         self.call_from_thread(block.update_content, raw_stdout, raw_stderr, return_code)
 
-    def run_command(self, command: str, stdin_data: Optional[str] = None) -> None:
+    def run_command(self, command: str, stdin_data: Optional[str] = None, *, no_timeout: bool = False) -> None:
         """
         Инициатор выполнения команды.
         Подставляет переменные и запускает поток.
@@ -4776,8 +4785,8 @@ class CommandRunner(App):
         
         # Запускаем в отдельном потоке, чтобы UI не завис
         thread = threading.Thread(
-            target=self._execute_in_thread, 
-            args=(block, final_command, stdin_data),
+            target=self._execute_in_thread,
+            args=(block, final_command, stdin_data, no_timeout),
             daemon=True
         )
         thread.start()

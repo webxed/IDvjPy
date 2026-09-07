@@ -72,6 +72,7 @@ python3 app.py --demo full --demo-quit
 |---------|------------|--------|
 | (нет) | Выполнить shell-команду | `ls -la` |
 | `> cmd` | Отдать настоящий TTY (htop, vim, ssh). После выхода — env/$PWD той же оболочки | `> htop` |
+| `@ cmd` | Выполнить без `command_timeout` (долгие не-TTY задачи) | `@ terraform apply` |
 | `#tag cmd` | Сохранить команду с тегом (текст как есть) | `#deploy rsync -av src/ host:` |
 | `# command` | В историю, не выполнять (как `# …` в bash; пробел после `#`) | `# curl https://example.com` |
 | `#tag=` / `#tag=ID=` | Комментарий к тегу / команде | `#deploy=prod rsync` |

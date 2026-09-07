@@ -381,6 +381,7 @@ klogin my-cluster
 /bin/false
 ls /no-such-idivjopy-dir
 sleep 15
+@sleep 15
 seq 1 400
 ```
 
@@ -388,6 +389,7 @@ seq 1 400
 
 - несуществующая команда: stderr + exit code ≠ 0
 - `sleep 15`: таймаут (`command_timeout` в `settings.yml`, по умолчанию 10 с), полный вывод не теряется
+- `@sleep 15`: префикс `@` выполняет без таймаута (ждём завершения; в истории строка остаётся с `@`)
 - `seq 1 400`: в UI последние ~300 строк + `truncated for UI stability`; F3 копирует полный вывод
 
 Автотест: `test_s15_errors_timeout_truncate`.
