@@ -355,7 +355,10 @@ async def test_small_last_block_gets_focus_when_it_cannot_reach_top(isolated_hom
         container = app.query_one("#results-container", VerticalScroll)
         container.scroll_to(y=0, animate=False)
         await pilot.pause()
-        await pilot.click(first)
+        # The first block is taller than the window; clicking it needs a screen
+        # coordinate inside its visible rows. Block-focus-by-click is covered by
+        # other tests, so focus the first block directly here.
+        first.focus()
         await pilot.pause()
         assert app.focused is first
         for _ in range(40):

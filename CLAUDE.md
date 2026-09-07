@@ -26,6 +26,8 @@ Tests:
 python3 -m pytest tests/ -v
 ```
 
+Dev dependencies for tests: `pip install -r requirements-dev.txt` (pytest, pytest-asyncio, pytest-timeout). Quick smoke that skips the slow Pilot suites: `python3 -m pytest tests/ -m "not slow"`.
+
 In-app help: `:?`.
 
 ## Setup
@@ -57,6 +59,8 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 
 - **`src/database_v2.py`**: SQLite tagged history
 - **`src/command_parser_v2.py`**: `!tag[tid]` / `!ID` / `!!` assembly
+- **`src/history_store.py`**: `history_<instance>.txt` append/read/compact + portalocker file-lock helpers
+- **`src/help_texts.py`**: static `:?` / `:i` help text constants
 - **`src/clipboard.py`**: CLIPBOARD / PRIMARY / OSC 52
 - **`src/shell_env.py`**: `.bashrc_term` vars, `~/.bashrc` aliases, `$1` substitution
 - **`src/json_viewer.py`**: JSON tree modal
@@ -126,6 +130,8 @@ Install from `requirements.txt`:
 - `PyYAML==6.0.3` - Settings parsing
 - `Pygments==2.19.2` - Syntax highlighting
 - `portalocker` - file locking
+
+Dev/test-only packages (`pytest`, `pytest-asyncio`, `pytest-timeout`) live in `requirements-dev.txt`. GitHub Actions runs the whole suite on every push/PR to `main` (`.github/workflows/tests.yml`).
 
 ## Key Configuration
 

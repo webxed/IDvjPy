@@ -3,6 +3,8 @@ import time
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 from app import CommandBlock, CommandRunner, InfoBlock
 
 from demo import (

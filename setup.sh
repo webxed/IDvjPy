@@ -9,6 +9,9 @@ source .venv/bin/activate
 # Install the dependencies
 pip install -r requirements.txt
 
+# Dev/test dependencies (pytest etc.) are separate:
+#   pip install -r requirements-dev.txt
+
 # Database file is created empty on first run (not shipped in git).
 echo "Setup complete. To run: python3 app.py"
 echo "Optional handbook tags: python3 src/seed_linux_commands.py --seed"

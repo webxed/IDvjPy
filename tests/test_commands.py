@@ -1,4 +1,8 @@
 """Базовые сценарии: ввод, выполнение, история, переменные, выход."""
+import pytest
+
+pytestmark = pytest.mark.slow
+
 from app import CommandBlock, CommandRunner, InfoBlock, escape_help_markup
 
 from tests.conftest import input_widget, last_info, submit, type_keys, wait_command_done

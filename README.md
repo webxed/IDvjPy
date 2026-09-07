@@ -19,7 +19,7 @@ IDvjPy — терминальное приложение (TUI) на Python (Text
 
 Код приложения лежит в `src/`. В рабочей папке — данные: `settings.yml`, база тегов, `.bashrc_term*`. При пустой БД в журнале показывается каталог seed-справочников (Linux, [цепочки k8s](K8S_CHAINS.md), git, ops): клик по зелёной `--seed` вставляет команду во ввод, клик по `.md` открывает справочник.
 
-Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Справка в приложении: `:?`.
+Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v` (dev-зависимости: `pip install -r requirements-dev.txt`). Справка в приложении: `:?`.
 
 ## Возможности
 
@@ -41,6 +41,7 @@ IDvjPy — терминальное приложение (TUI) на Python (Text
 ./setup.sh                 # создаёт .venv и ставит зависимости
 source .venv/bin/activate
 # или: pip install -r requirements.txt
+# тесты: pip install -r requirements-dev.txt
 ```
 
 На Linux для буфера обмена нужны `xclip` или `xsel` (на Wayland — `wl-clipboard`).

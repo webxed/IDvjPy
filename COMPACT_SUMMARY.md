@@ -161,6 +161,8 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/json_viewer.py` | JSON tree modal |
 | `src/ingress_analyzer.py` | `:i` k8s |
 | `src/command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
+| `src/history_store.py` | `history_<instance>.txt` append/read/compact, file locks |
+| `src/help_texts.py` | Static `:?` / `:i` help texts |
 | `src/seed_*.py` | Handbook seeds (linux, k8s, git, ops, …) |
 | `src/app.css` | Styles (JSON viewer, line-nav border, block focus) |
 | `settings.yml` | DB path, timeout, `terminal_mouse`, `theme`, `check_updates`, `history_keep`, `screensaver_idle`, `screensaver_stars` (cwd) |

@@ -1,4 +1,8 @@
 """Автотесты по сценариям test_cmd.md (IDvjPy_term v1.32)."""
+import pytest
+
+pytestmark = pytest.mark.slow
+
 from pathlib import Path
 
 import database_v2 as database
