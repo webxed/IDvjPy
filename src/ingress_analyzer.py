@@ -757,7 +757,9 @@ class IngressAnalyzer:
         else:
             # Get and parse nginx config
             try:
-                nginx_config = self.get_nginx_config(pod_name, pod_ns)
+                nginx_config = self.get_nginx_config(
+                    pod_name, pod_ns or self.default_namespace
+                )
                 result["nginx_config_raw"] = nginx_config[:5000] + "..." if len(nginx_config) > 5000 else nginx_config
 
                 parsed = self.parse_nginx_config(nginx_config)
