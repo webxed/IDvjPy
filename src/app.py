@@ -68,14 +68,14 @@ try:
     import os
     import threading
     import time
-    from collections.abc import Mapping
-    from typing import Any, Optional
+    from collections.abc import Mapping, Sequence
+    from typing import Any, Optional, cast
 
     import yaml
     from rich.markup import escape
     from textual import events
     from textual.app import App, ComposeResult, InvalidThemeError, SuspendNotSupported
-    from textual.binding import Binding
+    from textual.binding import Binding, BindingType
     from textual.containers import VerticalScroll
     from textual.widgets import Footer, Header, Input, Static
 
@@ -179,6 +179,11 @@ DEFAULT_SCREENSAVER_IDLE = 120
 class LineNavigable(Static):
     """Построчный курсор: F2/Enter включают; Enter копирует и уходит во ввод; Shift+Enter/Ctrl+V дописывают во ввод."""
 
+    @property
+    def app(self) -> "CommandRunner":
+        """Textual типизирует Widget.app как базовый App; отдаём реальный подкласс."""
+        return cast("CommandRunner", super().app)
+
     def _nav_plain_text(self) -> str:
         return ""
 
@@ -233,10 +238,12 @@ class LineNavigable(Static):
         except Exception:
             pass
         lines = self._nav_lines()
-        if getattr(self, "line_index", None) is None:
-            self.line_index = self._visible_line_index(lines)
+        idx = getattr(self, "line_index", None)
+        if idx is None:
+            idx = self._visible_line_index(lines)
         else:
-            self.line_index = max(0, min(self.line_index, max(0, len(lines) - 1)))
+            idx = max(0, min(idx, max(0, len(lines) - 1)))
+        self.line_index = idx
         self._paint_line_cursor()
         self._scroll_cursor_into_view()
         app = getattr(self, "app", None)
@@ -496,7 +503,7 @@ class LineNavigable(Static):
         self.exit_line_nav(notify=False)
 
 
-_LINE_NAV_APPEND_BINDINGS = [
+_LINE_NAV_APPEND_BINDINGS: list[BindingType] = [
     Binding("shift+enter", "append_line", show=False, priority=True),
     Binding("ctrl+enter", "append_line", show=False, priority=True),
     Binding("ctrl+v", "append_line_or_paste", show=False, priority=True),
@@ -628,10 +635,12 @@ class CommandBlock(LineNavigable, Static):
         self.update(self._format_output())
         if follow and app is not None and hasattr(app, "_schedule_journal_follow_end"):
             app._schedule_journal_follow_end()
-        if getattr(self, "line_nav_active", False) and getattr(self, "line_index", None) is not None:
-            n = len(self._nav_lines())
-            self.line_index = min(self.line_index, max(0, n - 1))
-            self._paint_line_cursor()
+        if getattr(self, "line_nav_active", False):
+            idx = getattr(self, "line_index", None)
+            if idx is not None:
+                n = len(self._nav_lines())
+                self.line_index = min(idx, max(0, n - 1))
+                self._paint_line_cursor()
 
     def on_focus(self) -> None:
         """
@@ -643,6 +652,11 @@ class CommandBlock(LineNavigable, Static):
 
 class ClickableCommand(Static):
     """Кликабельный виджет для отображения команды с возможностью клика."""
+
+    @property
+    def app(self) -> "CommandRunner":
+        """Textual типизирует Widget.app как базовый App; отдаём реальный подкласс."""
+        return cast("CommandRunner", super().app)
 
     def __init__(self, command_ref: str, display_text: str, **kwargs):
         """
@@ -663,7 +677,6 @@ class ClickableCommand(Static):
             input_widget.value = self.command_ref
             input_widget.cursor_position = len(self.command_ref)
             input_widget.focus()
-        return False
 
 class InfoBlock(LineNavigable, Static):
     """Виджет для отображения информационных сообщений (не от команд)."""
@@ -784,7 +797,7 @@ class CompletionList(Static):
 
     def update_candidates(
         self,
-        candidates: list[str | CompletionItem],
+        candidates: Sequence[str | CompletionItem],
         preview: str = "",
     ) -> None:
         """Обновить список кандидатов и опциональную расшифровку !tag[tid]."""
@@ -879,6 +892,11 @@ class CompletionList(Static):
 
 class CommandInput(Input):
     """Поле ввода: Tab — в журнал; Ctrl+D — очистить строку."""
+
+    @property
+    def app(self) -> "CommandRunner":
+        """Textual типизирует Widget.app как базовый App; отдаём реальный подкласс."""
+        return cast("CommandRunner", super().app)
 
     BINDINGS = [
         Binding("tab", "tab_input", show=False, priority=True),
@@ -1159,6 +1177,11 @@ class QueryResultsBlock(LineNavigable, Static):
 
 class JournalScroll(VerticalScroll):
     """Журнал: клавиши скролла активируют видимый блок (родитель перехватывает ↑/↓/PgUp раньше App)."""
+
+    @property
+    def app(self) -> "CommandRunner":
+        """Textual типизирует Widget.app как базовый App; отдаём реальный подкласс."""
+        return cast("CommandRunner", super().app)
 
     def action_scroll_up(self) -> None:
         self.app._scroll_journal_and_focus(-1)
@@ -2125,7 +2148,7 @@ class CommandRunner(App):
             return
         self._demo_active = False
         try:
-            self.workers.cancel_group("demo")
+            self.workers.cancel_group(self, "demo")
         except Exception:
             pass
         if message:
@@ -2320,6 +2343,8 @@ class CommandRunner(App):
         if not visible:
             return
         current = self.focused
+        if not isinstance(current, Static):
+            return
         if current in visible:
             idx = visible.index(current)
             nxt = idx + (1 if direction > 0 else -1)
@@ -2674,7 +2699,11 @@ class CommandRunner(App):
         commands = list(self.query(CommandBlock))
         if commands:
             return commands[-1]
-        others = list(self.query("InfoBlock, QueryResultsBlock"))
+        others = [
+            block
+            for block in self.query("InfoBlock, QueryResultsBlock")
+            if isinstance(block, (InfoBlock, QueryResultsBlock))
+        ]
         return others[-1] if others else None
 
     def _text_from_json_block(self, block: Static) -> str:
@@ -2900,7 +2929,11 @@ class CommandRunner(App):
             if len(parts) > 1:
                 filename = parts[1]
                 try:
-                    all_blocks = self.query("CommandBlock, InfoBlock")
+                    all_blocks = [
+                        block
+                        for block in self.query("CommandBlock, InfoBlock")
+                        if isinstance(block, (CommandBlock, InfoBlock))
+                    ]
                     # Удаляем теги форматирования перед записью
                     content_to_write = "\n\n---\n\n".join(
                         self._strip_formatting_tags(block.text_content) for block in all_blocks
@@ -3610,10 +3643,14 @@ class CommandRunner(App):
 
     def _list_ingresses(self, namespace: str | None = None) -> None:
         """List ingresses in namespace or all namespaces."""
+        analyzer = self.ingress_analyzer
+        if analyzer is None:
+            self.add_block(InfoBlock("[red]Error: Ingress analyzer is not initialized.[/red]"))
+            return
         ns_display = namespace or "all namespaces"
         def worker():
             try:
-                ingresses = self.ingress_analyzer.list_ingresses(namespace)
+                ingresses = analyzer.list_ingresses(namespace)
                 self.call_from_thread(self._display_ingress_list, ingresses, namespace)
             except Exception as e:
                 self.call_from_thread(
@@ -3647,11 +3684,15 @@ class CommandRunner(App):
 
     def _analyze_ingress(self, name: str, namespace: str | None = None) -> None:
         """Analyze specific ingress."""
+        analyzer = self.ingress_analyzer
+        if analyzer is None:
+            self.add_block(InfoBlock("[red]Error: Ingress analyzer is not initialized.[/red]"))
+            return
         ns_display = namespace or "default"
 
         def worker():
             try:
-                analysis = self.ingress_analyzer.analyze_ingress(name, namespace)
+                analysis = analyzer.analyze_ingress(name, namespace)
                 self.call_from_thread(self._display_ingress_analysis, analysis)
             except Exception as e:
                 self.call_from_thread(
@@ -3676,11 +3717,15 @@ class CommandRunner(App):
 
     def _check_service_endpoints(self, service: str, namespace: str | None = None) -> None:
         """Check service endpoints."""
+        analyzer = self.ingress_analyzer
+        if analyzer is None:
+            self.add_block(InfoBlock("[red]Error: Ingress analyzer is not initialized.[/red]"))
+            return
         ns_display = namespace or "default"
 
         def worker():
             try:
-                svc_info = self.ingress_analyzer.check_service_endpoints(service, namespace)
+                svc_info = analyzer.check_service_endpoints(service, namespace)
                 self.call_from_thread(self._display_service_info, svc_info)
             except Exception as e:
                 self.call_from_thread(
@@ -3828,7 +3873,7 @@ class CommandRunner(App):
         else:
             self.add_block(InfoBlock("Invalid syntax. Use: $VAR_NAME=VALUE"))
 
-    def _resolve_command_references(self, command: str) -> str:
+    def _resolve_command_references(self, command: str) -> str | None:
         """
         Раскрывает ссылки на команды в строке (!tag[tid], !ID, !! ...).
 
@@ -4792,7 +4837,7 @@ class CommandRunner(App):
         raw_stdout, raw_stderr, return_code = "", "", 0
         if command:
             try:
-                kwargs = dict(
+                kwargs: dict[str, Any] = dict(
                     shell=True,
                     executable="/bin/bash",
                     capture_output=True,
