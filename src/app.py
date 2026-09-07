@@ -176,7 +176,7 @@ def escape_help_markup(text: str) -> str:
 DEFAULT_SCREENSAVER_IDLE = 120
 
 
-class LineNavigable:
+class LineNavigable(Static):
     """Построчный курсор: F2/Enter включают; Enter копирует и уходит во ввод; Shift+Enter/Ctrl+V дописывают во ввод."""
 
     def _nav_plain_text(self) -> str:
