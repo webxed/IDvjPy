@@ -6,7 +6,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-from typing import List, Mapping, Optional, Sequence, Tuple
+from collections.abc import Mapping, Sequence
 
 LINUX_TERMINALS = (
     "xdg-terminal-exec",
@@ -27,7 +27,7 @@ class GuiOpenError(Exception):
     """User-facing error: missing binary, bad path, empty override."""
 
 
-def _norm_platform(platform: Optional[str] = None) -> str:
+def _norm_platform(platform: str | None = None) -> str:
     plat = sys.platform if platform is None else platform
     if plat.startswith("linux"):
         return "linux"
@@ -38,7 +38,7 @@ def _norm_platform(platform: Optional[str] = None) -> str:
     return "linux"
 
 
-def _split_cmd(value: str, platform: str) -> List[str]:
+def _split_cmd(value: str, platform: str) -> list[str]:
     return shlex.split(value, posix=(platform != "win32"))
 
 
@@ -47,7 +47,7 @@ def _require_which(name: str, var: str) -> None:
         raise GuiOpenError(f"{name} not found; set ${var}=")
 
 
-def resolve_target_dir(path_arg: Optional[str] = None) -> str:
+def resolve_target_dir(path_arg: str | None = None) -> str:
     """Absolute directory for :fm / :term. ``~`` is expanded."""
     if not path_arg:
         return os.getcwd()
@@ -61,8 +61,8 @@ def build_fileman_argv(
     target: str,
     environ: Mapping[str, str],
     *,
-    platform: Optional[str] = None,
-) -> List[str]:
+    platform: str | None = None,
+) -> list[str]:
     """Argv that opens a file manager at ``target``. Path is always appended."""
     plat = _norm_platform(platform)
     override = (environ.get("FILEMAN") or "").strip()
@@ -86,8 +86,8 @@ def build_term_argv(
     target: str,
     environ: Mapping[str, str],
     *,
-    platform: Optional[str] = None,
-) -> List[str]:
+    platform: str | None = None,
+) -> list[str]:
     """Argv for a system terminal. Working directory is ``Popen(cwd=target)``."""
     plat = _norm_platform(platform)
     override = (environ.get("TERMINAL") or "").strip()
@@ -119,7 +119,7 @@ def spawn_detached(
     cwd: str,
     env: Mapping[str, str],
     new_console: bool = False,
-    platform: Optional[str] = None,
+    platform: str | None = None,
 ) -> subprocess.Popen:
     """Start a GUI/terminal without waiting or stealing this TTY."""
     plat = _norm_platform(platform)
@@ -145,11 +145,11 @@ def format_opened(argv: Sequence[str], pid: int) -> str:
 
 
 def open_file_manager(
-    path_arg: Optional[str],
+    path_arg: str | None,
     environ: Mapping[str, str],
     *,
-    platform: Optional[str] = None,
-) -> Tuple[List[str], subprocess.Popen]:
+    platform: str | None = None,
+) -> tuple[list[str], subprocess.Popen]:
     target = resolve_target_dir(path_arg)
     argv = build_fileman_argv(target, environ, platform=platform)
     proc = spawn_detached(argv, cwd=target, env=environ, new_console=False, platform=platform)
@@ -157,11 +157,11 @@ def open_file_manager(
 
 
 def open_terminal(
-    path_arg: Optional[str],
+    path_arg: str | None,
     environ: Mapping[str, str],
     *,
-    platform: Optional[str] = None,
-) -> Tuple[List[str], subprocess.Popen]:
+    platform: str | None = None,
+) -> tuple[list[str], subprocess.Popen]:
     target = resolve_target_dir(path_arg)
     argv = build_term_argv(target, environ, platform=platform)
     proc = spawn_detached(argv, cwd=target, env=environ, new_console=True, platform=platform)

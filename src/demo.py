@@ -10,8 +10,9 @@ import re
 import sys
 import time
 import unicodedata
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Union
+from typing import Any
 
 import yaml
 from textual import events
@@ -41,13 +42,13 @@ LOOP_FOREVER_NAMES = frozenset({"true", "forever", "inf", "infinite", "yes", "on
 MAX_LOOP_DEPTH = 8
 
 
-def bundled_demo_names() -> List[str]:
+def bundled_demo_names() -> list[str]:
     if not BUNDLED_DEMOS_DIR.is_dir():
         return []
     return sorted(path.stem for path in BUNDLED_DEMOS_DIR.glob("*.yml"))
 
 
-def resolve_demo_path(name: str) -> Optional[Path]:
+def resolve_demo_path(name: str) -> Path | None:
     """Resolve a bundled name (``short``) or a filesystem path."""
     raw = (name or "").strip()
     if not raw:
@@ -74,7 +75,7 @@ def resolve_demo_path(name: str) -> Optional[Path]:
     return None
 
 
-def load_scenario(path: Union[str, Path]) -> Dict[str, Any]:
+def load_scenario(path: str | Path) -> dict[str, Any]:
     """Load and normalize a demo YAML file."""
     demo_path = Path(path)
     with demo_path.open("r", encoding="utf-8") as fh:
@@ -106,9 +107,9 @@ def iter_typed_lines(steps: Iterable[Any]) -> Iterable[str]:
             yield text
 
 
-def collect_reset_tags(scenario: Dict[str, Any]) -> List[str]:
+def collect_reset_tags(scenario: dict[str, Any]) -> list[str]:
     """Tags the scenario will `#tag cmd`-save. Cleared before playback so tids restart at 1."""
-    tags: List[str] = []
+    tags: list[str] = []
     seen = set()
     for raw in scenario.get("reset_tags") or []:
         name = str(raw).strip()
@@ -171,9 +172,9 @@ def session_line_needs_wait(text: str) -> bool:
     return True
 
 
-def playbook_steps_from_lines(lines: Iterable[str]) -> List[Any]:
+def playbook_steps_from_lines(lines: Iterable[str]) -> list[Any]:
     """Turn submitted input lines into YAML steps (string or wait_command map)."""
-    steps: List[Any] = []
+    steps: list[Any] = []
     for raw in lines:
         text = (raw or "").strip()
         if is_playbook_skip_line(text):
@@ -187,12 +188,12 @@ def playbook_steps_from_lines(lines: Iterable[str]) -> List[Any]:
 
 def session_to_playbook(
     lines: Iterable[str], *, title: str = "session playbook"
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build a loadable demo scenario from a normal-session command log."""
     steps = playbook_steps_from_lines(lines)
     if not steps:
         raise ValueError("No commands to record")
-    scenario: Dict[str, Any] = {
+    scenario: dict[str, Any] = {
         "title": title,
         "start_pause": DEFAULTS["start_pause"],
         "type_delay": DEFAULTS["type_delay"],
@@ -206,7 +207,7 @@ def session_to_playbook(
     return scenario
 
 
-def dump_playbook_yaml(scenario: Dict[str, Any]) -> str:
+def dump_playbook_yaml(scenario: dict[str, Any]) -> str:
     """Serialize a session playbook with a short how-to header."""
     body = yaml.safe_dump(
         scenario,
@@ -223,7 +224,7 @@ def dump_playbook_yaml(scenario: Dict[str, Any]) -> str:
     return header + body
 
 
-def _reset_demo_tags(app: Any, tags: List[str]) -> None:
+def _reset_demo_tags(app: Any, tags: list[str]) -> None:
     if not tags:
         return
     db_file = getattr(app, "db_file", None)
@@ -237,7 +238,7 @@ def _reset_demo_tags(app: Any, tags: List[str]) -> None:
         app._populate_query_results()
 
 
-def load_demo_for_cli(name: str) -> Dict[str, Any]:
+def load_demo_for_cli(name: str) -> dict[str, Any]:
     """Resolve ``--demo`` for the launcher; exit with a hint on failure."""
     path = resolve_demo_path(name)
     if path is None:
@@ -256,7 +257,7 @@ def load_demo_for_cli(name: str) -> Dict[str, Any]:
         sys.exit(2)
 
 
-def parse_loop_count(value: Any) -> Optional[int]:
+def parse_loop_count(value: Any) -> int | None:
     """How many times to repeat. ``None`` means until Esc."""
     if isinstance(value, bool):
         return None if value else 1
@@ -280,12 +281,12 @@ def parse_loop_count(value: Any) -> Optional[int]:
 
 
 def _make_loop_step(
-    times: Optional[int],
-    inner: List[Dict[str, Any]],
+    times: int | None,
+    inner: list[dict[str, Any]],
     *,
     caption: str = "",
-    pause: Optional[float] = None,
-) -> Dict[str, Any]:
+    pause: float | None = None,
+) -> dict[str, Any]:
     if not inner:
         raise ValueError("loop has no steps")
     return {
@@ -304,7 +305,7 @@ def _make_loop_step(
     }
 
 
-def normalize_step(raw: Any, *, _depth: int = 0) -> Dict[str, Any]:
+def normalize_step(raw: Any, *, _depth: int = 0) -> dict[str, Any]:
     """Turn a YAML step (string or mapping) into a playback dict."""
     if isinstance(raw, str):
         return {
@@ -327,7 +328,7 @@ def normalize_step(raw: Any, *, _depth: int = 0) -> Dict[str, Any]:
     return _normalize_plain_step(raw)
 
 
-def _normalize_loop_step(raw: Dict[str, Any], *, _depth: int) -> Dict[str, Any]:
+def _normalize_loop_step(raw: dict[str, Any], *, _depth: int) -> dict[str, Any]:
     times = parse_loop_count(raw.get("loop"))
     caption = str(raw.get("caption", raw.get("say", "")) or "")
     inner_raw = raw.get("steps")
@@ -349,7 +350,7 @@ def _normalize_loop_step(raw: Dict[str, Any], *, _depth: int) -> Dict[str, Any]:
     return _make_loop_step(times, inner, caption=caption, pause=loop_pause)
 
 
-def _normalize_plain_step(raw: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_plain_step(raw: dict[str, Any]) -> dict[str, Any]:
     type_text = raw.get("type", raw.get("text", "")) or ""
     if not isinstance(type_text, str):
         type_text = str(type_text)
@@ -389,7 +390,7 @@ def _delay(seconds: float, speed: float) -> float:
     return max(0.0, seconds / max(speed, 0.05))
 
 
-async def play_demo(app: Any, scenario: Dict[str, Any], speed: float = 1.0, quit_when_done: bool = False) -> None:
+async def play_demo(app: Any, scenario: dict[str, Any], speed: float = 1.0, quit_when_done: bool = False) -> None:
     """Drive ``CommandRunner`` with simulated keypresses."""
     title = str(scenario.get("title") or "demo")
     start_pause = float(scenario.get("start_pause", DEFAULTS["start_pause"]))
@@ -435,7 +436,7 @@ async def play_demo(app: Any, scenario: Dict[str, Any], speed: float = 1.0, quit
         app._demo_active = False
 
 
-def _ensure_step(raw: Any) -> Dict[str, Any]:
+def _ensure_step(raw: Any) -> dict[str, Any]:
     """Normalize a step unless it is already a loop dict from ``normalize_step``."""
     if isinstance(raw, dict) and raw.get("kind") == KIND_LOOP:
         inner = [_ensure_step(step) for step in (raw.get("steps") or [])]
@@ -445,13 +446,13 @@ def _ensure_step(raw: Any) -> Dict[str, Any]:
     return normalize_step(raw)
 
 
-def _loop_total_label(times: Optional[int]) -> str:
+def _loop_total_label(times: int | None) -> str:
     return "∞" if times is None else str(times)
 
 
 async def _play_steps_sequence(
     app: Any,
-    steps: List[Dict[str, Any]],
+    steps: list[dict[str, Any]],
     *,
     type_delay: float,
     default_pause: float,
@@ -494,7 +495,7 @@ async def _play_steps_sequence(
 
 async def _play_loop_step(
     app: Any,
-    step: Dict[str, Any],
+    step: dict[str, Any],
     *,
     type_delay: float,
     default_pause: float,
@@ -535,7 +536,7 @@ async def _play_loop_step(
 
 async def _play_step(
     app: Any,
-    step: Dict[str, Any],
+    step: dict[str, Any],
     *,
     type_delay: float,
     command_timeout: float,
@@ -688,7 +689,7 @@ async def _press(app: Any, keys: Iterable[str], gap: float = 0.08) -> None:
             key_name = _character_to_key(key_name)
         original_key = REPLACED_KEYS.get(key_name, key_name)
         try:
-            char: Optional[str] = unicodedata.lookup(
+            char: str | None = unicodedata.lookup(
                 _get_unicode_name_from_key(original_key)
             )
         except KeyError:

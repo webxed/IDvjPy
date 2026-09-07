@@ -6,17 +6,17 @@ command_parser_v2.py - Упрощенный парсер команд с под�
 v1.1.9 - Простая и надежная реализация (основной парсер).
 """
 
-from typing import List, Tuple, Optional, Callable
 import re
+from collections.abc import Callable
 
 
 class CommandToken:
     """Токен команды - ссылка, оператор или текст."""
 
     def __init__(self, token_type: str, value: str,
-                 tag: Optional[str] = None,
-                 tid: Optional[int] = None,
-                 global_id: Optional[int] = None):
+                 tag: str | None = None,
+                 tid: int | None = None,
+                 global_id: int | None = None):
         self.type = token_type  # 'tag_ref', 'global_ref', 'operator', 'text', 'double_bang'
         self.value = value
         self.tag = tag
@@ -33,7 +33,7 @@ class CommandToken:
         elif self.type == 'text':
             return f"Text('{self.value}')"
         elif self.type == 'double_bang':
-            return f"DoubleBang(!!)"
+            return "DoubleBang(!!)"
         return f"Token({self.type}, {self.value})"
 
 
@@ -55,7 +55,7 @@ class CommandParser:
     # Операторы shell
     OPERATORS = {'&&', '||', ';', '&', '|'}
 
-    def parse(self, command: str) -> List[CommandToken]:
+    def parse(self, command: str) -> list[CommandToken]:
         """
         Парсит команду и возвращает список токенов.
 
@@ -163,8 +163,8 @@ class CommandParser:
 
         return tokens
 
-    def assemble_command(self, tokens: List[CommandToken],
-                        get_command_fn: Callable) -> Optional[str]:
+    def assemble_command(self, tokens: list[CommandToken],
+                        get_command_fn: Callable) -> str | None:
         """
         Собирает команду из токенов, раскрывая ссылки.
 
@@ -188,8 +188,8 @@ class CommandParser:
         else:
             return self._assemble_normal(tokens, get_command_fn)
 
-    def _assemble_normal(self, tokens: List[CommandToken],
-                        get_command_fn: Callable) -> Optional[str]:
+    def _assemble_normal(self, tokens: list[CommandToken],
+                        get_command_fn: Callable) -> str | None:
         """Собирает обычную команду (без !!)."""
         result_parts = []
         last_token_was_operator = False
@@ -229,8 +229,8 @@ class CommandParser:
 
         return ''.join(result_parts).strip()
 
-    def _assemble_double_bang(self, tokens: List[CommandToken],
-                            get_command_fn: Callable) -> Optional[str]:
+    def _assemble_double_bang(self, tokens: list[CommandToken],
+                            get_command_fn: Callable) -> str | None:
         """Собирает команду с !!."""
         # Удаляем токен !! и собираем остальные
         filtered_tokens = [t for t in tokens if t.type != 'double_bang']
@@ -239,7 +239,7 @@ class CommandParser:
 
 # Тестирование модуля
 if __name__ == '__main__':
-    def test_get_command(**kwargs) -> Optional[str]:
+    def test_get_command(**kwargs) -> str | None:
         """Тестовая функция для получения команд."""
         if 'tag' in kwargs and 'tid' in kwargs:
             test_db = {

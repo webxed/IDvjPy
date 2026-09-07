@@ -5,13 +5,13 @@ Provides tools for analyzing Kubernetes ingress configurations,
 parsing nginx configs via crossplane, and debugging routing issues.
 """
 
-import subprocess
 import json
-import tempfile
 import os
 import re
-from typing import Optional, Dict, List, Tuple, Any
-from dataclasses import dataclass, field, asdict
+import subprocess
+import tempfile
+from dataclasses import asdict, dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -19,32 +19,32 @@ class IngressInfo:
     """Represents a Kubernetes Ingress resource."""
     name: str
     namespace: str
-    hosts: List[str]
-    paths: List[Dict[str, str]]
-    services: List[Dict[str, Any]]
-    annotations: Dict[str, str] = field(default_factory=dict)
-    tls: List[Dict[str, str]] = field(default_factory=list)
-    raw_json: Dict = field(default_factory=dict, repr=False)
+    hosts: list[str]
+    paths: list[dict[str, str]]
+    services: list[dict[str, Any]]
+    annotations: dict[str, str] = field(default_factory=dict)
+    tls: list[dict[str, str]] = field(default_factory=list)
+    raw_json: dict = field(default_factory=dict, repr=False)
 
 
 @dataclass
 class NginxLocation:
     """Represents a parsed nginx location block."""
     path: str
-    modifier: Optional[str] = None  # =, ~, ~*, ^~
-    proxy_pass: Optional[str] = None
-    upstream: Optional[str] = None
-    rewrite_rules: List[Dict] = field(default_factory=list)
-    raw_directives: List[Dict] = field(default_factory=list)
+    modifier: str | None = None  # =, ~, ~*, ^~
+    proxy_pass: str | None = None
+    upstream: str | None = None
+    rewrite_rules: list[dict] = field(default_factory=list)
+    raw_directives: list[dict] = field(default_factory=list)
 
 
 @dataclass
 class UpstreamInfo:
     """Represents an nginx upstream block."""
     name: str
-    servers: List[str] = field(default_factory=list)
-    port: Optional[int] = None
-    raw_directives: List[Dict] = field(default_factory=list)
+    servers: list[str] = field(default_factory=list)
+    port: int | None = None
+    raw_directives: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -53,7 +53,7 @@ class EndpointInfo:
     ip: str
     port: int
     ready: bool = True
-    pod_name: Optional[str] = None
+    pod_name: str | None = None
 
 
 @dataclass
@@ -62,9 +62,9 @@ class ServiceInfo:
     name: str
     namespace: str
     type: str
-    ports: List[Dict]
-    selector: Dict[str, str]
-    endpoints: List[EndpointInfo] = field(default_factory=list)
+    ports: list[dict]
+    selector: dict[str, str]
+    endpoints: list[EndpointInfo] = field(default_factory=list)
     healthy_endpoints: int = 0
     total_endpoints: int = 0
 
@@ -113,11 +113,11 @@ class IngressAnalyzer:
     def __init__(self, timeout: int = 30, default_namespace: str = "default"):
         self.timeout = timeout
         self.default_namespace = default_namespace
-        self._crossplane_available: Optional[bool] = None
-        self._cached_controller: Optional[Tuple[str, str]] = None
+        self._crossplane_available: bool | None = None
+        self._cached_controller: tuple[str, str] | None = None
 
-    def _run_kubectl(self, args: List[str], namespace: Optional[str] = None,
-                     json_output: bool = True) -> Tuple[int, str, str]:
+    def _run_kubectl(self, args: list[str], namespace: str | None = None,
+                     json_output: bool = True) -> tuple[int, str, str]:
         """
         Run kubectl command and return (returncode, stdout, stderr).
 
@@ -146,11 +146,11 @@ class IngressAnalyzer:
             )
             return result.returncode, result.stdout, result.stderr
         except subprocess.TimeoutExpired:
-            raise KubectlError(f"kubectl command timed out after {self.timeout}s")
+            raise KubectlError(f"kubectl command timed out after {self.timeout}s") from None
         except FileNotFoundError:
-            raise KubectlError("kubectl not found. Please install kubectl.")
+            raise KubectlError("kubectl not found. Please install kubectl.") from None
 
-    def check_crossplane(self) -> Tuple[bool, str]:
+    def check_crossplane(self) -> tuple[bool, str]:
         """
         Check if crossplane is installed and available.
 
@@ -177,7 +177,7 @@ class IngressAnalyzer:
         except subprocess.TimeoutExpired:
             return False, "crossplane check timed out"
 
-    def install_crossplane(self) -> Tuple[bool, str]:
+    def install_crossplane(self) -> tuple[bool, str]:
         """
         Install crossplane via pip.
 
@@ -200,7 +200,7 @@ class IngressAnalyzer:
         except Exception as e:
             return False, f"Installation error: {e}"
 
-    def list_ingresses(self, namespace: Optional[str] = None) -> List[IngressInfo]:
+    def list_ingresses(self, namespace: str | None = None) -> list[IngressInfo]:
         """
         Get ingresses.
 
@@ -231,7 +231,7 @@ class IngressAnalyzer:
         try:
             data = json.loads(stdout)
         except json.JSONDecodeError:
-            raise KubectlError("Failed to parse kubectl output")
+            raise KubectlError("Failed to parse kubectl output") from None
 
         ingresses = []
         for item in data.get("items", []):
@@ -241,7 +241,7 @@ class IngressAnalyzer:
 
         return ingresses
 
-    def _parse_ingress_item(self, item: Dict) -> Optional[IngressInfo]:
+    def _parse_ingress_item(self, item: dict) -> IngressInfo | None:
         """Parse a single ingress item from kubectl output."""
         try:
             metadata = item.get("metadata", {})
@@ -323,7 +323,7 @@ class IngressAnalyzer:
             print(f"Error parsing ingress item: {e}")
             return None
 
-    def get_ingress(self, name: str, namespace: Optional[str] = None) -> Optional[IngressInfo]:
+    def get_ingress(self, name: str, namespace: str | None = None) -> IngressInfo | None:
         """
         Get specific ingress details.
 
@@ -350,7 +350,7 @@ class IngressAnalyzer:
         except json.JSONDecodeError:
             return None
 
-    def find_ingress_controller_pod(self) -> Tuple[Optional[str], Optional[str]]:
+    def find_ingress_controller_pod(self) -> tuple[str | None, str | None]:
         """
         Find nginx ingress controller pod name and namespace.
 
@@ -433,13 +433,13 @@ class IngressAnalyzer:
                 if result.returncode == 0 and result.stdout.strip():
                     return result.stdout
             except subprocess.TimeoutExpired:
-                raise KubectlError("Timeout getting nginx config from pod")
+                raise KubectlError("Timeout getting nginx config from pod") from None
             except Exception:
                 continue
 
         raise KubectlError("Could not read nginx.conf from ingress controller")
 
-    def parse_nginx_config(self, config: str) -> Dict:
+    def parse_nginx_config(self, config: str) -> dict:
         """
         Parse nginx config using crossplane.
 
@@ -479,11 +479,11 @@ class IngressAnalyzer:
             return json.loads(result.stdout)
 
         except json.JSONDecodeError:
-            raise IngressAnalyzerError("Failed to parse crossplane output")
+            raise IngressAnalyzerError("Failed to parse crossplane output") from None
         finally:
             os.unlink(temp_path)
 
-    def extract_locations(self, parsed_config: Dict) -> List[NginxLocation]:
+    def extract_locations(self, parsed_config: dict) -> list[NginxLocation]:
         """
         Extract location blocks from parsed nginx config.
 
@@ -495,7 +495,7 @@ class IngressAnalyzer:
         """
         locations = []
 
-        def find_locations(directives: List[Dict]) -> None:
+        def find_locations(directives: list[dict]) -> None:
             """Recursively find location blocks."""
             for directive in directives:
                 if directive.get("directive") == "location":
@@ -513,7 +513,7 @@ class IngressAnalyzer:
 
         return locations
 
-    def _parse_location_directive(self, directive: Dict) -> Optional[NginxLocation]:
+    def _parse_location_directive(self, directive: dict) -> NginxLocation | None:
         """Parse a single location directive."""
         args = directive.get("args", [])
         block = directive.get("block", [])
@@ -564,7 +564,7 @@ class IngressAnalyzer:
             raw_directives=raw_directives
         )
 
-    def extract_upstreams(self, parsed_config: Dict) -> List[UpstreamInfo]:
+    def extract_upstreams(self, parsed_config: dict) -> list[UpstreamInfo]:
         """
         Extract upstream blocks from parsed nginx config.
 
@@ -585,7 +585,7 @@ class IngressAnalyzer:
 
         return upstreams
 
-    def _parse_upstream_directive(self, directive: Dict) -> Optional[UpstreamInfo]:
+    def _parse_upstream_directive(self, directive: dict) -> UpstreamInfo | None:
         """Parse a single upstream directive."""
         args = directive.get("args", [])
         block = directive.get("block", [])
@@ -621,7 +621,7 @@ class IngressAnalyzer:
             raw_directives=raw_directives
         )
 
-    def check_service_endpoints(self, service: str, namespace: Optional[str] = None) -> ServiceInfo:
+    def check_service_endpoints(self, service: str, namespace: str | None = None) -> ServiceInfo:
         """
         Check if service has healthy endpoints.
 
@@ -647,7 +647,7 @@ class IngressAnalyzer:
         try:
             svc_data = json.loads(stdout)
         except json.JSONDecodeError:
-            raise KubectlError("Failed to parse service data")
+            raise KubectlError("Failed to parse service data") from None
 
         # Extract service info
         metadata = svc_data.get("metadata", {})
@@ -680,7 +680,7 @@ class IngressAnalyzer:
 
         return service_info
 
-    def _parse_endpoints(self, ep_data: Dict) -> List[EndpointInfo]:
+    def _parse_endpoints(self, ep_data: dict) -> list[EndpointInfo]:
         """Parse endpoints from kubectl output."""
         endpoints = []
 
@@ -711,7 +711,7 @@ class IngressAnalyzer:
 
         return endpoints
 
-    def analyze_ingress(self, name: str, namespace: Optional[str] = None) -> Dict[str, Any]:
+    def analyze_ingress(self, name: str, namespace: str | None = None) -> dict[str, Any]:
         """
         Full analysis of an ingress.
 
@@ -798,7 +798,7 @@ class IngressAnalyzer:
         return result
 
 
-def format_analysis_summary(analysis: Dict) -> str:
+def format_analysis_summary(analysis: dict) -> str:
     """
     Format analysis result for display.
 

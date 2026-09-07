@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import os
 import time
-from typing import List, Optional, Tuple
 
 import portalocker
 
@@ -47,10 +46,10 @@ def acquire_file_lock(file_obj, timeout_sec: int = 5, *, shared: bool = False) -
             if elapsed >= timeout_sec:
                 raise FileLockTimeoutError(
                     f"Could not acquire file lock after {timeout_sec} seconds"
-                )
+                ) from None
             time.sleep(0.1)
         except Exception as e:
-            raise IOError(f"Failed to acquire file lock: {e}")
+            raise OSError(f"Failed to acquire file lock: {e}") from None
 
 
 def release_file_lock(file_obj) -> None:
@@ -66,20 +65,20 @@ def release_file_lock(file_obj) -> None:
         pass  # Lock was already released or file was closed
 
 
-def _stat_key_from_stat(st) -> Tuple[int, int]:
+def _stat_key_from_stat(st) -> tuple[int, int]:
     """Ключ кэша history.txt: mtime_ns + size (видно записи других процессов)."""
     mtime_ns = getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000))
     return (int(mtime_ns), int(st.st_size))
 
 
-def history_file_stat_key(path: str) -> Optional[Tuple[int, int]]:
+def history_file_stat_key(path: str) -> tuple[int, int] | None:
     try:
         return _stat_key_from_stat(os.stat(path))
     except OSError:
         return None
 
 
-def _read_last_history_line(file_obj, encoding: str, tail: int = 8192) -> Optional[str]:
+def _read_last_history_line(file_obj, encoding: str, tail: int = 8192) -> str | None:
     """Последняя непустая строка; file_obj открыт в бинарном режиме."""
     file_obj.seek(0, os.SEEK_END)
     size = file_obj.tell()
@@ -95,13 +94,13 @@ def _read_last_history_line(file_obj, encoding: str, tail: int = 8192) -> Option
 def read_history_file_lines(
     path: str,
     encoding: str = "utf-8",
-) -> Tuple[List[str], Optional[Tuple[int, int]]]:
+) -> tuple[list[str], tuple[int, int] | None]:
     """
     Читает history.txt. Shared-lock, если свободен; иначе читает без lock,
     чтобы подсказки не ждали писателя.
     """
     try:
-        f = open(path, "r", encoding=encoding)
+        f = open(path, encoding=encoding)
     except FileNotFoundError:
         return [], None
     except OSError:
@@ -111,7 +110,7 @@ def read_history_file_lines(
         try:
             acquire_file_lock(f, timeout_sec=0, shared=True)
             locked = True
-        except (FileLockTimeoutError, IOError):
+        except (OSError, FileLockTimeoutError):
             locked = False
         try:
             lines = [line.strip() for line in f if line.strip()]
@@ -164,7 +163,7 @@ DEFAULT_HISTORY_KEEP = 500
 HISTORY_COMPACT_HYSTERESIS = 2
 
 
-def compact_history_lines(lines: List[str], keep: int) -> List[str]:
+def compact_history_lines(lines: list[str], keep: int) -> list[str]:
     """Unique the old prefix; keep the last ``keep`` lines verbatim.
 
     In the prefix, last occurrence wins. A line that already appears in the
@@ -178,7 +177,7 @@ def compact_history_lines(lines: List[str], keep: int) -> List[str]:
     prefix = cleaned[:-keep]
     in_tail = set(tail)
     seen = set()
-    kept_rev: List[str] = []
+    kept_rev: list[str] = []
     for line in reversed(prefix):
         if line in in_tail or line in seen:
             continue
@@ -195,7 +194,7 @@ def compact_history_file(
     *,
     force: bool = False,
     hysteresis: int = HISTORY_COMPACT_HYSTERESIS,
-) -> Tuple[int, int, bool]:
+) -> tuple[int, int, bool]:
     """Rewrite history.txt under an exclusive lock.
 
     Auto mode (``force=False``) runs only when ``len(lines) > keep * hysteresis``.
@@ -212,7 +211,7 @@ def compact_history_file(
         try:
             acquire_file_lock(f, lock_timeout)
             locked = True
-        except (FileLockTimeoutError, IOError):
+        except (OSError, FileLockTimeoutError):
             return 0, 0, False
         try:
             lines = [line.strip() for line in f if line.strip()]

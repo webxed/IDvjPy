@@ -30,8 +30,9 @@ test*.*
 *.json
 *.csv
 backups/
-
+.
 # OS / editor
 .DS_Store
 *.swp
 .codegraph
+.ruff_cache/

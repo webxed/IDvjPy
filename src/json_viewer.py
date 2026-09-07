@@ -7,7 +7,7 @@ Supports jq path copying, filtering, and match navigation.
 
 import json
 import os
-from typing import Any, List
+from typing import Any
 
 import pyperclip
 from rich.highlighter import ReprHighlighter
@@ -51,7 +51,7 @@ class JSONViewer(ModalScreen):
         self.json_data = json_data
         self.highlighter = ReprHighlighter()
         self.search_query = ""
-        self.match_nodes: List[Any] = []
+        self.match_nodes: list[Any] = []
         self.current_match_index = -1
         self.total_nodes = 0
 
@@ -93,7 +93,7 @@ class JSONViewer(ModalScreen):
             return label
         return Text.assemble(key, "=", self.highlighter(repr(data)))
 
-    def _path_parts_to_jq_path(self, path_parts: List[str]) -> str:
+    def _path_parts_to_jq_path(self, path_parts: list[str]) -> str:
         jq_path = "".join(path_parts)
         if jq_path and not jq_path.startswith("."):
             jq_path = "." + jq_path
@@ -107,8 +107,8 @@ class JSONViewer(ModalScreen):
         blob = f"{key_name} {self._json_to_display_text(data)} {jq_path}".lower()
         return self.search_query in blob
 
-    def _collect_children(self, data: Any, path_parts: List[str]) -> List[tuple]:
-        children: List[tuple] = []
+    def _collect_children(self, data: Any, path_parts: list[str]) -> list[tuple]:
+        children: list[tuple] = []
         if isinstance(data, dict):
             for child_key, child_value in data.items():
                 if str(child_key).isidentifier():
@@ -123,7 +123,7 @@ class JSONViewer(ModalScreen):
                 children.append((f"[{idx}]", child_value, child_path))
         return children
 
-    def _node_or_descendant_matches(self, key_name: str, data: Any, path_parts: List[str]) -> bool:
+    def _node_or_descendant_matches(self, key_name: str, data: Any, path_parts: list[str]) -> bool:
         jq_path = self._path_parts_to_jq_path(path_parts)
         if self._matches_query(key_name, data, jq_path):
             return True
@@ -132,7 +132,7 @@ class JSONViewer(ModalScreen):
                 return True
         return False
 
-    def _build_tree_filtered(self, parent_node: Any, key_name: str, data: Any, path_parts: List[str]) -> None:
+    def _build_tree_filtered(self, parent_node: Any, key_name: str, data: Any, path_parts: list[str]) -> None:
         if self.search_query and not self._node_or_descendant_matches(key_name, data, path_parts):
             return
 

@@ -13,11 +13,11 @@ Schema:
 - timestamp: creation time
 - deleted: soft-delete flag
 """
-import sqlite3
 import datetime
 import json
 import os
-from typing import Tuple
+import sqlite3
+
 
 def get_db_connection(db_file: str):
     """Establishes a connection to the database."""
@@ -420,9 +420,9 @@ def export_tag_to_file(db_file: str, tag: str, path: str) -> int:
     return len(commands)
 
 
-def import_tag_from_file(db_file: str, path: str) -> Tuple[str, int]:
+def import_tag_from_file(db_file: str, path: str) -> tuple[str, int]:
     """Inserts commands from an export JSON (new tids). Returns (tag, count)."""
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         payload = json.load(f)
     commands = payload.get("commands") or []
     tag = payload.get("tag_filter")

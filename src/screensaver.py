@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import os
 import random
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable, Iterable, List, Optional, Sequence, Tuple
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -117,11 +117,11 @@ def flatten_command(text: str) -> str:
 
 @dataclass(frozen=True)
 class HostSnapshot:
-    load1: Optional[float] = None
-    load5: Optional[float] = None
-    load15: Optional[float] = None
-    mem_used: Optional[int] = None
-    mem_total: Optional[int] = None
+    load1: float | None = None
+    load5: float | None = None
+    load15: float | None = None
+    mem_used: int | None = None
+    mem_total: int | None = None
 
 
 def format_bytes_short(n: int) -> str:
@@ -138,7 +138,7 @@ def format_bytes_short(n: int) -> str:
     return f"{n}B"
 
 
-def parse_meminfo(text: str) -> Tuple[Optional[int], Optional[int]]:
+def parse_meminfo(text: str) -> tuple[int | None, int | None]:
     """Parse `/proc/meminfo` body → ``(used_bytes, total_bytes)``."""
     kb: dict[str, int] = {}
     for line in text.splitlines():
@@ -159,7 +159,7 @@ def parse_meminfo(text: str) -> Tuple[Optional[int], Optional[int]]:
     return max(0, (total_kb - avail_kb) * 1024), total_kb * 1024
 
 
-def read_meminfo(path: str = "/proc/meminfo") -> Tuple[Optional[int], Optional[int]]:
+def read_meminfo(path: str = "/proc/meminfo") -> tuple[int | None, int | None]:
     try:
         with open(path, encoding="utf-8") as fh:
             return parse_meminfo(fh.read())
@@ -167,7 +167,7 @@ def read_meminfo(path: str = "/proc/meminfo") -> Tuple[Optional[int], Optional[i
         return None, None
 
 
-def read_loadavg() -> Optional[Tuple[float, float, float]]:
+def read_loadavg() -> tuple[float, float, float] | None:
     try:
         return os.getloadavg()
     except (OSError, AttributeError):
@@ -211,7 +211,7 @@ def _edge_pad(width: int) -> int:
     return min(max(2, int(width * HELP_INDENT_RATIO)), max(0, width - 4))
 
 
-def _text_cells(text: Text, width: int) -> List[Tuple[str, str]]:
+def _text_cells(text: Text, width: int) -> list[tuple[str, str]]:
     padded = Text()
     padded.append_text(text)
     if padded.cell_len < width:
@@ -229,9 +229,9 @@ def _text_cells(text: Text, width: int) -> List[Tuple[str, str]]:
     return cells[:width]
 
 
-def _cells_to_text(cells: List[Tuple[str, str]]) -> Text:
+def _cells_to_text(cells: list[tuple[str, str]]) -> Text:
     line = Text()
-    buf: List[str] = []
+    buf: list[str] = []
     prev = None
     for ch, style in cells:
         if style != prev:
@@ -284,7 +284,7 @@ class HostStats:
     def __init__(
         self,
         *,
-        reader: Optional[Callable[[], HostSnapshot]] = None,
+        reader: Callable[[], HostSnapshot] | None = None,
         poll: float = HOST_POLL_SEC,
     ) -> None:
         self._reader = reader or read_host_snapshot
@@ -311,10 +311,10 @@ class HostStats:
 
 
 def ticker_items_from_commands(
-    rows: Iterable[Tuple[str, int, str]],
-) -> Tuple[str, ...]:
+    rows: Iterable[tuple[str, int, str]],
+) -> tuple[str, ...]:
     """Live (tag, tid, command) rows → `!tag[tid]  cmd` ticker entries."""
-    items: List[str] = []
+    items: list[str] = []
     for tag, tid, command in rows:
         name = (tag or "").strip()
         if not name:
@@ -327,9 +327,9 @@ def ticker_items_from_commands(
     return tuple(items)
 
 
-def load_library_reminders(db_file: str | None) -> Tuple[str, ...]:
+def load_library_reminders(db_file: str | None) -> tuple[str, ...]:
     """Snapshot live commands from SQLite. Hidden handbook tags stay out."""
-    rows: List[Tuple[str, int, str]] = []
+    rows: list[tuple[str, int, str]] = []
     if db_file:
         try:
             import database_v2 as database
@@ -358,8 +358,8 @@ class LibraryTicker:
         self.rng = random.Random(seed)
         self.speed = speed
         self.offset = 0.0
-        self.items: Tuple[str, ...] = tuple(items)
-        self.order: List[str] = []
+        self.items: tuple[str, ...] = tuple(items)
+        self.order: list[str] = []
         self._tape = ""
         self._reshuffle()
 
@@ -402,7 +402,7 @@ class HelpTypewriter:
         pause: float = HELP_PAUSE_SEC,
     ) -> None:
         self.rng = random.Random(seed)
-        self.lines: Tuple[str, ...] = tuple(lines) if lines else COMMAND_HELP_LINES
+        self.lines: tuple[str, ...] = tuple(lines) if lines else COMMAND_HELP_LINES
         self.type_cps = type_cps
         self.pause = pause
         self.phase = "type"
@@ -410,7 +410,7 @@ class HelpTypewriter:
         self.pause_left = 0.0
         self.current = ""
         self.previous = ""
-        self._deck: List[str] = []
+        self._deck: list[str] = []
         self._pick()
 
     def _pick(self) -> None:
@@ -456,7 +456,7 @@ class HelpTypewriter:
         cur, prev = self.current, self.previous
         span = max(len(cur), len(prev))
         n = min(n, span)
-        chars: List[str] = []
+        chars: list[str] = []
         for i in range(span):
             if i < n:
                 chars.append(cur[i] if i < len(cur) else " ")
@@ -514,10 +514,10 @@ class StarField:
         self.width = max(8, width)
         self.height = max(4, height)
         self.rng = random.Random(seed)
-        self.tokens: Tuple[str, ...] = tuple(tokens) if tokens else TOKENS
+        self.tokens: tuple[str, ...] = tuple(tokens) if tokens else TOKENS
         self._now = now or datetime.now
         self.stars_enabled = bool(stars)
-        self.stars: List[Star] = []
+        self.stars: list[Star] = []
         self._seed_stars()
 
     def resize(self, width: int, height: int) -> None:
@@ -547,10 +547,10 @@ class StarField:
 
     def render_text(self) -> Text:
         width, height = self.width, self.height
-        cells: List[List[Tuple[str, str]]] = [
+        cells: list[list[tuple[str, str]]] = [
             [(" ", "")] * width for _ in range(height)
         ]
-        drawn: List[Tuple[float, Star]] = []
+        drawn: list[tuple[float, Star]] = []
         for star in self.stars:
             drawn.append((star.z, star))
         drawn.sort(key=lambda item: -item[0])  # far first, near overwrites
@@ -622,7 +622,7 @@ class StarField:
         star.x, star.y, star.z = fresh.x, fresh.y, fresh.z
         star.speed, star.glyph, star.kind = fresh.speed, fresh.glyph, fresh.kind
 
-    def _project(self, star: Star) -> Tuple[float, float]:
+    def _project(self, star: Star) -> tuple[float, float]:
         z = max(star.z, 0.04)
         cx = (self.width - 1) / 2.0
         cy = (self.height - 1) / 2.0
@@ -647,7 +647,7 @@ class StarField:
 
     def _blit(
         self,
-        cells: List[List[Tuple[str, str]]],
+        cells: list[list[tuple[str, str]]],
         x: int,
         y: int,
         glyph: str,

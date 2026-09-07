@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import re
 import urllib.request
-from typing import Mapping, Optional, Tuple
+from collections.abc import Mapping
 from urllib.parse import quote, urlsplit, urlunsplit
 
 GITHUB_REPO = "https://github.com/webxed/IDvjPy"
@@ -65,7 +65,7 @@ def inject_proxy_userinfo(proxy_url: str, user: str, password: str = "") -> str:
     return urlunsplit((parts.scheme or "http", netloc, parts.path, parts.query, parts.fragment))
 
 
-def proxy_handler_map(environ: Mapping[str, str]) -> Optional[dict[str, str]]:
+def proxy_handler_map(environ: Mapping[str, str]) -> dict[str, str] | None:
     """Proxy URLs with ``PROXY_USER`` / ``PROXY_PASS`` filled in, or None."""
     user = _env_first(environ, _PROXY_USER_KEYS)
     if not user:
@@ -122,7 +122,7 @@ def _open_url(request: urllib.request.Request, timeout: float, environ: Mapping[
     return urllib.request.urlopen(request, timeout=timeout)
 
 
-def parse_version_tuple(text: str) -> Optional[Tuple[int, ...]]:
+def parse_version_tuple(text: str) -> tuple[int, ...] | None:
     """Turn ``v1.24`` / ``1.24.0`` into a comparable tuple, or None."""
     match = RE_VERSION_TOKEN.search((text or "").strip())
     if not match:
@@ -131,7 +131,7 @@ def parse_version_tuple(text: str) -> Optional[Tuple[int, ...]]:
     return tuple(parts)
 
 
-def parse_version_from_source(source: str) -> Optional[str]:
+def parse_version_from_source(source: str) -> str | None:
     """Read ``CommandRunner.VERSION`` from ``src/app.py`` text."""
     match = RE_VERSION_ASSIGN.search(source or "")
     if not match:
@@ -159,7 +159,7 @@ def compare_versions(local: str, remote: str) -> int:
     return 0
 
 
-def format_update_status(local: str, remote: str) -> Tuple[str, str]:
+def format_update_status(local: str, remote: str) -> tuple[str, str]:
     """Human status and kind: available / current / ahead."""
     cmp = compare_versions(local, remote)
     if cmp < 0:
@@ -180,7 +180,7 @@ def fetch_remote_version(
     url: str = GITHUB_MAIN_APP_PY,
     timeout: float = 5.0,
     user_agent: str = "IDvjPy-term",
-    environ: Optional[Mapping[str, str]] = None,
+    environ: Mapping[str, str] | None = None,
 ) -> str:
     """Download ``src/app.py`` from GitHub main and return its VERSION.
 

@@ -11,6 +11,7 @@ from pathlib import Path
 
 try:
     import yaml
+
     import database_v2 as database
 except ImportError as e:
     print(f"Error: {e}", file=sys.stderr)
@@ -43,7 +44,7 @@ def get_db_file() -> str:
     if not os.path.exists(FILE_SETTINGS):
         return DEFAULT_DB
     try:
-        with open(FILE_SETTINGS, "r", encoding=ENCODING) as f:
+        with open(FILE_SETTINGS, encoding=ENCODING) as f:
             settings = yaml.safe_load(f)
         if settings:
             return settings.get("database_tags_file", DEFAULT_DB)

@@ -5,7 +5,7 @@ import json
 import os
 import re
 import shlex
-from typing import Dict, List, Mapping, Optional, Tuple
+from collections.abc import Mapping
 
 RE_VAR_SUBST = re.compile(
     r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)\b"
@@ -37,7 +37,7 @@ TTY_ENV_SKIP = frozenset({
 })
 
 
-def parse_bashrc_assignment(line: str) -> Optional[Tuple[str, str]]:
+def parse_bashrc_assignment(line: str) -> tuple[str, str] | None:
     """Разбирает `export VAR=val` или `VAR=val`. Комментарии пропускает."""
     line = line.strip()
     if not line or line.startswith("#"):
@@ -54,7 +54,7 @@ def parse_bashrc_assignment(line: str) -> Optional[Tuple[str, str]]:
     return key, value
 
 
-def parse_alias_line(line: str) -> Optional[Tuple[str, str]]:
+def parse_alias_line(line: str) -> tuple[str, str] | None:
     """Разбирает `alias name='command'`. Иначе None."""
     line = line.strip()
     if not line.startswith("alias ") or "=" not in line:
@@ -68,10 +68,10 @@ def parse_alias_line(line: str) -> Optional[Tuple[str, str]]:
     return alias_name, alias_value
 
 
-def load_aliases_from_file(path: str, encoding: str = "utf-8") -> Dict[str, str]:
+def load_aliases_from_file(path: str, encoding: str = "utf-8") -> dict[str, str]:
     """Читает файл алиасов (обычно ~/.bashrc) и возвращает {name: body}."""
-    aliases: Dict[str, str] = {}
-    with open(path, "r", encoding=encoding) as f:
+    aliases: dict[str, str] = {}
+    with open(path, encoding=encoding) as f:
         for line in f:
             parsed = parse_alias_line(line)
             if parsed:
@@ -82,8 +82,8 @@ def load_aliases_from_file(path: str, encoding: str = "utf-8") -> Dict[str, str]
 def substitute_variables(
     command: str,
     local_env: Mapping[str, str],
-    environ: Optional[Mapping[str, str]] = None,
-    extra: Optional[Mapping[str, str]] = None,
+    environ: Mapping[str, str] | None = None,
+    extra: Mapping[str, str] | None = None,
 ) -> str:
     """Заменяет $VAR. Приоритет: extra > local_env > environ.
 
@@ -179,7 +179,7 @@ def expand_aliases(command: str, aliases: Mapping[str, str]) -> str:
     return expanded
 
 
-def parse_standalone_cd(command: str) -> Optional[str]:
+def parse_standalone_cd(command: str) -> str | None:
     """
     Если команда — одиночный cd без &&/||/|;, вернуть путь.
     Пустая строка = домашний каталог. None = это не builtin cd.
@@ -210,16 +210,16 @@ def skip_tty_env_key(key: str) -> bool:
     return not bool(RE_VAR_NAME.match(key))
 
 
-def load_env_dump(path: str) -> Optional[Dict[str, str]]:
+def load_env_dump(path: str) -> dict[str, str] | None:
     """JSON object of KEY→value from a child shell. None if missing or invalid."""
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError):
         return None
     if not isinstance(data, dict) or not data:
         return None
-    out: Dict[str, str] = {}
+    out: dict[str, str] = {}
     for key, value in data.items():
         name = str(key)
         if skip_tty_env_key(name):
@@ -231,15 +231,15 @@ def load_env_dump(path: str) -> Optional[Dict[str, str]]:
 def diff_exported_env(
     before: Mapping[str, str],
     after: Mapping[str, str],
-) -> Tuple[Dict[str, str], List[str]]:
+) -> tuple[dict[str, str], list[str]]:
     """Changed/new keys and keys unset in the child (skip list already applied)."""
-    updates: Dict[str, str] = {}
+    updates: dict[str, str] = {}
     for key, value in after.items():
         if skip_tty_env_key(key):
             continue
         if before.get(key) != value:
             updates[key] = value
-    removed: List[str] = []
+    removed: list[str] = []
     for key in before:
         if skip_tty_env_key(key):
             continue
@@ -274,9 +274,9 @@ def wrap_tty_command(
     )
 
 
-def format_env_followup(names: List[str], cwd: Optional[str] = None) -> List[str]:
+def format_env_followup(names: list[str], cwd: str | None = None) -> list[str]:
     """Short journal lines after TTY: env names and optional cwd."""
-    lines: List[str] = []
+    lines: list[str] = []
     if names:
         shown = names[:12]
         extra = f" (+{len(names) - 12})" if len(names) > 12 else ""

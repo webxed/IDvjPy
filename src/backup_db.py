@@ -10,8 +10,9 @@ import csv
 import json
 import sqlite3
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
 import yaml
 
 
@@ -24,7 +25,7 @@ def load_settings():
     """Load database filename from settings.yml."""
     settings_path = _data_dir() / "settings.yml"
     if settings_path.exists():
-        with open(settings_path, 'r') as f:
+        with open(settings_path) as f:
             settings = yaml.safe_load(f)
             return settings.get('database_tags_file', 'mytags.db')
     return 'mytags.db'
@@ -34,7 +35,7 @@ def load_backup_dir():
     """Load backup directory from settings.yml."""
     settings_path = _data_dir() / "settings.yml"
     if settings_path.exists():
-        with open(settings_path, 'r') as f:
+        with open(settings_path) as f:
             settings = yaml.safe_load(f)
             backup_dir = settings.get('backup_dir', 'backups')
             # Ensure backup directory exists
@@ -181,7 +182,7 @@ def import_db(db_file: str, input_file: str, mode: str = 'merge',
             print(f"✗ Error: File not found: {input_file}", file=sys.stderr)
             sys.exit(1)
 
-    with open(input_path, 'r', encoding='utf-8') as f:
+    with open(input_path, encoding='utf-8') as f:
         data = json.load(f)
 
     if 'commands' not in data:
@@ -232,6 +233,7 @@ def import_db(db_file: str, input_file: str, mode: str = 'merge',
     imported = 0
     skipped = 0
     errors = 0
+    updated = 0
     tid_conflicts = 0
 
     if mode == 'replace':
@@ -326,8 +328,9 @@ def import_db(db_file: str, input_file: str, mode: str = 'merge',
     conn.commit()
     conn.close()
 
-    print(f"\n✓ Import complete:")
+    print("\n✓ Import complete:")
     print(f"  Imported: {imported}")
+    print(f"  Updated:  {updated}")
     print(f"  Skipped:  {skipped}")
     if tid_conflicts > 0:
         print(f"  TID reassigned: {tid_conflicts}")
@@ -502,7 +505,7 @@ def import_csv(db_file: str, input_file: str, mode: str = 'merge'):
     updated = 0
     errors = 0
 
-    with open(input_path, 'r', newline='', encoding='utf-8') as f:
+    with open(input_path, newline='', encoding='utf-8') as f:
         reader = csv.reader(f, delimiter=';')
         header = next(reader, None)  # Skip header
 
@@ -563,7 +566,7 @@ def import_csv(db_file: str, input_file: str, mode: str = 'merge'):
     conn.commit()
     conn.close()
 
-    print(f"\n✓ Import complete:")
+    print("\n✓ Import complete:")
     print(f"  Imported: {imported}")
     print(f"  Updated:  {updated}")
     if errors > 0:
@@ -644,9 +647,9 @@ def import_tags_csv(db_file: str, input_file: str):
     updated = 0
     errors = 0
 
-    with open(input_path, 'r', newline='', encoding='utf-8') as f:
+    with open(input_path, newline='', encoding='utf-8') as f:
         reader = csv.reader(f, delimiter=';')
-        header = next(reader, None)  # Skip header
+        next(reader, None)  # Skip header
 
         for row_num, row in enumerate(reader, start=2):  # Start at 2 (after header)
             try:
@@ -684,7 +687,7 @@ def import_tags_csv(db_file: str, input_file: str):
     conn.commit()
     conn.close()
 
-    print(f"\n✓ Import complete:")
+    print("\n✓ Import complete:")
     print(f"  Imported: {imported}")
     print(f"  Updated:  {updated}")
     if errors > 0:

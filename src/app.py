@@ -8,12 +8,13 @@ Supports command execution, variable management, and command tagging.
 Usage:
     python app.py
 """
-import subprocess
-import sys
 import argparse
 import re
 import shutil
+import subprocess
+import sys
 import tempfile
+
 
 # Parse command-line arguments BEFORE importing dependencies
 def parse_arguments():
@@ -62,14 +63,31 @@ RE_INSTANCE_NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$")
 
 # Check dependencies before importing
 try:
-    import yaml
     import datetime
-    import os
     import json
-    import database_v2 as database
+    import os
     import threading
     import time
-    import portalocker
+    from collections.abc import Mapping
+    from typing import Any, Optional
+
+    import yaml
+    from rich.markup import escape
+    from textual import events
+    from textual.app import App, ComposeResult, InvalidThemeError, SuspendNotSupported
+    from textual.binding import Binding
+    from textual.containers import VerticalScroll
+    from textual.widgets import Footer, Header, Input, Static
+
+    import database_v2 as database
+    from clipboard import (
+        copy_text_to_clipboards,
+        paste_text_from_clipboards,
+    )
+    from command_parser_v2 import CommandParser
+    from demo import dump_playbook_yaml, load_demo_for_cli, play_demo, session_to_playbook
+    from gui_open import GuiOpenError, format_opened, open_file_manager, open_terminal
+    from help_texts import INGRESS_HELP_TEXT, MAIN_HELP_TEXT
     from history_store import (
         DEFAULT_HISTORY_KEEP,
         FileLockTimeoutError,
@@ -80,24 +98,20 @@ try:
         read_history_file_lines,
         release_file_lock,
     )
-    from typing import Any, List, Mapping, Optional, Dict, Tuple, Union
-    from command_parser_v2 import CommandParser
-    from textual import events
-    from textual.app import App, ComposeResult, InvalidThemeError, SuspendNotSupported
-    from textual.binding import Binding
-    from textual.widgets import Header, Footer, Input, Static
-    from rich.markup import escape
-    from rich.text import Text
-    from textual.containers import VerticalScroll, Vertical
-    from json_viewer import JSONViewer
     from ingress_analyzer import IngressAnalyzer
-    from clipboard import (
-        copy_text_to_clipboards,
-        paste_text_from_clipboards,
+    from json_viewer import JSONViewer
+    from md_viewer import HandbookMarkdownScreen, handbook_md_path
+    from screensaver import DevopsScreensaver
+    from seed_catalog import (
+        KNOWN_SEED_SCRIPTS,
+        format_empty_db_hint,
+        format_library_overview,
+        seed_invoke,
     )
+    from seed_lib import backup_sqlite
     from shell_env import (
-        RE_VAR_NAME,
         LAZY_PLACEHOLDERS,
+        RE_VAR_NAME,
         command_requests_placeholder,
         diff_exported_env,
         expand_aliases,
@@ -110,24 +124,12 @@ try:
         substitute_variables,
         wrap_tty_command,
     )
-    from seed_catalog import (
-        KNOWN_SEED_SCRIPTS,
-        format_empty_db_hint,
-        format_library_overview,
-        seed_invoke,
-    )
-    from demo import dump_playbook_yaml, load_demo_for_cli, play_demo, session_to_playbook
-    from seed_lib import backup_sqlite
-    from md_viewer import HandbookMarkdownScreen, handbook_md_path
-    from help_texts import INGRESS_HELP_TEXT, MAIN_HELP_TEXT
-    from screensaver import DevopsScreensaver
     from update_check import (
         KIND_AVAILABLE,
         fetch_remote_version,
-        format_update_status,
         format_update_fetch_error,
+        format_update_status,
     )
-    from gui_open import GuiOpenError, format_opened, open_file_manager, open_terminal
 except ImportError as e:
     print(f"Error: Missing dependency - {e}", file=sys.stderr)
     print("Please install required dependencies:", file=sys.stderr)
@@ -180,13 +182,13 @@ class LineNavigable:
     def _nav_plain_text(self) -> str:
         return ""
 
-    def _nav_lines(self) -> List[str]:
+    def _nav_lines(self) -> list[str]:
         text = self._nav_plain_text()
         if text.endswith("\n"):
             text = text[:-1]
         return text.split("\n") if text else [""]
 
-    def _visible_line_index(self, lines: List[str]) -> int:
+    def _visible_line_index(self, lines: list[str]) -> int:
         try:
             container = self.app.query_one("#results-container", VerticalScroll)
             block_y = int(getattr(self, "virtual_region", self.region).y)
@@ -529,7 +531,7 @@ class CommandBlock(LineNavigable, Static):
         self.collapsed = False
         self._truncated = False  # Флаг: вывод был обрезан
         self.pending = True  # True пока не пришёл результат из потока (run_command)
-        self.line_index: Optional[int] = None
+        self.line_index: int | None = None
         self.line_nav_active: bool = False
 
         # Формируем отображаемый контент
@@ -676,7 +678,7 @@ class InfoBlock(LineNavigable, Static):
             text_content: Текст для отображения.
         """
         self.text_content = text_content.rstrip() + "\n\n"
-        self.line_index: Optional[int] = None
+        self.line_index: int | None = None
         self.line_nav_active: bool = False
         super().__init__(self.text_content, **kwargs)
         self.can_focus = True
@@ -691,7 +693,7 @@ class CompletionItem:
     def __init__(
         self,
         insert: str,
-        display: Optional[str] = None,
+        display: str | None = None,
         replace_token: bool = False,
         add_space: bool = False,
         reopen: bool = False,
@@ -730,8 +732,8 @@ class CompletionList(Static):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.can_focus = False
-        self._items: List[CompletionItem] = []
-        self.candidates: List[CompletionItem] = []
+        self._items: list[CompletionItem] = []
+        self.candidates: list[CompletionItem] = []
         self.window_start: int = 0
         self.selected_index: int = 0
         self.total_candidates: int = 0
@@ -739,11 +741,11 @@ class CompletionList(Static):
         self.replace_token: bool = False
 
     @property
-    def all_candidates(self) -> List[str]:
+    def all_candidates(self) -> list[str]:
         return [item.insert for item in self._items]
 
     @property
-    def all_displays(self) -> List[str]:
+    def all_displays(self) -> list[str]:
         return [item.display for item in self._items]
 
     def _visible_capacity(self) -> int:
@@ -782,11 +784,11 @@ class CompletionList(Static):
 
     def update_candidates(
         self,
-        candidates: List[Union[str, CompletionItem]],
+        candidates: list[str | CompletionItem],
         preview: str = "",
     ) -> None:
         """Обновить список кандидатов и опциональную расшифровку !tag[tid]."""
-        items: List[CompletionItem] = []
+        items: list[CompletionItem] = []
         for cand in candidates:
             if isinstance(cand, CompletionItem):
                 items.append(cand)
@@ -850,12 +852,12 @@ class CompletionList(Static):
                 self.window_start = self.selected_index - cap + 1
             self._render_list()
 
-    def get_selected(self) -> Optional[str]:
+    def get_selected(self) -> str | None:
         """Текст для вставки выбранного элемента."""
         item = self.get_selected_item()
         return None if item is None else item.insert
 
-    def get_selected_item(self) -> Optional[CompletionItem]:
+    def get_selected_item(self) -> CompletionItem | None:
         if self._items and 0 <= self.selected_index < len(self._items):
             return self._items[self.selected_index]
         return None
@@ -889,14 +891,14 @@ class CommandInput(Input):
     def __init__(self, **kwargs):
         kwargs.setdefault("select_on_focus", False)
         super().__init__(**kwargs)
-        self._completion_list: Optional[CompletionList] = None
+        self._completion_list: CompletionList | None = None
         self._applying_completion: bool = False  # Флаг: применяем completion
 
     def set_completion_list(self, completion_list: 'CompletionList') -> None:
         """Привязать список подсказок (вызывается из App.on_mount)."""
         self._completion_list = completion_list
 
-    def _token_span(self, text: str, pos: int) -> Tuple[int, int]:
+    def _token_span(self, text: str, pos: int) -> tuple[int, int]:
         """Границы текущего токена (разделители: пробел, |, &, ;)."""
         pos = max(0, min(pos, len(text)))
         start = pos
@@ -1065,7 +1067,7 @@ class CommandInput(Input):
             return
 
         raw_value = self.value
-        bang_items: List[CompletionItem] = []
+        bang_items: list[CompletionItem] = []
         preview = ""
         if hasattr(app, "get_bang_completions"):
             bang_items, preview = app.get_bang_completions(raw_value, self.cursor_position)
@@ -1146,7 +1148,7 @@ class QueryResultsBlock(LineNavigable, Static):
             content: Текст для отображения (без кликабельных элементов).
         """
         self.text_content = content.rstrip() + "\n\n"
-        self.line_index: Optional[int] = None
+        self.line_index: int | None = None
         self.line_nav_active: bool = False
         super().__init__(self.text_content, **kwargs)
         self.can_focus = True
@@ -1299,7 +1301,7 @@ class CommandRunner(App):
 
     def __init__(
         self,
-        demo: Optional[Dict[str, Any]] = None,
+        demo: dict[str, Any] | None = None,
         demo_speed: float = 1.0,
         demo_quit: bool = False,
     ):
@@ -1311,37 +1313,37 @@ class CommandRunner(App):
         self._demo_active = False
         self._demo_pressing = False
         self._demo_worker_started = False
-        self.session_history: List[str] = []
-        self._playbook_log: List[str] = []
+        self.session_history: list[str] = []
+        self._playbook_log: list[str] = []
         self.instance_name: str = INSTANCE_NAME
         self.session_history_pos: int = 0
         self._history_walking: bool = False
         self._history_needle: str = ""
         self._history_draft: str = ""
-        self._history_matches: List[str] = []
+        self._history_matches: list[str] = []
         self._history_walk_index: int = 0
-        self._history_file_lines: List[str] = []
-        self._history_file_stat: Optional[Tuple[int, int]] = None
+        self._history_file_lines: list[str] = []
+        self._history_file_stat: tuple[int, int] | None = None
         # Словарь для хранения результатов поиска {ID: Command}
-        self.last_query_results: Dict[int, str] = {}
+        self.last_query_results: dict[int, str] = {}
         self.history_lines: int = 20
         self.history_keep: int = DEFAULT_HISTORY_KEEP
         self.check_updates: bool = False
         self.db_file = self.FILE_DATABASE
-        self.active_pipe_source: Optional[CommandBlock] = None
+        self.active_pipe_source: CommandBlock | None = None
         self.simple_output_mode: bool = False
         # Словарь локальных переменных окружения (имеют приоритет над os.environ)
-        self.local_env: Dict[str, str] = {}
+        self.local_env: dict[str, str] = {}
         # Словарь для хранения алиасов {alias: command}
-        self.aliases: Dict[str, str] = {}
+        self.aliases: dict[str, str] = {}
         # v1.1.9+: Парсер команд с поддержкой ссылок
         self.command_parser = CommandParser()
         # Kubernetes Ingress Analyzer
-        self.ingress_analyzer: Optional[IngressAnalyzer] = None
-        self._old_cwd: Optional[str] = None
+        self.ingress_analyzer: IngressAnalyzer | None = None
+        self._old_cwd: str | None = None
         self._data_dir: str = os.getcwd()
         self._search_pattern: str = ""
-        self._search_hits: List[Tuple[Static, int]] = []
+        self._search_hits: list[tuple[Static, int]] = []
         self._search_index: int = -1
         self._fresh_command_db: bool = False
         self.screensaver_idle: float = 0
@@ -1394,7 +1396,7 @@ class CommandRunner(App):
             return True
         return False
 
-    def _get_file_completion_candidates(self, text: str) -> List[str]:
+    def _get_file_completion_candidates(self, text: str) -> list[str]:
         """Подсказки файлов/директорий для текущей директории (включая скрытые)."""
         if not self._is_path_context(text):
             return []
@@ -1438,7 +1440,7 @@ class CommandRunner(App):
             if not resolved:
                 return []
 
-        suggestions: List[str] = []
+        suggestions: list[str] = []
         for name in entries:
             if list_base_prefix and not name.startswith(list_base_prefix):
                 continue
@@ -1469,7 +1471,7 @@ class CommandRunner(App):
                 suggestions.insert(0, token)
         return suggestions
 
-    def _bang_token_at_cursor(self, text: str, pos: int) -> Optional[str]:
+    def _bang_token_at_cursor(self, text: str, pos: int) -> str | None:
         """Текущий токен, если это !tag / !tag[ / !tag[tid], но не !!."""
         pos = max(0, min(pos, len(text)))
         start = pos
@@ -1523,9 +1525,9 @@ class CommandRunner(App):
             return ""
         return expanded
 
-    def _tag_completion_items(self, tags: List[str]) -> List[CompletionItem]:
+    def _tag_completion_items(self, tags: list[str]) -> list[CompletionItem]:
         """Пункты выбора тега: показ `file`, вставка `!file`."""
-        items: List[CompletionItem] = []
+        items: list[CompletionItem] = []
         for tag in tags:
             try:
                 n = len(database.get_commands_by_tag(self.db_file, tag))
@@ -1544,7 +1546,7 @@ class CommandRunner(App):
 
     def get_bang_completions(
         self, text: str, cursor_pos: int
-    ) -> Tuple[List[CompletionItem], str]:
+    ) -> tuple[list[CompletionItem], str]:
         """
         Подсказки для !file / !kube: в списке полная команда, во ввод — !tag[tid].
         Возвращает (пункты, расшифровка уже набранных ссылок).
@@ -1578,7 +1580,7 @@ class CommandRunner(App):
 
         exact = [t for t in tags if t == tag_prefix]
         prefixed = [t for t in tags if t.startswith(tag_prefix)]
-        items: List[CompletionItem] = []
+        items: list[CompletionItem] = []
         command_tags = exact if exact else (prefixed if len(prefixed) == 1 else [])
 
         if command_tags:
@@ -1613,10 +1615,10 @@ class CommandRunner(App):
 
         return items, preview
 
-    def _unique_history_matches(self, needle: str) -> List[str]:
+    def _unique_history_matches(self, needle: str) -> list[str]:
         """Совпадения history.txt (+ сессия), свежие сверху, одинаковые строки один раз."""
         folded = (needle or "").strip().casefold()
-        unique: List[str] = []
+        unique: list[str] = []
         seen = set()
         for cmd in reversed(self._history_pool()):
             if folded and folded not in cmd.casefold():
@@ -1627,7 +1629,7 @@ class CommandRunner(App):
             unique.append(cmd)
         return unique
 
-    def get_history_search_completions(self, text: str) -> Tuple[List[str], str]:
+    def get_history_search_completions(self, text: str) -> tuple[list[str], str]:
         """Подсказки для `:h /text`: уникальные строки history, свежие сверху."""
         matched = RE_COLON_H_SEARCH.match((text or "").rstrip())
         if not matched:
@@ -1640,7 +1642,7 @@ class CommandRunner(App):
         preview = f"{self.FILE_HISTORY} /{label}  {len(shown)}/{len(matches)}"
         return shown, preview
 
-    def get_completion_candidates(self, prefix: str) -> List[str]:
+    def get_completion_candidates(self, prefix: str) -> list[str]:
         """
         Возвращает список команд из БД и истории сессии по префиксу.
         Для выпадающего списка подсказок.
@@ -1655,7 +1657,7 @@ class CommandRunner(App):
             # иначе Enter подставляет `cat json.file` вместо токена файла.
             return file_cands[:20]
 
-        candidates: List[str] = []
+        candidates: list[str] = []
         try:
             from_db = database.get_commands_by_prefix(self.db_file, prefix)
             candidates.extend(from_db)
@@ -1786,7 +1788,7 @@ class CommandRunner(App):
 
         # 1. Загрузка общих настроек
         try:
-            with open(self.FILE_SETTINGS, "r", encoding=self.ENCODING) as f:
+            with open(self.FILE_SETTINGS, encoding=self.ENCODING) as f:
                 settings = yaml.safe_load(f)
                 if settings:
                     self.history_lines = settings.get(self.KEY_HISTORY_LINES, 20)
@@ -1833,7 +1835,7 @@ class CommandRunner(App):
                     shutil.copy(shared_bashrc, self.FILE_BASHRC)
                     self.add_block(InfoBlock(f"Migrated .bashrc_term -> {os.path.basename(self.FILE_BASHRC)}"))
                     self.set_timer(3, self.clear_subtitle)
-                except Exception as e:
+                except Exception:
                     pass  # Ошибка миграции не критична
 
         self._migrate_legacy_history()
@@ -1888,7 +1890,7 @@ class CommandRunner(App):
                 # row['id'] - глобальный уникальный ID
                 # row['command'] - текст команды для выполнения
                 self.last_query_results[row['id']] = row['command']
-        except Exception as e:
+        except Exception:
             # Если база недоступна или есть ошибка, оставляем словарь пустым
             # Пользователь увидит ошибку при попытке использовать !!
             self.last_query_results = {}
@@ -1908,7 +1910,7 @@ class CommandRunner(App):
             all_commands = database.get_all_commands_with_ids(self.db_file)
 
             # Обновляем словарь результатов (не очищая, чтобы не терять текущий контекст)
-            old_size = len(self.last_query_results)
+            len(self.last_query_results)
             for row in all_commands:
                 # row['id'] - глобальный уникальный ID
                 # row['command'] - текст команды для выполнения
@@ -1916,7 +1918,7 @@ class CommandRunner(App):
 
             # Если количество команд изменилось, можно оповестить пользователя (опционально)
             # Но пока делаем это тихо, чтобы не отвлекать
-        except Exception as e:
+        except Exception:
             # При ошибке просто пропускаем эту перезагрузку
             # Следующая попытка будет через DB_RELOAD_INTERVAL секунд
             pass
@@ -1936,7 +1938,7 @@ class CommandRunner(App):
         except OSError:
             pass
 
-    def _maybe_compact_history(self, *, force: bool = False) -> Optional[Tuple[int, int, bool]]:
+    def _maybe_compact_history(self, *, force: bool = False) -> tuple[int, int, bool] | None:
         """Shrink old duplicate lines in history_<instance>.txt. None if the file is missing."""
         if not os.path.exists(self.FILE_HISTORY):
             return None
@@ -1974,7 +1976,7 @@ class CommandRunner(App):
             f"(kept last {self.history_keep} verbatim)."
         ))
 
-    def _parse_bashrc_assignment(self, line: str) -> Optional[tuple]:
+    def _parse_bashrc_assignment(self, line: str) -> tuple | None:
         return parse_bashrc_assignment(line)
 
     def load_bashrc(self) -> None:
@@ -2016,7 +2018,7 @@ class CommandRunner(App):
                 if not os.path.exists(bashrc_file):
                     continue
 
-                with open(bashrc_file, "r", encoding=self.ENCODING) as f:
+                with open(bashrc_file, encoding=self.ENCODING) as f:
                     try:
                         acquire_file_lock(f, self.FILE_LOCK_TIMEOUT)
                     except FileLockTimeoutError:
@@ -2169,7 +2171,7 @@ class CommandRunner(App):
         if getattr(self, "_completion_list", None) is not None:
             self._completion_list.hide()
 
-    def _journal_blocks(self) -> List[Static]:
+    def _journal_blocks(self) -> list[Static]:
         """Блоки журнала в порядке отображения (команды и системный вывод)."""
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
         return [
@@ -2188,13 +2190,13 @@ class CommandRunner(App):
             return
         self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll).focus()
 
-    def _journal_block_span(self, block: Static) -> Tuple[int, int]:
+    def _journal_block_span(self, block: Static) -> tuple[int, int]:
         region = getattr(block, "virtual_region", None) or block.region
         top = int(getattr(region, "y", 0))
         height = max(1, int(getattr(region, "height", 1) or 1))
         return top, height
 
-    def _overlapping_journal_blocks(self) -> List[Static]:
+    def _overlapping_journal_blocks(self) -> list[Static]:
         """Блоки, пересекающиеся с видимой областью журнала (сверху вниз)."""
         try:
             container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
@@ -2206,14 +2208,14 @@ class CommandRunner(App):
         view_top = int(container.scroll_y)
         view_h = max(1, int(container.size.height) or 1)
         view_bottom = view_top + view_h
-        visible: List[Static] = []
+        visible: list[Static] = []
         for block in blocks:
             top, height = self._journal_block_span(block)
             if min(top + height, view_bottom) - max(top, view_top) > 0:
                 visible.append(block)
         return visible
 
-    def _visible_journal_block(self) -> Optional[Static]:
+    def _visible_journal_block(self) -> Static | None:
         """Блок у верхней видимой строки; в конце прокрутки — нижний видимый, если он не доезжает до края."""
         try:
             container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
@@ -2225,7 +2227,7 @@ class CommandRunner(App):
         view_top = int(container.scroll_y)
         view_h = max(1, int(container.size.height) or 1)
         view_bottom = view_top + view_h
-        overlapping: List[Tuple[Static, int, int, int]] = []
+        overlapping: list[tuple[Static, int, int, int]] = []
         for block in blocks:
             top, height = self._journal_block_span(block)
             overlap = min(top + height, view_bottom) - max(top, view_top)
@@ -2250,7 +2252,7 @@ class CommandRunner(App):
                 chosen = block
         return chosen or blocks[-1]
 
-    def _assign_journal_focus(self, chosen: Optional[Static]) -> None:
+    def _assign_journal_focus(self, chosen: Static | None) -> None:
         """Сфокусировать блок журнала, не прокручивая к его началу."""
         if chosen is None:
             return
@@ -2623,7 +2625,7 @@ class CommandRunner(App):
             self.sub_title = f"Error parsing JSON: {e}"
             self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
 
-    def _block_for_json_viewer(self) -> Optional[Static]:
+    def _block_for_json_viewer(self) -> Static | None:
         """Сфокусированный блок вывода или последний CommandBlock."""
         focused = self.focused
         if isinstance(focused, (CommandBlock, InfoBlock, QueryResultsBlock)):
@@ -2639,7 +2641,7 @@ class CommandRunner(App):
             return block.raw_stdout or ""
         return self._strip_formatting_tags(getattr(block, "text_content", "") or "")
 
-    def _extract_json(self, text: str) -> Optional[Any]:
+    def _extract_json(self, text: str) -> Any | None:
         """
         Извлекает JSON из текста (объект, массив или примитив).
 
@@ -2677,7 +2679,7 @@ class CommandRunner(App):
             filename: Путь к JSON файлу
         """
         try:
-            with open(filename, "r", encoding=self.ENCODING) as f:
+            with open(filename, encoding=self.ENCODING) as f:
                 json_data = json.load(f)
 
             self.push_screen(JSONViewer(json_data))
@@ -2844,7 +2846,8 @@ class CommandRunner(App):
     def handle_colon_command(self, user_input: str) -> None:
         """Обработка команд управления (:q, :w, :h, :c)."""
         parts = user_input[1:].split()
-        if not parts: return
+        if not parts:
+            return
         raw = user_input[1:].strip()
         if raw.startswith("/"):
             self._journal_search(raw[1:])
@@ -2950,7 +2953,7 @@ class CommandRunner(App):
         """Same seed catalog as a fresh empty database."""
         self.add_block(InfoBlock(format_empty_db_hint(self.db_file)))
 
-    def _handle_gui_open(self, command: str, args: List[str]) -> None:
+    def _handle_gui_open(self, command: str, args: list[str]) -> None:
         """Open a file manager or system terminal in a new window at cwd or path."""
         if len(args) > 1:
             self.add_block(InfoBlock(f"Usage: :{command} [path]"))
@@ -2970,7 +2973,7 @@ class CommandRunner(App):
             return
         self.add_block(InfoBlock(format_opened(argv, proc.pid)))
 
-    def _handle_env_reload(self, args: List[str]) -> None:
+    def _handle_env_reload(self, args: list[str]) -> None:
         """Re-read `.bashrc_term*` (and `~/.bashrc` aliases) into this process."""
         if args:
             self.add_block(InfoBlock("Usage: :env"))
@@ -2985,7 +2988,7 @@ class CommandRunner(App):
             f"Reloaded {os.path.basename(self.FILE_BASHRC)}{extra}: {len(self.local_env)} vars"
         ))
 
-    def _apply_env_diff(self, updates: Dict[str, str], removed: List[str]) -> None:
+    def _apply_env_diff(self, updates: dict[str, str], removed: list[str]) -> None:
         for key, value in updates.items():
             self.local_env[key] = value
             os.environ[key] = value
@@ -2993,7 +2996,7 @@ class CommandRunner(App):
             self.local_env.pop(key, None)
             os.environ.pop(key, None)
 
-    def _adopt_tty_cwd(self, pwd: str) -> Optional[str]:
+    def _adopt_tty_cwd(self, pwd: str) -> str | None:
         """Match the TUI cwd to the TTY shell's $PWD. None if unchanged/invalid."""
         if not pwd or not os.path.isdir(pwd):
             return None
@@ -3010,25 +3013,25 @@ class CommandRunner(App):
         os.environ["PWD"] = os.getcwd()
         return os.getcwd()
 
-    def _ingest_tty_session(self, env_path: str, pwd_path: str, before: Mapping[str, str]) -> List[str]:
+    def _ingest_tty_session(self, env_path: str, pwd_path: str, before: Mapping[str, str]) -> list[str]:
         """Reload `.bashrc_term*`, overlay TTY exports, adopt child cwd."""
         self.load_bashrc()
         dumped = load_env_dump(env_path)
-        updates: Dict[str, str] = {}
-        removed: List[str] = []
+        updates: dict[str, str] = {}
+        removed: list[str] = []
         if dumped is not None:
             updates, removed = diff_exported_env(before, dumped)
             self._apply_env_diff(updates, removed)
         new_cwd = None
         try:
-            with open(pwd_path, "r", encoding=self.ENCODING) as fh:
+            with open(pwd_path, encoding=self.ENCODING) as fh:
                 new_cwd = self._adopt_tty_cwd(fh.read())
         except OSError:
             new_cwd = None
         names = sorted(set(updates) | set(removed))
         return format_env_followup(names, new_cwd)
 
-    def _handle_backup_command(self, args: List[str]) -> None:
+    def _handle_backup_command(self, args: list[str]) -> None:
         if args:
             self.add_block(InfoBlock("Usage: :backup"))
             return
@@ -3121,7 +3124,7 @@ class CommandRunner(App):
         os.environ["PWD"] = os.getcwd()
         self.add_block(InfoBlock(f"cwd: {os.getcwd()}"))
 
-    def _command_from_block(self, block: Optional[Static]) -> str:
+    def _command_from_block(self, block: Static | None) -> str:
         if block is None:
             return ""
         cmd = (getattr(block, "source_command", None) or "").strip()
@@ -3144,9 +3147,9 @@ class CommandRunner(App):
             return
         self.set_input_draft(cmd)
 
-    def _collect_line_hits(self, lowered: str) -> List[Tuple[Static, int]]:
+    def _collect_line_hits(self, lowered: str) -> list[tuple[Static, int]]:
         """Совпадения (блок, индекс строки) по видимым строкам журнала."""
-        hits: List[Tuple[Static, int]] = []
+        hits: list[tuple[Static, int]] = []
         for block in self._journal_blocks():
             if not isinstance(block, LineNavigable):
                 continue
@@ -3209,7 +3212,7 @@ class CommandRunner(App):
         self.sub_title = f"search {self._search_index + 1}/{n}"
         self.set_timer(3, self.clear_subtitle)
 
-    def _handle_playbook_command(self, args: List[str]) -> None:
+    def _handle_playbook_command(self, args: list[str]) -> None:
         """Write this session's typed commands as a --demo YAML playbook."""
         if args and args[0] == "clear":
             n = len(self._playbook_log)
@@ -3261,7 +3264,7 @@ class CommandRunner(App):
                 os.environ.pop(key, None)
         self.local_env.clear()
 
-    def _handle_session_command(self, args: List[str]) -> None:
+    def _handle_session_command(self, args: list[str]) -> None:
         """`:session` — show; `:session NAME` — switch or create."""
         if not args:
             self.add_block(InfoBlock(self._session_status_text()))
@@ -3356,7 +3359,7 @@ class CommandRunner(App):
             return
         self.push_screen(DevopsScreensaver(stars=self.screensaver_stars))
 
-    def _handle_screensaver_command(self, args: List[str]) -> None:
+    def _handle_screensaver_command(self, args: list[str]) -> None:
         """`:screensaver` preview; `:screensaver 0` / `:screensaver 120` set idle seconds."""
         if args:
             raw = args[0].strip().lower()
@@ -3426,7 +3429,7 @@ class CommandRunner(App):
     def _show_update_result(self, text: str) -> None:
         self.add_block(InfoBlock(text))
 
-    def _export_tag(self, args: List[str]) -> None:
+    def _export_tag(self, args: list[str]) -> None:
         if not args:
             self.add_block(InfoBlock("Usage: :export <tag> [file.json]"))
             return
@@ -3438,7 +3441,7 @@ class CommandRunner(App):
         except Exception as e:
             self.add_block(InfoBlock(f"Export error: {e}"))
 
-    def _import_tag(self, args: List[str]) -> None:
+    def _import_tag(self, args: list[str]) -> None:
         if not args:
             self.add_block(InfoBlock("Usage: :import <file.json>"))
             return
@@ -3513,7 +3516,7 @@ class CommandRunner(App):
         else:
             self.add_block(InfoBlock(f"Unknown ingress subcommand: '{subcommand}'"))
 
-    def _extract_namespace_from_args(self, parts: List[str], save_to_var: bool = True) -> Optional[str]:
+    def _extract_namespace_from_args(self, parts: list[str], save_to_var: bool = True) -> str | None:
         """
         Extract -n <namespace> from command arguments and substitute variables.
 
@@ -3562,7 +3565,7 @@ class CommandRunner(App):
         """Show ingress command help."""
         self.add_block(InfoBlock(INGRESS_HELP_TEXT))
 
-    def _list_ingresses(self, namespace: Optional[str] = None) -> None:
+    def _list_ingresses(self, namespace: str | None = None) -> None:
         """List ingresses in namespace or all namespaces."""
         ns_display = namespace or "all namespaces"
         def worker():
@@ -3579,7 +3582,7 @@ class CommandRunner(App):
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
 
-    def _display_ingress_list(self, ingresses, namespace: Optional[str] = None) -> None:
+    def _display_ingress_list(self, ingresses, namespace: str | None = None) -> None:
         """Display list of ingresses."""
         ns_display = namespace or "all namespaces"
         if not ingresses:
@@ -3599,7 +3602,7 @@ class CommandRunner(App):
         lines.append("\n[dim]Use :i analyze <name> -n <namespace> to analyze[/dim]")
         self.add_block(InfoBlock("\n".join(lines)))
 
-    def _analyze_ingress(self, name: str, namespace: Optional[str] = None) -> None:
+    def _analyze_ingress(self, name: str, namespace: str | None = None) -> None:
         """Analyze specific ingress."""
         ns_display = namespace or "default"
 
@@ -3617,7 +3620,7 @@ class CommandRunner(App):
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
 
-    def _display_ingress_analysis(self, analysis: Dict) -> None:
+    def _display_ingress_analysis(self, analysis: dict) -> None:
         """Display ingress analysis results."""
         from ingress_analyzer import format_analysis_summary
 
@@ -3628,7 +3631,7 @@ class CommandRunner(App):
         # Open JSON viewer for detailed view
         self.push_screen(JSONViewer(analysis))
 
-    def _check_service_endpoints(self, service: str, namespace: Optional[str] = None) -> None:
+    def _check_service_endpoints(self, service: str, namespace: str | None = None) -> None:
         """Check service endpoints."""
         ns_display = namespace or "default"
 
@@ -3697,7 +3700,7 @@ class CommandRunner(App):
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
 
-    def _show_namespace_json(self, data: Dict) -> None:
+    def _show_namespace_json(self, data: dict) -> None:
         """Show namespace data in JSON viewer."""
         name = data.get("metadata", {}).get("name", "unknown")
         status = data.get("status", {}).get("phase", "unknown")
@@ -3746,7 +3749,7 @@ class CommandRunner(App):
                 # Читаем файл с блокировкой
                 if os.path.exists(self.FILE_BASHRC):
                     try:
-                        with open(self.FILE_BASHRC, "r", encoding=self.ENCODING) as f_read:
+                        with open(self.FILE_BASHRC, encoding=self.ENCODING) as f_read:
                             acquire_file_lock(f_read, self.FILE_LOCK_TIMEOUT)
                             try:
                                 lines = f_read.readlines()
@@ -3754,7 +3757,7 @@ class CommandRunner(App):
                                 release_file_lock(f_read)
                     except FileLockTimeoutError:
                         # Если не получили блокировку для чтения, читаем без неё
-                        with open(self.FILE_BASHRC, "r", encoding=self.ENCODING) as f:
+                        with open(self.FILE_BASHRC, encoding=self.ENCODING) as f:
                             lines = f.readlines()
 
                 # Пишем файл с блокировкой
@@ -3806,7 +3809,7 @@ class CommandRunner(App):
             return None
 
         # Определяем функцию для получения команд из БД
-        def get_command(**kwargs) -> Optional[str]:
+        def get_command(**kwargs) -> str | None:
             """Получает команду из БД по tag/tid или global_id."""
             if 'tag' in kwargs and 'tid' in kwargs:
                 db_result = database.get_command_by_tid(
@@ -4070,7 +4073,7 @@ class CommandRunner(App):
         else:
             self.add_block(InfoBlock("Invalid syntax. Use: #tag <command> or #tag=<comment>"))
 
-    def _clickable_bang_ref(self, tag: str, tid: Optional[int] = None) -> str:
+    def _clickable_bang_ref(self, tag: str, tid: int | None = None) -> str:
         """Rich ``@click`` that inserts ``!tag `` or ``!tag[tid] `` at the input cursor."""
         if tid is None:
             action = f"app.insert_bang_draft('{tag}')"
@@ -4253,7 +4256,7 @@ class CommandRunner(App):
                             )
                         )
                     content += "\n".join(lines)
-                    content += "\n\nUse `!{}[<tid>]` or `!ID` to execute.".format(tag_part)
+                    content += f"\n\nUse `!{tag_part}[<tid>]` or `!ID` to execute."
                     content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
                 self.add_block(InfoBlock(content))
         except Exception as e:
@@ -4479,7 +4482,7 @@ class CommandRunner(App):
         self.session_history_pos = len(self.session_history)
 
         final_command = self._expand_aliases(self._substitute_variables(command))
-        self._tty_followup_lines: List[str] = []
+        self._tty_followup_lines: list[str] = []
         try:
             return_code = self._run_in_tty(final_command)
         except SuspendNotSupported:
@@ -4529,7 +4532,7 @@ class CommandRunner(App):
                     except OSError:
                         pass
 
-    def handle_normal_command(self, command: str, stdin_data: Optional[str] = None, record_history: bool = True, *, no_timeout: bool = False) -> None:
+    def handle_normal_command(self, command: str, stdin_data: str | None = None, record_history: bool = True, *, no_timeout: bool = False) -> None:
         """
         Обертка для выполнения обычной команды с обновлением истории.
 
@@ -4552,7 +4555,7 @@ class CommandRunner(App):
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
         container.scroll_relative(y=delta, animate=False, immediate=True)
 
-    def _read_file_history(self) -> List[str]:
+    def _read_file_history(self) -> list[str]:
         """Строки history.txt из кэша; перечитывает файл при смене mtime/size."""
         fp = history_file_stat_key(self.FILE_HISTORY)
         if fp is None:
@@ -4566,7 +4569,7 @@ class CommandRunner(App):
         self._history_file_stat = key
         return list(lines)
 
-    def _history_pool(self) -> List[str]:
+    def _history_pool(self) -> list[str]:
         """history.txt плюс команды сессии, которых ещё нет в файле."""
         pool = self._read_file_history()
         seen = set(pool)
@@ -4577,7 +4580,7 @@ class CommandRunner(App):
                 seen.add(text)
         return pool
 
-    def _history_matches_for(self, needle: str) -> List[str]:
+    def _history_matches_for(self, needle: str) -> list[str]:
         pool = self._history_pool()
         text = (needle or "").strip()
         if not text:
@@ -4724,7 +4727,7 @@ class CommandRunner(App):
     def _expand_aliases(self, command: str) -> str:
         return expand_aliases(command, self.aliases)
 
-    def _execute_in_thread(self, block: CommandBlock, command: str, stdin_data: Optional[str], no_timeout: bool = False) -> None:
+    def _execute_in_thread(self, block: CommandBlock, command: str, stdin_data: str | None, no_timeout: bool = False) -> None:
         """
         Выполняет команду в отдельном потоке.
         Таймаут отключается при command_timeout: 0 в settings.yml или по `@ cmd`.
@@ -4755,7 +4758,7 @@ class CommandRunner(App):
                 return_code = -1
         self.call_from_thread(block.update_content, raw_stdout, raw_stderr, return_code)
 
-    def run_command(self, command: str, stdin_data: Optional[str] = None, *, no_timeout: bool = False) -> None:
+    def run_command(self, command: str, stdin_data: str | None = None, *, no_timeout: bool = False) -> None:
         """
         Инициатор выполнения команды.
         Подставляет переменные и запускает поток.
@@ -4802,7 +4805,7 @@ class CommandRunner(App):
         key = str(name or "").strip().lower()
         return self.THEME_ALIASES.get(key, key)
 
-    def _apply_theme_name(self, name: Optional[str]) -> None:
+    def _apply_theme_name(self, name: str | None) -> None:
         """Ставит тему из settings.yml; неизвестное имя — textual-dark."""
         theme = self._normalize_theme_name(name or self.DEFAULT_THEME)
         if not theme:
@@ -4812,7 +4815,7 @@ class CommandRunner(App):
         except InvalidThemeError:
             self.theme = self.DEFAULT_THEME
 
-    def _handle_theme_command(self, args: List[str]) -> None:
+    def _handle_theme_command(self, args: list[str]) -> None:
         """`:theme` — текущая и список; `:theme nord` — выбрать и сохранить."""
         if not args:
             names = ", ".join(sorted(self.available_themes))
@@ -4840,11 +4843,11 @@ class CommandRunner(App):
         path = self.FILE_SETTINGS
         try:
             if os.path.exists(path):
-                with open(path, "r", encoding=self.ENCODING) as f:
+                with open(path, encoding=self.ENCODING) as f:
                     raw = f.read()
                 lines = raw.splitlines(keepends=True)
                 replaced = False
-                out: List[str] = []
+                out: list[str] = []
                 for line in lines:
                     if re.match(r"^theme:\s*", line):
                         nl = "\n" if line.endswith("\n") else ""
@@ -4881,7 +4884,7 @@ class CommandRunner(App):
         Если ключа нет в settings.yml, остаётся True (обратная совместимость).
         """
         try:
-            with open(self.FILE_SETTINGS, "r", encoding=self.ENCODING) as f:
+            with open(self.FILE_SETTINGS, encoding=self.ENCODING) as f:
                 settings = yaml.safe_load(f)
             if isinstance(settings, dict) and "terminal_mouse" in settings:
                 return bool(settings["terminal_mouse"])
@@ -4903,14 +4906,14 @@ def history_file_for(name: str) -> str:
     return f"history_{name}.txt"
 
 
-def validate_instance_name(name: str) -> Optional[str]:
+def validate_instance_name(name: str) -> str | None:
     text = (name or "").strip()
     if not text or not RE_INSTANCE_NAME.match(text):
         return None
     return text
 
 
-def list_session_names(directory: str = ".") -> List[str]:
+def list_session_names(directory: str = ".") -> list[str]:
     """Names that already have history or bashrc files in the data dir, plus the current one."""
     names = {INSTANCE_NAME}
     try:

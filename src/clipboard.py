@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import subprocess
-from typing import Any, Optional
+from typing import Any
 
 import pyperclip
 
 
-def _linux_clipboard_cmd(selection: str, data: Optional[bytes] = None) -> Optional[bytes]:
+def _linux_clipboard_cmd(selection: str, data: bytes | None = None) -> bytes | None:
     """Чтение/запись X11/Wayland буферов. selection: clipboard | primary."""
     writers_readers = []
     if selection == "primary":
@@ -52,7 +52,7 @@ def _linux_clipboard_cmd(selection: str, data: Optional[bytes] = None) -> Option
     return None
 
 
-def copy_text_to_clipboards(text: str, app: Optional[Any] = None) -> None:
+def copy_text_to_clipboards(text: str, app: Any | None = None) -> None:
     """
     Копирует текст во все буферы, которые читает терминал:
     Textual (Ctrl+V в Input), OSC 52, CLIPBOARD и PRIMARY (Shift+Insert).
@@ -80,7 +80,7 @@ def copy_text_to_clipboards(text: str, app: Optional[Any] = None) -> None:
     _linux_clipboard_cmd("primary", encoded)
 
 
-def paste_text_from_clipboards(app: Optional[Any] = None) -> str:
+def paste_text_from_clipboards(app: Any | None = None) -> str:
     """Сначала системный CLIPBOARD/PRIMARY, затем внутренний буфер Textual."""
     try:
         clip = pyperclip.paste() or ""
