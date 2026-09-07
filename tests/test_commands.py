@@ -454,7 +454,7 @@ async def test_hash_space_parks_in_history_without_running(isolated_home):
 
 
 def test_history_append_skips_consecutive_duplicate(isolated_home):
-    from app import append_history_file_line, read_history_file_lines
+    from history_store import append_history_file_line, read_history_file_lines
 
     path = str(isolated_home / "history.txt")
     assert append_history_file_line(path, "echo same")
@@ -472,7 +472,7 @@ def _mp_append_history(path: str, prefix: str, count: int) -> None:
     src = str(Path(__file__).resolve().parents[1] / "src")
     if src not in sys.path:
         sys.path.insert(0, src)
-    from app import append_history_file_line
+    from history_store import append_history_file_line
 
     for i in range(count):
         append_history_file_line(path, f"{prefix}-{i}")
@@ -482,7 +482,7 @@ def test_history_concurrent_appends(isolated_home):
     """Несколько процессов дописывают history.txt без потери строк."""
     from multiprocessing import Process
 
-    from app import read_history_file_lines
+    from history_store import read_history_file_lines
 
     path = str(isolated_home / "history.txt")
     workers = 4
@@ -503,7 +503,7 @@ def test_history_concurrent_appends(isolated_home):
 
 
 def test_compact_history_lines_keeps_recent_sequence():
-    from app import compact_history_lines
+    from history_store import compact_history_lines
 
     lines = [
         "ls",
@@ -527,7 +527,7 @@ def test_compact_history_lines_keeps_recent_sequence():
 
 
 def test_compact_history_file_respects_hysteresis(isolated_home):
-    from app import compact_history_file, read_history_file_lines
+    from history_store import compact_history_file, read_history_file_lines
 
     path = str(isolated_home / "history.txt")
     (isolated_home / "history.txt").write_text(

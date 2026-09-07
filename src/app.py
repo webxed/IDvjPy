@@ -12,6 +12,7 @@ import subprocess
 import sys
 import argparse
 import re
+import shutil
 import tempfile
 
 # Parse command-line arguments BEFORE importing dependencies
@@ -67,9 +68,18 @@ try:
     import json
     import database_v2 as database
     import threading
-    import re
     import time
     import portalocker
+    from history_store import (
+        DEFAULT_HISTORY_KEEP,
+        FileLockTimeoutError,
+        acquire_file_lock,
+        append_history_file_line,
+        compact_history_file,
+        history_file_stat_key,
+        read_history_file_lines,
+        release_file_lock,
+    )
     from typing import Any, List, Mapping, Optional, Dict, Tuple, Union
     from command_parser_v2 import CommandParser
     from textual import events
@@ -109,6 +119,7 @@ try:
     from demo import dump_playbook_yaml, load_demo_for_cli, play_demo, session_to_playbook
     from seed_lib import backup_sqlite
     from md_viewer import HandbookMarkdownScreen, handbook_md_path
+    from help_texts import INGRESS_HELP_TEXT, MAIN_HELP_TEXT
     from screensaver import DevopsScreensaver
     from update_check import (
         KIND_AVAILABLE,
@@ -156,235 +167,11 @@ def escape_help_markup(text: str) -> str:
 
 
 # ============================================================================
-# File Locking Utilities with Timeout (Cross-platform)
+# History file store: append/read/compact live in src/history_store.py
 # ============================================================================
 
-class FileLockTimeoutError(Exception):
-    """Raised when file lock cannot be acquired within timeout."""
-    pass
 
-
-def acquire_file_lock(file_obj, timeout_sec: int = 5, *, shared: bool = False) -> None:
-    """
-    Acquire lock on file with timeout (cross-platform).
-
-    Uses portalocker for cross-platform file locking support:
-    - Linux/Unix: fcntl.flock()
-    - Windows: msvcrt.locking() or Win32 file locking
-
-    Args:
-        file_obj: Open file object (must be opened in a mode that allows locking)
-        timeout_sec: Maximum time to wait for lock (default: 5 seconds). 0 = one try.
-        shared: True for a shared read lock (several readers, blocks writers).
-
-    Raises:
-        FileLockTimeoutError: If lock cannot be acquired within timeout
-        IOError: If locking operation fails
-    """
-    flags = portalocker.LOCK_SH if shared else portalocker.LOCK_EX
-    flags |= portalocker.LOCK_NB
-    start_time = time.time()
-
-    while True:
-        try:
-            portalocker.lock(file_obj, flags)
-            return
-        except portalocker.exceptions.LockException:
-            elapsed = time.time() - start_time
-            if elapsed >= timeout_sec:
-                raise FileLockTimeoutError(
-                    f"Could not acquire file lock after {timeout_sec} seconds"
-                )
-            time.sleep(0.1)
-        except Exception as e:
-            raise IOError(f"Failed to acquire file lock: {e}")
-
-
-def release_file_lock(file_obj) -> None:
-    """
-    Release exclusive lock on file (cross-platform).
-
-    Args:
-        file_obj: Open file object
-    """
-    try:
-        portalocker.unlock(file_obj)
-    except Exception:
-        pass  # Lock was already released or file was closed
-
-
-def _stat_key_from_stat(st) -> Tuple[int, int]:
-    """Ключ кэша history.txt: mtime_ns + size (видно записи других процессов)."""
-    mtime_ns = getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000))
-    return (int(mtime_ns), int(st.st_size))
-
-
-def history_file_stat_key(path: str) -> Optional[Tuple[int, int]]:
-    try:
-        return _stat_key_from_stat(os.stat(path))
-    except OSError:
-        return None
-
-
-def _read_last_history_line(file_obj, encoding: str, tail: int = 8192) -> Optional[str]:
-    """Последняя непустая строка; file_obj открыт в бинарном режиме."""
-    file_obj.seek(0, os.SEEK_END)
-    size = file_obj.tell()
-    if size <= 0:
-        return None
-    file_obj.seek(max(0, size - tail), os.SEEK_SET)
-    data = file_obj.read()
-    text = data.decode(encoding, errors="replace")
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    return lines[-1] if lines else None
-
-
-def read_history_file_lines(
-    path: str,
-    encoding: str = "utf-8",
-) -> Tuple[List[str], Optional[Tuple[int, int]]]:
-    """
-    Читает history.txt. Shared-lock, если свободен; иначе читает без lock,
-    чтобы подсказки не ждали писателя.
-    """
-    try:
-        f = open(path, "r", encoding=encoding)
-    except FileNotFoundError:
-        return [], None
-    except OSError:
-        return [], None
-    with f:
-        locked = False
-        try:
-            acquire_file_lock(f, timeout_sec=0, shared=True)
-            locked = True
-        except (FileLockTimeoutError, IOError):
-            locked = False
-        try:
-            lines = [line.strip() for line in f if line.strip()]
-            key = _stat_key_from_stat(os.fstat(f.fileno()))
-            return lines, key
-        finally:
-            if locked:
-                release_file_lock(f)
-
-
-def append_history_file_line(
-    path: str,
-    command: str,
-    encoding: str = "utf-8",
-    lock_timeout: int = 5,
-) -> bool:
-    """
-    Дописывает команду в history.txt, если она не совпадает с последней строкой.
-
-    Проверка последней строки и запись — под одним exclusive flock,
-    чтобы несколько экземпляров не гонялись за хвостом файла.
-    """
-    command = (command or "").strip()
-    if not command:
-        return False
-    try:
-        with open(path, "ab+") as f:
-            locked = False
-            try:
-                acquire_file_lock(f, lock_timeout)
-                locked = True
-            except FileLockTimeoutError:
-                locked = False
-            try:
-                last = _read_last_history_line(f, encoding)
-                if last == command:
-                    return False
-                f.seek(0, os.SEEK_END)
-                f.write(f"{command}\n".encode(encoding))
-                f.flush()
-                return True
-            finally:
-                if locked:
-                    release_file_lock(f)
-    except OSError:
-        return False
-
-
-DEFAULT_HISTORY_KEEP = 500
-HISTORY_COMPACT_HYSTERESIS = 2
 DEFAULT_SCREENSAVER_IDLE = 120
-
-
-def compact_history_lines(lines: List[str], keep: int) -> List[str]:
-    """Unique the old prefix; keep the last ``keep`` lines verbatim.
-
-    In the prefix, last occurrence wins. A line that already appears in the
-    recent tail is dropped from the prefix so Up/Down does not repeat it.
-    ``keep <= 0`` leaves the list unchanged (compaction disabled).
-    """
-    cleaned = [str(line).strip() for line in lines if str(line).strip()]
-    if keep <= 0 or len(cleaned) <= keep:
-        return cleaned
-    tail = cleaned[-keep:]
-    prefix = cleaned[:-keep]
-    in_tail = set(tail)
-    seen = set()
-    kept_rev: List[str] = []
-    for line in reversed(prefix):
-        if line in in_tail or line in seen:
-            continue
-        seen.add(line)
-        kept_rev.append(line)
-    return list(reversed(kept_rev)) + tail
-
-
-def compact_history_file(
-    path: str,
-    keep: int,
-    encoding: str = "utf-8",
-    lock_timeout: int = 5,
-    *,
-    force: bool = False,
-    hysteresis: int = HISTORY_COMPACT_HYSTERESIS,
-) -> Tuple[int, int, bool]:
-    """Rewrite history.txt under an exclusive lock.
-
-    Auto mode (``force=False``) runs only when ``len(lines) > keep * hysteresis``.
-    Returns ``(before, after, changed)``. On lock/IO failure: ``(0, 0, False)``.
-    """
-    try:
-        f = open(path, "r+", encoding=encoding)
-    except FileNotFoundError:
-        return 0, 0, False
-    except OSError:
-        return 0, 0, False
-    with f:
-        locked = False
-        try:
-            acquire_file_lock(f, lock_timeout)
-            locked = True
-        except (FileLockTimeoutError, IOError):
-            return 0, 0, False
-        try:
-            lines = [line.strip() for line in f if line.strip()]
-            before = len(lines)
-            if keep <= 0:
-                return before, before, False
-            if not force and before <= keep * max(1, int(hysteresis)):
-                return before, before, False
-            compacted = compact_history_lines(lines, keep)
-            after = len(compacted)
-            if compacted == lines:
-                return before, after, False
-            f.seek(0)
-            f.truncate()
-            f.write("".join(f"{line}\n" for line in compacted))
-            f.flush()
-            try:
-                os.fsync(f.fileno())
-            except OSError:
-                pass
-            return before, after, True
-        finally:
-            if locked:
-                release_file_lock(f)
 
 
 class LineNavigable:
@@ -2042,7 +1829,6 @@ class CommandRunner(App):
             shared_bashrc = self._shared_bashrc_path()
             if os.path.exists(shared_bashrc) and not os.path.exists(self.FILE_BASHRC):
                 try:
-                    import shutil
                     shutil.copy(shared_bashrc, self.FILE_BASHRC)
                     self.add_block(InfoBlock(f"Migrated .bashrc_term -> {os.path.basename(self.FILE_BASHRC)}"))
                     self.set_timer(3, self.clear_subtitle)
@@ -2145,7 +1931,6 @@ class CommandRunner(App):
         if not os.path.exists(legacy):
             return
         try:
-            import shutil
             shutil.copy(legacy, self.FILE_HISTORY)
         except OSError:
             pass
@@ -2206,7 +1991,6 @@ class CommandRunner(App):
                     ".bashrc_term.example",
                 )
                 if os.path.exists(example):
-                    import shutil
                     shutil.copy(example, self.FILE_BASHRC)
                 else:
                     with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f:
@@ -2861,7 +2645,6 @@ class CommandRunner(App):
         Сначала парсит весь текст, затем ищет первый валидный JSON,
         начиная с `{` или `[` (вывод команды может содержать лишние строки).
         """
-        import json
 
         if not text:
             return None
@@ -2892,7 +2675,6 @@ class CommandRunner(App):
         Args:
             filename: Путь к JSON файлу
         """
-        import json
         try:
             with open(filename, "r", encoding=self.ENCODING) as f:
                 json_data = json.load(f)
@@ -3758,141 +3540,7 @@ class CommandRunner(App):
 
     def _show_main_help(self) -> None:
         """Show main help for all commands."""
-        help_text = """[bold]IDvjPy_term VER - Commands Help[/bold]
-
-[bold]Application Commands (prefix :)[/bold]
-  :?          - Show this help
-  :q          - Quit application
-  :w <file>   - Write output to file
-  :h [N]      - Last N lines of history_<instance>.txt (default: 20)
-  :h /text    - Search that file in completions (unique lines, newest first); Enter dumps a block
-  :h compact  - Unique old history; keep the last history_keep lines as a sequence
-  :c          - Clear all output blocks
-  :json       - Open JSON viewer (from last block)
-  :json <file>- Open JSON file in viewer
-  :md <file>  - Open a handbook .md with formatting (Esc closes)
-  :i          - Kubernetes Ingress Analyzer (see :i for details)
-  :cd [path]  - Show or change the shell cwd (tags DB / history stay at launch dir)
-  :fm [path]  - Open the OS file manager in a new window (cwd or path)
-  :term [path] - Open a system terminal in a new window (cwd or path)
-                $FILEMAN / $TERMINAL override the OS default
-  :env        - Re-read .bashrc_term* (and ~/.bashrc aliases) into this process
-  :session    - Show the current instance (history + .bashrc_term files)
-  :session NAME - Switch to that instance or create it (tags DB stays shared)
-  :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
-  :backup       - Copy the command DB into backups/ (same snapshot as --seed)
-  :screensaver  - Starfield; full-width ticker; bottom-left help; bottom-right load/mem (idle: screensaver_idle; 0 = off; screensaver_stars: false hides flying dust)
-  :r          - Put the focused (or last) block command into the input
-  :/text  :g  - Search journal lines; :n / n next, :N / N prev. / on a block starts :/
-  :export tag [file] - Write one tag to JSON
-  :import file       - Insert commands from that JSON (new tids)
-  :theme [name] - Show or set TUI theme (saved in settings.yml)
-  :playbook [file] - Write this session's commands as a --demo YAML (default playbook.yml)
-  :playbook - / clear - Preview YAML in the journal / forget recorded lines
-  :update     - Compare this VERSION with GitHub main (webxed/IDvjPy)
-                Proxy 407: set $PROXY_USER / $PROXY_PASS (and HTTPS_PROXY)
-
-[bold]Kubernetes Commands (prefix :i)[/bold]
-  :i list             - List all ingresses
-  :i list -n <ns>     - List ingresses in namespace
-  :i ns <namespace>   - Describe namespace (JSON viewer)
-  :i analyze <name>   - Analyze ingress
-  :i check <service>  - Check service endpoints
-
-[bold]Command Prefixes[/bold]
-  (none)     - Execute shell command
-  > <cmd>    - Suspend TUI and run with a real TTY (htop, vim, ssh, less)
-               After exit: import that shell's export/unset and $PWD; also :env
-  #<tag>     - Save command to database with tag (`#tag cmd`, no space after #)
-  # command  - Park a line in history without running (bash-style; space after #)
-  #tag! / #tag!tid - Restore soft-deleted tag / command
-  #name-- / #name!! - Hide / restore a handbook's tags (ansible, linux, k8s, …)
-  ?          - Query database (? tags, ?<tag>, ?? grouped; ?? lists hidden tags)
-               In ?? click a tag → insert `!tag ` / `!tag[tid] ` at the cursor
-               (does not replace the line; terminal_mouse). Esc → input, then Enter.
-  !tag / !tag[tid] - Type ! to list tags [file, kube, log]; Tab picks a tag
-               Then commands show as `<id> tag[tid]  full command`; Tab inserts `!tag[tid]`
-               Compose pipes/saves: `#file !file[1] | !file[2]` (preview expands refs)
-  !N         - Execute command by ID from last query
-  |<cmd>     - Pipe focused block output to command
-  $OUT       - On demand: last non-empty line of the focused (or last) command block.
-               Not stored in .bashrc_term. Type $OUT alone to peek. `$OUT=` is rejected.
-  $VAR=val   - Set environment variable
-  aliases    - From ~/.bashrc. If the body has $1 / $2 / $@, args are substituted
-               (klogin cluster → tsh kube login cluster). Else the rest of the line
-               is appended as in a classic alias.
-
-[bold]Navigation[/bold]
-  ↑/↓        - Instance history file in input (typed text filters, case-insensitive); journal scroll when a block is focused
-  Tab        - Focus last journal block (from input), including :h / :?
-  Click      - Focus a journal block without jumping to its start
-               (needs terminal_mouse: true in settings.yml)
-  PgUp/PgDn  - Scroll the journal a page; the visible block becomes active
-               (does not jump to the start of the block). From input: enter viewing.
-  Esc        - Return to input (see also line-cursor mode)
-  Space      - Toggle block collapse
-  ← / →      - Collapse / expand focused block
-  F3         - Copy full block output to clipboard
-  Ctrl+C     - Copy the whole input line; if a journal block is focused, copy the block (same as F3)
-  F5         - Open focused (or last command) block in JSON viewer
-  F6         - Toggle simple (plain) output
-  F2         - Toggle line-cursor mode (see below)
-  Shift+Insert / Ctrl+V - Paste into input (does not replace existing text)
-               In line-cursor mode Ctrl+V appends the current line instead
-  Ctrl+D     - Clear the entire input line
-  (JSON) Enter - Insert `jq 'path'` into input; also sets $JSON
-
-[bold]Line-cursor mode[/bold]
-  Focus a block (Tab or PgUp), then Enter or F2 to turn the mode on.
-  Off by default: ↑/↓ still scroll the journal.
-  On: current line is highlighted.
-  ↑/↓        - Move by lines inside the block
-  Home/End   - First / last line of the block
-  Enter      - Copy current line (trailing spaces stripped) and jump to input
-               Leading `# ` (parked history line) is removed so the command is ready
-               Cursor goes to the end of the input; existing text is not selected
-  Shift+Enter / Ctrl+V - Append current line to input, separated by a space
-               Leading `# ` is stripped the same way
-               Stay in the block (can append several lines)
-               If Shift+Enter acts like Enter, the terminal does not distinguish
-               the keys — use Ctrl+V. While the input is focused, Ctrl+V pastes
-  Esc        - Turn mode off, stay on the block; Esc again returns to input
-  F2         - Toggle mode on/off
-  /          - Start journal search (:/ in the input)
-  n / N      - Next / previous search hit (jumps to the matching line)
-
-[bold]Variables[/bold]
-  Use $VAR in commands for variable substitution
-  $NS is auto-set when using -n in :i commands
-  $JSON is set on Enter in JSON viewer (jq path of the selected node)
-  Example: jq $JSON test.json
-  $OUT is the last line of the focused/last command block, computed only when
-  the command contains $OUT / ${OUT} (not kept in memory as a variable)
-  $VAR also loaded from .bashrc_term and .bashrc_term_<instance>
-  :env re-reads those files. After `> cmd`, exports from that same bash
-  are imported (nested `> bash` then export inside does not: same-shell only).
-  TTY exports stay in this session; `$VAR=val` still writes .bashrc_term_*
-
-[bold]Demo mode[/bold]
-  python3 app.py --demo              - Play bundled short tour (Esc stops)
-  python3 app.py --demo full --demo-quit
-  python3 app.py --demo path.yml --demo-speed 1.5
-  Scenario YAML: src/demos/*.yml (type / keys / wait_command / loop). Manual script: DEMO.md
-  loop: true / loop: N  - Repeat steps (forever or N times). Esc stops. Also a step: loop: 10
-  :playbook [file.yml]  - Dump this session's typed lines as YAML; --demo that file
-  :playbook -           - Preview in the journal.  :playbook clear — reset the log
-  Keys (Tab/F5) and mouse are not recorded; edit the YAML if the tour needs them.
-
-[bold]Handbooks (empty database)[/bold]
-  First start with no commands lists seed scripts in the journal.
-  python3 src/seed_linux_commands.py --seed
-  python3 src/seed_k8s_chains.py --seed    # K8S_CHAINS.md — investigation chains
-  python3 src/seed_git.py --seed
-  python3 src/seed_ops.py --seed           # all ops except linux / k8s / git
-  Type the command here, then ?? (or wait ~5s). Each --seed replaces only its own tags.
-  Live DB is copied to backups/ first; :backup does the same snapshot by hand.
-  Click a green --seed line to insert it, then Enter. Click a .md name (terminal_mouse) or :md SEED_LINUX_COMMANDS.md to read the handbook.
-"""
+        help_text = MAIN_HELP_TEXT
         block = InfoBlock(
             escape_help_markup(
                 help_text.replace("IDvjPy_term VER", f"IDvjPy_term {self.VERSION}", 1)
@@ -3903,32 +3551,7 @@ class CommandRunner(App):
 
     def _show_ingress_help(self) -> None:
         """Show ingress command help."""
-        help_text = """[bold]Kubernetes Ingress Analyzer[/bold]
-
-[bold]Usage:[/bold]
-  :i list                   - List ingresses (uses $NS if set)
-  :i list -n <namespace>    - List in namespace (saves to $NS)
-  :i ns <namespace>         - Describe namespace (JSON viewer)
-  :i analyze <name>         - Analyze ingress (uses $NS if set)
-  :i analyze <name> -n <ns> - Analyze in namespace (saves to $NS)
-  :i check <service>        - Check service endpoints (uses $NS)
-  :i check <service> -n <ns>- Check in namespace (saves to $NS)
-
-[bold]Namespace persistence:[/bold]
-  When -n is specified, namespace is saved to $NS variable.
-  Subsequent commands without -n will use $NS automatically.
-
-[bold]Analysis includes:[/bold]
-  • Ingress configuration (hosts, paths, TLS)
-  • Nginx config from controller (via crossplane)
-  • Service and endpoint health
-  • Path-to-service mapping
-
-[bold]Prerequisites:[/bold]
-  • kubectl configured with cluster access
-  • crossplane: pip install crossplane
-"""
-        self.add_block(InfoBlock(help_text))
+        self.add_block(InfoBlock(INGRESS_HELP_TEXT))
 
     def _list_ingresses(self, namespace: Optional[str] = None) -> None:
         """List ingresses in namespace or all namespaces."""
