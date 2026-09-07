@@ -1,4 +1,4 @@
-# Authors: markovskiy.pavel, Gemini (Google), Claude
+# Authors: markovskiy.pavel, Gemini (Google), Claude, DeepSeek, Grok
 """
 Database module v2 for IDvjPy_term.
 

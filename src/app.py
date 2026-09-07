@@ -1,4 +1,4 @@
-# Vibe-Authors: markovskiy.pavel & Gemini, GLM-4.7, CLAUDE
+# Vibe-Authors: markovskiy.pavel & Gemini, GLM, CLAUDE, DeepSeek, Grok
 """
 IDvjPy_term - Textual TUI terminal application.
 

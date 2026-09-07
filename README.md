@@ -252,4 +252,4 @@ python3 -m pytest tests/ -v
 
 ## Лицензия
 
-[MIT](LICENSE). Авторы: markovskiy.pavel & Gemini, GLM-4.7, CLAUDE.
+[MIT](LICENSE). Авторы: markovskiy.pavel & Gemini, GLM, CLAUDE, DeepSeek, Grok.
