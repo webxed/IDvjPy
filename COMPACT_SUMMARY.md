@@ -39,7 +39,7 @@ Hotkeys: `Tab` input → output (Esc back); `F3` / `Ctrl+C` copy block (Ctrl+C i
 
 ## Database read path
 
-Details: `DATABASE.md`. Module: **`src/database_v2.py`** (`src/database.py` unused). File: `settings.yml` → `database_tags_file` (`mytags.db`).
+Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` → `database_tags_file` (`mytags.db`).
 
 - Two IDs: global `id` (`!1`, `!! 1`) and per-tag `tid` (`!deploy[1]`).
 - Each call opens SQLite, queries, closes. Filter `deleted = 0`.

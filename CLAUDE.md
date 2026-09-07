@@ -55,7 +55,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 
 ### Supporting Modules
 
-- **`src/database_v2.py`**: SQLite tagged history (`database.py` is unused)
+- **`src/database_v2.py`**: SQLite tagged history
 - **`src/command_parser_v2.py`**: `!tag[tid]` / `!ID` / `!!` assembly
 - **`src/clipboard.py`**: CLIPBOARD / PRIMARY / OSC 52
 - **`src/shell_env.py`**: `.bashrc_term` vars, `~/.bashrc` aliases, `$1` substitution
