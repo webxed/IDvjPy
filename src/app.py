@@ -1323,6 +1323,7 @@ class CommandRunner(App):
         self._history_matches: list[str] = []
         self._history_walk_index: int = 0
         self._history_file_lines: list[str] = []
+        self._history_file_folded: list[str] = []
         self._history_file_stat: tuple[int, int] | None = None
         # Словарь для хранения результатов поиска {ID: Command}
         self.last_query_results: dict[int, str] = {}
@@ -1620,8 +1621,8 @@ class CommandRunner(App):
         folded = (needle or "").strip().casefold()
         unique: list[str] = []
         seen = set()
-        for cmd in reversed(self._history_pool()):
-            if folded and folded not in cmd.casefold():
+        for cmd, cmd_folded in reversed(self._history_pool_pairs()):
+            if folded and folded not in cmd_folded:
                 continue
             if cmd in seen:
                 continue
@@ -3344,6 +3345,7 @@ class CommandRunner(App):
         self._playbook_log.clear()
         self._reset_history_walk()
         self._history_file_lines = []
+        self._history_file_folded = []
         self._history_file_stat = None
         self.load_bashrc()
         compacted = self._maybe_compact_history(force=False)
@@ -4602,12 +4604,14 @@ class CommandRunner(App):
         fp = history_file_stat_key(self.FILE_HISTORY)
         if fp is None:
             self._history_file_lines = []
+            self._history_file_folded = []
             self._history_file_stat = None
             return []
         if self._history_file_stat == fp:
             return list(self._history_file_lines)
         lines, key = read_history_file_lines(self.FILE_HISTORY, encoding=self.ENCODING)
         self._history_file_lines = lines
+        self._history_file_folded = [ln.casefold() for ln in lines]
         self._history_file_stat = key
         return list(lines)
 
@@ -4622,13 +4626,24 @@ class CommandRunner(App):
                 seen.add(text)
         return pool
 
+    def _history_pool_pairs(self) -> list[tuple[str, str]]:
+        """Как _history_pool, но парами (оригинал, casefold) — fold файла закэширован."""
+        lines = self._read_file_history()
+        seen = set(lines)
+        pairs = list(zip(lines, self._history_file_folded, strict=True))
+        for cmd in self.session_history:
+            text = (cmd or "").strip()
+            if text and text not in seen:
+                pairs.append((text, text.casefold()))
+                seen.add(text)
+        return pairs
+
     def _history_matches_for(self, needle: str) -> list[str]:
-        pool = self._history_pool()
         text = (needle or "").strip()
         if not text:
-            return pool
+            return self._history_pool()
         folded = text.casefold()
-        return [cmd for cmd in pool if folded in cmd.casefold()]
+        return [cmd for cmd, cmd_folded in self._history_pool_pairs() if folded in cmd_folded]
 
     def _reset_history_walk(self) -> None:
         self._history_walking = False
