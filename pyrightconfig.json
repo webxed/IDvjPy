@@ -1,0 +1,9 @@
+{
+  "include": ["src", "tests"],
+  "executionEnvironments": [
+    { "root": "tests", "extraPaths": ["src"] },
+    { "root": "src" }
+  ],
+  "typeCheckingMode": "basic",
+  "exclude": ["build", "dist", "backups", "**/__pycache__"]
+}

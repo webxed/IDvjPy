@@ -28,6 +28,7 @@ test*.*
 
 # Exports / backups produced by the app
 *.json
+!pyrightconfig.json
 *.csv
 backups/
 .
