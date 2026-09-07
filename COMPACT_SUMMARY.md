@@ -168,7 +168,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/app.css` | Styles (JSON viewer, line-nav border, block focus) |
 | `settings.yml` | DB path, timeout, `terminal_mouse`, `theme`, `check_updates`, `history_keep`, `screensaver_idle`, `screensaver_stars` (cwd) |
 | `K8S_CHAINS.md` | k8s investigation overview |
-| `SEED_*_COMMANDS.md` | Canonical tids per handbook |
+| `docs/SEED_*_COMMANDS.md` | Canonical tids per handbook |
 | `DATABASE.md` | How commands are read from SQLite |
 | `test_cmd.md` | Manual test script |
 
@@ -251,7 +251,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 - Application code in `src/`; cwd holds `settings.yml`, the command DB, `.bashrc_term*`, `history_<instance>.txt`.
 - Empty command DB shows a seed catalog (linux, k8s chains, git, `seed_ops.py`, individual ops).
-- [`K8S_CHAINS.md`](K8S_CHAINS.md) is the investigation overview; tids are in [`SEED_K8S_CHAINS_COMMANDS.md`](SEED_K8S_CHAINS_COMMANDS.md).
+- [`K8S_CHAINS.md`](K8S_CHAINS.md) is the investigation overview; tids are in [`SEED_K8S_CHAINS_COMMANDS.md`](docs/SEED_K8S_CHAINS_COMMANDS.md).
 
 ## This session (v1.1.25 → v1.1.52)
 

@@ -11,7 +11,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def handbook_md_path(name: str) -> Path | None:
-    """Resolve a handbook markdown file by basename (cwd, then repo root)."""
+    """Resolve a handbook markdown by basename.
+
+    Seed handbooks moved to ``docs/``; the overview docs (K8S_CHAINS.md) stay
+    at the repo root. Search cwd and repo root, each also under ``docs/``.
+    """
     raw = (name or "").strip()
     if not raw or any(sep in raw for sep in ("/", "\\", "..")):
         return None
@@ -19,13 +23,13 @@ def handbook_md_path(name: str) -> Path | None:
     if not base.lower().endswith(".md"):
         return None
     for folder in (Path.cwd(), REPO_ROOT):
-        path = (folder / base).resolve()
-        try:
-            path.relative_to(folder.resolve())
-        except ValueError:
-            continue
-        if path.is_file():
-            return path
+        for candidate in (folder / base, folder / "docs" / base):
+            try:
+                candidate.resolve().relative_to(folder.resolve())
+            except ValueError:
+                continue
+            if candidate.is_file():
+                return candidate.resolve()
     return None
 
 

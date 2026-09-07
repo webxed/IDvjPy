@@ -2,7 +2,7 @@
 
 Рабочие теги для инцидента в Kubernetes: широкий `get` → имя в `$POD` / `$DEPLOY` → `describe` / логи / events / JSON.
 
-Сидовый тег `kube` из [`SEED_LINUX_COMMANDS.md`](SEED_LINUX_COMMANDS.md) — общий справочник.  
+Сидовый тег `kube` из [`SEED_LINUX_COMMANDS.md`](docs/SEED_LINUX_COMMANDS.md) — общий справочник.  
 Этот набор **не трогает** `proc` / `file` / `net` / `kube`.
 
 ```bash
@@ -13,7 +13,7 @@ python3 src/seed_k8s_chains.py --seed
 `kvars` `kns` `kpod` `klog` `kev` `ksvc` `king` `kdep` `kres` `kjq`
 `kcrash` `knet` `kroll` `kwatch` `kquota`.
 
-Канонические tid: [`SEED_K8S_CHAINS_COMMANDS.md`](SEED_K8S_CHAINS_COMMANDS.md).
+Канонические tid: [`SEED_K8S_CHAINS_COMMANDS.md`](docs/SEED_K8S_CHAINS_COMMANDS.md).
 
 ## Цикл в TUI
 
