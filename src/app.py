@@ -1333,6 +1333,7 @@ class CommandRunner(App):
         self.check_updates: bool = False
         self.db_file = self.FILE_DATABASE
         self.active_pipe_source: CommandBlock | None = None
+        self._journal_block_cache: list[Static] | None = None
         self.simple_output_mode: bool = False
         # Словарь локальных переменных окружения (имеют приоритет над os.environ)
         self.local_env: dict[str, str] = {}
@@ -2192,13 +2193,20 @@ class CommandRunner(App):
             self._completion_list.hide()
 
     def _journal_blocks(self) -> list[Static]:
-        """Блоки журнала в порядке отображения (команды и системный вывод)."""
+        """Блоки журнала в порядке отображения (команды и системный вывод).
+
+        Кэшируется между изменениями DOM: список блоков пересобирается только
+        в add_block / clear_all_blocks, а не на каждый шаг скролла.
+        """
+        if self._journal_block_cache is not None:
+            return self._journal_block_cache
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
-        return [
+        self._journal_block_cache = [
             child
             for child in container.children
             if isinstance(child, (CommandBlock, InfoBlock, QueryResultsBlock))
         ]
+        return self._journal_block_cache
 
     def action_focus_output(self) -> None:
         """Переводит фокус на последний блок журнала (:h, :?, команда — что было последним)."""
@@ -2399,6 +2407,7 @@ class CommandRunner(App):
             # В Textual нужно вызывать remove() на каждом потомке
             for child in list(results_container.children):
                 child.remove()
+            self._journal_block_cache = None
 
             self.add_block(InfoBlock("All blocks cleared."))
         except Exception as e:
@@ -2480,6 +2489,7 @@ class CommandRunner(App):
         """
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
         container.mount(block)
+        self._journal_block_cache = None
         # Не скроллить весь блок в кадр: длинный :? / ?? с height:auto иначе
         # подвисает на layout. Фокус нужен, чтобы on_focus выставил pipe-source.
         block.focus(scroll_visible=False)
