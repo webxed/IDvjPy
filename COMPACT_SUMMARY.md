@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.32**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.33**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -131,7 +131,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.6 (app v1.32) |
+| `test_cmd.md` | Manual plan v1.6 (app v1.33) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -151,7 +151,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | File | Purpose |
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
-| `src/app.py` | TUI (`CommandRunner`), v1.32 |
+| `src/app.py` | TUI (`CommandRunner`), v1.33 |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
 | `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
@@ -173,6 +173,13 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.33
+
+- **`@ cmd`:** выполнить команду без `command_timeout` (долгие не-TTY задачи; stdout захватывается). История хранит строку с `@`, повтор по ↑ ведёт себя так же.
+- **CI и инструменты:** GitHub Actions гоняет pytest на push/PR в `main`; `tests/test_release_meta.py` сверяет версию в доках с `CommandRunner.VERSION`; dev-зависимости вынесены в `requirements-dev.txt`; тяжёлые Pilot-наборы помечены `slow` (быстрый прогон: `-m "not slow"`).
+- **Рефакторинг:** работа с `history_*.txt` и файловые блокировки — в `src/history_store.py`, статичные тексты справки `:?` / `:i` — в `src/help_texts.py`; удалены мёртвые `src/database.py` и `src/command_parser.py`.
+- **Доки:** 25 seed-справочников переехали в `docs/` (из TUI открываются как раньше), устаревшие `readme.ru.md` и `SESSION_SUMMARY.md` удалены — корень репозитория разгружен.
 
 ## v1.32
 
