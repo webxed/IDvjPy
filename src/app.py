@@ -1252,7 +1252,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.46"
+    VERSION = "v1.47"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -5303,21 +5303,12 @@ class CommandRunner(App):
         """
         `:llm` — обращение к LLM через API по конфигу llm_providers.yml.
 
-        :llm                       — список провайдеров
-        :llm <имя> <сообщение>     — запрос к провайдеру (ответ — в блок журнала)
+        :llm                        — список провайдеров
+        :llm <сообщение>            — запрос провайдеру по умолчанию (`default:`)
+        :llm <имя> <сообщение>      — запрос конкретному провайдеру
         """
         if not args:
             self._show_llm_providers()
-            return
-        provider_name = args[0]
-        message = " ".join(args[1:]).strip()
-        if not message:
-            self.add_block(
-                InfoBlock(
-                    f"Usage: :llm <provider> <message>\n"
-                    f"Providers: {self._llm_provider_label()}"
-                )
-            )
             return
         try:
             cfg = load_providers(self.FILE_LLM_PROVIDERS)
@@ -5326,16 +5317,38 @@ class CommandRunner(App):
                 InfoBlock(f"Error: {e}\nExample: cp {example_config_path()} {self.FILE_LLM_PROVIDERS}")
             )
             return
-        provider = cfg.get("providers", {}).get(provider_name)
-        if provider is None:
-            self.add_block(
-                InfoBlock(
-                    f"Error: unknown provider '{provider_name}'. "
-                    f"Known: {', '.join(provider_names(cfg)) or '(none)'}. "
-                    f"Usage: :llm <provider> <message>"
+        providers = cfg.get("providers", {})
+        known = provider_names(cfg)
+        default = default_provider(cfg)
+        first = args[0]
+        if first in providers:
+            provider_name = first
+            message = " ".join(args[1:]).strip()
+            if not message:
+                default_hint = f" (default: {default})" if default else ""
+                self.add_block(
+                    InfoBlock(
+                        f"Usage: :llm [<provider>] <message>{default_hint}\n"
+                        f"Providers: {', '.join(known) or '(none)'}\n"
+                        "Without a provider name the message goes to the default one."
+                    )
                 )
-            )
-            return
+                return
+        else:
+            # Первое слово — не провайдер: это сообщение для провайдера по умолчанию.
+            if default is None:
+                self.add_block(
+                    InfoBlock(
+                        f"Error: unknown provider '{first}'; no default provider is set.\n"
+                        f"Known: {', '.join(known) or '(none)'}.\n"
+                        "To ask the default model add `default: <name>` to "
+                        f"{self.FILE_LLM_PROVIDERS}, or use :llm <provider> <message>."
+                    )
+                )
+                return
+            provider_name = default
+            message = " ".join(args).strip()
+        provider = providers[provider_name]
         timeout = float(provider.get("timeout") or 60)
         now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         header = f"{now} ({os.getcwd()}) $ :llm {provider_name}"
@@ -5353,14 +5366,6 @@ class CommandRunner(App):
             args=(block, provider, message, timeout),
             daemon=True,
         ).start()
-
-    def _llm_provider_label(self) -> str:
-        try:
-            cfg = load_providers(self.FILE_LLM_PROVIDERS)
-            names = provider_names(cfg)
-        except LlmError:
-            return f"(create {self.FILE_LLM_PROVIDERS}, see {example_config_path()})"
-        return ", ".join(names) or "(none)"
 
     def _show_llm_providers(self) -> None:
         try:

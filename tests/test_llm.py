@@ -206,6 +206,36 @@ def test_perform_request_uses_authenticated_proxy(monkeypatch):
     assert perform_request(DS_CFG, "hi", env, timeout=2) == "via-proxy"
 
 
+async def test_colon_llm_default_provider_without_name(isolated_home, monkeypatch):
+    """:llm <свободный текст> уходит провайдеру по умолчанию (default:)."""
+    import app as app_module
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "default: ds\nproviders:\n"
+        "  ds:\n    url: http://x\n    model: deepseek-chat\n"
+        "  openai:\n    url: http://x\n    model: gpt\n",
+        encoding="utf-8",
+    )
+    calls: list[tuple] = []
+
+    def fake(provider, message, env, timeout=60):
+        calls.append((provider["model"], message))
+        return "default-answer"
+
+    monkeypatch.setattr(app_module, "perform_request", fake)
+
+    from app import CommandRunner
+    from tests.conftest import submit, wait_command_done
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, ":llm Привет как дела?")
+        block = await wait_command_done(app, timeout=8.0)
+        assert block.raw_stdout.strip() == "default-answer"
+    # Провайдер по умолчанию и полное сообщение.
+    assert calls == [("deepseek-chat", "Привет как дела?")]
+
+
 async def test_colon_llm_shows_answer(isolated_home, monkeypatch):
     import app as app_module
 
@@ -247,10 +277,12 @@ async def test_colon_llm_errors(isolated_home):
     async with app.run_test(size=(110, 30)) as pilot:
         await pilot.pause()
         await submit(pilot, ":llm ds")
-        assert "Usage: :llm <provider> <message>" in last_info(app).text_content
+        assert "Usage: :llm [<provider>] <message>" in last_info(app).text_content
         await submit(pilot, ":llm nope hi")
-        assert "unknown provider 'nope'" in last_info(app).text_content
-        assert "ds" in last_info(app).text_content
+        text = last_info(app).text_content
+        assert "unknown provider 'nope'" in text
+        assert "no default provider is set" in text
+        assert "ds" in text
 
 
 async def test_colon_llm_missing_config_hint(isolated_home):

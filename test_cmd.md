@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.46
+# План тестирования IDvjPy_term v1.47
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -808,12 +808,13 @@ x
 1. Скопировать `src/llm_providers.example.yml` в каталог запуска как `llm_providers.yml`.
 2. Задать ключ окружением: `$DEEPSEEK_API_KEY=...` (или export до запуска).
 3. `:llm` — **Ожидание:** список провайдеров (`ds (default)`, `openai`, `grok`, `ollama`, …).
-4. `:llm ds Привет, как дела?` — блок `[Consulting ds…]` → ответ модели в stdout блока (exit 0).
-5. Без ключа: `:llm ds hi` — `Missing env variable(s): DEEPSEEK_API_KEY`.
-6. Ошибки: `:llm ds` (Usage), `:llm nope hi` (`unknown provider`), удалённый конфиг — `Config not found` + подсказка про example.
-7. Провайдер с ручным `body` (например, `ollama` без ключа) — шаблон с `%MSG%` / `%MODEL%`.
-8. `:llm d` → Tab — **Ожидание:** список из конфига, подстановка только имени (`:llm ds `); начатое сообщение список гасит.
-9. Прокси 407 (`Tunnel connection failed: 407`): задать `$PROXY_USER=…` / `$PROXY_PASS=…` — `:llm` подхватит их, как `:update`; без них — явная подсказка в сообщении об ошибке.
+4. `:llm Привет, как дела?` — **Ожидание:** запрос провайдеру по умолчанию (`default: ds`).
+5. `:llm ds Привет, как дела?` — то же, но явно указан провайдер.
+6. Без ключа: `:llm ds hi` — `Missing env variable(s): DEEPSEEK_API_KEY`.
+7. Ошибки: `:llm ds` (Usage), `:llm nope hi` без `default:` (`unknown provider` + подсказка), удалённый конфиг — `Config not found` + подсказка про example.
+8. Провайдер с ручным `body` (например, `ollama` без ключа) — шаблон с `%MSG%` / `%MODEL%`.
+9. `:llm d` → Tab — **Ожидание:** список из конфига, подстановка только имени (`:llm ds `); начатое сообщение список гасит.
+10. Прокси 407 (`Tunnel connection failed: 407`): задать `$PROXY_USER=…` / `$PROXY_PASS=…` — `:llm` подхватит их, как `:update`; без них — явная подсказка в сообщении об ошибке.
 
 Автотест: `tests/test_llm.py` (urllib замокан, сеть не дёргается).
 
@@ -849,6 +850,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.46  
+**Версия приложения**: v1.47  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-26
