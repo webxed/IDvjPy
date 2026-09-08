@@ -1058,8 +1058,17 @@ class CommandInput(Input):
                 return
             elif event.key == "enter":
                 if self._typed_command_is_complete():
-                    self._completion_list.hide()
-                    return
+                    # Для аргумент-кандидатов (имя провайдера `:llm`) пробел после
+                    # команды означает «следующий аргумент», а не конец строки:
+                    # Enter применяет выбранного кандидата, а не запускает `:llm`.
+                    sel_item = None
+                    if self._completion_list is not None:
+                        sel_item = self._completion_list.get_selected_item()
+                    if sel_item is not None and sel_item.replace_token and sel_item.add_space:
+                        pass  # уходим в общий apply ниже
+                    else:
+                        self._completion_list.hide()
+                        return
                 selected = self._completion_list.get_selected()
                 if selected and self._preview_completion_value(selected) != self.value:
                     self._apply_selected_completion(selected)

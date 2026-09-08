@@ -150,6 +150,31 @@ async def test_llm_tab_applies_provider_name(isolated_home):
         assert inp.value == ":llm ds "
 
 
+async def test_llm_enter_applies_provider_not_submits(isolated_home):
+    """Enter при открытом списке провайдеров применяет имя, не выполняет :llm."""
+    from app import CommandRunner
+    from tests.conftest import info_texts, input_widget
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "providers:\n  ds:\n    url: http://x\n    model: m\n", encoding="utf-8"
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await pilot.pause()
+        inp = input_widget(app)
+        inp.value = ":llm "
+        inp.cursor_position = len(":llm ")
+        await pilot.pause()
+        assert app._completion_list.is_visible()
+        infos_before = len(info_texts(app))
+        await pilot.press("enter")
+        await pilot.pause()
+        # Провайдер применён, команда НЕ выполнена, ввод готов к сообщению.
+        assert inp.value == ":llm ds "
+        assert len(info_texts(app)) == infos_before
+        assert not app._completion_list.is_visible()
+
+
 async def test_colon_llm_shows_answer(isolated_home, monkeypatch):
     import app as app_module
 
