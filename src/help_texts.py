@@ -31,6 +31,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :r          - Put the focused (or last) block command into the input
   :kill [all] - Stop the running background command (focused block or the last one;
                 `:kill all` stops every running command). SIGTERM, then SIGKILL.
+  :watch <sec> <command> - Rerun <command> every <sec> seconds in one block
+                (monitor like `watch -n`; ticks replace the text, they do not pile up)
+                Stop: :watch stop, F4 / :kill, :c, or quit. One watch at a time.
   :/text  :g  - Search journal lines; :n / n next, :N / N prev. / on a block starts :/
   :export tag [file] - Write one tag to JSON
   :import file       - Insert commands from that JSON (new tids)

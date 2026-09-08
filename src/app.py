@@ -1224,7 +1224,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.36"
+    VERSION = "v1.37"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1301,6 +1301,7 @@ class CommandRunner(App):
     CMD_CD = "cd"
     CMD_REPLAY = "r"
     CMD_KILL = "kill"
+    CMD_WATCH = "watch"
     CMD_GREP = "g"
     CMD_SEARCH_NEXT = "n"
     CMD_SEARCH_PREV = "N"
@@ -1386,6 +1387,8 @@ class CommandRunner(App):
         # Нужны для F4 / :kill — остановить долгую команду, не дожидаясь timeout.
         self._proc_registry: dict[CommandBlock, subprocess.Popen] = {}
         self._proc_lock = threading.Lock()
+        # Активный :watch (один на сессию): блок + Event остановки + текущий Popen.
+        self._watch_state: dict[str, Any] | None = None
 
     def _extract_path_token(self, text: str) -> str:
         """Возвращает последний токен для path completion."""
@@ -2445,6 +2448,9 @@ class CommandRunner(App):
         Используется командой :c для очистки экрана.
         """
         try:
+            # Активный :watch живёт в блоке журнала — при :c останавливаем его.
+            if self._watch_state is not None:
+                self._stop_watch()
             # Получаем контейнер с результатами
             results_container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
 
@@ -2978,6 +2984,8 @@ class CommandRunner(App):
             self.clear_all_blocks()
         elif command == self.CMD_KILL:
             self._handle_kill_command(parts[1:])
+        elif command == self.CMD_WATCH:
+            self._handle_watch_command(parts[1:])
         elif command == self.CMD_JSON:
             # Открываем JSON viewer
             if len(parts) > 1:
@@ -4971,26 +4979,46 @@ class CommandRunner(App):
         return True
 
     def _stop_all_processes(self) -> None:
-        """Остановить все фоновые процессы (выход из приложения, :kill all)."""
+        """Остановить все фоновые процессы и :watch (выход из приложения, :kill all)."""
         for block in self._running_command_blocks():
             self._stop_command_block(block)
+        if self._watch_state is not None:
+            self._stop_watch()
 
     def _handle_kill_command(self, args: list[str]) -> None:
         """`:kill` — стоп сфокусированного/последнего процесса; `:kill all` — всех."""
         if args and args[0] == "all":
             running = self._running_command_blocks()
-            if not running:
+            watch = self._watch_state
+            if not running and watch is None:
                 self.add_block(InfoBlock("No running commands to stop."))
                 return
             for block in running:
                 self._stop_command_block(block)
-            self.sub_title = f"Stop signal sent to {len(running)} running command(s)."
+            if watch is not None:
+                self._stop_watch()
+            self.sub_title = "Stop signal sent to running command(s)."
             self.set_timer(2, self.clear_subtitle)
             return
         target = self.focused if isinstance(self.focused, CommandBlock) else None
+        watch = self._watch_state
+        if watch is not None and target is watch["block"]:
+            self._stop_watch()
+            label = (watch["block"].source_command or watch["block"].header)[:60]
+            self.sub_title = f"Stop signal sent: {label}"
+            self.set_timer(2, self.clear_subtitle)
+            return
         if target is None or not self._is_block_running(target):
             running = self._running_command_blocks()
             target = running[-1] if running else None
+        if target is None and watch is not None:
+            # Нет фоновых процессов, но крутится :watch — стоп его.
+            target = watch["block"]
+            self._stop_watch()
+            label = (watch["block"].source_command or watch["block"].header)[:60]
+            self.sub_title = f"Stop signal sent: {label}"
+            self.set_timer(2, self.clear_subtitle)
+            return
         if target is None:
             self.add_block(InfoBlock("No running commands to stop."))
             return
@@ -5006,6 +5034,178 @@ class CommandRunner(App):
     def action_stop_command(self) -> None:
         """F4 — остановить запущенную команду сфокусированного блока (или последнюю)."""
         self._handle_kill_command([])
+
+    # --- :watch — периодический перезапуск одной команды ---
+
+    def _handle_watch_command(self, args: list[str]) -> None:
+        """`:watch <sec> <command>` и `:watch stop` (см. :?)."""
+        if not args:
+            self.add_block(InfoBlock("Usage: :watch <sec> <command>   (stop: :watch stop)"))
+            return
+        if args[0] == "stop":
+            if self._watch_state is None:
+                self.add_block(InfoBlock("No active watch to stop."))
+                return
+            self._stop_watch()
+            return
+        if self._watch_state is not None:
+            self.add_block(
+                InfoBlock("A watch is already running. Stop it first: :watch stop")
+            )
+            return
+        try:
+            interval = float(args[0])
+        except ValueError:
+            self.add_block(InfoBlock("Usage: :watch <sec> <command>  (sec — число секунд)"))
+            return
+        if interval <= 0:
+            self.add_block(InfoBlock("Usage: :watch <sec> <command>  (sec должен быть > 0)"))
+            return
+        command = " ".join(args[1:]).strip()
+        if not command:
+            self.add_block(InfoBlock("Usage: :watch <sec> <command>"))
+            return
+        self._start_watch(command, interval)
+
+    def _start_watch(self, command: str, interval: float) -> None:
+        """Создаёт блок :watch и поток-цикл; тики обновляют тот же блок."""
+        final_command = self._expand_aliases(self._substitute_variables(command))
+        now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        header = f"{now} ({os.getcwd()}) $ watch: {final_command}"
+        block = CommandBlock(
+            header=header,
+            raw_stdout="",
+            raw_stderr="",
+            return_code=0,
+            source_command=f"watch {command}",
+        )
+        block._watch = True
+        block.pending = True
+        self._watch_state = {
+            "block": block,
+            "command": final_command,
+            "interval": interval,
+            "event": threading.Event(),
+            "proc": None,
+            "ticks": 0,
+        }
+        text = (
+            f"[dim]watch: {escape(final_command)} · every {interval:g}s · "
+            "F4 / :kill / :watch stop — остановить[/dim]\n"
+        )
+        block.text_content = text
+        block.update(text)
+        self.add_block(block)
+        threading.Thread(target=self._watch_loop, daemon=True).start()
+
+    def _watch_loop(self) -> None:
+        """Цикл тиков :watch: каждый интервал — один запуск команды."""
+        state = self._watch_state
+        if state is None:
+            return
+        try:
+            while not state["event"].is_set():
+                state["ticks"] += 1
+                tick = state["ticks"]
+                stdout, stderr, rc = self._capture_watch_tick(state)
+                if state["event"].is_set():
+                    break
+                self.call_from_thread(
+                    self._update_watch_block, tick, stdout, stderr, rc
+                )
+                state["event"].wait(state["interval"])
+        finally:
+            self.call_from_thread(self._finalize_watch)
+
+    def _capture_watch_tick(self, state: dict[str, Any]) -> tuple[str, str, int]:
+        """Один запуск команды :watch. Текущий Popen доступен для F4 / :kill."""
+        stdout, stderr, rc = "", "", 0
+        proc: subprocess.Popen | None = None
+        try:
+            proc = subprocess.Popen(
+                state["command"],
+                shell=True,
+                executable="/bin/bash",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding=self.ENCODING,
+                errors="replace",
+                start_new_session=True,
+            )
+            with self._proc_lock:
+                state["proc"] = proc
+            out, err = proc.communicate()
+            stdout, stderr, rc = out.strip(), err.strip(), proc.returncode
+        except Exception as e:
+            stderr, rc = str(e), -1
+        finally:
+            with self._proc_lock:
+                if state.get("proc") is proc:
+                    state["proc"] = None
+        if state["event"].is_set() and rc and rc < 0:
+            rc = 128 + (-rc)  # 143 для SIGTERM — как в shell
+        return stdout, stderr, rc
+
+    def _update_watch_block(self, tick: int, stdout: str, stderr: str, rc: int) -> None:
+        """UI-поток: перерисовать блок :watch очередным тиком."""
+        state = self._watch_state
+        if state is None:
+            return
+        block: CommandBlock = state["block"]
+        try:
+            ts = datetime.datetime.now().strftime("%H:%M:%S")
+            interval = state["interval"]
+            parts = [
+                f"[bold]{ts} ({os.getcwd()}) $ {escape(state['command'])}[/bold]",
+                f"[dim]watch #{tick} · every {interval:g}s · F4/:kill stop[/dim]",
+            ]
+            if stdout:
+                parts.append(block._truncate_output(stdout))
+            if stderr and stderr.strip():
+                parts.append(f"[bold red]STDERR:[/bold red]\n{stderr}")
+            if rc:
+                parts.append(f"[bold yellow]Exit code: {rc}[/bold yellow]")
+            text = "\n".join(parts) + "\n\n"
+            block.text_content = text
+            block.raw_stdout = stdout
+            block.raw_stderr = stderr
+            block.return_code = rc
+            block.update(text)
+        except Exception:
+            # Блок удалён (:c) или приложение закрывается — гасим цикл.
+            state["event"].set()
+
+    def _stop_watch(self) -> None:
+        """Остановить :watch: событие + SIGTERM текущему тику; финал — в потоке."""
+        state = self._watch_state
+        if state is None:
+            return
+        state["event"].set()
+        with self._proc_lock:
+            proc = state.get("proc")
+        if proc is not None:
+            self._terminate_proc_group(proc)
+
+    def _finalize_watch(self) -> None:
+        """UI-поток: после остановки :watch подписать блок и снять pending."""
+        state = self._watch_state
+        if state is None:
+            return
+        self._watch_state = None
+        block: CommandBlock = state["block"]
+        ticks = state["ticks"]
+        try:
+            footer = (
+                f"[dim]— watch stopped after {ticks} tick(s) "
+                f"(every {state['interval']:g}s) —[/dim]\n"
+            )
+            text = (block.text_content or "").rstrip() + "\n" + footer
+            block.pending = False
+            block.text_content = text
+            block.update(text)
+        except Exception:
+            pass
 
     def run_command(self, command: str, stdin_data: str | None = None, *, no_timeout: bool = False) -> None:
         """

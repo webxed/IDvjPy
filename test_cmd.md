@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.36
+# План тестирования IDvjPy_term v1.37
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -721,6 +721,18 @@ x
 
 Автотест: `tests/test_search_content.py`.
 
+### Периодический перезапуск (`:watch <sec> <command>`)
+
+1. `:watch 1 echo tick` — блок `watch: echo tick · every 1s`.
+2. Через ~3 сек в блоке `watch #3` (номер тика растёт, текст заменяется, не копится).
+3. `:watch stop` — подпись `— watch stopped after N tick(s) —`, блок не `[Executing...]`.
+4. `:watch 1 echo x` и сразу `:watch 1 echo y` — **Ожидание:** `A watch is already running…`.
+5. `:c` во время watch — останавливает цикл; повторный `:watch` снова работает.
+6. `:watch 3 sleep 60`, затем `F4` (или `:kill`) — тик останавливается, блок получает подпись.
+7. `:watch` (без аргументов), `:watch abc echo x`, `:watch 0 echo x` — явные Usage.
+
+Автотест: `tests/test_watch.py`.
+
 ---
 
 ## Критерии успеха
@@ -753,6 +765,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.36  
+**Версия приложения**: v1.37  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-26
