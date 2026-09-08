@@ -106,6 +106,7 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   Shift+Insert / Ctrl+V - Paste into input (does not replace existing text)
                In line-cursor mode Ctrl+V appends the current line instead
   Ctrl+D     - Clear the entire input line
+  (k8s) kubectl get <res> <Tab> - live cluster resource names (k8s_completion: true)
   (JSON) Enter - Insert `jq 'path'` into input; also sets $JSON
 
 [bold]Line-cursor mode[/bold]

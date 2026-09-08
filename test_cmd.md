@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.42
+# План тестирования IDvjPy_term v1.43
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -784,6 +784,16 @@ x
 
 Автотест: `tests/test_output_history.py`.
 
+### Автодополнение ресурсов k8s (`k8s_completion`)
+
+1. В `settings.yml` поставить `k8s_completion: true`, кластер доступен (`kubectl`).
+2. Набрать `kubectl get pod <Tab>` — **Ожидание:** список имён подов из кластера.
+3. `kubectl get svc -n prod web<Tab>` — имена сервисов в namespace `prod` с префиксом `web`.
+4. Выключить kubectl/кластер — `kubectl get pod <Tab>` не падает (пустой список, обычное дополнение не смешивается с файлами).
+5. Без флага (`k8s_completion: false`) — `kubectl get pod` не дёргает kubectl вовсе.
+
+Автотест: `tests/test_k8s_completion.py` (kubectl замокан).
+
 ---
 
 ## Критерии успеха
@@ -816,6 +826,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.42  
+**Версия приложения**: v1.43  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-26

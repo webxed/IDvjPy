@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.42) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.43) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.42` → `v1.43`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.43` → `v1.44`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -66,6 +66,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/json_viewer.py`**: JSON tree modal
 - **`src/md_viewer.py`**: handbook Markdown modal (`:md`, welcome `.md` clicks)
 - **`src/update_check.py`**: GitHub `VERSION` check (`:update`)
+- **`src/k8s_complete.py`**: live-cluster name completion for `kubectl get …` (gated by `k8s_completion: true`)
 - **`src/gui_open.py`**: `:fm` / `:term` — detach a file manager or system terminal (Linux / macOS / Windows; `$FILEMAN` / `$TERMINAL` override)
 - **`src/screensaver.py`**: idle starfield (`:screensaver`); flying live clock/date; full-width green library ticker; bottom-left command-help typewriter and bottom-right load/RAM (1s `/proc`; may overlap when the window is narrow); `screensaver_idle` seconds, `0` = off; `screensaver_stars: false` hides flying dust/tokens
 - **`src/seed_catalog.py`**: empty-DB welcome catalog (click `--seed` → input)
@@ -145,5 +146,6 @@ Edit `settings.yml`:
 - `terminal_mouse`: `true` — click focuses a block, wheel scrolls the journal; `false` — OS text selection (clicks do not focus)
 - `theme`: Textual theme name (`textual-dark` default). `d` toggles dark/light and writes this key; `:theme nord` picks a named theme
 - `check_updates`: `true` (default) — on start, compare `VERSION` with GitHub main. `:update` always checks. Tests set this to `false`. Proxy 407: `$PROXY_USER` / `$PROXY_PASS` in `.bashrc_term` (and `HTTPS_PROXY`).
+- `k8s_completion`: `false` (default) — for `kubectl get <res> <Tab>` pull live resource names from the cluster (short `kubectl get <resource> -o name` timeout; soft fallback when kubectl/cluster is unavailable)
 - `screensaver_idle`: seconds of no keys/clicks before the DevOps starfield (default 120). `0` disables. Tests set this to `0`. `:screensaver` starts it now; `:screensaver 0` / `:screensaver 120` change idle for this session.
 - `screensaver_stars`: `true` (default) — flying dust/tokens. `false` — black canvas; clock/date, library ticker, and load/mem stay.

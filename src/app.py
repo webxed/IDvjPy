@@ -101,6 +101,7 @@ try:
     )
     from ingress_analyzer import IngressAnalyzer
     from json_viewer import JSONViewer
+    from k8s_complete import kubectl_resource_candidates
     from md_viewer import HandbookMarkdownScreen, handbook_md_path
     from screensaver import DevopsScreensaver
     from seed_catalog import (
@@ -1228,7 +1229,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.42"
+    VERSION = "v1.43"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1330,6 +1331,7 @@ class CommandRunner(App):
     KEY_THEME = "theme"
     KEY_SCREENSAVER_IDLE = "screensaver_idle"
     KEY_SCREENSAVER_STARS = "screensaver_stars"
+    KEY_K8S_COMPLETION = "k8s_completion"
     DEFAULT_THEME = "textual-dark"
     THEME_ALIASES = {
         "dark": "textual-dark",
@@ -1390,6 +1392,7 @@ class CommandRunner(App):
         self._fresh_command_db: bool = False
         self.screensaver_idle: float = 0
         self.screensaver_stars: bool = True
+        self.k8s_completion: bool = False
         self._ss_timer = None
         # Запущенные фоновые процессы (shell-команды): CommandBlock -> Popen.
         # Нужны для F4 / :kill — остановить долгую команду, не дожидаясь timeout.
@@ -1701,6 +1704,13 @@ class CommandRunner(App):
         prefix = prefix.strip()
         if not raw_prefix:
             return []
+        # k8s: имена ресурсов из живого кластера (флаг k8s_completion).
+        # Перехватываем до path-дополнения, чтобы `kubectl get pod te`
+        # не превратилось в список файлов. None = контекст не kubectl get.
+        if self.k8s_completion:
+            k8s_cands = kubectl_resource_candidates(raw_prefix)
+            if k8s_cands is not None:
+                return k8s_cands[:20]
         file_cands = self._get_file_completion_candidates(raw_prefix)
         if file_cands:
             # Не смешивать полные команды из БД/истории с путями:
@@ -1864,6 +1874,9 @@ class CommandRunner(App):
                         self.screensaver_idle = DEFAULT_SCREENSAVER_IDLE
                     self.screensaver_stars = bool(
                         settings.get(self.KEY_SCREENSAVER_STARS, True)
+                    )
+                    self.k8s_completion = bool(
+                        settings.get(self.KEY_K8S_COMPLETION, False)
                     )
         except (FileNotFoundError, KeyError, yaml.YAMLError):
             pass
