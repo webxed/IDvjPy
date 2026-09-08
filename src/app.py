@@ -98,6 +98,7 @@ try:
         history_file_stat_key,
         read_history_file_lines,
         release_file_lock,
+        remove_history_file_line,
     )
     from ingress_analyzer import IngressAnalyzer
     from json_viewer import JSONViewer
@@ -1252,7 +1253,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.49"
+    VERSION = "v1.50"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -5087,12 +5088,26 @@ class CommandRunner(App):
                 if raw_stderr:
                     raw_stderr += "\n"
                 raw_stderr += self.MSG_STOPPED
+        forget = self._is_command_not_found(raw_stderr, return_code)
         self.call_from_thread(
-            self._on_command_finished, block, raw_stdout, raw_stderr, return_code
+            self._on_command_finished, block, raw_stdout, raw_stderr, return_code, forget
+        )
+
+    @staticmethod
+    def _is_command_not_found(stderr: str, return_code: int) -> bool:
+        """Опечатка команды: bash не нашёл бинарь (Жр → command not found)."""
+        if return_code != 127:
+            return False
+        low = (stderr or "").lower()
+        return (
+            "command not found" in low
+            or "не найдена команда" in low
+            or "команда не найдена" in low
         )
 
     def _on_command_finished(
-        self, block: CommandBlock, raw_stdout: str, raw_stderr: str, return_code: int
+        self, block: CommandBlock, raw_stdout: str, raw_stderr: str, return_code: int,
+        forget_history: bool = False,
     ) -> None:
         """UI-поток: запомнить завершённый вывод в сессионную историю, обновить блок."""
         now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
@@ -5108,6 +5123,36 @@ class CommandRunner(App):
         if len(self._output_history) > self._OUTPUT_HISTORY_CAP:
             del self._output_history[: len(self._output_history) - self._OUTPUT_HISTORY_CAP]
         block.update_content(raw_stdout, raw_stderr, return_code)
+        # Опечатка (command not found): убрать строку из истории, чтобы ↑/`:h`
+        # не подсовывали заведомо битую команду. Вывод в журнале остаётся.
+        if forget_history:
+            self._forget_history_line(block.source_command or "")
+
+    def _forget_history_line(self, executed: str) -> None:
+        """Убирает строку из session_history и history-файла (по всем формам)."""
+        text = (executed or "").strip()
+        if not text:
+            return
+        forms: list[str] = []
+        for candidate in (text, f"@ {text}"):
+            if candidate not in forms:
+                forms.append(candidate)
+        for candidate in forms:
+            kept = [
+                line for line in self.session_history
+                if line != candidate and line.strip() != candidate
+            ]
+            if len(kept) != len(self.session_history):
+                self.session_history[:] = kept
+                self.session_history_pos = min(self.session_history_pos, len(self.session_history))
+            if remove_history_file_line(
+                self.FILE_HISTORY,
+                candidate,
+                encoding=self.ENCODING,
+                lock_timeout=self.FILE_LOCK_TIMEOUT,
+            ):
+                break
+        self._history_file_stat = None
 
     # --- Остановка запущенной команды (F4 / :kill) ---
 

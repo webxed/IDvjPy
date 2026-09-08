@@ -159,6 +159,53 @@ def append_history_file_line(
         return False
 
 
+def remove_history_file_line(
+    path: str,
+    command: str,
+    encoding: str = "utf-8",
+    lock_timeout: int = 5,
+) -> bool:
+    """
+    Удаляет последнее вхождение строки из history-файла (откат опечаток).
+
+    Используется, когда команда упала с `command not found` — такая строка
+    не должна оставаться в истории для повтора по ↑. Перезапись под
+    exclusive flock, как append/compact.
+    """
+    target = (command or "").strip()
+    if not target:
+        return False
+    try:
+        with open(path, "r+", encoding=encoding) as f:
+            locked = False
+            try:
+                acquire_file_lock(f, lock_timeout)
+                locked = True
+            except FileLockTimeoutError:
+                locked = False
+            try:
+                lines = [line.rstrip("\n") for line in f]
+                index = -1
+                for i in range(len(lines) - 1, -1, -1):
+                    if lines[i].strip() == target:
+                        index = i
+                        break
+                if index < 0:
+                    return False
+                del lines[index]
+                f.seek(0)
+                f.truncate()
+                if lines:
+                    f.write("\n".join(lines) + "\n")
+                f.flush()
+                return True
+            finally:
+                if locked:
+                    release_file_lock(f)
+    except OSError:
+        return False
+
+
 DEFAULT_HISTORY_KEEP = 500
 HISTORY_COMPACT_HYSTERESIS = 2
 

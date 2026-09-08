@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.49
+# План тестирования IDvjPy_term v1.50
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -820,6 +820,15 @@ x
 
 Автотест: `tests/test_llm.py` (urllib замокан, сеть не дёргается).
 
+### Опечатки не пишутся в историю
+
+1. Ввести `Жр` (Enter) — блок с `command not found`, `Exit code: 127`.
+2. `:h` / открыть `history_default.txt` — строки `Жр` нет; в ↑ её тоже нет.
+3. `bash -c 'exit 127'` (127 без not-found) — **Ожидание:** строка в истории остаётся.
+4. Обычные команды (`echo ok`) пишутся как раньше.
+
+Автотест: `tests/test_history_typo.py`.
+
 ---
 
 ## Критерии успеха
@@ -852,6 +861,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.49  
+**Версия приложения**: v1.50  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-26
