@@ -1229,7 +1229,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.43"
+    VERSION = "v1.44"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1311,6 +1311,7 @@ class CommandRunner(App):
     CMD_STATS = "stats"
     CMD_DIFF = "diff"
     CMD_OUT = "o"
+    CMD_ALIAS = "alias"
     CMD_GREP = "g"
     CMD_SEARCH_NEXT = "n"
     CMD_SEARCH_PREV = "N"
@@ -3043,7 +3044,9 @@ class CommandRunner(App):
             else:
                 self._change_cwd(" ".join(parts[1:]))
         elif command == self.CMD_REPLAY:
-            self._replay_focused_command()
+            self._handle_replay_command(parts[1:])
+        elif command == self.CMD_ALIAS:
+            self._handle_alias_command(parts[1:])
         elif command == self.CMD_GREP:
             self._journal_search(" ".join(parts[1:]))
         elif command == self.CMD_SEARCH_NEXT:
@@ -3265,17 +3268,30 @@ class CommandRunner(App):
             return header.split(" $ ", 1)[1].strip()
         return ""
 
-    def _replay_focused_command(self) -> None:
-        """Подставить команду сфокусированного (или последнего) блока во ввод."""
-        block = self.focused if isinstance(self.focused, CommandBlock) else None
-        if block is None:
-            blocks = list(self.query(CommandBlock))
-            block = blocks[-1] if blocks else None
-        cmd = self._command_from_block(block)
+    def _handle_replay_command(self, args: list[str]) -> None:
+        """`:r [N]` — команда последнего блока (N — сколько блоков назад, 0 = последний)."""
+        blocks = list(self.query(CommandBlock))
+        if not blocks:
+            self.add_block(InfoBlock("No command block to replay."))
+            return
+        back = 0
+        if args and args[0].isdigit():
+            back = int(args[0])
+        idx = len(blocks) - 1 - back
+        if idx < 0:
+            self.add_block(
+                InfoBlock(f"Error: only {len(blocks)} command block(s); :r {back} is too far back.")
+            )
+            return
+        cmd = self._command_from_block(blocks[idx])
         if not cmd:
             self.add_block(InfoBlock("No command block to replay."))
             return
         self.set_input_draft(cmd)
+
+    def _replay_focused_command(self) -> None:
+        """Обратная совместимость: :r без аргумента (последний блок)."""
+        self._handle_replay_command([])
 
     def _collect_line_hits(self, lowered: str) -> list[tuple[Static, int]]:
         """Совпадения (блок, индекс строки) по видимым строкам журнала."""
@@ -4955,6 +4971,7 @@ class CommandRunner(App):
                 )
                 with self._proc_lock:
                     self._proc_registry[block] = proc
+                self.call_from_thread(self._refresh_running_title)
                 try:
                     stdout, stderr = proc.communicate(input=stdin_data, timeout=timeout)
                     raw_stdout = stdout.strip()
@@ -4972,6 +4989,7 @@ class CommandRunner(App):
                 if proc is not None:
                     with self._proc_lock:
                         self._proc_registry.pop(block, None)
+                    self.call_from_thread(self._refresh_running_title)
             # Пользователь остановил процесс (F4 / :kill): подписать блок.
             if getattr(block, "_stop_requested", False):
                 rc = proc.returncode if proc is not None else return_code
@@ -5150,6 +5168,57 @@ class CommandRunner(App):
             self.add_block(InfoBlock(f"Error: {e}"))
         except Exception as e:
             self.add_block(InfoBlock(f"Database error: {e}"))
+
+    @staticmethod
+    def _shell_fn_name(tag: str, tid: int) -> str:
+        """Валидное имя bash-функции из тега и tid (`deploy_1`, `k8s-х` → `k8s_x`)."""
+        raw = f"{tag}_{tid}"
+        cleaned = re.sub(r"[^A-Za-z0-9_]", "_", raw)
+        if not cleaned or cleaned[0].isdigit():
+            cleaned = "f" + cleaned
+        return cleaned
+
+    def _handle_alias_command(self, args: list[str]) -> None:
+        """
+        `:alias <tag> [file.sh]` / `:alias * [library.sh]` — экспорт команд
+        тега(ов) как bash-функции `tag_tid() { command; }`.
+        """
+        if not args:
+            self.add_block(InfoBlock("Usage: :alias <tag> [file.sh]  |  :alias * [library.sh]"))
+            return
+        target = args[0]
+        path = args[1] if len(args) > 1 else ("library.sh" if target == "*" else f"{target}.sh")
+        try:
+            if target == "*":
+                rows = [dict(r) for r in database.get_all_commands_with_ids(self.db_file)]
+                tag_name = "library"
+            else:
+                rows = [dict(r) for r in database.get_commands_by_tag(self.db_file, target)]
+                tag_name = target
+                for r in rows:
+                    r["tag"] = target
+            if not rows:
+                self.add_block(InfoBlock(f"Error: no live commands for '{target}'."))
+                return
+            lines = [f"# Generated by IDvjPy_term {self.VERSION}: {len(rows)} command(s) of '{tag_name}'\n"]
+            for r in rows:
+                fname = self._shell_fn_name(r["tag"], r["tid"])
+                comment = (r.get("comment") or "").strip()
+                if comment:
+                    lines.append(f"# {comment}")
+                lines.append(f"{fname}() {{")
+                lines.append(f"  {r['command']}")
+                lines.append("}\n")
+            with open(path, "w", encoding=self.ENCODING) as f:
+                f.write("\n".join(lines) + "\n")
+            self.add_block(InfoBlock(f"Exported {len(rows)} shell function(s) to {path}"))
+        except Exception as e:
+            self.add_block(InfoBlock(f"Alias export error: {e}"))
+
+    def _refresh_running_title(self) -> None:
+        """Показать в заголовке число активных фоновых команд (:kill / :watch)."""
+        n = len(self._proc_registry) + (1 if self._watch_state is not None else 0)
+        self.title = f"{self.TITLE} — {n} running" if n else self.TITLE
 
     def _handle_diff_command(self) -> None:
         """`:diff` — сравнить stdout сфокусированного блока с предыдущим CommandBlock.
@@ -5365,6 +5434,7 @@ class CommandRunner(App):
             "proc": None,
             "ticks": 0,
         }
+        self._refresh_running_title()
         text = (
             f"[dim]watch: {escape(final_command)} · every {interval:g}s · "
             "F4 / :kill / :watch stop — остановить[/dim]\n"
@@ -5482,6 +5552,7 @@ class CommandRunner(App):
             block.update(text)
         except Exception:
             pass
+        self._refresh_running_title()
 
     def run_command(self, command: str, stdin_data: str | None = None, *, no_timeout: bool = False) -> None:
         """

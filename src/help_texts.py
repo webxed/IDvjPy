@@ -29,6 +29,7 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
   :screensaver  - Starfield; full-width ticker; bottom-left help; bottom-right load/mem (idle: screensaver_idle; 0 = off; screensaver_stars: false hides flying dust)
   :r          - Put the focused (or last) block command into the input
+  :r N        - Put the command N blocks back into the input (0 = last)
   :kill [all] - Stop the running background command (focused block or the last one;
                 `:kill all` stops every running command). SIGTERM, then SIGKILL.
   :watch <sec> <command> - Rerun <command> every <sec> seconds in one block
@@ -44,6 +45,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 (grouped by tag; tag and command comments included)
   :diff         - Unified diff of the focused block stdout vs the previous
                 CommandBlock (no focus: the last two blocks)
+  :alias <tag> [file.sh] / :alias * [library.sh] - export commands as
+                bash functions tag_tid() { ...; }
   :o [N]        - Last N finished command outputs of this session (default 5)
   :o /text      - grep the stored outputs (stdout/stderr); survives :c
   :o clear      - Forget the stored outputs (memory only, not the DB)

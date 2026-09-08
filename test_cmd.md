@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.43
+# План тестирования IDvjPy_term v1.44
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -794,6 +794,15 @@ x
 
 Автотест: `tests/test_k8s_completion.py` (kubectl замокан).
 
+### UX-мелочи (`:r N`, running, `:alias`)
+
+1. `echo a`, `echo b`, `echo c`; `:r 1` — во вводе `echo b`; `:r 0` — `echo c`; `:r 5` — `too far back`.
+2. `@ sleep 30` — заголовок `IDvjPy_term — 1 running`; `:kill` — счётчик исчезает.
+3. `#mine echo hello`, `:alias mine out.sh` — файл содержит `mine_1() {` и `echo hello`; `:alias * lib.sh` — все теги.
+4. `:alias` — Usage; `:alias ghost` — `no live commands for 'ghost'`.
+
+Автотест: `tests/test_ux_extras.py`.
+
 ---
 
 ## Критерии успеха
@@ -826,6 +835,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.43  
+**Версия приложения**: v1.44  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-26
