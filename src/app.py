@@ -1228,7 +1228,7 @@ class CommandRunner(App):
         Binding("right", "expand_block", "→ Expand", show=False),
     ]
 
-    TITLE = "IDvjPy_term"
+    TITLE: str = "IDvjPy_term"
     VERSION = "v1.44"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
@@ -4436,6 +4436,14 @@ class CommandRunner(App):
                     self.add_block(InfoBlock(content))
                     return
 
+                # Тег существует, но все строки soft-deleted (скрыт) — как раньше,
+                # а не «поиск по содержимому» (иначе `?cleanup` смущает).
+                if tag_part in database.get_hidden_tags(self.db_file):
+                    content = f"Commands for tag '{tag_part}':\n  (None found)"
+                    content += f"\n[dim]Tag is hidden (soft-deleted). Restore with #{tag_part}![/dim]"
+                    self.add_block(InfoBlock(content))
+                    return
+
                 # Поиск по содержимому команд (2+ символа) — `?kubectl wide`.
                 if len(tag_part) < 2:
                     content = f"Tag '{escape(tag_part)}' not found."
@@ -5218,7 +5226,10 @@ class CommandRunner(App):
     def _refresh_running_title(self) -> None:
         """Показать в заголовке число активных фоновых команд (:kill / :watch)."""
         n = len(self._proc_registry) + (1 if self._watch_state is not None else 0)
-        self.title = f"{self.TITLE} — {n} running" if n else self.TITLE
+        label: str = self.TITLE
+        if n:
+            label = f"{self.TITLE} — {n} running"
+        self.title = label
 
     def _handle_diff_command(self) -> None:
         """`:diff` — сравнить stdout сфокусированного блока с предыдущим CommandBlock.

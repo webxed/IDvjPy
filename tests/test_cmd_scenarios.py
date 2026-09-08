@@ -5,11 +5,11 @@ pytestmark = pytest.mark.slow
 
 from pathlib import Path
 
-import database_v2 as database
 import pyperclip
 from rich.text import Text
-from app import CommandBlock, CommandRunner, InfoBlock
 
+import database_v2 as database
+from app import CommandBlock, CommandRunner, InfoBlock
 from tests.conftest import (
     confirm_input,
     input_widget,
@@ -146,7 +146,7 @@ async def test_s06_query(isolated_home):
         assert "deploy[1]" in last_info(app).text_content
 
         await submit(pilot, "?missing")
-        assert "None found" in last_info(app).text_content
+        assert "Search 'missing': no matches" in last_info(app).text_content
 
 
 async def test_s07_bang_insert(isolated_home):
