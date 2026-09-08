@@ -1224,7 +1224,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.35"
+    VERSION = "v1.36"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -4333,31 +4333,60 @@ class CommandRunner(App):
                 content += self._hidden_tags_section()
                 self.add_block(InfoBlock(content))
             else:
-                # Поиск по тегу
-                commands = database.get_commands_by_tag(self.db_file, tag_part)
-                comment = database.get_tag_comment(self.db_file, tag_part)
-                content = f"Commands for tag '{tag_part}'"
-                if comment:
-                    content += f" ({comment})"
-                content += ":\n"
-                if not commands:
-                    content += "  (None found)"
-                else:
-                    for row in commands:
-                        self.last_query_results[row['id']] = row['command']
-                    lines = []
-                    for row in commands:
-                        cmd_comment = ""
-                        if "comment" in row.keys() and row["comment"]:
-                            cmd_comment = row["comment"]
-                        lines.append(
-                            self._format_tagged_command_line(
-                                row["id"], tag_part, row["tid"], row["command"], cmd_comment
+                # Точный тег — список команд как раньше.
+                # Если тега нет — это подстрочный поиск по содержимому команд.
+                known_tags = database.get_all_tags(self.db_file)
+                if tag_part in known_tags:
+                    commands = database.get_commands_by_tag(self.db_file, tag_part)
+                    comment = database.get_tag_comment(self.db_file, tag_part)
+                    content = f"Commands for tag '{tag_part}'"
+                    if comment:
+                        content += f" ({comment})"
+                    content += ":\n"
+                    if not commands:
+                        content += "  (None found)"
+                    else:
+                        for row in commands:
+                            self.last_query_results[row['id']] = row['command']
+                        lines = []
+                        for row in commands:
+                            cmd_comment = ""
+                            if "comment" in row.keys() and row["comment"]:
+                                cmd_comment = row["comment"]
+                            lines.append(
+                                self._format_tagged_command_line(
+                                    row["id"], tag_part, row["tid"], row["command"], cmd_comment
+                                )
                             )
-                        )
-                    content += "\n".join(lines)
-                    content += f"\n\nUse `!{tag_part}[<tid>]` or `!ID` to execute."
-                    content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
+                        content += "\n".join(lines)
+                        content += f"\n\nUse `!{tag_part}[<tid>]` or `!ID` to execute."
+                        content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
+                    self.add_block(InfoBlock(content))
+                    return
+
+                # Поиск по содержимому команд (2+ символа) — `?kubectl wide`.
+                if len(tag_part) < 2:
+                    content = f"Tag '{escape(tag_part)}' not found."
+                    content += "\nUse `? <tag>` for a tag, or type 2+ characters to search\ncommand text and comments across all tags."
+                    self.add_block(InfoBlock(content))
+                    return
+                rows, total = database.search_commands_by_content(self.db_file, tag_part)
+                needle = escape(tag_part)
+                if not rows:
+                    self.add_block(
+                        InfoBlock(f"Search '{needle}': no matches in commands.")
+                    )
+                    return
+                content = f"[bold]Search '{needle}' in commands ({total}):[/bold]\n"
+                for row in rows:
+                    self.last_query_results[row["id"]] = row["command"]
+                    cmd_comment = row["comment"] or ""
+                    content += self._format_tagged_command_line(
+                        row["id"], row["tag"], row["tid"], row["command"], cmd_comment
+                    ) + "\n"
+                if total > len(rows):
+                    content += f"\n[dim]… and {total - len(rows)} more. Refine the search.[/dim]\n"
+                content += "\nUse `!tag[tid]` or `!ID` to run."
                 self.add_block(InfoBlock(content))
         except Exception as e:
             self.add_block(InfoBlock(f"Database error: {e}"))

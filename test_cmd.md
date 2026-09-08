@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.35
+# План тестирования IDvjPy_term v1.36
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -709,6 +709,18 @@ x
 
 Автотест: `tests/test_stop_command.py`.
 
+### Поиск по содержимому команд (`?text`)
+
+**Предусловия:** в БД есть команды с общим фрагментом, напр. `kubectl get pods -o wide` (тег kube).
+
+1. `#kube kubectl get pods -o wide`, `#kube kubectl get svc -o wide`.
+2. `?wide` — **Ожидание:** заголовок `Search 'wide' in commands (2)`, обе строки `<id> kube[tid]  …`.
+3. `?pods` — одна строка. `?zzz` — `no matches` (не ошибка). `?z` — `Tag 'z' not found`.
+4. `!<id>` после поиска — команда вставляется во ввод, Enter выполняет.
+5. `?kube` — по-прежнему список тега (не поиск).
+
+Автотест: `tests/test_search_content.py`.
+
 ---
 
 ## Критерии успеха
@@ -741,6 +753,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.35  
+**Версия приложения**: v1.36  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-26

@@ -57,6 +57,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   #tag! / #tag!tid - Restore soft-deleted tag / command
   #name-- / #name!! - Hide / restore a handbook's tags (ansible, linux, k8s, …)
   ?          - Query database (? tags, ?<tag>, ?? grouped; ?? lists hidden tags)
+               ?text (2+ chars, no such tag) = search commands/comments across all tags;
+               rows: <id> tag[tid]; Esc → input, then Enter runs via !ID
                In ?? click a tag → insert `!tag ` / `!tag[tid] ` at the cursor
                (does not replace the line; terminal_mouse). Esc → input, then Enter.
   !tag / !tag[tid] - Type ! to list tags [file, kube, log]; Tab picks a tag

@@ -246,6 +246,43 @@ def get_commands_by_prefix(db_file: str, prefix: str):
     conn.close()
     return result
 
+
+def _escape_like(text: str) -> str:
+    """Экранирует LIKE-метасимволы (% _ \\) для подстановки в pattern с ESCAPE '\\'."""
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def search_commands_by_content(db_file: str, needle: str, limit: int = 200):
+    """
+    Подстрочный поиск по тексту команд и комментариям (live-строки).
+
+    Case-insensitive как LIKE (ASCII). Символы % и _ ищутся буквально.
+
+    Returns:
+        (rows, total): rows — до limit записей (id, tag, tid, command, comment)
+        в порядке tag/tid; total — полное число совпадений.
+    """
+    needle = (needle or "").strip()
+    if not needle:
+        return [], 0
+    pattern = "%" + _escape_like(needle) + "%"
+    where = "(command LIKE ? ESCAPE '\\' OR comment LIKE ? ESCAPE '\\') AND deleted = 0"
+    conn = get_db_connection(db_file)
+    try:
+        total = conn.execute(
+            "SELECT COUNT(*) FROM commands WHERE " + where,
+            (pattern, pattern),
+        ).fetchone()[0]
+        rows = conn.execute(
+            "SELECT id, tag, tid, command, comment FROM commands WHERE "
+            + where
+            + " ORDER BY tag ASC, tid ASC LIMIT ?",
+            (pattern, pattern, limit),
+        ).fetchall()
+    finally:
+        conn.close()
+    return rows, total
+
 def set_tag_comment(db_file: str, tag: str, comment: str):
     """
     Sets or updates the comment for a tag.
