@@ -65,6 +65,7 @@ python3 app.py
 python3 app.py --instance-name=user1   # отдельный .bashrc_term_user1 и history_user1.txt
 python3 app.py --demo                  # автотур: печатает команды сам (Esc — стоп)
 python3 app.py --demo ip               # myip → jq .cc → Wiki URL → hello pipe → echo Hello, $OUT
+python3 app.py --demo features         # новые команды v1.44 (см. DEMO.md)
 python3 app.py --demo full --demo-quit
 ```
 

@@ -17,6 +17,7 @@ python3 app.py
 python3 app.py --instance-name=user1   # .bashrc_term_user1 и history_user1.txt
 python3 app.py --demo                  # короткий тур (Esc — стоп)
 python3 app.py --demo ip               # myip → jq .cc → F2 copy → Wiki URL → hello pipe → echo Hello, $OUT
+python3 app.py --demo features         # v1.44: ?text, :mv, :stats, F4-stop, :watch, :diff, :o, :export *, :alias
 python3 app.py --demo full --demo-quit # длинный тур и выход (удобно для asciinema)
 ```
 

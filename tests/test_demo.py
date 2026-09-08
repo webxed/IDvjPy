@@ -6,9 +6,9 @@ import pytest
 pytestmark = pytest.mark.slow
 
 from app import CommandBlock, CommandRunner, InfoBlock
-
 from demo import (
     KIND_LOOP,
+    _type_gap,
     bundled_demo_names,
     collect_reset_tags,
     dump_playbook_yaml,
@@ -18,9 +18,7 @@ from demo import (
     resolve_demo_path,
     session_line_needs_wait,
     session_to_playbook,
-    _type_gap,
 )
-
 from tests.conftest import input_widget, last_info, submit, wait_command_done
 
 
@@ -52,6 +50,35 @@ def test_bundled_short_and_full_resolve():
     assert "tour" in short_tags
     assert "tourlog" in short_tags
     assert "tourpipe" in short_tags
+
+
+def test_bundled_features_tour_guards():
+    """Тур features (новые команды v1.44): пригоден для записи asciinema."""
+    names = bundled_demo_names()
+    assert "features" in names
+    path = resolve_demo_path("features")
+    assert path is not None and path.is_file()
+    scenario = load_scenario(path)
+    assert scenario["steps"]
+    assert scenario["title"]
+    assert "deploy" in collect_reset_tags(scenario)
+    assert "kube" in collect_reset_tags(scenario)
+    steps = [normalize_step(s) for s in scenario["steps"]]
+    # Демонстрирует новые команды…
+    types = [st["type"] for st in steps]
+    for needle in (
+        "?wide", ":mv deploy[1] kube", ":stats", ":watch 1 date",
+        ":watch stop", ":diff", ":r 1", ":o /needle-42",
+        ":export * library.md", ":alias mine run.sh",
+    ):
+        assert any(needle in t for t in types), needle
+    assert any(st["keys"] == ["f4"] for st in steps)
+    # …и безопасен для автотура: никаких :q, TTY, wait на colon-шагах,
+    # никаких бесконечных циклов.
+    assert not any(t.startswith(":q") for t in types)
+    assert not any(t.startswith(">") for t in types)
+    assert not any(t.startswith(":") and st["wait_command"] for t, st in zip(types, steps, strict=True))
+    assert not any(st.get("kind") == KIND_LOOP for st in steps)
 
 
 def test_session_to_playbook_heuristics():
@@ -210,6 +237,34 @@ def test_type_gap_long_lines_are_faster():
     fast = _type_gap(0.12, "https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#")
     assert fast < slow
     assert _type_gap(0, "anything") == 0.005
+
+
+async def test_bundled_features_plays(isolated_home):
+    """Прогон features-тура: колон-команды и F4 выполняются без поломок."""
+    path = resolve_demo_path("features")
+    assert path is not None
+    scenario = load_scenario(path)
+    scenario["start_pause"] = 0
+    scenario["type_delay"] = 0
+    scenario["pause"] = 0
+    app = CommandRunner(demo=scenario, demo_speed=25)
+    async with app.run_test(size=(120, 40)) as pilot:
+        deadline = time.monotonic() + 60
+        while app._demo_active and time.monotonic() < deadline:
+            await pilot.pause()
+        assert app._demo_active is False
+        assert "Demo error" not in (app.sub_title or "")
+        infos = " ".join(block.text_content for block in app.query(InfoBlock))
+        # :c в туре очищает журнал, поэтому проверяем сессионную память выводов.
+        assert "Output search 'needle-42'" in infos
+        assert "Exported 3 command(s) to library.md" in infos
+        assert "Exported 1 shell function(s) to run.sh" in infos
+        run_me = [r for r in app._output_history if r["command"] == "echo run-me"]
+        assert len(run_me) == 2
+        assert all(r["stdout"] == "run-me" for r in run_me)
+        assert any("needle-42" in r["command"] for r in app._output_history)
+        assert (isolated_home / "library.md").is_file()
+        assert (isolated_home / "run.sh").is_file()
 
 
 async def test_bundled_short_plays(isolated_home):

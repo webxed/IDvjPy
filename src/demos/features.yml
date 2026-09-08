@@ -1,0 +1,119 @@
+# Tour v1.44: новые команды — поиск, гигиена библиотеки, мониторинг, вывод.
+# `python3 app.py --demo features`
+# Без TTY (> cmd), без кластера (k8s_completion off), без :q в середине.
+# Создаёт теги deploy / kube / mine (сбрасываются перед повтором) и в текущем
+# каталоге файлы library.md и run.sh (экспорт). Запускайте из пустого каталога:
+#   mkdir -p /tmp/idvj-demo && cd /tmp/idvj-demo
+#   python3 /path/to/Idivjopy/app.py --demo features --demo-quit
+
+title: IDvjPy — новые команды v1.44
+start_pause: 1.8
+type_delay: 0.12
+pause: 1.0
+command_timeout: 12
+
+reset_tags:
+  - deploy
+  - kube
+  - mine
+
+steps:
+  - caption: Что нового — сохраним пару команд для примера
+    type: "#deploy kubectl get pods -o wide"
+    pause: 1.2
+
+  - type: "#deploy kubectl get svc -o wide"
+
+  - type: "#mine echo run-me"
+    pause: 1.2
+
+  - caption: "Поиск по содержимому: ?text — тега wide нет, ищем по тексту команд"
+    type: "?wide"
+    pause: 3.0
+
+  - caption: "Точный тег работает как раньше: ?deploy"
+    type: "?deploy"
+    pause: 2.6
+
+  - caption: "Перенос команды между тегами: :mv deploy[1] kube"
+    type: ":mv deploy[1] kube"
+    pause: 2.2
+
+  - caption: "Теперь kubectl get pods живёт в теге kube"
+    type: "?kube"
+    pause: 2.4
+
+  - caption: "Статистика библиотеки: :stats — пока всё не запускалось"
+    type: ":stats"
+    pause: 2.8
+
+  - caption: "Запустим сохранённую команду дважды (счётчик использования)"
+    type: "echo run-me"
+    wait_command: true
+    pause: 1.4
+
+  - type: "echo run-me"
+    wait_command: true
+    pause: 1.4
+
+  - caption: ":stats — echo run-me в топе с 2×, тег mine обновился"
+    type: ":stats"
+    pause: 3.0
+
+  - caption: "Остановка долгой команды: @ sleep 60 (без timeout), затем F4"
+    type: "@ sleep 60"
+    pause: 1.0
+
+  - caption: "F4 шлёт SIGTERM группе процесса"
+    keys: f4
+    pause: 2.6
+
+  - caption: "Блок подписан: Process stopped by user. (exit 143)"
+    type: "# блок завершён без ожидания таймаута"
+    pause: 2.0
+
+  - caption: "Мониторинг: :watch 1 date +%s — тики в одном блоке"
+    type: ":watch 1 date +%s"
+    pause: 3.6
+
+  - caption: "Остановка watch: :watch stop (или F4 / :c)"
+    type: ":watch stop"
+    pause: 2.4
+
+  - caption: "Сравнение выводов: :diff — первая версия вывода"
+    type: "printf 'a\\nb\\nc\\n'"
+    wait_command: true
+    pause: 1.2
+
+  - type: "printf 'a\\nB\\nc\\n'"
+    wait_command: true
+    pause: 1.2
+
+  - caption: ":diff — unified diff двух блоков (-b / +B)"
+    type: ":diff"
+    pause: 3.2
+
+  - caption: "Команда блока N назад: :r 1 кладёт printf 'a\\nb\\nc\\n' во ввод"
+    type: ":r 1"
+    pause: 2.0
+
+  - caption: "История вывода сессии: выполним команду…"
+    type: "echo needle-42"
+    wait_command: true
+    pause: 1.4
+
+  - caption: ":c очищает журнал… но не память выводов"
+    type: ":c"
+    pause: 2.0
+
+  - caption: ":o /needle-42 находит старый вывод даже после :c"
+    type: ":o /needle-42"
+    pause: 3.0
+
+  - caption: "Весь каталог — в Markdown: :export * library.md"
+    type: ":export * library.md"
+    pause: 2.4
+
+  - caption: "Теги как bash-функции: :alias mine run.sh"
+    type: ":alias mine run.sh"
+    pause: 2.4

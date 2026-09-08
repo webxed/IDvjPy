@@ -1,6 +1,6 @@
 # Сценарий демонстрации IDvjPy_term
 
-Версия приложения: **v1.28**. Длительность живого рассказа: **12–15 минут**.
+Версия приложения: **v1.44**. Длительность живого рассказа: **12–15 минут**.
 
 Тезис для зрителя: теги — переменные с шаблонами команд; приложение собирает их в строку. `!` / `!!` только подставляют текст во ввод, запуск — отдельным Enter.
 
@@ -16,6 +16,7 @@ TUI сам печатает команды из YAML. Рядом можно по
 python3 app.py --demo                     # bundled short, ~2–3 мин
 python3 app.py --demo full                # bundled full, без htop / kubectl / :q
 python3 app.py --demo ip                  # myip → jq .cc → Wiki URL → hello pipe → echo Hello, $OUT
+python3 app.py --demo features            # новые команды v1.44: ?text, :mv, :stats, F4, :watch, :diff, :o, :export *, :alias
 python3 app.py --demo --demo-speed 1.5    # быстрее (2 = вдвое)
 python3 app.py --demo full --demo-quit    # выйти, когда сценарий закончится
 python3 app.py --demo path/to/tour.yml    # свой файл
@@ -23,12 +24,12 @@ python3 app.py --demo path/to/tour.yml    # свой файл
 
 | Флаг | Что делает |
 |---|---|
-| `--demo` | Имя bundled-тура (`short` по умолчанию, ещё `full`, `ip`) или путь к `.yml` |
+| `--demo` | Имя bundled-тура (`short` по умолчанию, ещё `full`, `ip`, `features`) или путь к `.yml` |
 | `--demo-speed N` | Множитель скорости: паузы и набор делятся на N (`1` = как в YAML) |
 | `--demo-quit` | После последнего шага приложение закрывается (удобно для asciinema) |
 | `--instance-name=…` | Как обычно: отдельные `.bashrc_term_*` и `history_*.txt` (БД тегов общая) |
 
-Bundled-сценарии: `src/demos/short.yml`, `src/demos/full.yml`, `src/demos/ip.yml`.
+Bundled-сценарии: `src/demos/short.yml`, `src/demos/full.yml`, `src/demos/ip.yml`, `src/demos/features.yml`.
 
 Во время тура в subtitle: `DEMO · … · Esc stops`. **Esc** останавливает проигрывание, сессия остаётся — можно продолжить руками. `:q` выходит из приложения.
 
@@ -46,7 +47,21 @@ cd /tmp/idvj-demo   # или рабочая копия проекта
 asciinema rec idvj-demo.cast -c 'python3 /path/to/Idivjopy/app.py --demo --demo-quit'
 ```
 
-### Свой YAML
+## Тур features (новое в v1.44)
+
+```bash
+python3 app.py --demo features --demo-quit
+```
+
+Короткий автотур по командам v1.35–v1.44 (без сети и кластера):
+
+`?text` — поиск по содержимому команд; `:mv tag[1] tag2` и переименование тега; `:stats` (счётчики запусков растут после повторов); `F4` останавливает `@ sleep 60` (SIGTERM группе); `:watch 1 …` тикает в одном блоке и останавливается `:watch stop`; `:diff` сравнивает два вывода; `:r 1` возвращает команду блока назад; `:o /text` находит вывод даже после `:c`; `:export * library.md` и `:alias mine run.sh` пишут файлы в текущий каталог.
+
+Сбрасываемые перед повтором теги: `deploy` / `kube` / `mine` (и все, что `#`-сохранены в YAML). Файлы `library.md` / `run.sh` создаются в каталоге запуска — для чистой записи используйте пустой каталог, как выше.
+
+Автотест-гвард: `tests/test_demo.py::test_bundled_features_tour_guards`.
+
+## Свой YAML
 
 ```yaml
 title: my tour

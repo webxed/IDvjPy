@@ -279,6 +279,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 - **`$OUT`**: last non-empty line of the focused (or last) command block, computed only when the command contains `$OUT` / `${OUT}`. Not stored in `.bashrc_term` or `local_env`. `$OUT=` is rejected; `$OUT` alone peeks.
 - **`--demo ip`**: myip → jq `.cc` → Wiki URL → tag `hello` pipe (`!! hello[1]|hello[2]`) → `echo "Hello, $OUT"`; `# comment` lines before commands. Demo tags from `#tag cmd` are wiped before playback so a second run does not duplicate tids.
+- **`--demo features`** (v1.44): автотур новых команд — `?text`, `:mv`, `:stats`, `F4`/стоп, `:watch`, `:diff`, `:r N`, `:o`, `:export *`, `:alias`; см. `DEMO.md`.
 - **Ansible seed:** `python3 src/seed_ansible.py --seed` — tags `ansible` `aplay` `avault` `agalaxy`, inspect playbooks `achk` / `aping`. Included in `seed_ops.py`.
 - **Systemd seed:** `python3 src/seed_systemd.py --seed` — `sctl` (systemctl), `jctl` (journalctl), `dmesg`; inspect playbooks `sfail` / `sstat` / `kmsg`.
 - **Sysinfo seed:** `python3 src/seed_sysinfo.py --seed` — `hinfo`, `lsof`, `strace`; playbooks `hstat` / `lport` / `pdbg`. Attach `strace -p` is time-bounded or `> cmd`.
