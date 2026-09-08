@@ -40,6 +40,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 never-run count. `!tag` completion sorts by usage.
   :/text  :g  - Search journal lines; :n / n next, :N / N prev. / on a block starts :/
   :export tag [file] - Write one tag to JSON
+  :export * [file.md] - Write the whole library as a Markdown catalog
+                (grouped by tag; tag and command comments included)
   :import file       - Insert commands from that JSON (new tids)
   :theme [name] - Show or set TUI theme (saved in settings.yml)
   :playbook [file] - Write this session's commands as a --demo YAML (default playbook.yml)

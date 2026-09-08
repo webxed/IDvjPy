@@ -1224,7 +1224,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.39"
+    VERSION = "v1.40"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -3534,8 +3534,19 @@ class CommandRunner(App):
         self.add_block(InfoBlock(text))
 
     def _export_tag(self, args: list[str]) -> None:
+        """`:export <tag> [file.json]`; `:export * [file.md]` — весь каталог в Markdown."""
         if not args:
-            self.add_block(InfoBlock("Usage: :export <tag> [file.json]"))
+            self.add_block(InfoBlock("Usage: :export <tag> [file.json]  |  :export * [library.md]"))
+            return
+        if args[0] == "*":
+            path = args[1] if len(args) > 1 else "library.md"
+            try:
+                n = database.export_all_to_markdown(self.db_file, path)
+                self.add_block(
+                    InfoBlock(f"Exported {n} command(s) to {path} (Markdown catalog)")
+                )
+            except Exception as e:
+                self.add_block(InfoBlock(f"Export error: {e}"))
             return
         tag = args[0]
         path = args[1] if len(args) > 1 else f"{tag}.json"

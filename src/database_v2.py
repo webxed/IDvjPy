@@ -618,6 +618,49 @@ def export_tag_to_file(db_file: str, tag: str, path: str) -> int:
     return len(commands)
 
 
+def _md_inline(text: str) -> str:
+    """Код-инлайн с защитой от внутренних бэктиков."""
+    return text.replace("`", "\\`")
+
+
+def export_all_to_markdown(db_file: str, path: str, title: str = "Command library") -> int:
+    """
+    Пишет весь каталог live-команд как Markdown (группировка по тегам).
+
+    Каждая команда — строка списка `cmd` (с комментарием строки, если есть),
+    у тега — заголовок уровня 2 и комментарий тега. Returns число команд.
+    """
+    conn = get_db_connection(db_file)
+    try:
+        rows = conn.execute(
+            "SELECT tag, tid, command, comment FROM commands WHERE deleted = 0 "
+            "ORDER BY tag ASC, tid ASC"
+        ).fetchall()
+        tag_comments = dict(conn.execute(
+            "SELECT tag, comment FROM tags ORDER BY tag ASC"
+        ).fetchall())
+    finally:
+        conn.close()
+    lines = [f"# {title}", ""]
+    current = None
+    for row in rows:
+        tag = row["tag"]
+        if tag != current:
+            current = tag
+            comment = (tag_comments.get(tag) or "").strip()
+            lines.append(f"## {tag}" + (f" — {comment}" if comment else "") + "")
+        item = f"- `{_md_inline(row['command'])}`"
+        cmd_comment = (row["comment"] or "").strip()
+        if cmd_comment:
+            item += f"  — {cmd_comment}"
+        lines.append(item)
+    if not rows:
+        lines.append("_Empty library — run a seed or save a command._")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    return len(rows)
+
+
 def import_tag_from_file(db_file: str, path: str) -> tuple[str, int]:
     """Inserts commands from an export JSON (new tids). Returns (tag, count)."""
     with open(path, encoding="utf-8") as f:

@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.39
+# План тестирования IDvjPy_term v1.40
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -755,6 +755,15 @@ x
 
 Автотест: `tests/test_usage_stats.py`.
 
+### Экспорт библиотеки в Markdown (`:export *`)
+
+1. `#kube kubectl get pods`, `#mine echo done`, комментарий тега/команды.
+2. `:export * out.md` — **Ожидание:** `Exported 2 command(s) to out.md (Markdown catalog)`.
+3. Файл: `# Command library`, `## kube — …`, строки `` `kubectl get pods` ``, комментарии строк `— …`.
+4. `:export` без аргументов — Usage. Старый `:export mine out.json` — как раньше (JSON).
+
+Автотест: `tests/test_md_export.py`.
+
 ---
 
 ## Критерии успеха
@@ -787,6 +796,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.39  
+**Версия приложения**: v1.40  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-26
