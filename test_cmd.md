@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.45
+# План тестирования IDvjPy_term v1.46
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -812,6 +812,7 @@ x
 5. Без ключа: `:llm ds hi` — `Missing env variable(s): DEEPSEEK_API_KEY`.
 6. Ошибки: `:llm ds` (Usage), `:llm nope hi` (`unknown provider`), удалённый конфиг — `Config not found` + подсказка про example.
 7. Провайдер с ручным `body` (например, `ollama` без ключа) — шаблон с `%MSG%` / `%MODEL%`.
+8. `:llm d` → Tab — **Ожидание:** список из конфига, подстановка только имени (`:llm ds `); начатое сообщение список гасит.
 
 Автотест: `tests/test_llm.py` (urllib замокан, сеть не дёргается).
 
@@ -847,6 +848,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.45  
+**Версия приложения**: v1.46  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-26

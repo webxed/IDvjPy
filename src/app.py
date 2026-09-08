@@ -104,6 +104,7 @@ try:
     from k8s_complete import kubectl_resource_candidates
     from llm_client import (
         LlmError,
+        default_provider,
         describe,
         example_config_path,
         load_providers,
@@ -1106,6 +1107,11 @@ class CommandInput(Input):
         if bang_items or preview:
             self._completion_list.update_candidates(bang_items, preview=preview)
             return
+        if hasattr(app, "get_llm_completions"):
+            llm_items, llm_preview = app.get_llm_completions(raw_value, self.cursor_position)
+            if llm_items or llm_preview:
+                self._completion_list.update_candidates(llm_items, preview=llm_preview)
+                return
         if self._typed_command_is_complete():
             # `ls   ` — выполнить ls, не держать список `ls -la`.
             self._completion_list.hide()
@@ -1237,7 +1243,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.45"
+    VERSION = "v1.46"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1590,6 +1596,55 @@ class CommandRunner(App):
         if expanded == source:
             return ""
         return expanded
+
+    def get_llm_completions(self, text: str, pos: int) -> tuple[list[CompletionItem], str]:
+        """
+        Подсказки провайдеров для `:llm <имя>`: вставляется только токен имени.
+
+        Показываются, пока второй аргумент ещё не начат (после ':llm ' и после
+        пробела за выбранным именем список гаснет — дальше сообщение).
+        """
+        raw = (text or "")[:pos]
+        stripped_end = raw.rstrip()
+        if not stripped_end.startswith(":llm"):
+            return [], ""
+        words = stripped_end.split()
+        if words[0] != ":llm":
+            return [], ""
+        if len(words) == 1:
+            # Список показываем после ':llm ' (пробел набран), не в процессе ':llm'.
+            if not raw.endswith(" "):
+                return [], ""
+            needle = ""
+        elif len(words) == 2:
+            # Пробел за выбранным именем — начинается сообщение, список гасим.
+            if raw.endswith(" "):
+                return [], ""
+            needle = words[1]
+        else:
+            return [], ""
+        try:
+            cfg = load_providers(self.FILE_LLM_PROVIDERS)
+            names = provider_names(cfg)
+        except LlmError:
+            return [], ""
+        default = default_provider(cfg)
+        items: list[CompletionItem] = []
+        for name in names:
+            if needle and not name.startswith(needle):
+                continue
+            prov = cfg["providers"][name]
+            model = prov.get("model") or ""
+            mark = " (default)" if name == default else ""
+            items.append(
+                CompletionItem(
+                    insert=name,
+                    display=f"{name}{mark}  {model}",
+                    replace_token=True,
+                    add_space=True,
+                )
+            )
+        return items, ""
 
     def _tag_completion_items(self, tags: list[str]) -> list[CompletionItem]:
         """Пункты выбора тега: показ `file`, вставка `!file`."""

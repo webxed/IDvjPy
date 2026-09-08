@@ -97,6 +97,59 @@ def test_perform_request_http_error(monkeypatch):
         perform_request(DS_CFG, "hi", {"DEEPSEEK_API_KEY": "x"}, timeout=2)
 
 
+def test_llm_completion_items(isolated_home):
+    from app import CommandRunner
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "default: ds\nproviders:\n  ds:\n    url: http://x\n    model: deepseek-chat\n"
+        "  openai:\n    url: http://x\n    model: gpt-4o-mini\n",
+        encoding="utf-8",
+    )
+    app = CommandRunner()
+    items, preview = app.get_llm_completions(":llm ", len(":llm "))
+    assert preview == ""
+    inserts = [i.insert for i in items]
+    assert "ds" in inserts and "openai" in inserts
+    ds_item = next(i for i in items if i.insert == "ds")
+    assert ds_item.replace_token is True
+    assert ds_item.add_space is True
+    assert "(default)" in ds_item.display
+    # По префиксу; после начала сообщения/пробела список не показываем.
+    items, _ = app.get_llm_completions(":llm o", len(":llm o"))
+    assert [i.insert for i in items] == ["openai"]
+    assert app.get_llm_completions(":llm ds hi", 10) == ([], "")
+    assert app.get_llm_completions(":llm ds ", len(":llm ds ")) == ([], "")
+
+
+def test_llm_completion_without_config_empty(isolated_home):
+    from app import CommandRunner
+
+    app = CommandRunner()
+    assert app.get_llm_completions(":llm ", len(":llm ")) == ([], "")
+
+
+async def test_llm_tab_applies_provider_name(isolated_home):
+    from app import CommandRunner
+    from tests.conftest import input_widget
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "providers:\n  ds:\n    url: http://x\n    model: m\n", encoding="utf-8"
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await pilot.pause()
+        inp = input_widget(app)
+        inp.value = ":llm d"
+        inp.cursor_position = len(":llm d")
+        await pilot.pause()
+        assert app._completion_list is not None and app._completion_list.is_visible()
+        assert app._completion_list.total_candidates == 1
+        await pilot.press("tab")
+        await pilot.pause()
+        # Подстановка заменила только токен имени, префикс :llm сохранён.
+        assert inp.value == ":llm ds "
+
+
 async def test_colon_llm_shows_answer(isolated_home, monkeypatch):
     import app as app_module
 
