@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.41 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.42 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -37,6 +37,7 @@ IDvjPy — терминальное приложение (TUI) на Python (Text
 - Метрики: счётчики запусков (use_count/last_used) и `:stats` — топ по запускам, теги, «never run»
 - Каталог в Markdown: `:export * [file.md]` — вся библиотека по тегам с комментариями
 - Сравнение выводов: `:diff` — unified diff сфокусированного блока с предыдущим
+- История вывода сессии: `:o [N]`, `:o /текст`, `:o clear` — grep по прошлым выводам после `:c`
 - Алиасы из `~/.bashrc` (в том числе `$1` / `$2` / `$@`), фоновое выполнение команд
 - `> cmd` — настоящий TTY (htop, vim, ssh); клик и PgUp/PgDn активируют видимый блок журнала
 

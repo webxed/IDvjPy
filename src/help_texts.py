@@ -44,6 +44,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 (grouped by tag; tag and command comments included)
   :diff         - Unified diff of the focused block stdout vs the previous
                 CommandBlock (no focus: the last two blocks)
+  :o [N]        - Last N finished command outputs of this session (default 5)
+  :o /text      - grep the stored outputs (stdout/stderr); survives :c
+  :o clear      - Forget the stored outputs (memory only, not the DB)
   :import file       - Insert commands from that JSON (new tids)
   :theme [name] - Show or set TUI theme (saved in settings.yml)
   :playbook [file] - Write this session's commands as a --demo YAML (default playbook.yml)

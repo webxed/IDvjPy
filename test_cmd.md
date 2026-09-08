@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.41
+# План тестирования IDvjPy_term v1.42
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -774,6 +774,16 @@ x
 
 Автотест: `tests/test_diff.py`.
 
+### Сессионная история вывода (`:o`)
+
+1. `echo alpha`, `echo beta`, `echo gamma`.
+2. `:o` — последние выводы (заголовки `$ echo …` и строки). `:o 1` — только gamma.
+3. `echo secret-token-42`, затем `:c`, затем `:o /secret-token` — **Ожидание:** совпадение найдено даже после очистки журнала.
+4. `:o /zzz` — `no matches in output history`. `:o clear` → `Cleared…`, затем `:o` → `No command output stored`.
+5. `echo err >&2; exit 3`, `:o 1` — `exit 3` и строка stderr.
+
+Автотест: `tests/test_output_history.py`.
+
 ---
 
 ## Критерии успеха
@@ -806,6 +816,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.41  
+**Версия приложения**: v1.42  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-26

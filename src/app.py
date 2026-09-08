@@ -1224,7 +1224,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.41"
+    VERSION = "v1.42"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1305,6 +1305,7 @@ class CommandRunner(App):
     CMD_MOVE = "mv"
     CMD_STATS = "stats"
     CMD_DIFF = "diff"
+    CMD_OUT = "o"
     CMD_GREP = "g"
     CMD_SEARCH_NEXT = "n"
     CMD_SEARCH_PREV = "N"
@@ -1392,6 +1393,10 @@ class CommandRunner(App):
         self._proc_lock = threading.Lock()
         # Активный :watch (один на сессию): блок + Event остановки + текущий Popen.
         self._watch_state: dict[str, Any] | None = None
+        # Сессионная история завершённых команд (кольцевой список): вывод ищется
+        # через :o /needle даже после :c; только память, не пишется в БД/историю.
+        self._output_history: list[dict[str, Any]] = []
+        self._OUTPUT_HISTORY_CAP = 300
 
     def _extract_path_token(self, text: str) -> str:
         """Возвращает последний токен для path completion."""
@@ -2999,6 +3004,8 @@ class CommandRunner(App):
             self._handle_stats_command()
         elif command == self.CMD_DIFF:
             self._handle_diff_command()
+        elif command == self.CMD_OUT:
+            self._handle_out_command(parts[1:])
         elif command == self.CMD_JSON:
             # Открываем JSON viewer
             if len(parts) > 1:
@@ -4956,7 +4963,27 @@ class CommandRunner(App):
                 if raw_stderr:
                     raw_stderr += "\n"
                 raw_stderr += self.MSG_STOPPED
-        self.call_from_thread(block.update_content, raw_stdout, raw_stderr, return_code)
+        self.call_from_thread(
+            self._on_command_finished, block, raw_stdout, raw_stderr, return_code
+        )
+
+    def _on_command_finished(
+        self, block: CommandBlock, raw_stdout: str, raw_stderr: str, return_code: int
+    ) -> None:
+        """UI-поток: запомнить завершённый вывод в сессионную историю, обновить блок."""
+        now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        self._output_history.append(
+            {
+                "time": now,
+                "command": block.source_command or "",
+                "stdout": raw_stdout or "",
+                "stderr": raw_stderr or "",
+                "code": return_code,
+            }
+        )
+        if len(self._output_history) > self._OUTPUT_HISTORY_CAP:
+            del self._output_history[: len(self._output_history) - self._OUTPUT_HISTORY_CAP]
+        block.update_content(raw_stdout, raw_stderr, return_code)
 
     # --- Остановка запущенной команды (F4 / :kill) ---
 
@@ -5163,6 +5190,70 @@ class CommandRunner(App):
             else:
                 rendered.append(f"[dim] {escape(ln)}[/dim]" if ln.strip() else "")
         self.add_block(InfoBlock("\n".join(rendered) + "\n"))
+
+    def _handle_out_command(self, args: list[str]) -> None:
+        """
+        `:o` — сессионная история вывода (не БД):
+          :o [N]      — последние N завершённых выводов (по умолчанию 5, до 100)
+          :o /text    — grep по stdout/stderr запомненных команд
+          :o clear    — очистить память выводов
+        """
+        if args and args[0] == "clear":
+            self._output_history.clear()
+            self.add_block(InfoBlock("Cleared session output history."))
+            return
+        if not self._output_history:
+            self.add_block(
+                InfoBlock("No command output stored this session (:o /text searches past runs).")
+            )
+            return
+        history = list(reversed(self._output_history))
+        if args and args[0].startswith("/"):
+            needle = args[0][1:].lower()
+            if not needle:
+                self.add_block(InfoBlock("Usage: :o /text"))
+                return
+            hits: list[str] = []
+            total = 0
+            for rec in history:
+                lines = (rec["stdout"] + "\n" + rec["stderr"]).splitlines()
+                matched = [ln for ln in lines if needle in ln.lower()]
+                if not matched:
+                    continue
+                total += 1
+                if len(hits) < 25:
+                    head = self._strip_formatting_tags(rec["command"])[:80]
+                    hits.append(f"[dim]{rec['time']} $ {head} (exit {rec['code']})[/dim]")
+                    for ln in matched[:5]:
+                        hits.append(f"    {escape(ln[:200])}")
+                    if len(matched) > 5:
+                        hits.append(f"    [dim]… {len(matched) - 5} more line(s)[/dim]")
+            if not hits:
+                self.add_block(InfoBlock(f"Search '{args[0][1:]}': no matches in output history."))
+                return
+            title = f"[bold]Output search '{args[0][1:]}' ({total} command(s)):[/bold]"
+            if total > 25:
+                title = title[:-1] + f", {total - 25} more hidden)"
+            self.add_block(InfoBlock(title + "\n" + "\n".join(hits) + "\n"))
+            return
+        try:
+            n = int(args[0]) if args and args[0].isdigit() else 5
+        except ValueError:
+            self.add_block(InfoBlock("Usage: :o [N]  |  :o /text  |  :o clear"))
+            return
+        n = max(1, min(n, 100))
+        lines: list[str] = [f"[bold]Last {min(n, len(history))} command output(s):[/bold]"]
+        for rec in history[:n]:
+            head = self._strip_formatting_tags(rec["command"])[:80]
+            lines.append(f"[dim]{rec['time']} $ {head} (exit {rec['code']})[/dim]")
+            out = (rec["stdout"] or "").splitlines()
+            for ln in out[:20]:
+                lines.append(f"    {escape(ln[:240])}")
+            if len(out) > 20:
+                lines.append(f"    [dim]… {len(out) - 20} more line(s)[/dim]")
+            if rec["stderr"]:
+                lines.append(f"    [red]stderr: {escape(rec['stderr'][:200])}[/red]")
+        self.add_block(InfoBlock("\n".join(lines) + "\n"))
 
     def _handle_stats_command(self) -> None:
         """`:stats` — сводка по библиотеке: запуски, теги, «мёртвые» команды."""
