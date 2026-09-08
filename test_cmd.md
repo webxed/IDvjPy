@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.47
+# План тестирования IDvjPy_term v1.48
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -815,6 +815,7 @@ x
 8. Провайдер с ручным `body` (например, `ollama` без ключа) — шаблон с `%MSG%` / `%MODEL%`.
 9. `:llm d` → Tab — **Ожидание:** список из конфига, подстановка только имени (`:llm ds `); начатое сообщение список гасит.
 10. Прокси 407 (`Tunnel connection failed: 407`): задать `$PROXY_USER=…` / `$PROXY_PASS=…` — `:llm` подхватит их, как `:update`; без них — явная подсказка в сообщении об ошибке.
+11. Вывод блока: выполнить `printf 'l1\nl2\n'`, затем `:llm ds $OUT` — уйдёт строка `l2`; `:llm ds $BLOCK` — весь вывод `l1`…`l2`. Без завершённого блока — явная ошибка.
 
 Автотест: `tests/test_llm.py` (urllib замокан, сеть не дёргается).
 
@@ -850,6 +851,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.47  
+**Версия приложения**: v1.48  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-26

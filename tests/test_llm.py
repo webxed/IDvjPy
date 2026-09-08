@@ -236,6 +236,54 @@ async def test_colon_llm_default_provider_without_name(isolated_home, monkeypatc
     assert calls == [("deepseek-chat", "Привет как дела?")]
 
 
+async def test_colon_llm_sends_block_output_tokens(isolated_home, monkeypatch):
+    """:llm раскрывает $OUT (последняя строка) и $BLOCK (весь stdout)."""
+    import app as app_module
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "default: ds\nproviders:\n  ds:\n    url: http://x\n    model: m\n",
+        encoding="utf-8",
+    )
+    calls: list[str] = []
+
+    def fake(provider, message, env, timeout=60):
+        calls.append(message)
+        return "ok"
+
+    monkeypatch.setattr(app_module, "perform_request", fake)
+
+    from app import CommandRunner
+    from tests.conftest import submit, wait_command_done
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        # $BLOCK: весь stdout сфокусированного/последнего CommandBlock.
+        await submit(pilot, "printf 'l1\\nl2\\n'")
+        await wait_command_done(app, timeout=8.0)
+        await submit(pilot, ":llm $BLOCK привет")
+        await wait_command_done(app, timeout=8.0)
+        # $OUT: последняя непустая строка блока (свежий блок перед вызовом).
+        await submit(pilot, "printf 'x1\\nx2\\n'")
+        await wait_command_done(app, timeout=8.0)
+        await submit(pilot, ":llm ds $OUT")
+        await wait_command_done(app, timeout=8.0)
+    assert calls == ["l1\nl2 привет", "x2"]
+
+
+async def test_colon_llm_output_tokens_without_block(isolated_home):
+    from app import CommandRunner
+    from tests.conftest import last_info, submit
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "providers:\n  ds:\n    url: http://x\n    model: m\n", encoding="utf-8"
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await pilot.pause()
+        await submit(pilot, ":llm ds $OUT")
+        assert "$OUT / $BLOCK need a finished command block" in last_info(app).text_content
+
+
 async def test_colon_llm_shows_answer(isolated_home, monkeypatch):
     import app as app_module
 

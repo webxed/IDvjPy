@@ -1252,7 +1252,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.47"
+    VERSION = "v1.48"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -5349,6 +5349,15 @@ class CommandRunner(App):
             provider_name = default
             message = " ".join(args).strip()
         provider = providers[provider_name]
+        message = self._llm_expand_output_tokens(message)
+        if message is None:
+            self.add_block(
+                InfoBlock(
+                    "Error: $OUT / $BLOCK need a finished command block "
+                    "(focused or the last CommandBlock)."
+                )
+            )
+            return
         timeout = float(provider.get("timeout") or 60)
         now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         header = f"{now} ({os.getcwd()}) $ :llm {provider_name}"
@@ -5366,6 +5375,28 @@ class CommandRunner(App):
             args=(block, provider, message, timeout),
             daemon=True,
         ).start()
+
+    def _llm_expand_output_tokens(self, message: str) -> str | None:
+        """Заменяет в сообщении `:llm` токены вывода блока.
+
+        $OUT  — последняя непустая строка сфокусированного/последнего CommandBlock;
+        $BLOCK — весь stdout того же блока. Обе записи: $VAR и ${VAR}.
+        Блока нет или он ещё выполняется — возвращает None (явная ошибка).
+        """
+        if not re.search(r"\$\{?(OUT|BLOCK)\}?", message):
+            return message
+        block = self._output_block_for_placeholder()
+        if block is None or getattr(block, "pending", False):
+            return None
+        stdout = block.raw_stdout or ""
+        last_line = last_nonempty_line(stdout)
+        full = stdout.rstrip("\n")
+
+        def repl(match: re.Match) -> str:
+            return last_line if match.group(1) == "OUT" else full
+
+        expanded = re.sub(r"\$\{?(OUT|BLOCK)\}?", repl, message)
+        return expanded if expanded.strip() else None
 
     def _show_llm_providers(self) -> None:
         try:

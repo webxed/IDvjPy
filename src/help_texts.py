@@ -51,6 +51,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :llm <provider> <message> - Ask the given LLM via its API (headers/body from config;
                 secrets come from the environment, e.g. $DEEPSEEK_API_KEY)
   :llm <message> - Ask the default provider (`default:` in llm_providers.yml)
+                $OUT — last non-empty line of the focused/last CommandBlock
+                $BLOCK — full stdout of that block (also ${OUT} / ${BLOCK})
                 Placeholders: %MSG% (JSON-safe), %MSG_RAW%, %SYSTEM%, %MODEL%
                 Tab completes provider names after `:llm `
                 Proxy 407: set $PROXY_USER / $PROXY_PASS (as with :update)
