@@ -175,6 +175,37 @@ async def test_llm_enter_applies_provider_not_submits(isolated_home):
         assert not app._completion_list.is_visible()
 
 
+def test_perform_request_407_hint_when_no_proxy_creds(monkeypatch):
+    def tunnel_407(request, timeout):
+        raise urllib.error.URLError(
+            OSError("Tunnel connection failed: 407 Proxy Authentication Required")
+        )
+
+    monkeypatch.setattr(llm_client.urllib.request, "urlopen", tunnel_407)
+    with pytest.raises(LlmError) as exc:
+        perform_request(DS_CFG, "hi", {"DEEPSEEK_API_KEY": "x"}, timeout=2)
+    text = str(exc.value)
+    assert "407" in text
+    assert "Proxy requires login" in text
+    assert "PROXY_USER" in text
+
+
+def test_perform_request_uses_authenticated_proxy(monkeypatch):
+    def fake_open(request, timeout, env):
+        return io.BytesIO(
+            json.dumps({"choices": [{"message": {"content": "via-proxy"}}]}).encode()
+        )
+
+    monkeypatch.setattr(llm_client, "_open_request", fake_open)
+    env = {
+        "DEEPSEEK_API_KEY": "x",
+        "PROXY_USER": "u",
+        "PROXY_PASS": "p",
+        "HTTPS_PROXY": "http://proxy:8080",
+    }
+    assert perform_request(DS_CFG, "hi", env, timeout=2) == "via-proxy"
+
+
 async def test_colon_llm_shows_answer(isolated_home, monkeypatch):
     import app as app_module
 

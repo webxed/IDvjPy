@@ -23,7 +23,17 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from update_check import (
+    looks_like_proxy_auth_error,
+    proxy_handler_map,
+    redact_proxy_secrets,
+)
+
 DEFAULT_TIMEOUT = 60.0
+LLM_PROXY_HINT = (
+    "Proxy requires login: set $PROXY_USER and $PROXY_PASS "
+    "(in .bashrc_term or type $PROXY_USER=… here), then retry :llm."
+)
 MISSING_BODY_FALLBACKS = (
     "choices.0.message.content",
     "choices.0.text",
@@ -177,6 +187,30 @@ def build_headers(provider: dict[str, Any], env: dict[str, str]) -> dict[str, st
     return headers
 
 
+def _open_request(
+    request: urllib.request.Request, timeout: float, env: dict[str, str]
+):
+    """urlopen с учётом аутентифицирующего прокси (как в :update).
+
+    Если заданы $PROXY_USER/$PROXY_PASS и прокси в окружении — креды
+    вставляются в прокси-URL, иначе — стандартный opener (env-прокси как есть).
+    """
+    proxies = proxy_handler_map(env)
+    if proxies:
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxies))
+        return opener.open(request, timeout=timeout)
+    return urllib.request.urlopen(request, timeout=timeout)
+
+
+def _proxy_aware_error(prefix: str, text: str, env: dict[str, str]) -> str:
+    """Чистит секреты и добавляет подсказку про прокси при 407."""
+    clean = redact_proxy_secrets(text, env)
+    message = f"{prefix}{clean}"
+    if looks_like_proxy_auth_error(clean):
+        message += "\n" + LLM_PROXY_HINT
+    return message
+
+
 def perform_request(
     provider: dict[str, Any],
     message: str,
@@ -194,7 +228,7 @@ def perform_request(
     body = build_body(provider, message, env).encode("utf-8")
     request = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=max(timeout, 0.1)) as response:
+        with _open_request(request, timeout, env) as response:
             raw = response.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as e:
         detail = ""
@@ -202,9 +236,11 @@ def perform_request(
             detail = e.read().decode("utf-8", errors="replace")[:300]
         except Exception:
             pass
-        raise LlmError(f"HTTP {e.code} from {url}: {detail or e.reason}") from e
+        message = _proxy_aware_error(f"HTTP {e.code} from {url}: ", detail or str(e.reason), env)
+        raise LlmError(message) from e
     except urllib.error.URLError as e:
-        raise LlmError(f"Network error for {url}: {e.reason}") from e
+        message = _proxy_aware_error(f"Network error for {url}: ", str(e.reason), env)
+        raise LlmError(message) from e
     except TimeoutError as e:
         raise LlmError(f"Timeout after {timeout:g}s for {url}.") from e
     try:

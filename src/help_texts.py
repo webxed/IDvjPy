@@ -52,6 +52,7 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 secrets come from the environment, e.g. $DEEPSEEK_API_KEY)
                 Placeholders: %MSG% (JSON-safe), %MSG_RAW%, %SYSTEM%, %MODEL%
                 Tab completes provider names after `:llm `
+                Proxy 407: set $PROXY_USER / $PROXY_PASS (as with :update)
   :o [N]        - Last N finished command outputs of this session (default 5)
   :o /text      - grep the stored outputs (stdout/stderr); survives :c
   :o clear      - Forget the stored outputs (memory only, not the DB)
