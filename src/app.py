@@ -1252,7 +1252,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.48"
+    VERSION = "v1.49"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1802,8 +1802,10 @@ class CommandRunner(App):
             candidates.extend(from_db)
         except Exception:
             pass
+        # Записи `:llm …` лежат в history_*.txt для ↑/`:h`, но в подсказках
+        # не предлагаются (это вопросы, а не команды для повтора).
         for cmd in self.session_history:
-            if cmd.strip().startswith(prefix):
+            if cmd.strip().startswith(prefix) and not re.match(r"^:llm\s+\S", cmd.strip()):
                 candidates.append(cmd.strip())
         return sorted(set(candidates))[:20]
 
@@ -1826,7 +1828,7 @@ class CommandRunner(App):
             input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
             if not input_widget.has_focus:
                 input_widget.focus()
-                # Клавиша обработается input'ом автоматически
+        # Клавиша обработается input'ом автоматически
 
     def on_paste(self, event: events.Paste) -> None:
         """Ctrl+V в терминале часто приходит как Paste, не как клавиша ctrl+v."""
@@ -3010,7 +3012,10 @@ class CommandRunner(App):
         Проверка хвоста файла и append — одна блокировка (несколько экземпляров).
         """
         prefixes = (self.PREFIX_CMD, self.PREFIX_QUERY, self.PREFIX_BANG, self.PREFIX_DOUBLE_BANG, self.PREFIX_TAG, self.PREFIX_VAR)
-        if command.startswith(prefixes) and not self._is_history_comment(command):
+        # :llm <сообщение> — запрос к LLM: сохраняем в историю как «комментарий»
+        # (для ↑ и :h), но из подсказок он не появляется (см. get_completion_candidates).
+        is_llm_question = bool(re.match(r"^:llm\s+\S", command or ""))
+        if command.startswith(prefixes) and not self._is_history_comment(command) and not is_llm_question:
             return
         append_history_file_line(
             self.FILE_HISTORY,

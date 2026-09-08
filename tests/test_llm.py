@@ -284,6 +284,35 @@ async def test_colon_llm_output_tokens_without_block(isolated_home):
         assert "$OUT / $BLOCK need a finished command block" in last_info(app).text_content
 
 
+async def test_llm_recorded_in_history_but_not_in_hints(isolated_home, monkeypatch):
+    """:llm пишется в history_*.txt (для ↑/:h), но не предлагается в подсказках."""
+    import app as app_module
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "providers:\n  ds:\n    url: http://x\n    model: m\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(app_module, "perform_request", lambda *a, **k: "ok")
+
+    from app import CommandRunner
+    from tests.conftest import submit, wait_command_done
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, ":llm ds привет")
+        await wait_command_done(app, timeout=8.0)
+        hist_path = isolated_home / "history_default.txt"
+        lines = hist_path.read_text(encoding="utf-8").splitlines()
+        assert ":llm ds привет" in lines
+        # В подсказках (Tab) запрос-вопрос не предлагается.
+        assert app.get_completion_candidates(":llm d") == []
+        # Но доступен для поиска по истории.
+        assert any(":llm ds привет" in line for line in app._history_pool())
+        # Другие colon-команды по-прежнему в историю не пишутся.
+        await submit(pilot, ":stats")
+        lines = hist_path.read_text(encoding="utf-8").splitlines()
+        assert not any(line.strip() == ":stats" for line in lines)
+
+
 async def test_colon_llm_shows_answer(isolated_home, monkeypatch):
     import app as app_module
 
