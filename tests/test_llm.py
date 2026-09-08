@@ -75,6 +75,29 @@ def test_extract_text_heuristics_and_path():
         _extract_text({"a": 1}, "choices.0.nope")
 
 
+def test_answer_language_rule_appended_to_system():
+    base = {"model": "m", "system": "You are a helpful assistant."}
+    no_lang = json.loads(build_body(base, "hi", {}))
+    assert no_lang["messages"][0]["content"] == "You are a helpful assistant."
+
+    with_lang = dict(base, answer_language="Russian")
+    body = json.loads(build_body(with_lang, "hi", {}))
+    system = body["messages"][0]["content"]
+    assert "You are a helpful assistant." in system
+    assert "always answer in russian" in system.lower()
+    assert "Chinese" in system
+
+    # Пользовательский шаблон тоже получает правило через %SYSTEM%.
+    templated = dict(base, answer_language="Russian", body='{"s": %SYSTEM%}')
+    payload = json.loads(build_body(templated, "hi", {}))
+    assert "always answer in russian" in payload["s"].lower()
+
+    # Без system, но с языком — правило само по себе системный промпт.
+    only_lang = {"model": "m", "answer_language": "Russian"}
+    body = json.loads(build_body(only_lang, "hi", {}))
+    assert body["messages"][0]["content"] == llm_client._effective_system(only_lang)
+
+
 def test_perform_request_success(monkeypatch):
     body = {"choices": [{"message": {"content": "answer-42"}}]}
 

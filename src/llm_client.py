@@ -34,6 +34,12 @@ LLM_PROXY_HINT = (
     "Proxy requires login: set $PROXY_USER and $PROXY_PASS "
     "(in .bashrc_term or type $PROXY_USER=… here), then retry :llm."
 )
+
+_LANG_RULE = (
+    "Always answer in {lang}. Do not switch to another language "
+    "(in particular, do not reply in Chinese or English) unless the user "
+    "explicitly asks for that language."
+)
 MISSING_BODY_FALLBACKS = (
     "choices.0.message.content",
     "choices.0.text",
@@ -156,6 +162,21 @@ def _extract_text(payload: Any, response_path: str | None) -> str:
     )
 
 
+def _effective_system(provider: dict[str, Any]) -> str:
+    """Системный промпт + жёсткое правило языка (answer_language).
+
+    Без answer_language возвращает provider.system как есть. С языком —
+    к system дописывается инструкция (DeepSeek и другие билингвы иначе
+    периодически отвечают не на языке пользователя).
+    """
+    base = str(provider.get("system") or "").strip()
+    lang = str(provider.get("answer_language") or "").strip()
+    if not lang:
+        return base
+    rule = _LANG_RULE.format(lang=lang)
+    return f"{base}\n\n{rule}" if base else rule
+
+
 def _default_body(model: str, system: str | None, message: str) -> dict[str, Any]:
     messages = []
     if system:
@@ -168,7 +189,7 @@ def _default_body(model: str, system: str | None, message: str) -> dict[str, Any
 def build_body(provider: dict[str, Any], message: str, env: dict[str, str]) -> str:
     """Тело запроса: пользовательский шаблон с плейсхолдерами или OpenAI-форма."""
     model = str(provider.get("model") or "")
-    system = str(provider.get("system") or "")
+    system = _effective_system(provider)
     template = provider.get("body")
     if template is None:
         return json.dumps(_default_body(model, system, message), ensure_ascii=False)
