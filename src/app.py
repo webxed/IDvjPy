@@ -541,6 +541,10 @@ class CommandBlock(LineNavigable, Static):
         self.pending = True  # True пока не пришёл результат из потока (run_command)
         self.line_index: int | None = None
         self.line_nav_active: bool = False
+        # Управление процессом (F4 / :kill / :watch): запрос на остановку
+        # и признак «это блок :watch». Выставляются приложением.
+        self._stop_requested: bool = False
+        self._watch: bool = False
 
         # Формируем отображаемый контент
         self.text_content = self._format_output()
