@@ -36,6 +36,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 Stop: :watch stop, F4 / :kill, :c, or quit. One watch at a time.
   :mv <tag>[<tid>] <dst> - Move one command to another tag (new tid at the end)
   :mv <tag> <dst>   - Rename a whole tag (comment moves too)
+  :stats            - Library usage summary: runs per tag, top-10 commands,
+                never-run count. `!tag` completion sorts by usage.
   :/text  :g  - Search journal lines; :n / n next, :N / N prev. / on a block starts :/
   :export tag [file] - Write one tag to JSON
   :import file       - Insert commands from that JSON (new tids)

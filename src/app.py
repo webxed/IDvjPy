@@ -1224,7 +1224,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.38"
+    VERSION = "v1.39"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1303,6 +1303,7 @@ class CommandRunner(App):
     CMD_KILL = "kill"
     CMD_WATCH = "watch"
     CMD_MOVE = "mv"
+    CMD_STATS = "stats"
     CMD_GREP = "g"
     CMD_SEARCH_NEXT = "n"
     CMD_SEARCH_PREV = "N"
@@ -1628,6 +1629,8 @@ class CommandRunner(App):
         if command_tags:
             tag = command_tags[0]
             rows = [entry for entry in lib if entry["tag"] == tag]
+            # Часто используемые команды — выше (счётчики из :stats).
+            rows.sort(key=lambda r: (-(r.get("use_count") or 0), r["tid"]))
             for row in rows:
                 tid = row["tid"]
                 if tid_prefix and not str(tid).startswith(tid_prefix):
@@ -1904,7 +1907,7 @@ class CommandRunner(App):
         )
 
     def _read_library_rows(self) -> list[dict]:
-        """Все live-команды БД как dict-строки (id/tag/tid/command/comment)."""
+        """Все live-команды БД как dict-строки (id/tag/tid/command/comment/use)."""
         return [
             {
                 "id": row["id"],
@@ -1912,6 +1915,8 @@ class CommandRunner(App):
                 "tid": row["tid"],
                 "command": row["command"],
                 "comment": row["comment"] or "",
+                "use_count": row["use_count"] or 0,
+                "last_used": row["last_used"],
             }
             for row in database.get_all_commands_with_ids(self.db_file)
         ]
@@ -2989,6 +2994,8 @@ class CommandRunner(App):
             self._handle_watch_command(parts[1:])
         elif command == self.CMD_MOVE:
             self._handle_move_command(parts[1:])
+        elif command == self.CMD_STATS:
+            self._handle_stats_command()
         elif command == self.CMD_JSON:
             # Открываем JSON viewer
             if len(parts) > 1:
@@ -5086,6 +5093,47 @@ class CommandRunner(App):
         except Exception as e:
             self.add_block(InfoBlock(f"Database error: {e}"))
 
+    def _handle_stats_command(self) -> None:
+        """`:stats` — сводка по библиотеке: запуски, теги, «мёртвые» команды."""
+        try:
+            s = database.usage_stats(self.db_file)
+        except Exception as e:
+            self.add_block(InfoBlock(f"Database error: {e}"))
+            return
+        lines = ["[bold]Library stats:[/bold]"]
+        lines.append(
+            f"Tags: {s['tags']} · live commands: {s['live']} · "
+            f"soft-deleted: {s['deleted']} · never run: {s['never_run']}"
+        )
+        if s["per_tag"]:
+            lines.append("")
+            lines.append("[bold]Per tag (by runs):[/bold]")
+            for t in s["per_tag"][:12]:
+                last = ""
+                if t.get("last_used"):
+                    last = f" · last {str(t['last_used'])[:16]}"
+                lines.append(
+                    f"  {t['tag']:<16} {t['live']:>3} cmd · {t['runs']:>4} run(s){last}"
+                )
+            if len(s["per_tag"]) > 12:
+                lines.append(f"  [dim]… and {len(s['per_tag']) - 12} more tag(s)[/dim]")
+        if s["top"]:
+            lines.append("")
+            lines.append("[bold]Top commands by runs:[/bold]")
+            for r in s["top"]:
+                lines.append(
+                    f"  <{r['id']}> {r['tag']}[{r['tid']}]  {escape(r['command'])}  "
+                    f"([yellow]{r['use_count']}×[/yellow])"
+                )
+        if s["live"] == 0:
+            lines.append("  (empty database — run a seed or save a command)")
+        lines.append("")
+        lines.append(
+            f"[dim]DB: {self.db_file} · {os.path.getsize(self.db_file)} bytes · "
+            f"instance: {self.instance_name}[/dim]"
+        )
+        self.add_block(InfoBlock("\n".join(lines)))
+
     def _handle_watch_command(self, args: list[str]) -> None:
         """`:watch <sec> <command>` и `:watch stop` (см. :?)."""
         if not args:
@@ -5268,6 +5316,15 @@ class CommandRunner(App):
         final_command = self._substitute_variables(command)
         # Шаг 2: Раскрываем алиасы
         final_command = self._expand_aliases(final_command)
+
+        # Счётчик запусков: исполняемый текст совпал с live-командой из БД
+        # (в т.ч. при запуске через !tag[tid] / !ID / повтор из истории).
+        try:
+            if any(e["command"] == final_command for e in self._library()):
+                database.bump_command_usage(self.db_file, final_command)
+                self._invalidate_library()
+        except Exception:
+            pass  # Статистика не должна ломать запуск команды
         
         header = f"{timestamp} ({cwd}) $ {final_command}"
 

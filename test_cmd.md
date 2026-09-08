@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.38
+# План тестирования IDvjPy_term v1.39
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -744,6 +744,17 @@ x
 
 Автотест: `tests/test_tag_move.py`.
 
+### Статистика использования (`:stats`)
+
+1. `#kube echo hot`, `#kube echo cold`.
+2. `echo hot` (Enter) ×2.
+3. `:stats` — **Ожидание:** теги 1, live 2, never run 1; `Per tag`: `kube … 2 run(s)`; `Top commands`: `echo hot … (2×)`.
+4. `!kube` (completion) — первой строка `echo hot` (чаще использовалась), затем `echo cold`.
+5. `:stats` на пустой БД — `(empty database …)`.
+6. Старая БД: запуск приложения не падает (миграция `use_count`/`last_used` на лету).
+
+Автотест: `tests/test_usage_stats.py`.
+
 ---
 
 ## Критерии успеха
@@ -776,6 +787,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.38  
+**Версия приложения**: v1.39  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-26

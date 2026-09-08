@@ -63,6 +63,15 @@ def init_db(db_file: str):
     except Exception:
         pass  # Column already exists
 
+    # Use counters (v1.39): use_count / last_used добавляются на лету в live-БД.
+    _cols = [row[1] for row in conn.execute("PRAGMA table_info(commands)").fetchall()]
+    if "use_count" not in _cols:
+        conn.execute(
+            "ALTER TABLE commands ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0"
+        )
+    if "last_used" not in _cols:
+        conn.execute("ALTER TABLE commands ADD COLUMN last_used DATETIME")
+
     # Tags table for comments
     conn.execute("""
         CREATE TABLE IF NOT EXISTS tags (
@@ -226,11 +235,92 @@ def get_all_commands_with_ids(db_file: str):
     """
     conn = get_db_connection(db_file)
     cursor = conn.execute(
-        "SELECT id, tag, tid, command, comment FROM commands WHERE deleted = 0 ORDER BY tag ASC, tid ASC"
+        "SELECT id, tag, tid, command, comment, use_count, last_used FROM commands "
+        "WHERE deleted = 0 ORDER BY tag ASC, tid ASC"
     )
     commands = cursor.fetchall()
     conn.close()
     return commands
+
+
+def bump_command_usage(db_file: str, command: str) -> int:
+    """
+    Инкрементит счётчик запусков для live-команд с этим текстом.
+
+    Атрибуция: текст исполняемой строки совпал с сохранённой командой
+    (в т.ч. через !tag[tid] / !ID / повтор из истории).
+
+    Returns:
+        Число обновлённых строк (0 — совпадений не было).
+    """
+    conn = get_db_connection(db_file)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        cursor = conn.execute(
+            "UPDATE commands SET use_count = use_count + 1, last_used = ? "
+            "WHERE command = ? AND deleted = 0",
+            (datetime.datetime.now(), command),
+        )
+        conn.commit()
+        return cursor.rowcount
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def usage_stats(db_file: str) -> dict:
+    """
+    Сводка по библиотеке для `:stats`.
+
+    Returns:
+        dict: tags/live/deleted/never_run counts, top-10 по запускам,
+        per_tag — агрегаты по каждому тегу.
+    """
+    conn = get_db_connection(db_file)
+    try:
+        live = conn.execute(
+            "SELECT COUNT(*) FROM commands WHERE deleted = 0"
+        ).fetchone()[0]
+        deleted = conn.execute(
+            "SELECT COUNT(*) FROM commands WHERE deleted = 1"
+        ).fetchone()[0]
+        tags = conn.execute(
+            "SELECT COUNT(DISTINCT tag) FROM commands WHERE deleted = 0"
+        ).fetchone()[0]
+        never_run = conn.execute(
+            "SELECT COUNT(*) FROM commands WHERE deleted = 0 "
+            "AND (use_count IS NULL OR use_count = 0)"
+        ).fetchone()[0]
+        per_tag = [
+            dict(row)
+            for row in conn.execute(
+                "SELECT tag, COUNT(*) AS live, "
+                "COALESCE(SUM(use_count), 0) AS runs, "
+                "MAX(last_used) AS last_used "
+                "FROM commands WHERE deleted = 0 "
+                "GROUP BY tag ORDER BY runs DESC, tag ASC"
+            ).fetchall()
+        ]
+        top = [
+            dict(row)
+            for row in conn.execute(
+                "SELECT id, tag, tid, command, use_count, last_used "
+                "FROM commands WHERE deleted = 0 AND use_count > 0 "
+                "ORDER BY use_count DESC, last_used DESC LIMIT 10"
+            ).fetchall()
+        ]
+        return {
+            "tags": tags,
+            "live": live,
+            "deleted": deleted,
+            "never_run": never_run,
+            "per_tag": per_tag,
+            "top": top,
+        }
+    finally:
+        conn.close()
 
 
 def get_commands_by_prefix(db_file: str, prefix: str):
