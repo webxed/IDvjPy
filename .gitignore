@@ -25,6 +25,8 @@ __pycache__/
 !src/.bashrc_term.example
 *.txt
 test*.*
+llm_providers.yml
+!src/llm_providers.example.yml
 
 # Exports / backups produced by the app
 *.json

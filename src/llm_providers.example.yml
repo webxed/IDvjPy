@@ -1,0 +1,72 @@
+# LLM-провайдеры для команды `:llm <имя> <сообщение>`.
+# Скопируйте в каталог запуска как `llm_providers.yml` и поправьте под себя.
+#
+# Секреты здесь не храним: значения `$VAR` в headers/body подставляются из
+# окружения при каждом запросе (export, `$VAR=val` в TUI, .bashrc_term).
+#
+# Поля провайдера:
+#   url            — endpoint (POST)
+#   model          — имя модели (плейсхолдер %MODEL% и авто-тело)
+#   system         — системный промпт (плейсхолдер %SYSTEM%, необязательно)
+#   headers        — заголовки запроса; $VAR разрешаются из окружения
+#   body           — шаблон тела. Плейсхолдеры: %MSG% (JSON-escaped),
+#                    %MSG_RAW% (как есть), %SYSTEM% / %MODEL% (JSON-escaped).
+#                    Если body нет — авто OpenAI-совместимое chat/completions.
+#   response_path  — где в ответе текст модели (точки: choices.0.message.content);
+#                    без него — эвристика по известным полям
+#   timeout        — секунды ожидания ответа (по умолчанию 60)
+# providers.* — словарь имя → описание выше.
+# default — имя провайдера по умолчанию (для `:llm <msg>` без имени — не обязательно).
+
+default: ds
+
+providers:
+  ds:
+    url: https://api.deepseek.com/chat/completions
+    model: deepseek-chat
+    system: "You are a helpful assistant. Answer in the user's language."
+    timeout: 60
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer $DEEPSEEK_API_KEY"
+    response_path: choices.0.message.content
+
+  openai:
+    url: https://api.openai.com/v1/chat/completions
+    model: gpt-4o-mini
+    system: "You are a helpful assistant. Answer in the user's language."
+    timeout: 60
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer $OPENAI_API_KEY"
+    response_path: choices.0.message.content
+
+  grok:
+    url: https://api.x.ai/v1/chat/completions
+    model: grok-2-latest
+    system: "You are a helpful assistant. Answer in the user's language."
+    timeout: 60
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer $XAI_API_KEY"
+    response_path: choices.0.message.content
+
+  # Локально, ключ не нужен (OpenAI-совместимый endpoint Ollama).
+  ollama:
+    url: http://localhost:11434/v1/chat/completions
+    model: llama3.2
+    timeout: 120
+    headers:
+      Content-Type: application/json
+    response_path: choices.0.message.content
+
+  # Пример с ручным шаблоном тела и без JSON-разбора ответа.
+  echo-demo:
+    url: http://localhost:8080/llm
+    model: demo
+    timeout: 10
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer $MY_KEY"
+    body: |
+      {"model": %MODEL%, "messages": [{"role": "user", "content": %MSG%}], "stream": false}

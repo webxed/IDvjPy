@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.44) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.45) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.44` → `v1.45`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.45` → `v1.46`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -68,6 +68,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/md_viewer.py`**: handbook Markdown modal (`:md`, welcome `.md` clicks)
 - **`src/update_check.py`**: GitHub `VERSION` check (`:update`)
 - **`src/k8s_complete.py`**: live-cluster name completion for `kubectl get …` (gated by `k8s_completion: true`)
+- **`src/llm_client.py`**: `:llm` calls to LLM providers described in `llm_providers.yml` (env-only secrets, urllib, background thread)
 - **`src/gui_open.py`**: `:fm` / `:term` — detach a file manager or system terminal (Linux / macOS / Windows; `$FILEMAN` / `$TERMINAL` override)
 - **`src/screensaver.py`**: idle starfield (`:screensaver`); flying live clock/date; full-width green library ticker; bottom-left command-help typewriter and bottom-right load/RAM (1s `/proc`; may overlap when the window is narrow); `screensaver_idle` seconds, `0` = off; `screensaver_stars: false` hides flying dust/tokens
 - **`src/seed_catalog.py`**: empty-DB welcome catalog (click `--seed` → input)
@@ -94,7 +95,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no exact tag) = substring search over command text + comments. Click tag in `??` inserts `!tag ` at the cursor (does not replace the line, does not run). |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble refs into the input line |
-| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:fm`, `:term`, `:env`, `:session`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:/`, `:n`, `:N`, `:export`, `:md`, `:playbook`, `:update`, `:kill`, `:watch`, `:mv`, `:stats`, `:diff`, `:o`, `:alias`) |
+| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:fm`, `:term`, `:env`, `:session`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:/`, `:n`, `:N`, `:export`, `:md`, `:playbook`, `:update`, `:kill`, `:watch`, `:mv`, `:stats`, `:diff`, `:o`, `:alias`, `:llm`) |
 | `\| cmd` | Pipe stdout from the focused block, add to history |
 | `$OUT` | On demand: last line of focused/last block (not stored in `.bashrc_term`) |
 | `$VAR=val` | Set env in `.bashrc_term_<instance>` and the current session. `:env` re-reads the files. |
@@ -148,5 +149,6 @@ Edit `settings.yml`:
 - `theme`: Textual theme name (`textual-dark` default). `d` toggles dark/light and writes this key; `:theme nord` picks a named theme
 - `check_updates`: `true` (default) — on start, compare `VERSION` with GitHub main. `:update` always checks. Tests set this to `false`. Proxy 407: `$PROXY_USER` / `$PROXY_PASS` in `.bashrc_term` (and `HTTPS_PROXY`).
 - `k8s_completion`: `false` (default) — for `kubectl get <res> <Tab>` pull live resource names from the cluster (short `kubectl get <resource> -o name` timeout; soft fallback when kubectl/cluster is unavailable)
+- `llm_providers.yml` (cwd): LLM providers for `:llm` — see `src/llm_providers.example.yml`. Keys come from the environment only (`$VAR` refs in headers/body)
 - `screensaver_idle`: seconds of no keys/clicks before the DevOps starfield (default 120). `0` disables. Tests set this to `0`. `:screensaver` starts it now; `:screensaver 0` / `:screensaver 120` change idle for this session.
 - `screensaver_stars`: `true` (default) — flying dust/tokens. `false` — black canvas; clock/date, library ticker, and load/mem stay.

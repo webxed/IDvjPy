@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.44
+# План тестирования IDvjPy_term v1.45
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -803,6 +803,18 @@ x
 
 Автотест: `tests/test_ux_extras.py`.
 
+### LLM через API (`:llm`)
+
+1. Скопировать `src/llm_providers.example.yml` в каталог запуска как `llm_providers.yml`.
+2. Задать ключ окружением: `$DEEPSEEK_API_KEY=...` (или export до запуска).
+3. `:llm` — **Ожидание:** список провайдеров (`ds (default)`, `openai`, `grok`, `ollama`, …).
+4. `:llm ds Привет, как дела?` — блок `[Consulting ds…]` → ответ модели в stdout блока (exit 0).
+5. Без ключа: `:llm ds hi` — `Missing env variable(s): DEEPSEEK_API_KEY`.
+6. Ошибки: `:llm ds` (Usage), `:llm nope hi` (`unknown provider`), удалённый конфиг — `Config not found` + подсказка про example.
+7. Провайдер с ручным `body` (например, `ollama` без ключа) — шаблон с `%MSG%` / `%MODEL%`.
+
+Автотест: `tests/test_llm.py` (urllib замокан, сеть не дёргается).
+
 ---
 
 ## Критерии успеха
@@ -835,6 +847,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.44  
+**Версия приложения**: v1.45  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-26

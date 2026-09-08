@@ -102,6 +102,14 @@ try:
     from ingress_analyzer import IngressAnalyzer
     from json_viewer import JSONViewer
     from k8s_complete import kubectl_resource_candidates
+    from llm_client import (
+        LlmError,
+        describe,
+        example_config_path,
+        load_providers,
+        perform_request,
+        provider_names,
+    )
     from md_viewer import HandbookMarkdownScreen, handbook_md_path
     from screensaver import DevopsScreensaver
     from seed_catalog import (
@@ -1229,7 +1237,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.44"
+    VERSION = "v1.45"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1312,6 +1320,7 @@ class CommandRunner(App):
     CMD_DIFF = "diff"
     CMD_OUT = "o"
     CMD_ALIAS = "alias"
+    CMD_LLM = "llm"
     CMD_GREP = "g"
     CMD_SEARCH_NEXT = "n"
     CMD_SEARCH_PREV = "N"
@@ -1333,6 +1342,7 @@ class CommandRunner(App):
     KEY_SCREENSAVER_IDLE = "screensaver_idle"
     KEY_SCREENSAVER_STARS = "screensaver_stars"
     KEY_K8S_COMPLETION = "k8s_completion"
+    FILE_LLM_PROVIDERS = "llm_providers.yml"
     DEFAULT_THEME = "textual-dark"
     THEME_ALIASES = {
         "dark": "textual-dark",
@@ -3047,6 +3057,8 @@ class CommandRunner(App):
             self._handle_replay_command(parts[1:])
         elif command == self.CMD_ALIAS:
             self._handle_alias_command(parts[1:])
+        elif command == self.CMD_LLM:
+            self._handle_llm_command(parts[1:])
         elif command == self.CMD_GREP:
             self._journal_search(" ".join(parts[1:]))
         elif command == self.CMD_SEARCH_NEXT:
@@ -5222,6 +5234,93 @@ class CommandRunner(App):
             self.add_block(InfoBlock(f"Exported {len(rows)} shell function(s) to {path}"))
         except Exception as e:
             self.add_block(InfoBlock(f"Alias export error: {e}"))
+
+    def _handle_llm_command(self, args: list[str]) -> None:
+        """
+        `:llm` — обращение к LLM через API по конфигу llm_providers.yml.
+
+        :llm                       — список провайдеров
+        :llm <имя> <сообщение>     — запрос к провайдеру (ответ — в блок журнала)
+        """
+        if not args:
+            self._show_llm_providers()
+            return
+        provider_name = args[0]
+        message = " ".join(args[1:]).strip()
+        if not message:
+            self.add_block(
+                InfoBlock(
+                    f"Usage: :llm <provider> <message>\n"
+                    f"Providers: {self._llm_provider_label()}"
+                )
+            )
+            return
+        try:
+            cfg = load_providers(self.FILE_LLM_PROVIDERS)
+        except LlmError as e:
+            self.add_block(
+                InfoBlock(f"Error: {e}\nExample: cp {example_config_path()} {self.FILE_LLM_PROVIDERS}")
+            )
+            return
+        provider = cfg.get("providers", {}).get(provider_name)
+        if provider is None:
+            self.add_block(
+                InfoBlock(
+                    f"Error: unknown provider '{provider_name}'. "
+                    f"Known: {', '.join(provider_names(cfg)) or '(none)'}. "
+                    f"Usage: :llm <provider> <message>"
+                )
+            )
+            return
+        timeout = float(provider.get("timeout") or 60)
+        now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        header = f"{now} ({os.getcwd()}) $ :llm {provider_name}"
+        block = CommandBlock(
+            header=header,
+            raw_stdout=f"[Consulting {provider_name}…]",
+            raw_stderr="",
+            return_code=0,
+            source_command=f":llm {provider_name} {message}",
+        )
+        block.update(block.text_content)
+        self.add_block(block)
+        threading.Thread(
+            target=self._llm_worker,
+            args=(block, provider, message, timeout),
+            daemon=True,
+        ).start()
+
+    def _llm_provider_label(self) -> str:
+        try:
+            cfg = load_providers(self.FILE_LLM_PROVIDERS)
+            names = provider_names(cfg)
+        except LlmError:
+            return f"(create {self.FILE_LLM_PROVIDERS}, see {example_config_path()})"
+        return ", ".join(names) or "(none)"
+
+    def _show_llm_providers(self) -> None:
+        try:
+            cfg = load_providers(self.FILE_LLM_PROVIDERS)
+        except LlmError as e:
+            self.add_block(
+                InfoBlock(
+                    f"Error: {e}\nExample: cp {example_config_path()} {self.FILE_LLM_PROVIDERS}"
+                )
+            )
+            return
+        self.add_block(InfoBlock(describe(cfg)))
+
+    def _llm_worker(self, block: CommandBlock, provider: dict, message: str, timeout: float) -> None:
+        """Фоновый поток: запрос к LLM не должен блокировать UI."""
+        env = {**os.environ, **self.local_env}
+        try:
+            answer = perform_request(provider, message, env, timeout=timeout)
+            out, err, code = answer.strip() + "\n", "", 0
+        except LlmError as e:
+            out, err, code = "", str(e), 1
+        except Exception as e:  # Защита от неожиданного — показать, не ронять поток.
+            out, err, code = "", f"LLM error: {e}", 1
+        self.call_from_thread(self._on_command_finished, block, out, err, code)
 
     def _refresh_running_title(self) -> None:
         """Показать в заголовке число активных фоновых команд (:kill / :watch)."""
