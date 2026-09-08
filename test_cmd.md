@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.37
+# План тестирования IDvjPy_term v1.38
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -733,6 +733,17 @@ x
 
 Автотест: `tests/test_watch.py`.
 
+### Перенос и переименование тегов (`:mv`)
+
+1. `#kube kubectl get pods`, `#mine echo stay`.
+2. `:mv kube[1] mine` — **Ожидание:** `Moved <1> kube[1] → mine[2]`.
+3. `?mine` — обе команды; `?kube` — теперь поиск `Search 'kube'` (тега нет), не список.
+4. `:mv kube k8s` (переименование) — `Renamed tag 'kube' → 'k8s' (N command(s)).`; комментарий тега переехал.
+5. Ошибки: `:mv`, `:mv kube[1] 9bad`, `:mv nope[1] mine`, `:mv kube kube`, `:mv ghost target` — явные сообщения.
+6. `:mv kube[1] mine`, затем `:mv k8s mine` — целевой тег занят → `already exists`.
+
+Автотест: `tests/test_tag_move.py`.
+
 ---
 
 ## Критерии успеха
@@ -765,6 +776,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.37  
+**Версия приложения**: v1.38  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-26

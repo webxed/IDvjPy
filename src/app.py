@@ -1224,7 +1224,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.37"
+    VERSION = "v1.38"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1302,6 +1302,7 @@ class CommandRunner(App):
     CMD_REPLAY = "r"
     CMD_KILL = "kill"
     CMD_WATCH = "watch"
+    CMD_MOVE = "mv"
     CMD_GREP = "g"
     CMD_SEARCH_NEXT = "n"
     CMD_SEARCH_PREV = "N"
@@ -2986,6 +2987,8 @@ class CommandRunner(App):
             self._handle_kill_command(parts[1:])
         elif command == self.CMD_WATCH:
             self._handle_watch_command(parts[1:])
+        elif command == self.CMD_MOVE:
+            self._handle_move_command(parts[1:])
         elif command == self.CMD_JSON:
             # Открываем JSON viewer
             if len(parts) > 1:
@@ -5035,7 +5038,53 @@ class CommandRunner(App):
         """F4 — остановить запущенную команду сфокусированного блока (или последнюю)."""
         self._handle_kill_command([])
 
-    # --- :watch — периодический перезапуск одной команды ---
+    def _handle_move_command(self, args: list[str]) -> None:
+        """
+        `:mv <src> <dst>` — гигиена библиотеки:
+          :mv tag[tid] tag2  — перенести команду в другой тег (новый tid)
+          :mv tag tag2       — переименовать тег целиком
+        """
+        if len(args) != 2:
+            self.add_block(
+                InfoBlock("Usage: :mv <tag>[<tid>] <dst_tag>   |   :mv <tag> <dst_tag>")
+            )
+            return
+        src, dst = args[0].strip(), args[1].strip()
+        if not RE_TAG_NAME.match(dst):
+            self.add_block(InfoBlock(f"Error: invalid destination tag '{dst}'."))
+            return
+        try:
+            tid_match = RE_TAG_TID.match(src)
+            if tid_match:
+                tag, tid = tid_match.group(1), int(tid_match.group(2))
+                if tag == dst:
+                    self.add_block(InfoBlock(f"Error: '{tag}[{tid}]' already belongs to '{dst}'."))
+                    return
+                result = database.move_command_by_tid(self.db_file, tag, tid, dst)
+                if result is None:
+                    self.add_block(InfoBlock(f"Error: Command {tag}[{tid}] not found."))
+                    return
+                new_tid, gid = result
+                self._invalidate_library()
+                self.add_block(
+                    InfoBlock(f"Moved <{gid}> {tag}[{tid}] → {dst}[{new_tid}]")
+                )
+                return
+            if src == dst:
+                self.add_block(InfoBlock(f"Error: tag is already '{dst}'."))
+                return
+            n = database.rename_tag(self.db_file, src, dst)
+            if n == 0:
+                self.add_block(InfoBlock(f"Error: tag '{src}' not found."))
+                return
+            self._invalidate_library()
+            self.add_block(
+                InfoBlock(f"Renamed tag '{src}' → '{dst}' ({n} command(s)).")
+            )
+        except ValueError as e:
+            self.add_block(InfoBlock(f"Error: {e}"))
+        except Exception as e:
+            self.add_block(InfoBlock(f"Database error: {e}"))
 
     def _handle_watch_command(self, args: list[str]) -> None:
         """`:watch <sec> <command>` и `:watch stop` (см. :?)."""

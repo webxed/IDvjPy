@@ -412,6 +412,72 @@ def update_command_by_tid(db_file: str, tag: str, tid: int, new_command: str):
     return rows_updated > 0
 
 
+def move_command_by_tid(db_file: str, tag: str, tid: int, new_tag: str):
+    """
+    Переносит одну live-команду в другой тег (новый tid в конце целевого тега).
+
+    Комментарий команды переносится вместе с ней; комментарий тега не трогаем.
+
+    Returns:
+        (new_tid, global_id) новой строки или None, если команда не найдена.
+    """
+    conn = get_db_connection(db_file)
+    try:
+        row = conn.execute(
+            "SELECT id, command, comment FROM commands WHERE tag = ? AND tid = ? AND deleted = 0",
+            (tag, tid),
+        ).fetchone()
+        if row is None:
+            return None
+        new_tid = _get_next_tid(conn, new_tag)
+        conn.execute(
+            "UPDATE commands SET tag = ?, tid = ? WHERE id = ?",
+            (new_tag, new_tid, row["id"]),
+        )
+        conn.commit()
+        return new_tid, row["id"]
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def rename_tag(db_file: str, old_tag: str, new_tag: str) -> int:
+    """
+    Переименовывает тег целиком (все строки — live и мягко-удалённые).
+
+    Комментарий тега переносится в новый тег. Возвращает число переименованных
+    строк; если целевой тег уже существует — ValueError.
+    """
+    conn = get_db_connection(db_file)
+    try:
+        tag_comment_exists = conn.execute(
+            "SELECT 1 FROM tags WHERE tag = ?", (new_tag,)
+        ).fetchone()
+        tag_rows_exist = conn.execute(
+            "SELECT 1 FROM commands WHERE tag = ? LIMIT 1", (new_tag,)
+        ).fetchone()
+        if tag_comment_exists or tag_rows_exist:
+            raise ValueError(f"Tag '{new_tag}' already exists")
+        row_count = conn.execute(
+            "SELECT COUNT(*) FROM commands WHERE tag = ?", (old_tag,)
+        ).fetchone()[0]
+        if row_count == 0:
+            return 0
+        conn.execute("UPDATE commands SET tag = ? WHERE tag = ?", (new_tag, old_tag))
+        conn.execute(
+            "UPDATE OR IGNORE tags SET tag = ? WHERE tag = ?", (new_tag, old_tag)
+        )
+        conn.commit()
+        return row_count
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def restore_commands_by_tag(db_file: str, tag: str) -> int:
     """Clears the soft-delete flag for all commands with this tag. Returns row count."""
     conn = get_db_connection(db_file)
