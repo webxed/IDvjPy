@@ -1224,7 +1224,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.40"
+    VERSION = "v1.41"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1304,6 +1304,7 @@ class CommandRunner(App):
     CMD_WATCH = "watch"
     CMD_MOVE = "mv"
     CMD_STATS = "stats"
+    CMD_DIFF = "diff"
     CMD_GREP = "g"
     CMD_SEARCH_NEXT = "n"
     CMD_SEARCH_PREV = "N"
@@ -2996,6 +2997,8 @@ class CommandRunner(App):
             self._handle_move_command(parts[1:])
         elif command == self.CMD_STATS:
             self._handle_stats_command()
+        elif command == self.CMD_DIFF:
+            self._handle_diff_command()
         elif command == self.CMD_JSON:
             # Открываем JSON viewer
             if len(parts) > 1:
@@ -5103,6 +5106,63 @@ class CommandRunner(App):
             self.add_block(InfoBlock(f"Error: {e}"))
         except Exception as e:
             self.add_block(InfoBlock(f"Database error: {e}"))
+
+    def _handle_diff_command(self) -> None:
+        """`:diff` — сравнить stdout сфокусированного блока с предыдущим CommandBlock.
+
+        Без фокуса — два последних CommandBlock. Вывод — unified diff
+        (difflib) с цветами: -красный / +зелёный / @@ голубой.
+        """
+        import difflib
+
+        blocks = list(self.query(CommandBlock))
+        if len(blocks) < 2:
+            self.add_block(InfoBlock("Error: need at least two command blocks to diff."))
+            return
+        focused = self.focused
+        if isinstance(focused, CommandBlock) and focused in blocks:
+            idx = blocks.index(focused)
+            if idx == 0:
+                self.add_block(InfoBlock("Error: no earlier command block to diff against."))
+                return
+            block_b, block_a = focused, blocks[idx - 1]
+        else:
+            block_b, block_a = blocks[-1], blocks[-2]
+        a_text = (block_a.raw_stdout or "").rstrip("\n")
+        b_text = (block_b.raw_stdout or "").rstrip("\n")
+        if a_text == b_text:
+            self.add_block(InfoBlock("[bold]Diff:[/bold] outputs are identical."))
+            return
+        a_head = self._strip_formatting_tags(block_a.header or block_a.source_command or "A")
+        b_head = self._strip_formatting_tags(block_b.header or block_b.source_command or "B")
+        lines = list(
+            difflib.unified_diff(
+                a_text.split("\n"),
+                b_text.split("\n"),
+                fromfile=a_head[-40:],
+                tofile=b_head[-40:],
+                lineterm="",
+                n=2,
+            )
+        )
+        rendered: list[str] = [f"[bold]Diff:[/bold] {block_a.source_command or 'block A'}  vs  {block_b.source_command or 'block B'}"]
+        count = 0
+        for ln in lines:
+            count += 1
+            if count > 300:
+                rendered.append("[dim]… diff truncated at 300 lines[/dim]")
+                break
+            if ln.startswith(("---", "+++")):
+                rendered.append(f"[dim]{escape(ln)}[/dim]")
+            elif ln.startswith("@@"):
+                rendered.append(f"[cyan]{escape(ln)}[/cyan]")
+            elif ln.startswith("+"):
+                rendered.append(f"[green]+ {escape(ln[1:])}[/green]")
+            elif ln.startswith("-"):
+                rendered.append(f"[red]- {escape(ln[1:])}[/red]")
+            else:
+                rendered.append(f"[dim] {escape(ln)}[/dim]" if ln.strip() else "")
+        self.add_block(InfoBlock("\n".join(rendered) + "\n"))
 
     def _handle_stats_command(self) -> None:
         """`:stats` — сводка по библиотеке: запуски, теги, «мёртвые» команды."""

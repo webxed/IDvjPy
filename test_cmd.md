@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.40
+# План тестирования IDvjPy_term v1.41
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -764,6 +764,16 @@ x
 
 Автотест: `tests/test_md_export.py`.
 
+### Сравнение выводов (`:diff`)
+
+1. `printf 'a\nb\nc'`, затем `printf 'a\nB\nc'` — два блока.
+2. `:diff` — **Ожидание:** `Diff:` + `@@`, строка `- b` (красная) и `+ B` (зелёная).
+3. Дважды одна и та же команда + `:diff` — `outputs are identical`.
+4. Одна команда + `:diff` — `need at least two command blocks`.
+5. Сфокусировать (Tab) второй блок из трёх + `:diff` — сравнение именно его с предыдущим.
+
+Автотест: `tests/test_diff.py`.
+
 ---
 
 ## Критерии успеха
@@ -796,6 +806,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.40  
+**Версия приложения**: v1.41  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-26
