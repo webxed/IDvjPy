@@ -29,6 +29,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
   :screensaver  - Starfield; full-width ticker; bottom-left help; bottom-right load/mem (idle: screensaver_idle; 0 = off; screensaver_stars: false hides flying dust)
   :r          - Put the focused (or last) block command into the input
+  :kill [all] - Stop the running background command (focused block or the last one;
+                `:kill all` stops every running command). SIGTERM, then SIGKILL.
   :/text  :g  - Search journal lines; :n / n next, :N / N prev. / on a block starts :/
   :export tag [file] - Write one tag to JSON
   :import file       - Insert commands from that JSON (new tids)
@@ -80,6 +82,7 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   Space      - Toggle block collapse
   ← / →      - Collapse / expand focused block
   F3         - Copy full block output to clipboard
+  F4         - Stop the running background command (same as :kill; SIGTERM group)
   Ctrl+C     - Copy the whole input line; if a journal block is focused, copy the block (same as F3)
   F5         - Open focused (or last command) block in JSON viewer
   F6         - Toggle simple (plain) output

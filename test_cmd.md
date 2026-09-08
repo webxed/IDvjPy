@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.34
+# План тестирования IDvjPy_term v1.35
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -695,6 +695,20 @@ x
 
 Автотест: `tests/test_screensaver.py`.
 
+### Остановка фоновой команды (F4 / :kill)
+
+**Предусловия:** приложение запущено с `command_timeout` > 0.
+
+1. `@ sleep 60` — долгая команда без timeout; блок показывает `[Executing...]`.
+2. `F4` (фокус во вводе → стоп последней запущенной) — блок быстро завершается.
+   **Ожидание:** в блоке STDERR: `Process stopped by user.`, `Exit code: 143` (128+SIGTERM).
+3. `@ sleep 60`, затем сфокусировать этот блок (Tab) и нажать `F4` — стоп именно его.
+4. `@ sleep 60` ×2, затем `:kill all` — оба блока останавливаются.
+5. `:kill` без запущенных — **Ожидание:** `No running commands to stop.`
+6. Запустить `@ sleep 30` и выйти `:q` — приложение закрывается и останавливает процесс.
+
+Автотест: `tests/test_stop_command.py`.
+
 ---
 
 ## Критерии успеха
@@ -727,6 +741,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.6  
-**Версия приложения**: v1.34  
+**Версия приложения**: v1.35  
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
 **Дата**: 2026-08-26

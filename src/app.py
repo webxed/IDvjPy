@@ -11,6 +11,7 @@ Usage:
 import argparse
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -1206,6 +1207,7 @@ class CommandRunner(App):
         ("escape", "focus_input", "Focus Input"),
         ("f2", "toggle_line_nav", "Line cursor"),
         ("f3", "copy_block", "Copy Block"),
+        ("f4", "stop_command", "Stop"),
         ("f5", "open_json_viewer", "JSON Viewer"),
         ("f6", "toggle_simple_output", "Simple output"),
         Binding("d", "toggle_dark", "Toggle dark mode", show=False),
@@ -1222,7 +1224,7 @@ class CommandRunner(App):
     ]
 
     TITLE = "IDvjPy_term"
-    VERSION = "v1.34"
+    VERSION = "v1.35"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1275,6 +1277,8 @@ class CommandRunner(App):
     MSG_COPIED = "Copied to clipboard!"
     MSG_NO_FOCUS = "No command block focused."
     MSG_TIMEOUT = "Process timed out ({sec}s). Killed."
+    MSG_STOPPED = "Process stopped by user."
+    KILL_GRACE = 0.8  # Секунды между SIGTERM и SIGKILL при остановке процесса
     
     # Префиксы команд
     PREFIX_CMD = ":"
@@ -1296,6 +1300,7 @@ class CommandRunner(App):
     CMD_HELP = "?"
     CMD_CD = "cd"
     CMD_REPLAY = "r"
+    CMD_KILL = "kill"
     CMD_GREP = "g"
     CMD_SEARCH_NEXT = "n"
     CMD_SEARCH_PREV = "N"
@@ -1377,6 +1382,10 @@ class CommandRunner(App):
         self.screensaver_idle: float = 0
         self.screensaver_stars: bool = True
         self._ss_timer = None
+        # Запущенные фоновые процессы (shell-команды): CommandBlock -> Popen.
+        # Нужны для F4 / :kill — остановить долгую команду, не дожидаясь timeout.
+        self._proc_registry: dict[CommandBlock, subprocess.Popen] = {}
+        self._proc_lock = threading.Lock()
 
     def _extract_path_token(self, text: str) -> str:
         """Возвращает последний токен для path completion."""
@@ -2967,6 +2976,8 @@ class CommandRunner(App):
                     self.add_block(InfoBlock(f"Error reading history: {e}"))
         elif command == self.CMD_CLEAR:
             self.clear_all_blocks()
+        elif command == self.CMD_KILL:
+            self._handle_kill_command(parts[1:])
         elif command == self.CMD_JSON:
             # Открываем JSON viewer
             if len(parts) > 1:
@@ -4833,32 +4844,139 @@ class CommandRunner(App):
         """
         Выполняет команду в отдельном потоке.
         Таймаут отключается при command_timeout: 0 в settings.yml или по `@ cmd`.
+
+        Popen вместо subprocess.run: дескриптор процесса регистрируется в
+        _proc_registry, поэтому F4 / :kill могут послать SIGTERM всей группе
+        (start_new_session) и не ждать command_timeout.
         """
         raw_stdout, raw_stderr, return_code = "", "", 0
+        proc: subprocess.Popen | None = None
         if command:
+            timeout = None
+            if self.COMMAND_TIMEOUT and self.COMMAND_TIMEOUT > 0 and not no_timeout:
+                timeout = float(self.COMMAND_TIMEOUT)
             try:
-                kwargs: dict[str, Any] = dict(
+                proc = subprocess.Popen(
+                    command,
                     shell=True,
                     executable="/bin/bash",
-                    capture_output=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    stdin=subprocess.PIPE if stdin_data is not None else None,
                     text=True,
                     encoding=self.ENCODING,
                     errors="replace",
-                    input=stdin_data,
+                    start_new_session=True,
                 )
-                if self.COMMAND_TIMEOUT and self.COMMAND_TIMEOUT > 0 and not no_timeout:
-                    kwargs["timeout"] = self.COMMAND_TIMEOUT
-                process = subprocess.run(command, **kwargs)
-                raw_stdout = process.stdout.strip()
-                raw_stderr = process.stderr.strip()
-                return_code = process.returncode
-            except subprocess.TimeoutExpired:
-                raw_stderr = self.MSG_TIMEOUT.format(sec=self.COMMAND_TIMEOUT)
-                return_code = 124
+                with self._proc_lock:
+                    self._proc_registry[block] = proc
+                try:
+                    stdout, stderr = proc.communicate(input=stdin_data, timeout=timeout)
+                    raw_stdout = stdout.strip()
+                    raw_stderr = stderr.strip()
+                    return_code = proc.returncode
+                except subprocess.TimeoutExpired:
+                    # communicate убил сам shell; добиваем группу (внуки могут жить).
+                    self._signal_proc_group(proc, signal.SIGKILL)
+                    raw_stderr = self.MSG_TIMEOUT.format(sec=self.COMMAND_TIMEOUT)
+                    return_code = 124
             except Exception as e:
                 raw_stderr = str(e)
                 return_code = -1
+            finally:
+                if proc is not None:
+                    with self._proc_lock:
+                        self._proc_registry.pop(block, None)
+            # Пользователь остановил процесс (F4 / :kill): подписать блок.
+            if getattr(block, "_stop_requested", False):
+                rc = proc.returncode if proc is not None else return_code
+                if rc is not None and rc < 0:
+                    return_code = 128 + (-rc)  # 143 для SIGTERM — как в shell
+                if raw_stderr:
+                    raw_stderr += "\n"
+                raw_stderr += self.MSG_STOPPED
         self.call_from_thread(block.update_content, raw_stdout, raw_stderr, return_code)
+
+    # --- Остановка запущенной команды (F4 / :kill) ---
+
+    def _signal_proc_group(self, proc: subprocess.Popen, sig: int) -> None:
+        """Сигнал всей группе процесса (процессы запущены с start_new_session=True)."""
+        try:
+            pgid = os.getpgid(proc.pid)
+        except (ProcessLookupError, PermissionError):
+            return
+        try:
+            os.killpg(pgid, sig)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+    def _terminate_proc_group(self, proc: subprocess.Popen) -> None:
+        """SIGTERM группе; если через KILL_GRACE сек ещё жива — SIGKILL (в потоке)."""
+        self._signal_proc_group(proc, signal.SIGTERM)
+
+        def escalate() -> None:
+            time.sleep(self.KILL_GRACE)
+            if proc.poll() is None:
+                self._signal_proc_group(proc, signal.SIGKILL)
+
+        threading.Thread(target=escalate, daemon=True).start()
+
+    def _running_command_blocks(self) -> list[CommandBlock]:
+        """Блоки с ещё работающим фоновым процессом (в порядке запуска)."""
+        with self._proc_lock:
+            return list(self._proc_registry)
+
+    def _stop_command_block(self, block: CommandBlock) -> bool:
+        """
+        Просит остановить процесс блока. True — сигнал отправлен
+        (или уже отправлялся); False — процесс не найден / завершился.
+        """
+        with self._proc_lock:
+            proc = self._proc_registry.get(block)
+        if proc is None:
+            return False
+        if getattr(block, "_stop_requested", False):
+            return True
+        block._stop_requested = True
+        self._terminate_proc_group(proc)
+        return True
+
+    def _stop_all_processes(self) -> None:
+        """Остановить все фоновые процессы (выход из приложения, :kill all)."""
+        for block in self._running_command_blocks():
+            self._stop_command_block(block)
+
+    def _handle_kill_command(self, args: list[str]) -> None:
+        """`:kill` — стоп сфокусированного/последнего процесса; `:kill all` — всех."""
+        if args and args[0] == "all":
+            running = self._running_command_blocks()
+            if not running:
+                self.add_block(InfoBlock("No running commands to stop."))
+                return
+            for block in running:
+                self._stop_command_block(block)
+            self.sub_title = f"Stop signal sent to {len(running)} running command(s)."
+            self.set_timer(2, self.clear_subtitle)
+            return
+        target = self.focused if isinstance(self.focused, CommandBlock) else None
+        if target is None or not self._is_block_running(target):
+            running = self._running_command_blocks()
+            target = running[-1] if running else None
+        if target is None:
+            self.add_block(InfoBlock("No running commands to stop."))
+            return
+        self._stop_command_block(target)
+        label = (target.source_command or target.header)[:60]
+        self.sub_title = f"Stop signal sent: {label}"
+        self.set_timer(2, self.clear_subtitle)
+
+    def _is_block_running(self, block: CommandBlock) -> bool:
+        with self._proc_lock:
+            return block in self._proc_registry
+
+    def action_stop_command(self) -> None:
+        """F4 — остановить запущенную команду сфокусированного блока (или последнюю)."""
+        self._handle_kill_command([])
 
     def run_command(self, command: str, stdin_data: str | None = None, *, no_timeout: bool = False) -> None:
         """
@@ -4993,6 +5111,11 @@ class CommandRunner(App):
         except Exception:
             pass
         return True
+
+    def exit(self, result: Any = None, *, return_code: int = 0, message: Any = None) -> None:
+        """При выходе (в т.ч. :q, --demo-quit) останавливаем фоновые процессы."""
+        self._stop_all_processes()
+        return super().exit(result=result, return_code=return_code, message=message)
 
     def run(self, **kwargs: Any) -> Any:
         if "mouse" not in kwargs:
