@@ -24,7 +24,8 @@ __pycache__/
 !.bashrc_term.example
 !src/.bashrc_term.example
 *.txt
-test*.*
+# Корневые скретч-файлы (test_ses.txt и т.п.); tests/ не трогаем
+/test*.*
 llm_providers.yml
 !src/llm_providers.example.yml
 

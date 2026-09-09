@@ -113,6 +113,7 @@ try:
     from ingress_analyzer import IngressAnalyzer
     from json_viewer import JSONViewer
     from k8s_complete import kubectl_resource_candidates
+    from kctx_store import KUBE_STACK_VARS, add_snapshot, parse_cluster_login
     from llm_client import (
         LlmError,
         default_provider,
@@ -1263,7 +1264,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.56"
+    VERSION = "v1.57"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1369,6 +1370,7 @@ class CommandRunner(App):
     KEY_SCREENSAVER_STARS = "screensaver_stars"
     KEY_K8S_COMPLETION = "k8s_completion"
     FILE_LLM_PROVIDERS = "llm_providers.yml"
+    FILE_KCTX = "kctx.json"  # Кластерный журнал kubectl-стека (:kctx, v1.57)
     DEFAULT_THEME = "textual-dark"
     THEME_ALIASES = {
         "dark": "textual-dark",
@@ -1425,6 +1427,7 @@ class CommandRunner(App):
         self.ingress_analyzer: IngressAnalyzer | None = None
         self._old_cwd: str | None = None
         self._data_dir: str = os.getcwd()
+        self._current_kube_cluster: str | None = None  # v1.57: кластер kubectl для :kctx
         self._search_pattern: str = ""
         self._search_hits: list[tuple[Static, int]] = []
         self._search_index: int = -1
@@ -1925,6 +1928,7 @@ class CommandRunner(App):
         self.FILE_HISTORY = self._data_path(history_file_for(name))
         self.FILE_BASHRC = self._data_path(bashrc_file_for(name))
         self.FILE_LLM_PROVIDERS = self._data_path("llm_providers.yml")
+        self.FILE_KCTX = self._data_path("kctx.json")
 
     @staticmethod
     def _settings_example_path() -> str:
@@ -2991,6 +2995,18 @@ class CommandRunner(App):
 
         # v1.1.9+: Проверяем, содержит ли команда shell-операторы
         has_shell_operators = bool(RE_SHELL_OPERATORS.search(user_input))
+
+        # v1.57: вход в кластер kubectl (`klogin prod` / `tsh kube login prod`)
+        # запоминается как текущий кластер — присваивания переменных стека
+        # ($NS=…) после этого пишутся в кластерный журнал (kctx.json).
+        # Срабатывает только для обычных shell-строк, не для служебных префиксов.
+        if not user_input.startswith((
+            self.PREFIX_CMD, self.PREFIX_TAG, self.PREFIX_QUERY,
+            self.PREFIX_BANG, self.PREFIX_PIPE, self.PREFIX_VAR, self.PREFIX_TTY,
+        )):
+            login_cluster = parse_cluster_login(user_input)
+            if login_cluster:
+                self._current_kube_cluster = login_cluster
 
         # Маршрутизация по префиксам
         if user_input.startswith(self.PREFIX_CMD):
@@ -4131,12 +4147,34 @@ class CommandRunner(App):
                         release_file_lock(f_write)
 
                 self.add_block(InfoBlock(f"Variable ${var_name} set to '{var_value}'"))
+                if var_name in KUBE_STACK_VARS:
+                    self._remember_kctx_snapshot()
             except FileLockTimeoutError as e:
                 self.add_block(InfoBlock(f"Error: File is locked by another instance. {e}"))
             except Exception as e:
                 self.add_block(InfoBlock(f"Error setting variable: {e}"))
         else:
             self.add_block(InfoBlock("Invalid syntax. Use: $VAR_NAME=VALUE"))
+
+    def _remember_kctx_snapshot(self) -> None:
+        """Кластерный журнал: снимок kubectl-стека для текущего кластера.
+
+        Пишется при присваивании переменной стека ($NS=…), когда известен
+        кластер (вход через `klogin …` / `tsh kube login …` / будущий :kctx).
+        Ошибки журнала не мешают самому присваиванию переменной.
+        """
+        cluster = self._current_kube_cluster
+        if not cluster:
+            return
+        try:
+            add_snapshot(
+                self.FILE_KCTX,
+                cluster,
+                self.local_env,
+                lock_timeout=self.FILE_LOCK_TIMEOUT,
+            )
+        except Exception:
+            pass
 
     def _resolve_command_references(self, command: str) -> str | None:
         """

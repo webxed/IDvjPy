@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.56) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.57) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.56` → `v1.57`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.57` → `v1.58`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -63,6 +63,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/database_v2.py`**: SQLite tagged history
 - **`src/command_parser_v2.py`**: `!tag[tid]` / `!ID` / `!!` assembly
 - **`src/history_store.py`**: `history_<instance>.txt` append/read/compact + portalocker file-lock helpers
+- **`src/kctx_store.py`**: cluster journal `kctx.json` (data dir): snapshots of the kubectl var stack (`NS POD DEPLOY SVC ING APP CTR QUOTA`) per cluster, captured on `$VAR=` after a `klogin` / `tsh kube login` / `kubectl config use-context` line (UI `:kctx` follows)
 - **`src/help_texts.py`**: static `:?` / `:i` help text constants
 - **`src/clipboard.py`**: CLIPBOARD / PRIMARY / OSC 52
 - **`src/shell_env.py`**: `.bashrc_term` vars, `~/.bashrc` aliases, `$1` substitution
