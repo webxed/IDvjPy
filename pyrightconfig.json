@@ -1,7 +1,7 @@
 {
   "include": ["src", "tests"],
   "executionEnvironments": [
-    { "root": "tests", "extraPaths": ["src"] },
+    { "root": "tests", "extraPaths": ["src", "."] },
     { "root": "src" }
   ],
   "typeCheckingMode": "basic",

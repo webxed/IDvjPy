@@ -143,7 +143,7 @@ def add_snapshot(
     now: float | None = None,
     per_cluster_limit: int = DEFAULT_PER_CLUSTER_LIMIT,
     total_limit: int = DEFAULT_TOTAL_LIMIT,
-    lock_timeout: float = DEFAULT_LOCK_TIMEOUT,
+    lock_timeout: int = DEFAULT_LOCK_TIMEOUT,
 ) -> bool:
     """Сохраняет снимок kubectl-стека для кластера.
 

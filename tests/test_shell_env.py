@@ -1,11 +1,11 @@
 """Unit tests for extracted shell_env helpers."""
 from shell_env import (
+    command_requests_placeholder,
     expand_aliases,
     last_nonempty_line,
     parse_alias_line,
     parse_bashrc_assignment,
     substitute_variables,
-    command_requests_placeholder,
 )
 
 

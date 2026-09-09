@@ -1,7 +1,6 @@
 """Теги: сохранение, запрос, удаление. Команды с '-', '=', '+' не должны ломать парсер."""
 import database_v2 as database
-from app import CommandRunner
-
+from app import CommandBlock, CommandRunner
 from tests.conftest import info_texts, input_widget, last_info, submit, wait_command_done
 
 
@@ -48,7 +47,7 @@ async def test_delete_tag_id_and_bang_execute(isolated_home):
         await pilot.press("escape")
         await pilot.press("enter")
         await wait_command_done(app)
-        block = list(app.query("CommandBlock"))[-1]
+        block = list(app.query(CommandBlock))[-1]
         assert "bang-target" in block.raw_stdout
 
         await submit(pilot, "#demo-1")

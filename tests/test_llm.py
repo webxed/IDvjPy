@@ -112,8 +112,12 @@ def test_perform_request_success(monkeypatch):
 
 
 def test_perform_request_http_error(monkeypatch):
+    from typing import Any, cast
+
     def boom(request, timeout):
-        raise urllib.error.HTTPError("u", 401, "Unauthorized", {}, io.BytesIO(b"bad key"))
+        raise urllib.error.HTTPError(
+            "u", 401, "Unauthorized", cast(Any, {}), io.BytesIO(b"bad key")
+        )
 
     monkeypatch.setattr(llm_client.urllib.request, "urlopen", boom)
     with pytest.raises(LlmError, match="HTTP 401"):

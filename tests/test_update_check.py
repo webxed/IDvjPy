@@ -5,16 +5,16 @@ from update_check import (
     KIND_AHEAD,
     KIND_AVAILABLE,
     KIND_CURRENT,
+    PROXY_AUTH_HINT,
     compare_versions,
     fetch_remote_version,
+    format_update_fetch_error,
     format_update_status,
     inject_proxy_userinfo,
     parse_version_from_source,
     parse_version_tuple,
     proxy_handler_map,
     redact_proxy_secrets,
-    format_update_fetch_error,
-    PROXY_AUTH_HINT,
 )
 
 
@@ -150,7 +150,8 @@ def test_fetch_remote_version_uses_proxy_auth(monkeypatch):
     def fake_build_opener(*handlers):
         for handler in handlers:
             if isinstance(handler, urllib.request.ProxyHandler):
-                seen["proxies"] = dict(handler.proxies)
+                # .proxies нет в typeshed для ProxyHandler (есть в рантайме)
+                seen["proxies"] = dict(getattr(handler, "proxies", {}))
         return _Opener()
 
     monkeypatch.setattr("update_check.urllib.request.build_opener", fake_build_opener)
@@ -165,7 +166,6 @@ def test_fetch_remote_version_uses_proxy_auth(monkeypatch):
 
 async def test_colon_update_reports_newer_remote(isolated_home, monkeypatch):
     from app import CommandRunner
-
     from tests.conftest import last_info, submit
 
     monkeypatch.setattr("app.fetch_remote_version", lambda **k: "v9.9")
@@ -185,7 +185,6 @@ async def test_colon_update_reports_newer_remote(isolated_home, monkeypatch):
 
 async def test_colon_update_hints_proxy_login(isolated_home, monkeypatch):
     from app import CommandRunner
-
     from tests.conftest import last_info, submit
 
     monkeypatch.delenv("PROXY_USER", raising=False)

@@ -1,7 +1,7 @@
 """Файловые подсказки: видимость списка, Tab не затирает команду, каталоги с /."""
 import pyperclip
-from app import CommandRunner
 
+from app import CommandBlock, CommandRunner
 from tests.conftest import input_widget, submit, type_keys, wait_command_done
 
 
@@ -64,7 +64,7 @@ async def test_ls_home_slash_keeps_home_directory(isolated_home, monkeypatch):
 
         await pilot.press("enter")
         await wait_command_done(app)
-        blocks = list(app.query("CommandBlock"))
+        blocks = list(app.query(CommandBlock))
         assert blocks
         assert "$ ls ~/" in blocks[-1].header
         assert "Documents" in blocks[-1].raw_stdout
@@ -232,6 +232,7 @@ async def test_pageup_hides_completion_and_leaves_journal(isolated_home):
 
 async def test_arrows_scroll_journal_when_block_focused(isolated_home):
     from textual.containers import VerticalScroll
+
     from app import CommandBlock
 
     app = CommandRunner()
@@ -273,6 +274,7 @@ async def test_click_selects_block_without_leaving_input_only(isolated_home):
 
 async def test_pageup_does_not_jump_to_block_start(isolated_home):
     from textual.containers import VerticalScroll
+
     from app import CommandBlock
 
     app = CommandRunner()
@@ -338,6 +340,7 @@ async def test_keyboard_scroll_activates_visible_block(isolated_home):
 
 async def test_small_last_block_gets_focus_when_it_cannot_reach_top(isolated_home):
     from textual.containers import VerticalScroll
+
     import database_v2 as database
     from app import CommandBlock
 
@@ -436,7 +439,7 @@ async def test_line_cursor_mode_toggles_on_block(isolated_home):
         assert pyperclip.paste() == "1"
         assert input_widget(app).has_focus
         assert app.sub_title == app.MSG_COPIED
-        blocks = list(app.query("CommandBlock"))
+        blocks = list(app.query(CommandBlock))
         assert blocks and not blocks[0].line_nav_active
 
 
@@ -456,9 +459,9 @@ async def test_line_copy_strips_trailing_spaces(isolated_home):
         await pilot.pause()
         found = False
         for _ in range(8):
-            line = app.focused._plain_copy_line(
-                app.focused._nav_lines()[app.focused.line_index]
-            )
+            line_index = app.focused.line_index
+            assert line_index is not None  # построчный режим активен
+            line = app.focused._plain_copy_line(app.focused._nav_lines()[line_index])
             if line == "hello":
                 found = True
                 break
@@ -487,8 +490,10 @@ async def test_line_copy_shift_insert_pastes_into_input(isolated_home, monkeypat
         await pilot.press("home")
         await pilot.pause()
         for _ in range(8):
+            line_index = app.focused.line_index
+            assert line_index is not None  # построчный режим активен
             line = app.focused._plain_copy_line(
-                app.focused._nav_lines()[app.focused.line_index]
+                app.focused._nav_lines()[line_index]
             )
             if line == "COPYME":
                 break

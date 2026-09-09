@@ -4,7 +4,6 @@ import pytest
 pytestmark = pytest.mark.slow
 
 from app import CommandBlock, CommandRunner, InfoBlock, escape_help_markup
-
 from tests.conftest import input_widget, last_info, submit, type_keys, wait_command_done
 
 
@@ -124,8 +123,9 @@ async def test_colon_backup_writes_sqlite_copy(isolated_home):
 
 
 async def test_colon_md_opens_formatted_handbook(isolated_home):
-    from md_viewer import HandbookMarkdownScreen
     from textual.widgets import Markdown
+
+    from md_viewer import HandbookMarkdownScreen
 
     app = CommandRunner()
     async with app.run_test(size=(120, 40)) as pilot:
@@ -152,8 +152,9 @@ async def test_insert_seed_command_puts_draft_in_input(isolated_home):
 
 
 async def test_md_viewer_wheel_does_not_scroll_journal(isolated_home):
-    from md_viewer import HandbookMarkdownScreen
     from textual.containers import VerticalScroll
+
+    from md_viewer import HandbookMarkdownScreen
 
     class _Wheel:
         def __init__(self) -> None:
@@ -388,6 +389,7 @@ async def test_colon_session_creates_and_switches(isolated_home):
     """`:session NAME` creates files on the fly; env and history stay per instance."""
     import os
     from pathlib import Path
+
     from app import apply_instance_name
 
     try:
@@ -734,6 +736,7 @@ async def test_ctrl_c_copies_whole_input_line(isolated_home):
 
 async def test_ctrl_c_on_block_copies_stdout(isolated_home):
     import pyperclip
+
     from app import CommandBlock
 
     app = CommandRunner()
@@ -789,8 +792,8 @@ async def test_tty_prefix_no_space(isolated_home, monkeypatch):
 
 async def test_tty_imports_same_shell_export(isolated_home, monkeypatch):
     """After `> export`, the TUI process sees the child's variable."""
-    from contextlib import nullcontext
     import os
+    from contextlib import nullcontext
 
     monkeypatch.setattr(CommandRunner, "suspend", lambda self: nullcontext())
     app = CommandRunner()
@@ -820,7 +823,6 @@ async def test_colon_env_reloads_bashrc(isolated_home):
 
 async def test_cd_changes_app_cwd(isolated_home):
     import os
-    from pathlib import Path
 
     sub = isolated_home / "inner"
     sub.mkdir()
@@ -851,6 +853,7 @@ async def test_cd_keeps_tags_db_in_launch_dir(isolated_home):
     """Relative mytags.db / test_history.db must not be created after :cd."""
     import os
     from pathlib import Path
+
     import database_v2 as database
 
     sub = isolated_home / "inner"

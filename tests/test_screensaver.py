@@ -1,10 +1,10 @@
 """DevOps starfield screensaver (Norton Commander-style idle overlay)."""
 import asyncio
 import time
-
 from datetime import datetime
 
 from rich.text import Text
+
 from app import CommandRunner
 from screensaver import (
     COMMAND_HELP_LINES,
@@ -19,12 +19,11 @@ from screensaver import (
     flatten_command,
     format_bytes_short,
     load_library_reminders,
-    parse_meminfo,
     overlay_host_on_help,
+    parse_meminfo,
     render_host_line,
     ticker_items_from_commands,
 )
-
 from tests.conftest import input_widget, last_info, submit
 
 
@@ -74,7 +73,7 @@ def test_ticker_shuffles_and_scrolls():
     assert one.order != two.order
     line = one.render_line(20)
     assert len(line.plain) == 20
-    assert "00ff5f" in (line.style or "") or any(
+    assert "00ff5f" in str(line.style or "") or any(
         span.style and "00ff5f" in str(span.style) for span in line.spans
     )
     before = one.render_line(24).plain

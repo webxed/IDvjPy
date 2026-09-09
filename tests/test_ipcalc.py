@@ -72,8 +72,13 @@ def test_host_range_30():
 
 
 def test_large_prefix_hosts_count():
-    assert "Hosts/Net: 16777214" in evaluate("10.0.0.0/8")
-    assert "Hosts/Net: 65534" in evaluate("172.16.0.1/16")
+    for expr, needle in (
+        ("10.0.0.0/8", "Hosts/Net: 16777214"),
+        ("172.16.0.1/16", "Hosts/Net: 65534"),
+    ):
+        out = evaluate(expr)
+        assert out is not None
+        assert needle in out
 
 
 def test_point_to_point_31():
@@ -139,12 +144,14 @@ def test_hosts_to_prefix(expr, needle):
 
 def test_hosts_neighbor_line():
     out = evaluate("300 hosts")
+    assert out is not None
     assert "/22 → 1022 usable" in out
     assert "/24 → 254 usable" in out
 
 
 def test_hosts_31_notes():
     out = evaluate("2 hosts")
+    assert out is not None
     assert "point-to-point (RFC 3021)" in out
     assert "/30" in out
 

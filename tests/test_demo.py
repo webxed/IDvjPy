@@ -32,7 +32,9 @@ def test_bundled_short_and_full_resolve():
     scenario = load_scenario(short)
     assert scenario["steps"]
     assert scenario["title"]
-    ip = load_scenario(resolve_demo_path("ip"))
+    ip_path = resolve_demo_path("ip")
+    assert ip_path is not None
+    ip = load_scenario(ip_path)
     echo_step = next(s for s in ip["steps"] if (s.get("type") or "").startswith("echo -e "))
     assert r"\n" in echo_step["type"]
     types = [s.get("type") or "" for s in ip["steps"]]
@@ -470,6 +472,7 @@ def test_resolve_custom_yaml(tmp_path, monkeypatch):
     )
     path = resolve_demo_path(str(custom))
     assert path == custom.resolve()
+    assert path is not None
     scenario = load_scenario(path)
     assert scenario["steps"][0]["type"] == "echo x"
 

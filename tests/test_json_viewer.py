@@ -3,7 +3,6 @@ from textual.widgets import Input, Tree
 
 from app import CommandRunner
 from json_viewer import JSONViewer
-
 from tests.conftest import (
     input_widget,
     last_info,
@@ -12,7 +11,6 @@ from tests.conftest import (
     wait_command_done,
     wait_json_viewer,
 )
-
 
 SAMPLE = {
     "spec": {
@@ -110,11 +108,12 @@ async def test_f3_opens_viewer_from_command_output(isolated_home):
         viewer = await wait_json_viewer(app)
         tree = viewer.query_one(Tree)
         assert tree.root.children
-        labels = [child.label.plain for child in tree.root.children]
+        labels = [getattr(child.label, "plain", str(child.label)) for child in tree.root.children]
         assert any("JSON Root" in label for label in labels)
         nested = tree.root.children[0]
         assert nested.is_expanded
-        child_labels = [c.label.plain for c in nested.children]
+        # label у детей может типизироваться как str без .plain — единообразно
+        child_labels = [getattr(c.label, "plain", str(c.label)) for c in nested.children]
         assert any("spec" in label for label in child_labels)
         await pilot.press("q")
         await pilot.pause()
@@ -142,7 +141,7 @@ async def test_f3_tree_with_bracket_keys_and_array_root(isolated_home):
         wrapper = tree.root.children[0]
         assert wrapper.is_expanded
         assert wrapper.children, "tree was empty after F5 on cat test.json"
-        assert any("[0]" in c.label.plain for c in wrapper.children)
+        assert any("[0]" in getattr(c.label, "plain", str(c.label)) for c in wrapper.children)
         await pilot.press("q")
 
 

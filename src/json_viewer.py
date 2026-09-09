@@ -260,52 +260,54 @@ class JSONViewer(ModalScreen):
             return
         tree = self.query_one(Tree)
         if tree.cursor_node:
-            class FakeEvent:
-                def __init__(self, node):
-                    self.node = node
-
-            self.on_tree_node_selected(FakeEvent(tree.cursor_node))
+            self._handle_node_selected(tree.cursor_node)
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
-        node = event.node
-        if hasattr(node, "_jq_path"):
-            jq_path = self._path_parts_to_jq_path(node._jq_path)
+        self._handle_node_selected(event.node)
 
-            # Защита от гонки событий: узел мог сгенерировать повторный select
-            # после того, как modal уже закрыт.
-            if self.app.screen is self:
-                self.app.pop_screen()
+    def _handle_node_selected(self, node: Any) -> None:
+        """jq-путь выбранного узла → $JSON, черновик во вводе, буфер обмена."""
+        raw_path = getattr(node, "_jq_path", None)
+        if raw_path is None:
+            return
+        jq_path = self._path_parts_to_jq_path(raw_path)
+        runner: Any = self.app  # реальный тип — CommandRunner, но у ModalScreen app: App[Unknown]
 
-            if hasattr(self.app, "add_block"):
-                from app import InfoBlock
+        # Защита от гонки событий: узел мог сгенерировать повторный select
+        # после того, как modal уже закрыт.
+        if runner.screen is self:
+            runner.pop_screen()
 
-                self.app.add_block(InfoBlock(f"[bold]jq path:[/bold] {jq_path}"))
+        if hasattr(runner, "add_block"):
+            from app import InfoBlock
 
-                # Путь доступен как $JSON и сразу как черновик во вводе.
-                if hasattr(self.app, "local_env"):
-                    self.app.local_env["JSON"] = jq_path
-                os.environ["JSON"] = jq_path
+            runner.add_block(InfoBlock(f"[bold]jq path:[/bold] {jq_path}"))
 
-                quoted = "'" + jq_path.replace("'", "'\\''") + "'"
-                pipe = getattr(self.app, "active_pipe_source", None)
-                has_pipe = (
-                    pipe is not None
-                    and getattr(pipe, "raw_stdout", None)
-                    and not str(pipe.raw_stdout).startswith("[Executing...]")
-                )
-                draft = f"| jq {quoted}" if has_pipe else f"jq {quoted}"
-                if hasattr(self.app, "set_input_draft"):
-                    self.app.set_input_draft(draft)
+            # Путь доступен как $JSON и сразу как черновик во вводе.
+            if hasattr(runner, "local_env"):
+                runner.local_env["JSON"] = jq_path
+            os.environ["JSON"] = jq_path
 
-                try:
-                    clipboard_path = f"'{jq_path}'"
-                    if hasattr(self.app, "copy_text"):
-                        self.app.copy_text(clipboard_path)
-                    else:
-                        pyperclip.copy(clipboard_path)
-                    self.app.sub_title = f"jq draft: {draft}; $JSON set"
-                except Exception:
-                    self.app.sub_title = f"jq draft: {draft}; $JSON set"
+            quoted = "'" + jq_path.replace("'", "'\\''") + "'"
+            pipe = getattr(runner, "active_pipe_source", None)
+            has_pipe = (
+                pipe is not None
+                and getattr(pipe, "raw_stdout", None)
+                and not str(pipe.raw_stdout).startswith("[Executing...]")
+            )
+            draft = f"| jq {quoted}" if has_pipe else f"jq {quoted}"
+            if hasattr(runner, "set_input_draft"):
+                runner.set_input_draft(draft)
+
+            try:
+                clipboard_path = f"'{jq_path}'"
+                if hasattr(runner, "copy_text"):
+                    runner.copy_text(clipboard_path)
+                else:
+                    pyperclip.copy(clipboard_path)
+                runner.sub_title = f"jq draft: {draft}; $JSON set"
+            except Exception:
+                runner.sub_title = f"jq draft: {draft}; $JSON set"
 
     def action_close_screen(self) -> None:
         if self.app.screen is self:
