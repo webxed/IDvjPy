@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.55
+# План тестирования IDvjPy_term v1.56
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -867,7 +867,7 @@ x
 5. `python3 -m idvjpy_boot --demo short --demo-quit` — тот же запуск через `python -m`.
 6. Ресурсы (CSS/demos/примеры) берутся из пакета: демо и темы работают без каталога репозитория рядом.
 
-Проверено вручную: wheel `idvjpy_term-1.55.0` поставлен в чистый каталог; headless-`run_test` с `data_dir` (provisioning из встроенных примеров) и реальный pty-прогон `--demo short --demo-quit` (exit 0).
+Проверено вручную: wheel `idvjpy_term-1.56.0` поставлен в чистый каталог; headless-`run_test` с `data_dir` (provisioning из встроенных примеров) и реальный pty-прогон `--demo short --demo-quit` (exit 0).
 
 ---
 
@@ -901,6 +901,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.8  
-**Версия приложения**: v1.55
+**Версия приложения**: v1.56
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-09

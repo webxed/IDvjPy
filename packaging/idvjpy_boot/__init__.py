@@ -8,9 +8,11 @@
 """
 from __future__ import annotations
 
+import importlib
 import os
 import re
 import sys
+from typing import Any
 
 _SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
 
@@ -31,15 +33,21 @@ __version__ = _package_version()
 
 
 def main() -> None:
-    """Console entry point: тот же запуск, что `python3 app.py` из repo."""
+    """Console entry point: тот же запуск, что `python3 app.py` из repo.
+
+    Модуль ``app`` резолвится только в рантайме — из вложенной ``src/``,
+    которую мы кладём в sys.path. Статическим анализаторам этот импорт
+    недоступен (они видят корневой лаунчер ``app.py`` без этих имён),
+    поэтому обращение идёт через importlib, а модуль типизирован как Any.
+    """
     if _SRC not in sys.path:
         sys.path.insert(0, _SRC)
-    import app as app_module
+    app: Any = importlib.import_module("app")
 
-    args = app_module.parse_arguments()
-    app_module.apply_instance_name(args.instance_name)
-    demo_spec = app_module.load_demo_for_cli(args.demo) if args.demo else None
-    application = app_module.CommandRunner(
+    args = app.parse_arguments()
+    app.apply_instance_name(args.instance_name)
+    demo_spec = app.load_demo_for_cli(args.demo) if args.demo else None
+    application = app.CommandRunner(
         demo=demo_spec,
         demo_speed=args.demo_speed,
         demo_quit=args.demo_quit,
