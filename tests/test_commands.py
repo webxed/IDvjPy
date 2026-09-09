@@ -1071,10 +1071,12 @@ async def test_journal_search_next_and_prev_line(isolated_home):
         await submit(pilot, ":/aaa-hit")
         assert isinstance(app.focused, CommandBlock)
         first = app.focused.line_index
+        assert first is not None  # построчный режим активен после поиска
         assert "aaa-hit" in app.focused._current_plain_line()
         await pilot.press("escape")
         await submit(pilot, ":n")
         second = app.focused.line_index
+        assert second is not None
         assert second > first
         assert "aaa-hit" in app.focused._current_plain_line()
         await pilot.press("escape")
