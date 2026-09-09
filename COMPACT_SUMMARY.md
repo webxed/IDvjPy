@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.57**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.58**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -141,7 +141,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.8 (app v1.57) |
+| `test_cmd.md` | Manual plan v1.9 (app v1.58) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -162,7 +162,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
-| `src/app.py` | TUI (`CommandRunner`), v1.57 |
+| `src/app.py` | TUI (`CommandRunner`), v1.58 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -191,6 +191,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.58
+
+- **`:kctx` — кластерный журнал kubectl-стека (UI).** `:kctx` — список кластеров из `kctx.json`; `:kctx <cluster>` — вход (`klogin <c> || kubectl config use-context <c>` — fallback, когда tsh недоступен) и список ранее использованных наборов переменных стека (`NS POD DEPLOY SVC ING APP CTR QUOTA`); `:kctx N` применяет набор из последнего открытого списка; `:kctx <cluster> N` — вход и применение одной строкой. Применение пишет те же `.bashrc_term_<instance>` и env, что `$VAR=…` (общий `_set_env_var`; рефакторинг `handle_variable_assignment`). Подсказки: после `:kctx ` — имена кластеров из журнала. Справка `:?`. Pilot-тесты `tests/test_kctx_cmd.py`.
 
 ## v1.57
 

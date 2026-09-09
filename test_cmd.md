@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.57
+# План тестирования IDvjPy_term v1.58
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -869,6 +869,22 @@ x
 
 Проверено вручную: wheel `idvjpy_term-1.56.0` поставлен в чистый каталог; headless-`run_test` с `data_dir` (provisioning из встроенных примеров) и реальный pty-прогон `--demo short --demo-quit` (exit 0).
 
+### Кластерный журнал `:kctx` (v1.58)
+
+Переменные kubectl-стека (`NS POD DEPLOY SVC ING APP CTR QUOTA`) запоминаются по кластерам в `kctx.json` (data-каталог).
+
+1. Войти в кластер обычной строкой — `klogin prod` (alias → `tsh kube login`) или `kubectl config use-context prod` (когда tsh недоступен).
+2. Задать `$NS=team-a`, `$POD=api-7f` → в журнале появились снимки кластера `prod` (см. `kctx.json` рядом с `settings.yml`).
+3. `:kctx` — список кластеров: имя, число снимков, время последнего; у текущего — «← текущий».
+4. `:kctx prod` — блок входа (`klogin prod || kubectl config use-context prod`) и список ранее использованных наборов переменных (`1. NS=… POD=… (дата)`).
+5. `:kctx 1` — применить свежайший набор: переменные в `.bashrc_term_<instance>`, InfoBlock `kctx prod #1: NS=…`. Проверить: `cat .bashrc_term_default`, `echo $NS` в новой команде.
+6. `:kctx staging 2` — вход в staging и применение его набора №2 одной строкой.
+7. `:kctx 99` без открытого списка — подсказка «нет открытого списка»; после `:kctx <cluster>` с одним снимком — «набора 99 нет».
+8. Ввод `:kctx ` + первые буквы кластера — подсказки имён из журнала (Tab/Enter).
+9. Не-стековые переменные (`$EDITOR=…`) в журнал кластеров не пишутся.
+
+Автотесты: `tests/test_kctx_cmd.py`, `tests/test_kctx_store.py`.
+
 ---
 
 ## Критерии успеха
@@ -900,7 +916,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.8  
-**Версия приложения**: v1.57
+**Версия документа**: v1.9  
+**Версия приложения**: v1.58
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-09

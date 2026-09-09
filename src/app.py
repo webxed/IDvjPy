@@ -113,7 +113,15 @@ try:
     from ingress_analyzer import IngressAnalyzer
     from json_viewer import JSONViewer
     from k8s_complete import kubectl_resource_candidates
-    from kctx_store import KUBE_STACK_VARS, add_snapshot, parse_cluster_login
+    from kctx_store import (
+        KUBE_STACK_VARS,
+        add_snapshot,
+        cluster_summary,
+        format_vars,
+        load_snapshots,
+        parse_cluster_login,
+        snapshots_for_cluster,
+    )
     from llm_client import (
         LlmError,
         default_provider,
@@ -1264,7 +1272,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.57"
+    VERSION = "v1.58"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1346,6 +1354,7 @@ class CommandRunner(App):
     CMD_STATS = "stats"
     CMD_DIFF = "diff"
     CMD_OUT = "o"
+    CMD_KCTX = "kctx"
     CMD_ALIAS = "alias"
     CMD_LLM = "llm"
     CMD_GREP = "g"
@@ -1795,6 +1804,15 @@ class CommandRunner(App):
         prefix = prefix.strip()
         if not raw_prefix:
             return []
+        # :kctx — подсказки кластеров из журнала (после ':kctx <буквы>')
+        if raw_prefix.startswith(":kctx") and len(raw_prefix) > len(":kctx") and raw_prefix[5:].strip():
+            tail = raw_prefix[5:].strip()
+            matched = [
+                f":kctx {name}"
+                for name in self._kctx_cluster_names()
+                if name.casefold().startswith(tail.casefold())
+            ]
+            return matched[:20]
         # k8s: имена ресурсов из живого кластера (флаг k8s_completion).
         # Перехватываем до path-дополнения, чтобы `kubectl get pod te`
         # не превратилось в список файлов. None = контекст не kubectl get.
@@ -3212,6 +3230,8 @@ class CommandRunner(App):
             self._handle_diff_command()
         elif command == self.CMD_OUT:
             self._handle_out_command(parts[1:])
+        elif command == self.CMD_KCTX:
+            self._handle_kctx_command(parts[1:])
         elif command == self.CMD_JSON:
             # Открываем JSON viewer
             if len(parts) > 1:
@@ -4106,61 +4126,79 @@ class CommandRunner(App):
                 ))
                 return
 
-            # Обновляем в памяти
-            self.local_env[var_name] = var_value
-            os.environ[var_name] = var_value
-
-            # Перезаписываем файл с блокировкой
-            try:
-                lines = []
-                updated = False
-
-                # Читаем файл с блокировкой
-                if os.path.exists(self.FILE_BASHRC):
-                    try:
-                        with open(self.FILE_BASHRC, encoding=self.ENCODING) as f_read:
-                            acquire_file_lock(f_read, self.FILE_LOCK_TIMEOUT)
-                            try:
-                                lines = f_read.readlines()
-                            finally:
-                                release_file_lock(f_read)
-                    except FileLockTimeoutError:
-                        # Если не получили блокировку для чтения, читаем без неё
-                        with open(self.FILE_BASHRC, encoding=self.ENCODING) as f:
-                            lines = f.readlines()
-
-                # Пишем файл с блокировкой
-                with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f_write:
-                    acquire_file_lock(f_write, self.FILE_LOCK_TIMEOUT)
-                    try:
-                        for line in lines:
-                            # Если переменная уже есть в файле, обновляем её строку
-                            if line.startswith(f"export {var_name}="):
-                                f_write.write(f'export {var_name}="{var_value}"\n')
-                                updated = True
-                            else:
-                                f_write.write(line)
-                        # Если переменной не было, добавляем в конец
-                        if not updated:
-                            f_write.write(f'export {var_name}="{var_value}"\n')
-                    finally:
-                        release_file_lock(f_write)
-
-                self.add_block(InfoBlock(f"Variable ${var_name} set to '{var_value}'"))
-                if var_name in KUBE_STACK_VARS:
-                    self._remember_kctx_snapshot()
-            except FileLockTimeoutError as e:
-                self.add_block(InfoBlock(f"Error: File is locked by another instance. {e}"))
-            except Exception as e:
-                self.add_block(InfoBlock(f"Error setting variable: {e}"))
+            error = self._set_env_var(var_name, var_value)
+            if error:
+                self.add_block(InfoBlock(f"Error setting variable: {error}"))
+                return
+            self.add_block(InfoBlock(f"Variable ${var_name} set to '{var_value}'"))
+            if var_name in KUBE_STACK_VARS:
+                self._remember_kctx_snapshot()
         else:
             self.add_block(InfoBlock("Invalid syntax. Use: $VAR_NAME=VALUE"))
+
+    def _set_env_var(self, name: str, value: str) -> str | None:
+        """Записывает переменную в память и .bashrc_term (под локом).
+
+        Общий путь для `$VAR=val` и применения снимка `:kctx N`. Возвращает
+        текст ошибки или None при успехе. Имя и значение уже валидированы
+        вызывающей стороной.
+        """
+        var_name = str(name).strip()
+        var_value = str(value).strip()
+        if not RE_VAR_NAME.match(var_name):
+            return f"Invalid variable name '{var_name}'."
+
+        # Обновляем в памяти
+        self.local_env[var_name] = var_value
+        os.environ[var_name] = var_value
+
+        # Перезаписываем файл с блокировкой
+        try:
+            lines: list[str] = []
+            updated = False
+
+            # Читаем файл с блокировкой
+            if os.path.exists(self.FILE_BASHRC):
+                try:
+                    with open(self.FILE_BASHRC, encoding=self.ENCODING) as f_read:
+                        acquire_file_lock(f_read, self.FILE_LOCK_TIMEOUT)
+                        try:
+                            lines = f_read.readlines()
+                        finally:
+                            release_file_lock(f_read)
+                except FileLockTimeoutError:
+                    # Если не получили блокировку для чтения, читаем без неё
+                    with open(self.FILE_BASHRC, encoding=self.ENCODING) as f:
+                        lines = f.readlines()
+
+            # Пишем файл с блокировкой
+            with open(self.FILE_BASHRC, "w", encoding=self.ENCODING) as f_write:
+                acquire_file_lock(f_write, self.FILE_LOCK_TIMEOUT)
+                try:
+                    for line in lines:
+                        # Если переменная уже есть в файле, обновляем её строку
+                        if line.startswith(f"export {var_name}="):
+                            f_write.write(f'export {var_name}="{var_value}"\n')
+                            updated = True
+                        else:
+                            f_write.write(line)
+                    # Если переменной не было, добавляем в конец
+                    if not updated:
+                        f_write.write(f'export {var_name}="{var_value}"\n')
+                finally:
+                    release_file_lock(f_write)
+        except FileLockTimeoutError as e:
+            return f"File is locked by another instance. {e}"
+        except Exception as e:
+            return str(e)
+        return None
 
     def _remember_kctx_snapshot(self) -> None:
         """Кластерный журнал: снимок kubectl-стека для текущего кластера.
 
         Пишется при присваивании переменной стека ($NS=…), когда известен
-        кластер (вход через `klogin …` / `tsh kube login …` / будущий :kctx).
+        кластер (вход через `klogin …` / `tsh kube login …` /
+        `kubectl config use-context …` / `:kctx <cluster>`).
         Ошибки журнала не мешают самому присваиванию переменной.
         """
         cluster = self._current_kube_cluster
@@ -4175,6 +4213,137 @@ class CommandRunner(App):
             )
         except Exception:
             pass
+
+    # --- :kctx — кластерный журнал kubectl-стека (v1.58) ---
+
+    @staticmethod
+    def _kctx_login_line(cluster: str) -> str:
+        """Строка входа: alias `klogin` (Teleport) или, если tsh недоступен,
+        fallback на `kubectl config use-context`."""
+        return f"klogin {cluster} || kubectl config use-context {cluster}"
+
+    def _kctx_load_items(self) -> list[dict]:
+        try:
+            return load_snapshots(self.FILE_KCTX)
+        except Exception:
+            return []
+
+    def _kctx_cluster_names(self) -> list[str]:
+        """Имена кластеров из журнала (свежайшие сверху); текущий — первым."""
+        try:
+            items = load_snapshots(self.FILE_KCTX)
+            names = [row["cluster"] for row in cluster_summary(items)]
+        except Exception:
+            names = []
+        current = self._current_kube_cluster
+        if current and current not in names:
+            names.insert(0, current)
+        return names
+
+    def _handle_kctx_command(self, args: list[str]) -> None:
+        """`:kctx [cluster [N]]` / `:kctx N` — кластерный журнал.
+
+        :kctx              — список кластеров из журнала
+        :kctx <cluster>    — вход (klogin || kubectl use-context) + снимки NS/POD…
+        :kctx <cluster> N  — вход + применить снимок N
+        :kctx N            — применить снимок N из последнего открытого списка
+        """
+        if not args:
+            self._kctx_show_clusters()
+            return
+        first, rest = args[0], args[1:]
+        if first.isdigit() and not rest:
+            if not getattr(self, "_kctx_list_cluster", None):
+                self.add_block(InfoBlock(
+                    "kctx: нет открытого списка снимков. "
+                    "Сначала ':kctx <cluster>', или сразу ':kctx <cluster> N'."
+                ))
+                return
+            self._kctx_apply_index(int(first))
+            return
+        if rest and not rest[0].isdigit():
+            self.add_block(InfoBlock(
+                "Usage: :kctx [cluster [N]] — N — номер снимка из списка"
+            ))
+            return
+        index = int(rest[0]) if rest else None
+        self._kctx_open_cluster(first, index)
+
+    def _kctx_show_clusters(self) -> None:
+        """`:kctx` — список кластеров журнала."""
+        items = self._kctx_load_items()
+        summary = cluster_summary(items) if items else []
+        current = self._current_kube_cluster
+        lines = ["[bold]kctx — кластеры из журнала:[/bold]"]
+        if not summary and not current:
+            lines.append("  (пусто)")
+            lines.append("  Войдите в кластер (klogin … / tsh kube login … / kubectl config use-context …)")
+            lines.append("  и задайте переменные стека: $NS=… $POD=… — они запишутся в журнал.")
+            self.add_block(InfoBlock("\n".join(lines)))
+            return
+        for i, row in enumerate(summary, start=1):
+            when = datetime.datetime.fromtimestamp(row["last_ts"]).strftime("%d.%m %H:%M")
+            marker = " ← текущий" if row["cluster"] == current else ""
+            lines.append(f"  {i}. {escape(row['cluster'])}  ({row['count']} сн.)  {when}{marker}")
+        if current and current not in {row["cluster"] for row in summary}:
+            lines.append(f"  • {escape(current)}  (0 сн.) ← текущий")
+        lines.append("")
+        lines.append("  :kctx <cluster> — войти и показать снимки; :kctx <cluster> N — войти и применить N")
+        self.add_block(InfoBlock("\n".join(lines)))
+
+    def _kctx_open_cluster(self, cluster: str, index: int | None) -> None:
+        """Вход в кластер, показ снимков, опционально — применение набора N."""
+        self._current_kube_cluster = cluster
+        # Вход выполняется как обычная команда (блок в журнале), но в историю
+        # не пишется: строку набрал не пользователь, а :kctx.
+        self.handle_normal_command(self._kctx_login_line(cluster), record_history=False)
+        self._kctx_list_cluster = cluster
+        self._kctx_show_snapshots(cluster)
+        if index is not None:
+            self._kctx_apply_index(index)
+
+    def _kctx_show_snapshots(self, cluster: str) -> None:
+        """Список снимков переменных кластера (свежайшие сверху)."""
+        rows = snapshots_for_cluster(self._kctx_load_items(), cluster)
+        lines = [f"[bold]kctx — {escape(cluster)}: снимки переменных:[/bold]"]
+        if not rows:
+            lines.append("  (снимков нет)")
+            lines.append("  Задайте $NS=… / $POD=… — они запишутся в журнал для этого кластера.")
+        else:
+            for i, row in enumerate(rows, start=1):
+                when = datetime.datetime.fromtimestamp(row["ts"]).strftime("%d.%m %H:%M")
+                lines.append(f"  {i}. {escape(format_vars(row['vars']) or '—')}  ({when})")
+            lines.append("")
+            lines.append("  :kctx N — применить набор N")
+        self.add_block(InfoBlock("\n".join(lines)))
+
+    def _kctx_apply_index(self, index: int) -> None:
+        """Применяет набор N из последнего открытого списка кластера."""
+        cluster = getattr(self, "_kctx_list_cluster", None)
+        if not cluster:
+            return
+        rows = snapshots_for_cluster(self._kctx_load_items(), cluster)
+        if not (1 <= index <= len(rows)):
+            self.add_block(InfoBlock(
+                f"kctx: набора {index} нет у '{escape(cluster)}' "
+                f"(в журнале {len(rows)})."
+            ))
+            return
+        row = rows[index - 1]
+        before = self._current_kube_cluster
+        errors: list[str] = []
+        for name, value in row["vars"].items():
+            err = self._set_env_var(name, value)
+            if err:
+                errors.append(f"{name}: {err}")
+        self._current_kube_cluster = cluster
+        text = format_vars(row["vars"]) or "(пусто)"
+        message = f"kctx {escape(cluster)} #{index}: {escape(text)}"
+        if errors:
+            message += f"  [red]errors: {'; '.join(errors)}[/red]"
+        elif before and before != cluster:
+            message += f"  (кластер входа: {escape(before)} — примените ':kctx {escape(cluster)}', чтобы переключить)"
+        self.add_block(InfoBlock(message))
 
     def _resolve_command_references(self, command: str) -> str | None:
         """

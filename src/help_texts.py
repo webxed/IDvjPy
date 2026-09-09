@@ -59,6 +59,13 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :o [N]        - Last N finished command outputs of this session (default 5)
   :o /text      - grep the stored outputs (stdout/stderr); survives :c
   :o clear      - Forget the stored outputs (memory only, not the DB)
+  :kctx         - Cluster journal (kctx.json): list clusters; variables of the
+                kubectl stack (NS POD DEPLOY SVC ING APP CTR QUOTA) are saved
+                per cluster when set after login
+  :kctx <cluster> - Log in (klogin <c> || kubectl config use-context <c>) and
+                show previously used variable sets of that cluster
+  :kctx <cluster> N - Log in and apply saved set N
+  :kctx N       - Apply set N from the last shown list (:kctx N sets vars only)
   :import file       - Insert commands from that JSON (new tids)
   :theme [name] - Show or set TUI theme (saved in settings.yml)
   :playbook [file] - Write this session's commands as a --demo YAML (default playbook.yml)

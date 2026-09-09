@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.57 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.58 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -47,6 +47,7 @@ IDvjPy — терминальное приложение (TUI) на Python (Text
 - `> cmd` — настоящий TTY (htop, vim, ssh); клик и PgUp/PgDn активируют видимый блок журнала
 - Калькулятор без спец-команд: строка, начинающаяся с цифры (или `(` / `-`) и целиком разбираемая как арифметика/перевод единиц, считается локально — `512Mi + 20% in Gi`, `20% of 512Mi`, `2Gi/512Mi`, `500m in cores`
 - ipcalc: IPv4-сети считаются так же, без спец-команд — `192.168.1.0/24`, `300 hosts` → `/23` (как jodies.de/ipcalc)
+- Кластерный журнал kubectl: переменные стека (`NS POD DEPLOY SVC ING APP CTR QUOTA`) запоминаются по кластерам в `kctx.json` (data-каталог). `:kctx` — список кластеров; `:kctx <cluster>` — вход (`klogin <c> || kubectl config use-context <c>`) и ранее использованные наборы переменных; `:kctx N` возвращает набор (переменные → `.bashrc_term_*`); `:kctx <cluster> N` — вход и применение одной строкой
 
 ## Установка
 
@@ -126,7 +127,7 @@ python3 app.py --demo full --demo-quit
 | `?` / `??` / `?tag` / `?tag[tid]` | Запрос тегов / всех / по тегу / превью; `?text` (2+ симв., не тег) — поиск по содержимому команд и комментариев | `?deploy`, `?wide` |
 | `!tag[tid]` / `!N` | Вставить команду во ввод (не запускает) | `!deploy[1]` |
 | `!! …` | Собрать строку во вводе | `!! deploy[1] && start[1]` |
-| `:` | Команды приложения | `:q`, `:cd`, `:fm`, `:term`, `:session`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:playbook`, `:md`, `:?` |
+| `:` | Команды приложения | `:q`, `:cd`, `:fm`, `:term`, `:session`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:kctx`, `:playbook`, `:md`, `:?` |
 | `\| cmd` | Пайп stdout сфокусированного блока (в историю, как обычная команда) | `\| grep error` |
 | `$OUT` | По запросу: последняя непустая строка блока (не хранится) | `echo Hello, $OUT` |
 | `$VAR=val` | Локальная переменная (пишет `.bashrc_term_<instance>`) | `$EDITOR=nvim` |
