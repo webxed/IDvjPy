@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.58
+# План тестирования IDvjPy_term v1.59
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -885,6 +885,16 @@ x
 
 Автотесты: `tests/test_kctx_cmd.py`, `tests/test_kctx_store.py`.
 
+### Удаление по словам во вводе (v1.59)
+
+1. Вставить/набрать длинную строку (например, поля вывода `kubectl get ... -o wide`).
+2. `Ctrl+Backspace` — удалить слово слева от курсора; `Ctrl+Delete` — справа.
+3. `Ctrl+W` / `Ctrl+F` — то же самое (канонические комбинации, работают во всех терминалах).
+4. `Ctrl+←` / `Ctrl+→` — курсор по словам (не посимвольно).
+5. Удержание Backspace — как раньше, посимвольно (авто-repeat терминала).
+
+Автотест: `tests/test_input_words.py`.
+
 ---
 
 ## Критерии успеха
@@ -916,7 +926,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.9  
-**Версия приложения**: v1.58
+**Версия документа**: v1.10  
+**Версия приложения**: v1.59
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-09

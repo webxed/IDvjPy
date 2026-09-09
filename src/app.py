@@ -939,6 +939,10 @@ class CommandInput(Input):
         Binding("ctrl+v", "paste_clipboard", show=False, priority=True),
         Binding("ctrl+c", "copy_input", show=False, priority=True),
         Binding("ctrl+d", "clear_input", show=False, priority=True),
+        # Алиасы удаления по словам: канонические Ctrl+W (влево) и Ctrl+F
+        # (вправо) и word-навигация Ctrl+←/→ уже встроены в Input.
+        Binding("ctrl+backspace", "delete_left_word", "Delete word left", show=False),
+        Binding("ctrl+delete", "delete_right_word", "Delete word right", show=False),
     ]
 
     def __init__(self, **kwargs):
@@ -1272,7 +1276,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.58"
+    VERSION = "v1.59"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"

@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.58 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.59 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -192,6 +192,9 @@ python3 app.py --demo full --demo-quit
 | `F2` | Построчный режим в блоке |
 | `Shift+Insert` / `Ctrl+V` | Вставка во ввод (не затирает уже набранное). В построчном режиме `Ctrl+V` дописывает текущую строку |
 | `Ctrl+D` | Очистить всю строку ввода |
+| `Ctrl+W` / `Ctrl+Backspace` | Во вводе: удалить слово слева от курсора (удобно подчищать вставленный вывод, напр. из `kubectl`) |
+| `Ctrl+F` / `Ctrl+Delete` | Во вводе: удалить слово справа от курсора |
+| `Ctrl+←` / `Ctrl+→` | Во вводе: курсор на слово влево / вправо |
 | `d` | Тёмная / светлая тема (`textual-dark` / `textual-light`), сохраняется в `settings.yml`. Когда фокус во вводе, `d` печатается как буква; тема: фокус на журнале или `:theme` |
 
 ### Построчный режим (блок в фокусе)
