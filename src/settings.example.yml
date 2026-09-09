@@ -1,0 +1,17 @@
+# IDvjPy_term — настройки по умолчанию.
+# Создаётся автоматически при первом запуске в новом data-каталоге
+# (если запущено из каталога с этим файлом — portable-режим, правьте его сам).
+#
+# Все относительные пути — от data-каталога (settings рядом с БД/history).
+
+max_lines: 100000
+history_lines: 20
+history_keep: 500
+database_tags_file: mytags.db
+command_timeout: 10
+terminal_mouse: true
+theme: textual-dark
+check_updates: true
+screensaver_idle: 120
+screensaver_stars: true
+k8s_completion: false

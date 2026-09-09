@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.53 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.54 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -64,6 +64,12 @@ source .venv/bin/activate
 Переменные: при первом старте копируется [`src/.bashrc_term.example`](src/.bashrc_term.example) в `.bashrc_term_<instance>`. Демо: [`DEMO.md`](DEMO.md) (живой сценарий) и `python3 app.py --demo` (автонабор для записи видео).
 
 ## Запуск
+
+```bash
+python3 app.py [--data-dir PATH]
+```
+
+Данные (settings/БД/history): `--data-dir` → `$IDVJPY_DATA_DIR` → текущий каталог (если в нём уже есть `settings.yml`) → системный каталог (`~/.config/idvjpy`, macOS `~/Library/Application Support/IDvjPy`, Windows `%APPDATA%\IDvjPy`). При первом запуске в новом каталоге создаются шаблоны `settings.yml` и `llm_providers.yml`.
 
 ```bash
 python3 app.py

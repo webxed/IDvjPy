@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.53
+# План тестирования IDvjPy_term v1.54
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -849,6 +849,15 @@ x
 
 Автотесты: `tests/test_calc.py`, `tests/test_ipcalc.py`.
 
+### Data-каталог (`--data-dir` / `$IDVJPY_DATA_DIR`)
+
+1. `python3 app.py --data-dir /tmp/idvj-dir` — settings/БД/history создаются в `/tmp/idvj-dir`.
+2. Без флага, из каталога с `settings.yml` — данные остаются в нём (portable).
+3. Без флага из пустого каталога (и без env) — системный каталог ОС (см. `src/data_dirs.py`).
+4. `IDVJPY_DATA_DIR=/tmp/idvj-env python3 app.py` — каталог из переменной.
+
+Автотест: `tests/test_data_dirs.py`.
+
 ---
 
 ## Критерии успеха
@@ -881,6 +890,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.7  
-**Версия приложения**: v1.53  
+**Версия приложения**: v1.54
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-09

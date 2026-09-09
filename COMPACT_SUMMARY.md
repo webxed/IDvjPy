@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.53**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.54**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -141,7 +141,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.7 (app v1.53) |
+| `test_cmd.md` | Manual plan v1.6 (app v1.54) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -161,7 +161,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | File | Purpose |
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
-| `src/app.py` | TUI (`CommandRunner`), v1.53 |
+| `src/app.py` | TUI (`CommandRunner`), v1.54 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -170,8 +170,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/md_viewer.py` | Modal Markdown viewer (`:md`, welcome links) |
 | `src/k8s_complete.py` | Имена ресурсов k8s из живого кластера (`kubectl get`) |
 | `src/update_check.py` | Compare `VERSION` with GitHub main (`:update`) |
+| `src/data_dirs.py` | Data-каталог: `--data-dir` / `$IDVJPY_DATA_DIR` / portable / OS default |
 | `src/llm_client.py` | LLM-запросы по `llm_providers.yml` (`:llm`) |
 | `src/llm_providers.example.yml` | Образец конфига провайдеров LLM |
+| `src/settings.example.yml` | Шаблон настроек для первого запуска в новом data-каталоге |
 | `src/gui_open.py` | `:fm` / `:term` detached file manager / terminal |
 | `src/json_viewer.py` | JSON tree modal |
 | `src/ingress_analyzer.py` | `:i` k8s |
@@ -187,6 +189,11 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.54
+
+- **Data-каталог (подготовка к pip):** выбор места хранения settings/БД/history — приоритет: `--data-dir` → `$IDVJPY_DATA_DIR` → «портативный режим» (текущий каталог, если в нём `settings.yml` — так работают repo/тесты) → системный каталог ОС (Linux `~/.config/idvjpy`, macOS `~/Library/Application Support/IDvjPy`, Windows `%APPDATA%\IDvjPy`). Модуль `src/data_dirs.py`, флаг в лаунчерах, `CommandRunner(data_dir=…)`.
+- **First-run provisioning:** в новом (не портативном) data-каталоге при первом запуске автоматически создаются `settings.yml` (из `src/settings.example.yml`) и `llm_providers.yml` (из примера). `FILE_LLM_PROVIDERS` теперь тоже пинится в data-каталог.
 
 ## v1.53
 

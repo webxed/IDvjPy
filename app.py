@@ -38,5 +38,6 @@ if __name__ == "__main__":
         demo=demo_spec,
         demo_speed=args.demo_speed,
         demo_quit=args.demo_quit,
+        data_dir=args.data_dir,
     )
     application.run()

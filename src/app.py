@@ -38,6 +38,13 @@ Examples:
         help='Instance name for unique .bashrc_term and history files (default: default)'
     )
     parser.add_argument(
+        '--data-dir',
+        type=str,
+        default=None,
+        help='Data directory for settings/DB/history (default: $IDVJPY_DATA_DIR, '
+             'or the launch dir when it holds settings.yml, else the OS data dir)'
+    )
+    parser.add_argument(
         '--demo',
         nargs='?',
         const='short',
@@ -88,6 +95,7 @@ try:
         paste_text_from_clipboards,
     )
     from command_parser_v2 import CommandParser
+    from data_dirs import ensure_data_dir, resolve_data_dir
     from demo import dump_playbook_yaml, load_demo_for_cli, play_demo, session_to_playbook
     from gui_open import GuiOpenError, format_opened, open_file_manager, open_terminal
     from help_texts import CALC_HELP_TEXT, INGRESS_HELP_TEXT, MAIN_HELP_TEXT
@@ -1255,7 +1263,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.53"
+    VERSION = "v1.54"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1372,12 +1380,14 @@ class CommandRunner(App):
         demo: dict[str, Any] | None = None,
         demo_speed: float = 1.0,
         demo_quit: bool = False,
+        data_dir: str | None = None,
     ):
         """Инициализация состояния приложения."""
         super().__init__()
         self._demo_scenario = demo
         self._demo_speed = demo_speed if demo_speed and demo_speed > 0 else 1.0
         self._demo_quit = bool(demo_quit)
+        self._requested_data_dir = (data_dir or "").strip() or None
         self._demo_active = False
         self._demo_pressing = False
         self._demo_worker_started = False
@@ -1908,12 +1918,45 @@ class CommandRunner(App):
         return os.path.abspath(os.path.join(home, raw))
 
     def _pin_instance_files(self) -> None:
-        """Keep settings / history / bashrc in the launch dir after ``:cd``."""
+        """Keep settings / history / bashrc in the data dir after ``:cd``."""
         name = getattr(self, "instance_name", None) or INSTANCE_NAME
         self.FILE_SETTINGS = self._data_path("settings.yml")
         self.FILE_HISTORY_LEGACY = self._data_path("history.txt")
         self.FILE_HISTORY = self._data_path(history_file_for(name))
         self.FILE_BASHRC = self._data_path(bashrc_file_for(name))
+        self.FILE_LLM_PROVIDERS = self._data_path("llm_providers.yml")
+
+    @staticmethod
+    def _settings_example_path() -> str:
+        return os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "settings.example.yml"
+        )
+
+    def _provision_fresh_data_dir(self) -> None:
+        """Первый запуск в новом (не портативном) data-каталоге — кладём шаблоны.
+
+        Портативный режим (data_dir == cwd) не трогаем: там файлами управляет
+        пользователь (repo / старая раскладка).
+        """
+        if self._data_dir == os.getcwd():
+            return
+        try:
+            if not os.path.exists(self.FILE_SETTINGS):
+                example = self._settings_example_path()
+                if os.path.exists(example):
+                    shutil.copy(example, self.FILE_SETTINGS)
+                else:
+                    with open(self.FILE_SETTINGS, "w", encoding=self.ENCODING) as f:
+                        f.write("command_timeout: 10\n")
+        except OSError:
+            pass
+        try:
+            if not os.path.exists(self.FILE_LLM_PROVIDERS) and os.path.exists(
+                example_config_path()
+            ):
+                shutil.copy(example_config_path(), self.FILE_LLM_PROVIDERS)
+        except OSError:
+            pass
 
     def _shared_bashrc_path(self) -> str:
         return self._data_path(".bashrc_term")
@@ -1923,8 +1966,9 @@ class CommandRunner(App):
         Вызывается при старте приложения.
         Загружает настройки, базу данных и переменные окружения.
         """
-        self._data_dir = os.getcwd()
+        self._data_dir = ensure_data_dir(resolve_data_dir(self._requested_data_dir))
         self._pin_instance_files()
+        self._provision_fresh_data_dir()
 
         # 0. Привязать список подсказок к полю ввода
         cmd_input = self.query_one(f"#{self.ID_INPUT}", CommandInput)
@@ -6094,5 +6138,6 @@ if __name__ == "__main__":
         demo=demo_spec,
         demo_speed=args.demo_speed,
         demo_quit=args.demo_quit,
+        data_dir=args.data_dir,
     )
     app.run()
