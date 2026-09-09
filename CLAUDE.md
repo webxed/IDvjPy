@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.54) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.55) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.54` → `v1.55`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.55` → `v1.56`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -45,6 +45,7 @@ The setup script handles dependencies and configuration. On Linux, clipboard nee
 - Launch cwd — `settings.yml`, SQLite command DB, `.bashrc_term*`, `history_<instance>.txt`. `:cd` / `cd` change the process cwd for shell commands; they do not move or recreate the tags DB.
 - Data dir resolution: `--data-dir` → `$IDVJPY_DATA_DIR` → launch cwd if it holds `settings.yml` (portable) → OS default (`~/.config/idvjpy` / macOS App Support / Windows `%APPDATA%`). See `src/data_dirs.py`.
 - Root **`app.py`** / **`backup_db.py`** are launchers
+- **`packaging/`** — pip-упаковка (`idvjpy-term`). `build_wheel.sh` копирует текущий `src/` во вложенный ресурс `idvjpy_boot/src` и собирает wheel (без сети); boot-модуль при запуске (`idvjpy`, `python -m idvjpy_boot`) добавляет вложенную `src/` в `sys.path` — топ-левел импорты и ресурсы (`app.css`, `demos/`, примеры, `.bashrc_term.example`) читаются из пакета, а не из репозитория. Данные пользователя — всегда вне пакета (см. data dir выше).
 - Empty command DB: welcome InfoBlock lists handbook seeds (`src/seed_catalog.py`). Click a `--seed` line to insert it into the input; click a `.md` name or `:md` to open the handbook. After `--seed`, type `??` or wait ~5s. `:welcome` shows that catalog again. Non-empty DB: startup lists loaded tag sections (`linux`, `k8s`, `свои`, …).
 - Seeds: `python3 src/seed_linux_commands.py --seed`, `python3 src/seed_k8s_chains.py --seed` ([`K8S_CHAINS.md`](K8S_CHAINS.md)), `python3 src/seed_git.py --seed`, `python3 src/seed_ops.py --seed` (all ops except linux / k8s / git). Each `--seed` replaces only its own tags. A live DB is copied first to `backup_dir` (`backups/<stem>-pre-<label>-<timestamp>.db`); empty DB is skipped; `seed_ops` snapshots once.
 

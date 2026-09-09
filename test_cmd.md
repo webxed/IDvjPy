@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.54
+# План тестирования IDvjPy_term v1.55
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -858,6 +858,17 @@ x
 
 Автотест: `tests/test_data_dirs.py`.
 
+### pip-установка из wheel (v1.55)
+
+1. Из репозитория: `packaging/build_wheel.sh` → `packaging/dist/idvjpy_term-*.whl`.
+2. В чистом venv (`pip install --no-deps <wheel>` без зависимостей не запустится — нужны deps; обычный `pip install <wheel>` ставит их из PyPI).
+3. `idvjpy --data-dir /tmp/idvj-pip` — первый запуск создаёт settings/БД/history + шаблоны `settings.yml`, `llm_providers.yml`, `.bashrc_term_default` в `/tmp/idvj-pip`; `:q` — выход.
+4. `idvjpy --demo short --demo-quit` — автотур из установленного пакета, корректный выход.
+5. `python3 -m idvjpy_boot --demo short --demo-quit` — тот же запуск через `python -m`.
+6. Ресурсы (CSS/demos/примеры) берутся из пакета: демо и темы работают без каталога репозитория рядом.
+
+Проверено вручную: wheel `idvjpy_term-1.55.0` поставлен в чистый каталог; headless-`run_test` с `data_dir` (provisioning из встроенных примеров) и реальный pty-прогон `--demo short --demo-quit` (exit 0).
+
 ---
 
 ## Критерии успеха
@@ -889,7 +900,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.7  
-**Версия приложения**: v1.54
+**Версия документа**: v1.8  
+**Версия приложения**: v1.55
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-09

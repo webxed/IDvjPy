@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.54 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.55 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -62,6 +62,27 @@ source .venv/bin/activate
 На Linux для буфера обмена нужны `xclip` или `xsel` (на Wayland — `wl-clipboard`).
 
 Переменные: при первом старте копируется [`src/.bashrc_term.example`](src/.bashrc_term.example) в `.bashrc_term_<instance>`. Демо: [`DEMO.md`](DEMO.md) (живой сценарий) и `python3 app.py --demo` (автонабор для записи видео).
+
+### Установка как pip-пакета (wheel)
+
+Собранный wheel можно поставить в любой venv и запускать командой `idvjpy` без клонирования репозитория.
+
+```bash
+# из репозитория: собрать wheel (копирует актуальный src/ во вложенный ресурс пакета)
+packaging/build_wheel.sh                 # → packaging/dist/idvjpy_term-<версия>-py3-none-any.whl
+
+# в целевом окружении:
+python3 -m venv .venv && source .venv/bin/activate
+pip install packaging/dist/idvjpy_term-*.whl
+
+idvjpy                       # запуск (те же флаги, что у python3 app.py)
+idvjpy --demo short          # автотур из установленного пакета
+python3 -m idvjpy_boot       # то же самое через python -m
+```
+
+В wheel входят код и ресурсы (`app.css`, `demos/`, примеры конфигов, `.bashrc_term.example`); хранилища пользователя (settings/БД/history) в пакет **не** кладутся — при первом запуске они создаются в системном data-каталоге (`--data-dir` → `$IDVJPY_DATA_DIR` → системный каталог ОС, см. «Запуск»). Так один и тот же пакет можно обновлять (`pip install -U`), не трогая свои теги и историю.
+
+Версия пакета соответствует версии приложения (`CommandRunner.VERSION` → `MAJOR.MINOR.0`).
 
 ## Запуск
 
