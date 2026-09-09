@@ -939,8 +939,11 @@ class CommandInput(Input):
         Binding("ctrl+v", "paste_clipboard", show=False, priority=True),
         Binding("ctrl+c", "copy_input", show=False, priority=True),
         Binding("ctrl+d", "clear_input", show=False, priority=True),
+        Binding("ctrl+z", "undo", "Undo", show=False),
         # Алиасы удаления по словам: канонические Ctrl+W (влево) и Ctrl+F
-        # (вправо) и word-навигация Ctrl+←/→ уже встроены в Input.
+        # (вправо) и word-навигация Ctrl+←/→ уже встроены в Input. Ctrl+W
+        # универсален: многие терминалы шлют Ctrl+Backspace как обычный
+        # Backspace, и Textual не видит модификатор.
         Binding("ctrl+backspace", "delete_left_word", "Delete word left", show=False),
         Binding("ctrl+delete", "delete_right_word", "Delete word right", show=False),
     ]
@@ -950,6 +953,36 @@ class CommandInput(Input):
         super().__init__(**kwargs)
         self._completion_list: CompletionList | None = None
         self._applying_completion: bool = False  # Флаг: применяем completion
+        # Undo (Ctrl+Z): стек предыдущих состояний value+курсор. Заполняется в
+        # _watch_value при каждом изменении (печать, удаление, word-delete,
+        # вставка) — сбрасывается после отправки команды и по Ctrl+D.
+        self._undo_stack: list[tuple[str, int]] = []
+        self._undo_limit = 100
+        self._undo_anchor: tuple[str, int] = (self.value, self.cursor_position)
+        self._applying_undo = False
+
+    def reset_undo(self) -> None:
+        """Начать «чистую» историю правок (после отправки команды / очистки)."""
+        self._undo_stack.clear()
+        self._undo_anchor = (self.value, self.cursor_position)
+        self._applying_undo = False
+
+    def action_undo(self) -> None:
+        """Ctrl+Z: отменить последнее изменение строки ввода."""
+        if not self._undo_stack:
+            self.app.sub_title = "Nothing to undo"
+            self.app.set_timer(2, self.app.clear_subtitle)
+            return
+        text, pos = self._undo_stack.pop()
+        self._applying_undo = True
+        try:
+            self.value = text
+            self.cursor_position = min(pos, len(text))
+        finally:
+            self._applying_undo = False
+        self._undo_anchor = (text, min(pos, len(text)))
+        if self._completion_list is not None:
+            self._completion_list.hide()
 
     def set_completion_list(self, completion_list: 'CompletionList') -> None:
         """Привязать список подсказок (вызывается из App.on_mount)."""
@@ -1053,6 +1086,7 @@ class CommandInput(Input):
         """Ctrl+D: удалить всю строку ввода."""
         self.value = ""
         self.cursor_position = 0
+        self.reset_undo()
         if self._completion_list is not None:
             self._completion_list.hide()
 
@@ -1112,6 +1146,15 @@ class CommandInput(Input):
         """Вызывается при изменении value (reactive watcher)."""
         # Сначала вызываем родительский метод
         super()._watch_value(value)
+        # Undo: перед каждым реальным изменением запоминаем предыдущее состояние.
+        # Во время самого undo и применения completion не пишем в стек.
+        if not self._applying_undo:
+            anchor = self._undo_anchor
+            if anchor is not None and anchor[0] != value and not self._applying_completion:
+                self._undo_stack.append(anchor)
+                if len(self._undo_stack) > self._undo_limit:
+                    self._undo_stack.pop(0)
+            self._undo_anchor = (value, min(self.cursor_position, len(value)))
         # Не показываем подсказки если применяем completion
         if self._applying_completion:
             self._applying_completion = False
@@ -1276,7 +1319,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.59"
+    VERSION = "v1.60"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -2985,6 +3028,7 @@ class CommandRunner(App):
         user_input = message.value.strip()
         input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
         input_widget.value = ""
+        input_widget.reset_undo()  # новая строка — «чистая» история правок
         self._reset_history_walk()
 
         if not user_input:

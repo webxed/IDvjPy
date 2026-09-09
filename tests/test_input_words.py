@@ -58,3 +58,32 @@ async def test_canonical_word_keys_and_navigation(isolated_home):
         # Textual прыгает к началу следующего слова (пропуская пробел после
         # 'kubectl' — это позиция 8: 'kubectl ' = 8 символов)
         assert inp.cursor_position == 8
+
+
+async def test_ctrl_z_undoes_word_delete(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        inp = await _focused_input(app, pilot, TEXT, len(TEXT))
+        await pilot.press("ctrl+backspace")  # удалили 'hello'
+        assert inp.value == "kubectl get pods "
+        await pilot.press("ctrl+z")
+        assert inp.value == TEXT
+        assert inp.cursor_position == len(TEXT)
+
+
+async def test_ctrl_z_undoes_typed_chars(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        inp = input_widget(app)
+        inp.focus()
+        await pilot.pause()
+        for ch in "kubectl":
+            await pilot.press(ch)
+        assert inp.value == "kubectl"
+        await pilot.press("ctrl+z")
+        assert inp.value == "kubect"
+        for _ in range(10):
+            await pilot.press("ctrl+z")
+        assert inp.value == ""
