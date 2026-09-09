@@ -69,7 +69,7 @@ try:
     import os
     import threading
     import time
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
     from typing import Any, Optional, cast
 
     import yaml
@@ -1253,7 +1253,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.51"
+    VERSION = "v1.52"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -5702,7 +5702,28 @@ class CommandRunner(App):
         block.text_content = text
         block.update(text)
         self.add_block(block)
-        threading.Thread(target=self._watch_loop, daemon=True).start()
+        threading.Thread(target=self._watch_loop, daemon=True, name="watch-loop").start()
+
+    def _watch_post(self, callback: Callable[..., Any], *args: Any) -> None:
+        """Вызов в UI-цикле из потока :watch.
+
+        call_from_thread требует работающий цикл приложения: на выходе из
+        приложения (закрытый цикл) он бросает RuntimeError, а :watch тогда
+        обновлять нечего. Гасим поток, чтобы «Event loop is closed» не
+        уходил в фоновый поток (pytest считает это ошибкой теста).
+        """
+        loop = getattr(self, "_loop", None)
+        if loop is None or loop.is_closed():
+            state = self._watch_state
+            if state is not None:
+                state["event"].set()
+            return
+        try:
+            self.call_from_thread(callback, *args)
+        except RuntimeError:
+            state = self._watch_state
+            if state is not None:
+                state["event"].set()
 
     def _watch_loop(self) -> None:
         """Цикл тиков :watch: каждый интервал — один запуск команды."""
@@ -5716,12 +5737,12 @@ class CommandRunner(App):
                 stdout, stderr, rc = self._capture_watch_tick(state)
                 if state["event"].is_set():
                     break
-                self.call_from_thread(
+                self._watch_post(
                     self._update_watch_block, tick, stdout, stderr, rc
                 )
                 state["event"].wait(state["interval"])
         finally:
-            self.call_from_thread(self._finalize_watch)
+            self._watch_post(self._finalize_watch)
 
     def _capture_watch_tick(self, state: dict[str, Any]) -> tuple[str, str, int]:
         """Один запуск команды :watch. Текущий Popen доступен для F4 / :kill."""
