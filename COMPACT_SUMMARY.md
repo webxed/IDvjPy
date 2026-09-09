@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.52**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.53**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -14,7 +14,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 
 | Prefix | Action |
 |--------|--------|
-| (none) | Execute shell command |
+| (none) | Execute shell command; a digit-leading line that fully parses as arithmetic/units is calculated locally (see below) |
 | `> cmd` | Suspend TUI, run with a real TTY (`htop`, `vim`, `ssh`). On exit: import that shell's env and `$PWD` |
 | `@ cmd` | Run without `command_timeout` (long non-TTY jobs; stdout captured) |
 | `#tag cmd` | Save (literal text; refs `!tag[tid]` not expanded on save) |
@@ -34,6 +34,8 @@ TUI на Textual для запуска shell-команд с тегирован�
 
 Aliases from `~/.bashrc`: bodies with `$1` / `$2` / `$@` substitute args; otherwise the rest of the line is appended.
 
+**Calculator (no prefix):** lines starting with a digit (or '(' / '-') are tried as math first, then shell (`7z …`, `(cd …)` unaffected). `512Mi + 20% in Gi` → 0.6Gi; `20% of 512Mi`, `512Mi*30 in Gi`, `1Gi/512Mi`, `500m in cores`, `2^10`, `524288 in Mi`. IPv4 subnets are handled the same way — `192.168.1.0/24` prints address/netmask/wildcard/network/broadcast/hosts like jodies.de/ipcalc, and `300 hosts` finds the smallest fitting prefix (/23). Memory: B, KB/MB/GB/TB (×1000), KiB/MiB/GiB/TiB and k8s Ki/Mi/Gi/Ti (×1024). % is relative to the left operand. Result block header is `calc:`.
+
 Hotkeys: `Tab` input → output (Esc back); `F3` / `Ctrl+C` copy block (Ctrl+C in the input copies the draft); `F4` / `:kill` stop a running command (SIGTERM to the process group); `F5` JSON; `F6` simple output; `F2` line-cursor mode; `Shift+Insert`/`Ctrl+V` paste in the input (does not replace existing text); in line-cursor mode `Ctrl+V` appends the current line; `Ctrl+D` clears the input line; `PgUp`/`PgDn` scroll a page and activate the visible block (no jump to block start); click a block to focus it; `Up`/`Down` walk `history_<instance>.txt` in the input (typed text filters), journal scroll when a block is focused (line-by-line in line-cursor mode).
 
 ---
@@ -51,6 +53,14 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 ---
 
 ## Key features (current)
+
+### Calculator (no prefix)
+- A line starting with a digit (or '(' / '-') that fully parses as arithmetic/unit math is evaluated **locally** (no shell) and shown as a journal block with a `calc:` header — result goes to stdout, so ↑-repeat, `$OUT` and `|` work. Everything that does not parse (`7z …`, `(cd … && …)`, `2>/dev/null …`) still runs in the shell.
+- Arithmetic: `+ - * / ^ ( )` — `1024*3`, `2^10`, `(512+512)*2`, `-5+8`. Percent scales the left operand: `512Mi + 20%` (increase by 20%), `512Mi - 15%`, `512Mi * 20%` (fraction), `2 + 10%`. `of` = fraction of a value: `20% of 512Mi`, `1/3 of 1Gi`, `20% of (512Mi + 1Gi)`.
+- Memory: `B`; `K/M/G/T` = `KB/MB/GB/TB` (×1000); `Ki/Mi/Gi/Ti` = `KiB/MiB/GiB/TiB` (×1024); k8s-style attached or spaced: `512Mi`, `1.5 Gi`. Conversion: `512Mi in Gi`, `512Mi in MB`; bare `512Mi` prints the largest IEC unit + bytes. `524288 in Mi` treats the bare number as bytes. `1Gi/512Mi` → 2.
+- IPv4 subnets (like jodies.de/ipcalc): `192.168.1.0/24`, `10.1.2.3/255.255.255.0`, or a bare `8.8.8.8` (classful default mask) prints Address · Netmask (= prefix) · Wildcard · Network/prefix · HostMin · HostMax · Broadcast · Hosts/Net with class/RFC1918 and binary columns. /31 = point-to-point, /32 = host route. Reverse task: `300 hosts` → the smallest prefix that fits (/23, 510 usable).
+- CPU: `m` = milli-core, `cores`. `500m in cores` → 0.5 cores, `0.5 in m` → 500m.
+- Engine: `src/calc.py` (tokenizer + recursive descent, no eval). Tests: `tests/test_calc.py`.
 
 ### Focus / journal
 - `Tab` in the input focuses the last journal block in display order (`:h` / `:?` InfoBlocks included, not only the last CommandBlock). Completion list, if open, still consumes Tab to apply a candidate.
@@ -131,7 +141,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.6 (app v1.52) |
+| `test_cmd.md` | Manual plan v1.7 (app v1.53) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -151,7 +161,8 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | File | Purpose |
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
-| `src/app.py` | TUI (`CommandRunner`), v1.52 |
+| `src/app.py` | TUI (`CommandRunner`), v1.53 |
+| `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
 | `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
@@ -176,6 +187,12 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.53
+
+- **Калькулятор без спец-команд** (`src/calc.py`, без `eval`): строка, начинающаяся с цифры (или `(` / `-`) и целиком разбираемая как арифметика/перевод единиц, считается локально, результат — блок с заголовком `calc:`. Арифметика `+ - * / ^ ( )`; проценты относительно левого операнда (`512Mi + 20%`, `512Mi - 15%`, `512Mi * 20%`, `2 + 10%`); `of` — доля от значения (`20% of 512Mi`, `1/3 of 1Gi`). Единицы памяти: `B`, SI `K/M/G/T…` = `KB/MB/GB…` (×1000), IEC `Ki/Mi/Gi/Ti…` = `KiB/MiB/GiB…` (×1024), k8s-стиль `512Mi`/`1.5 Gi`; перевод `in`/`to`; CPU `m` (миллиядро) и `cores`; безразмерные числа как байты (`524288 in Mi`); `1Gi/512Mi` → 2. Не-расчёты (`7z …`, `(cd …)`, `2>/dev/null …`) по-прежнему уходят в shell.
+- **ipcalc как jodies.de/ipcalc** (`src/ipcalc.py`): IPv4-строка считается локально — `192.168.1.0/24`, маска `255.255.255.0`, голый адрес (классовая маска). Показывает Address · Netmask (= N) · Wildcard · Network/prefix · HostMin · HostMax · Broadcast · Hosts/Net с бинарной колонкой, классом/RFC1918; `/31` point-to-point (RFC 3021), `/32` host route. Обратная задача: `300 hosts` → минимальный префикс (`/23`, 510 usable). Ошибки (октет/префикс/маска) — явные, не молчаливый shell.
+- **Справка**: полный справочник в TUI — `:? calc` (обновлены `src/help_texts.py`, `README.md`, `COMPACT_SUMMARY.md`, ручной план `test_cmd.md`).
 
 ## v1.52
 

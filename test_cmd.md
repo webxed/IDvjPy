@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.52
+# План тестирования IDvjPy_term v1.53
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -831,6 +831,26 @@ x
 
 ---
 
+## Калькулятор / ipcalc (v1.53)
+
+Локальные вычисления **без спец-команд**: строка, начинающаяся с цифры (или `(` / `-`) и целиком разбираемая как арифметика/единицы/IPv4, выполняется локально, результат — блок с заголовком `calc:`. Остальное (`7z …`, `(cd …)`, `-la`, `2>/dev/null …`) уходит в shell как раньше.
+
+1. **Арифметика:** `1024*3` → `= 3072`; `(512+512)*2` → `= 2048`; `2^10` → `= 1024`; `-5 + 8` → `= 3`.
+2. **Проценты:** `512Mi + 20% in Gi` → `= 0.6Gi` (увеличить память на 20%); `512Mi - 15%` → 435.2Mi; `512Mi * 20% in Mi` → `= 102.4Mi` (доля); `2 + 10%` → `= 2.2`.
+3. **Доли (`of`):** `20% of 512Mi in Mi` → `= 102.4Mi`; `1/3 of 1Gi in Mi` → `= 341.333333Mi`; `20% of (512Mi + 1Gi) in Mi` → `= 307.2Mi`.
+4. **Перевод единиц:** `512Mi in B` → `= 536870912B`; `1Mi in B` → `= 1048576B`, `1M in B` → `= 1000000B`; `1Gi in MB` → `= 1073.741824MB`; голый `512Mi` — авто-эквиваленты `= 512Mi (= 536870912B)`.
+5. **CPU:** `500m in cores` → `= 0.5 cores`; `0.5 in m` → `= 500m`; `500m + 20% in m` → `= 600m`.
+6. **k8s-ресурсы:** `512Mi + 1Gi + 256Mi in Mi` → `= 1792Mi`; `512Mi*30 in Gi` → `= 15Gi`; `1Gi/512Mi` → `= 2`; `524288 in Mi` → `= 0.5Mi`.
+7. **ipcalc:** `192.168.1.0/24` — Network `192.168.1.0/24`, Broadcast `192.168.1.255`, `Hosts/Net: 254`, `Class C · RFC1918 private`, бинарная колонка; `10.1.2.3/255.255.255.0` — `Netmask: 255.255.255.0 = 24`; `10.0.0.1/32` — host route; `172.16.0.1` (без маски) — класс B → /16.
+8. **Префикс под N хостов:** `300 hosts` → `300 hosts → /23` (510 usable); `2 hosts` → `/31` (RFC 3021 point-to-point); `1 host` → `/32`; `7 hosts` → `/28`; `4,000 hosts` → `/20`.
+9. **Ошибки — явные, не молчаливый shell:** `512Mi + 2` → `calc: incompatible units…`; `10.1.2.3/33` → `calc: prefix out of range…`; `0 hosts` → `calc: hosts count must be >= 1`.
+10. **Не-расчёты остаются shell:** `7z` → `command not found` (127); `(echo ok)` — подстановка выполняется; `2>/dev/null echo ok` → stdout `ok`.
+11. **Справка:** `:? calc` — справочник калькулятора и ipcalc (упоминание в `:?`).
+
+Автотесты: `tests/test_calc.py`, `tests/test_ipcalc.py`.
+
+---
+
 ## Критерии успеха
 
 - Команды сохраняются с корректным `tid`; `-`/`=`/`+` внутри текста не ломают парсер
@@ -860,7 +880,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.6  
-**Версия приложения**: v1.52  
-**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`  
-**Дата**: 2026-08-26
+**Версия документа**: v1.7  
+**Версия приложения**: v1.53  
+**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
+**Дата**: 2026-09-09

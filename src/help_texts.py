@@ -7,7 +7,7 @@
 MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
 
 [bold]Application Commands (prefix :)[/bold]
-  :?          - Show this help
+  :? [calc]   - Show this help; `:? calc` — full calculator reference
   :q          - Quit application
   :w <file>   - Write output to file
   :h [N]      - Last N lines of history_<instance>.txt (default: 20)
@@ -75,6 +75,18 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
 
 [bold]Command Prefixes[/bold]
   (none)     - Execute shell command
+               A line starting with a digit (or '(' / '-') is tried as a local
+               calculator first:
+               512Mi + 20% in Gi    (increase memory by 20% → = 0.6Gi)
+               20% of 512Mi · 1/3 of 1Gi · 512Mi*30 in Gi · 1Gi/512Mi
+               500m in cores · 2^10 · 524288 in Mi · (512+512)*2
+               Units: B, KB/MB/GB/TB (×1000), KiB/MiB/GiB/TiB (×1024), k8s Ki/Mi/Gi, m.
+               IPv4 networks too (like jodies.de/ipcalc): 192.168.1.0/24,
+               10.1.2.3/255.255.255.0, or a bare 8.8.8.8 (classful default mask).
+               Prefix for N hosts: 300 hosts → /23.
+               Only when the whole line parses as math/units — otherwise shell
+               (7z …, (cd …), 2>/dev/null …).
+               Full calculator reference: type `:? calc`.
   > <cmd>    - Suspend TUI and run with a real TTY (htop, vim, ssh, less)
                After exit: import that shell's export/unset and $PWD; also :env
   @ <cmd>    - Run without command_timeout (long non-TTY jobs; stdout captured)
@@ -98,6 +110,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   aliases    - From ~/.bashrc. If the body has $1 / $2 / $@, args are substituted
                (klogin cluster → tsh kube login cluster). Else the rest of the line
                is appended as in a classic alias.
+
+[bold]Help topics[/bold]
+  :? calc    - Calculator + ipcalc reference (syntax, units, percent, IPv4 subnets)
 
 [bold]Navigation[/bold]
   ↑/↓        - Instance history file in input (typed text filters, case-insensitive); journal scroll when a block is focused
@@ -198,4 +213,67 @@ INGRESS_HELP_TEXT = """[bold]Kubernetes Ingress Analyzer[/bold]
 [bold]Prerequisites:[/bold]
   • kubectl configured with cluster access
   • crossplane: pip install crossplane (optional, for nginx config parsing)
+"""
+
+
+CALC_HELP_TEXT = """[bold]Calculator — no special command or prefix[/bold]
+
+A line that starts with a digit (or '(' / '-') is tried as a calculation first.
+If the whole line parses, it is evaluated locally and shown as a journal block
+with a `calc:` header (↑ repeats it; `$OUT` / `|` work on the result).
+Everything that does not parse — `7z …`, `(cd … && …)`, `-la`, `2>/dev/null …` —
+still runs in the shell as usual.
+
+[bold]Arithmetic[/bold]
+  1024*3 · (2+3)*4 · 10/3 · 2^10 · 1.5 + 0.25 · -5 + 8
+
+[bold]Percent — % scales the value on the left[/bold]
+  512Mi + 20%   increase by 20%   → = 614.4Mi
+  512Mi - 15%   decrease by 15%
+  512Mi * 20%   take 20% of it     → = 102.4Mi
+  2 + 10%                          → = 2.2
+
+[bold]of — a fraction of a value (same as *)[/bold]
+  20% of 512Mi                    → = 102.4Mi
+  1/3 of 1Gi in Mi                → = 341.333333Mi
+  20% of (512Mi + 1Gi) in Mi      → = 307.2Mi
+
+[bold]Unit conversion — in / to, or just type a value with a unit[/bold]
+  512Mi in Gi        → = 0.5Gi
+  512Mi in B         → = 536870912B
+  1Gi in MB          → = 1073.741824MB
+  524288 in Mi       → = 0.5Mi    (a bare number is read as bytes)
+  1Gi / 512Mi        → 2          (how many times it fits)
+  512Mi              → = 512Mi (= 536870912B)   (no `in`: largest unit + bytes)
+
+[bold]Memory units[/bold] (k8s-style, attached or spaced: `512Mi`, `1.5 Gi`)
+  B
+  decimal (×1000):   K KB · M MB · G GB · T TB · P PB · E EB
+  binary  (×1024):   Ki KiB · Mi MiB · Gi GiB · Ti TiB · Pi PiB · Ei EiB
+  lowercase aliases: kb mb gb tb pb eb
+
+[bold]CPU — milli-cores / cores[/bold]
+  500m in cores      → = 0.5 cores
+  0.5 in m           → = 500m
+  100m * 4           → = 400m
+
+[bold]k8s resource math[/bold]
+  512Mi + 1Gi + 256Mi in Mi       → = 1792Mi
+  512Mi*30 in Gi                  → = 15Gi
+  512Mi + 20% in Gi               → = 0.6Gi  (limits with headroom)
+
+[bold]IP / subnet — ipcalc (like jodies.de/ipcalc)[/bold]
+  192.168.1.0/24              → network info for that prefix
+  10.1.2.3/255.255.255.0      → prefix from a netmask
+  8.8.8.8                     → classful default mask (class A → /8)
+  300 hosts                   → smallest prefix for 300 hosts (/23, 510 usable)
+  Shows: Address · Netmask (= prefix) · Wildcard · Network/prefix · HostMin ·
+  HostMax · Broadcast · Hosts/Net, plus class / RFC1918 private and the binary
+  form of every value. /31 = point-to-point (RFC 3021), /32 = host route.
+
+[bold]Rules[/bold]
+  • units are checked: `512Mi + 2` is an error (memory vs cpu/plain number)
+  • memory ÷ memory gives a plain ratio (`1Gi / 512Mi` → 2)
+  • `^` works on plain numbers only
+  • a real command is never blocked: any line with words is left to the shell
 """

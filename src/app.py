@@ -80,7 +80,9 @@ try:
     from textual.containers import VerticalScroll
     from textual.widgets import Footer, Header, Input, Static
 
+    import calc
     import database_v2 as database
+    import ipcalc
     from clipboard import (
         copy_text_to_clipboards,
         paste_text_from_clipboards,
@@ -88,7 +90,7 @@ try:
     from command_parser_v2 import CommandParser
     from demo import dump_playbook_yaml, load_demo_for_cli, play_demo, session_to_playbook
     from gui_open import GuiOpenError, format_opened, open_file_manager, open_terminal
-    from help_texts import INGRESS_HELP_TEXT, MAIN_HELP_TEXT
+    from help_texts import CALC_HELP_TEXT, INGRESS_HELP_TEXT, MAIN_HELP_TEXT
     from history_store import (
         DEFAULT_HISTORY_KEEP,
         FileLockTimeoutError,
@@ -1253,7 +1255,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.52"
+    VERSION = "v1.53"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -3001,6 +3003,30 @@ class CommandRunner(App):
                 return
         else:
             # Обычные команды без ссылок
+            # Встроенный калькулятор (без спец-префикса): строка, начинающаяся
+            # с цифры (или '(' / '-') и целиком разбираемая как арифметика/
+            # перевод единиц, считается локально. Остальное (7z …, (cd …),
+            # 2 && echo …) отдаётся shell — calc.evaluate возвращает None.
+            if calc.is_calc_like(user_input):
+                try:
+                    calc_output = calc.evaluate(user_input)
+                except calc.CalcError as e:
+                    self.add_block(InfoBlock(f"calc: {e}"))
+                    return
+                if calc_output is not None:
+                    self._run_calc(user_input, calc_output)
+                    return
+                # ipcalc: строка — IPv4 с префиксом/маской (192.168.1.0/24),
+                # как на jodies.de/ipcalc. Не-IP остаётся shell.
+                if ipcalc.looks_like(user_input):
+                    try:
+                        ip_output = ipcalc.evaluate(user_input)
+                    except ipcalc.IpCalcError as e:
+                        self.add_block(InfoBlock(f"calc: {e}"))
+                        return
+                    if ip_output is not None:
+                        self._run_calc(user_input, ip_output)
+                        return
             self.handle_normal_command(user_input, no_timeout=no_timeout, record_history=not no_timeout)
 
     def log_to_history(self, command: str) -> None:
@@ -3037,6 +3063,28 @@ class CommandRunner(App):
             self.session_history.append(user_input)
         self.session_history_pos = len(self.session_history)
         self.add_block(InfoBlock(escape(user_input)))
+
+    def _run_calc(self, expression: str, output: str) -> None:
+        """Показывает результат калькулятора блоком в журнале, shell не запускает.
+
+        Блок устроен как у обычной команды (stdout = результат), поэтому с него
+        работают ↑-повтор, F-копирование, пайп ``|`` и ``$OUT``.
+        Заголовок помечен ``calc:``, чтобы не выглядело, что это был shell.
+        """
+        timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        header = f"{timestamp} ({os.getcwd()}) calc: {expression}"
+        block = CommandBlock(
+            header=header,
+            raw_stdout=output,
+            raw_stderr="",
+            return_code=0,
+            source_command=expression,
+        )
+        block.pending = False  # результат готов сразу, фонового процесса нет
+        if expression not in self.session_history:
+            self.session_history.append(expression)
+        self.session_history_pos = len(self.session_history)
+        self.add_block(block)
 
     def handle_colon_command(self, user_input: str) -> None:
         """Обработка команд управления (:q, :w, :h, :c)."""
@@ -3117,7 +3165,11 @@ class CommandRunner(App):
             # Kubernetes Ingress Analyzer
             self.handle_ingress_command(user_input[2:].strip())
         elif command == self.CMD_HELP:
-            self._show_main_help()
+            topic = parts[1].strip().lower() if len(parts) > 1 else ""
+            if topic in ("calc", "calculator", "калькулятор"):
+                self._show_calc_help()
+            else:
+                self._show_main_help()
         elif command == self.CMD_CD:
             if len(parts) == 1:
                 self.add_block(InfoBlock(f"cwd: {os.getcwd()}"))
@@ -3805,6 +3857,10 @@ class CommandRunner(App):
     def _show_ingress_help(self) -> None:
         """Show ingress command help."""
         self.add_block(InfoBlock(INGRESS_HELP_TEXT))
+
+    def _show_calc_help(self) -> None:
+        """Show the full calculator reference (`:? calc`)."""
+        self.add_block(InfoBlock(CALC_HELP_TEXT))
 
     def _list_ingresses(self, namespace: str | None = None) -> None:
         """List ingresses in namespace or all namespaces."""
