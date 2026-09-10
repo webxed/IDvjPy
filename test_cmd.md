@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.61
+# План тестирования IDvjPy_term v1.62
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -900,6 +900,17 @@ x
 
 Автотест: `tests/test_input_words.py`.
 
+### Выделение мышью → буфер (v1.62)
+
+1. Выполнить команду с выводом (`echo hello`), при `terminal_mouse: true` протянуть мышью по журналу — текст выделяется, при отпускании сразу в буфере; в подзаголовке `Copied selection (N chars)`.
+2. Вставить в другое окно/поле (Ctrl+V) — вставляется именно выделенное.
+3. `Ctrl+C` при активном выделении — копирует выделение (иначе — строка ввода/блок).
+4. Простой клик без протяжки — выделение снимается, буфер не меняется.
+5. `Shift`+протяжка — нативное выделение терминала (альтернатива).
+6. Проверить оба режима `terminal_mouse`: true — выделяет приложение (с автокопированием); false — выделяет терминал сам, колесо в приложение не идёт (PgUp/PgDn).
+
+Автотест: `tests/test_mouse_selection.py` (эмуляция протяжки через MouseDown/Move/Up).
+
 ---
 
 ## Критерии успеха
@@ -931,7 +942,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.12  
-**Версия приложения**: v1.61
+**Версия документа**: v1.13  
+**Версия приложения**: v1.62
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-09

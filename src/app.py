@@ -1091,7 +1091,9 @@ class CommandInput(Input):
             self._completion_list.hide()
 
     def action_copy_input(self) -> None:
-        """Ctrl+C: скопировать всю строку ввода в буфер."""
+        """Ctrl+C: если есть выделение мышью — его; иначе всю строку ввода."""
+        if self.app._copy_selection_to_clipboard():
+            return
         if hasattr(self.app, "copy_input_line"):
             self.app.copy_input_line()
 
@@ -1319,7 +1321,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.61"
+    VERSION = "v1.62"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1949,6 +1951,27 @@ class CommandRunner(App):
     def copy_text(self, text: str) -> None:
         """Копирует текст в CLIPBOARD, PRIMARY и внутренний буфер Textual."""
         copy_text_to_clipboards(text or "", self)
+
+    def _copy_selection_to_clipboard(self) -> bool:
+        """Копирует выделенный мышью текст (если он есть).
+
+        Возвращает True, если было что копировать. Используется автокопированием
+        при отпускании мыши (TextSelected) и Ctrl+C в приоритете над строкой/блоком.
+        """
+        try:
+            selected = self.screen.get_selected_text()
+        except Exception:
+            selected = None
+        if not selected or not selected.strip():
+            return False
+        self.copy_text(selected)
+        self.sub_title = f"Copied selection ({len(selected)} chars)"
+        self.set_timer(3, self.clear_subtitle)
+        return True
+
+    def on_text_selected(self, event: events.TextSelected) -> None:
+        """Терминал: выделили текст мышью и отпустили кнопку — копируем в буфер."""
+        self._copy_selection_to_clipboard()
 
     def on_mouse_down(self, event: events.MouseDown) -> None:
         self._bump_screensaver_idle()
@@ -2841,7 +2864,9 @@ class CommandRunner(App):
         self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
 
     def action_copy_input_or_block(self) -> None:
-        """Ctrl+C: во вводе — вся строка; в журнале — весь блок (как F3)."""
+        """Ctrl+C: выделение мышью → в буфер; иначе вся строка ввода / весь блок (F3)."""
+        if self._copy_selection_to_clipboard():
+            return
         inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
         if inp.has_focus:
             self.copy_input_line()
