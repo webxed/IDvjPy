@@ -4,7 +4,7 @@ import pytest
 pytestmark = pytest.mark.slow
 
 from app import CommandRunner
-from tests.conftest import last_info, submit, wait_command_done
+from tests.conftest import last_info, submit, type_keys, wait_command_done
 
 
 async def test_out_lists_last_outputs(isolated_home):
@@ -34,6 +34,20 @@ async def test_out_search_finds_old_output_after_clear(isolated_home):
         assert "Output search 'needle-payload'" in text
         assert "echo needle-payload" in text
         assert "needle-payload" in text
+
+
+async def test_out_slash_is_not_a_path_completion(isolated_home):
+    """`:o /text` — поиск по выводам, а не листинг `/`: файловых подсказок нет."""
+    (isolated_home / "somefile.txt").write_text("x", encoding="utf-8")
+    app = CommandRunner()
+    assert app._is_path_context(":o /") is False
+    assert app._get_file_completion_candidates(":o /") == []
+    # `:cd /tin` — всё ещё путь (подсказки по каталогам не сломали).
+    assert app._is_path_context(":cd /tin") is True
+    async with app.run_test(size=(110, 30)) as pilot:
+        await type_keys(pilot, ":o /")
+        await pilot.pause()
+        assert not app._completion_list.is_visible()
 
 
 async def test_out_no_match_and_clear(isolated_home):

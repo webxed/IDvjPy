@@ -1339,7 +1339,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.71"
+    VERSION = "v1.72"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1441,6 +1441,11 @@ class CommandRunner(App):
     CMD_TERM = "term"
     CMD_EDITOR = "editor"
     CMD_ENV = "env"
+    # Colon-команды, у которых аргументы — не пути: числа и поисковые шаблоны.
+    # Для них `/` — начало `:o /text` (grep по выводам) / `:h /text`, а не листинг корня.
+    COLON_NO_PATH_ARGS = frozenset(
+        (PREFIX_CMD + CMD_HISTORY, PREFIX_CMD + CMD_OUT, PREFIX_CMD + CMD_GREP)
+    )
     KEY_CHECK_UPDATES = "check_updates"
     KEY_THEME = "theme"
     KEY_EDITOR = "editor"
@@ -1553,14 +1558,14 @@ class CommandRunner(App):
         """
         Path-контекст: последний токен похож на путь, либо аргумент cd/pushd.
         Не любое «два слова»: иначе `cat file` + Enter из истории даёт `cat cat file`.
-        `:h /…` — поиск по history.txt, не листинг `/`.
+        `:h /…` и `:o /…` — поиск по истории, не листинг `/`.
         """
         stripped = text.rstrip()
         if not stripped:
             return False
 
         parts = stripped.split()
-        if parts and parts[0] == f"{self.PREFIX_CMD}{self.CMD_HISTORY}":
+        if parts and parts[0] in self.COLON_NO_PATH_ARGS:
             return False
 
         token = self._extract_path_token(text)
