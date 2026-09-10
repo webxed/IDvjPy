@@ -54,7 +54,7 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 $OUT — last non-empty line of the focused/last CommandBlock
                 $BLOCK — full stdout of that block (also ${OUT} / ${BLOCK})
                 @file — attach a text file (UTF-8, ≤200 KB; several: @a.py @b.log;
-                literal @ — @@). Лимит — ключ max_attachment_bytes у провайдера
+                literal @ — @@). Size limit: provider key max_attachment_bytes
                 Placeholders: %MSG% (JSON-safe), %MSG_RAW%, %SYSTEM%, %MODEL%
                 Tab completes provider names after `:llm `
                 Proxy 407: set $PROXY_USER / $PROXY_PASS (as with :update)
