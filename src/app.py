@@ -1331,7 +1331,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.67"
+    VERSION = "v1.68"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -4773,8 +4773,15 @@ class CommandRunner(App):
         else:
             self.add_block(InfoBlock("Invalid syntax. Use: #tag <command> or #tag=<comment>"))
 
-    def _clickable_bang_ref(self, tag: str, tid: int | None = None) -> str:
-        """Rich ``@click`` that inserts ``!tag `` or ``!tag[tid] `` at the input cursor."""
+    def _clickable_bang_ref(
+        self, tag: str, tid: int | None = None, *, prefix: str = ""
+    ) -> str:
+        """Rich ``@click`` that inserts ``!tag `` or ``!tag[tid] `` at the input cursor.
+
+        Action name is written *without* the ``action_`` prefix: Textual looks up
+        ``action_<name>`` itself, so ``app.action_x`` would resolve to the
+        non-existent ``action_action_x`` and the click would silently do nothing.
+        """
         if tid is None:
             action = f"app.insert_bang_draft('{tag}')"
             label = tag
@@ -4783,7 +4790,7 @@ class CommandRunner(App):
             label = f"{tag}[{tid}]"
         return (
             f"[@click={action}]"
-            f"[bold underline #8a6bb5]{escape(label)}[/][/]"
+            f"[bold underline #8a6bb5]{escape(prefix + label)}[/][/]"
         )
 
     def _format_tagged_command_line(
@@ -6100,11 +6107,12 @@ class CommandRunner(App):
         )
 
     def _llm_ref_link(self, tag: str, tid: int) -> str:
-        """Rich-ссылка `!tag[tid]` → action_insert_bang_draft (клик по ссылке)."""
-        return (
-            f"[@click=app.action_insert_bang_draft('{tag}', '{tid}')]"
-            f"[underline #8a6bb5]!{escape(tag)}[{tid}][/][/]"
-        )
+        """Rich-ссылка `!tag[tid]` из ответа `:llm ask` (клик → вставка во ввод).
+
+        Тот же вид и действие, что в `??` (`_clickable_bang_ref`), только с «!»
+        внутри ссылки — чтобы клик работал по всему токену целиком.
+        """
+        return self._clickable_bang_ref(tag, tid, prefix="!")
 
     def _refresh_running_title(self) -> None:
         """Показать в заголовке число активных фоновых команд (:kill / :watch)."""

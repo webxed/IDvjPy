@@ -810,7 +810,10 @@ async def test_colon_llm_ask_offers_only_existing_refs(isolated_home, monkeypatc
         await submit(pilot, ":llm ask что с подами")
         await wait_command_done(app, timeout=8.0)
         assert await _wait_info_contains(app, "!kpod[1]")
-        assert "action_insert_bang_draft" in " ".join(info_texts(app))
+        refs = " ".join(info_texts(app))
+        # Имя действия без префикса `action_` — иначе Textual ищет action_action_…
+        assert "insert_bang_draft('kpod', '1')" in refs
+        assert "action_insert_bang_draft" not in refs
         # Выдуманный моделью tid не предлагается.
         assert not any("ghost" in text for text in info_texts(app))
 
@@ -862,3 +865,48 @@ async def test_colon_llm_provider_app_context_key(isolated_home, monkeypatch):
         await submit(pilot, ":llm plain hi")
         await wait_command_done(app, timeout=8.0)
     assert calls == [("hi", True), ("hi", False)]
+
+
+async def test_colon_llm_ask_ref_action_is_dispatchable(isolated_home, monkeypatch):
+    """Ссылка из `:llm ask` несёт рабочее действие и вставляет `!tag[tid] ` во ввод.
+
+    Регрессия: клик ничего не делал, потому что в `@click` стояло
+    `app.action_insert_bang_draft`, а Textual сам ищет `action_<имя>`
+    (`action_action_…` не существует). Pilot-клик стиль/meta не несёт (в обход
+    `App.on_event`), поэтому проверяем ровно тот путь, которым идёт Textual:
+    meta → `App.run_action`.
+    """
+    from rich.text import Text
+
+    import app as app_module
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "default: ds\nproviders:\n  ds:\n    url: http://x\n    model: m\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(app_module, "perform_request", lambda *a, **k: "План: !kpod[1].")
+
+    from app import CommandRunner, InfoBlock
+    from tests.conftest import input_widget, submit, wait_command_done
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, "#kpod kubectl get pods -n $NS")
+        await submit(pilot, ":llm ask что с подами")
+        await wait_command_done(app, timeout=8.0)
+        assert await _wait_info_contains(app, "!kpod[1]")
+        block = [b for b in app.query(InfoBlock) if "!kpod[1]" in b.text_content][-1]
+        parsed = Text.from_markup(block.text_content)
+        clicks: list[tuple] = []
+        for span in parsed.spans:
+            meta = getattr(span.style, "meta", None)
+            if meta and "@click" in meta:
+                clicks.append(meta["@click"])
+        assert clicks, "no @click span in the refs line"
+        name, params = clicks[0]
+        assert name == "app.insert_bang_draft"  # без префикса action_
+        assert params == ("kpod", "1")
+        # Textual разрешает `app.<name>` → `action_<name>`; раньше это был no-op.
+        assert await app.run_action(f"{name}({', '.join(repr(p) for p in params)})")
+        await pilot.pause()
+        assert input_widget(app).value == "!kpod[1] "
