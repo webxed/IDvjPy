@@ -55,7 +55,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 $BLOCK — full stdout of that block (also ${OUT} / ${BLOCK})
                 @file — attach a text file (UTF-8, ≤200 KB; several: @a.py @b.log;
                 literal @ — @@). Size limit: provider key max_attachment_bytes
-                Placeholders: %MSG% (JSON-safe), %MSG_RAW%, %SYSTEM%, %MODEL%
+                Context: provider key history_turns: N keeps the last N user/assistant
+                pairs in memory for this session; :llm reset [<provider>|*] clears it
+                Placeholders: %MSG% (JSON-safe), %MSG_RAW%, %SYSTEM%, %MODEL%, %HISTORY%
                 Tab completes provider names after `:llm `
                 Proxy 407: set $PROXY_USER / $PROXY_PASS (as with :update)
   :o [N]        - Last N finished command outputs of this session (default 5)

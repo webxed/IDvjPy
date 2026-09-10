@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.65
+# План тестирования IDvjPy_term v1.66
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -818,7 +818,8 @@ x
 11. Вывод блока: выполнить `printf 'l1\nl2\n'`, затем `:llm ds $OUT` — уйдёт строка `l2`; `:llm ds $BLOCK` — весь вывод `l1`…`l2`. Без завершённого блока — явная ошибка.
 12. Вложение файла: создать `note.txt`, затем `:llm ds объясни @note.txt` — в шапке блока `@files: note.txt (N)`, в запрос уйдёт содержимое (```-блок). Несколько: `@a.py @b.log`. Ошибки явные: нет файла (`Cannot read`), каталог (`directory`), бинарник (`binary`), больше лимита (`too large`; лимит — `max_attachment_bytes`). Литеральный `@` — `@@`; `user@host` не трогается.
 13. В `history_*.txt` и в `:r` — исходная строка с `@файлом`, без содержимого файла. Подсказки: набрать `:llm ds … @no` — список файлов каталога (каталоги с `/`).
-14. Язык ответа: в конфиге у `ds` задан `answer_language: Russian` — ответы DeepSeek на русском, без ухода в китайский (несколько вопросов подряд, короткие).
+14. Контекст беседы: в конфиге `ds` задать `history_turns: 2` — задать два вопроса подряд (`:llm первый`, `:llm второй`): в шапке второго блока `ctx: 1/2 turns`, в запрос уходит первая пара. Третий вопрос — уже 2 пары; четвёртый вытесняет первую. `:llm reset` — сброс ветки default (InfoBlock `LLM context reset: ds (N turns)`); `:llm reset ds`, `:llm reset *` — по имени/все. Без `history_turns` — поведения нет (как раньше).
+15. Язык ответа: в конфиге у `ds` задан `answer_language: Russian` — ответы DeepSeek на русском, без ухода в китайский (несколько вопросов подряд, короткие).
 
 Автотест: `tests/test_llm.py` (urllib замокан, сеть не дёргается).
 
@@ -944,7 +945,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.14  
-**Версия приложения**: v1.65
+**Версия документа**: v1.15  
+**Версия приложения**: v1.66
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-09

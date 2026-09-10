@@ -13,13 +13,17 @@ pytestmark = pytest.mark.slow
 
 import llm_client
 from llm_client import (
+    MAX_HISTORY_TURNS,
     LlmError,
     _extract_text,
+    append_exchange,
     build_body,
     build_headers,
     expand_file_refs,
+    history_turns_for,
     load_providers,
     perform_request,
+    trim_history,
 )
 
 DS_CFG = {
@@ -74,6 +78,66 @@ def test_expand_file_refs_errors(tmp_path):
 def test_expand_file_refs_no_refs_keeps_text(tmp_path):
     text, attachments = expand_file_refs("just a message", str(tmp_path))
     assert text == "just a message" and attachments == []
+
+
+def test_history_turns_for_clamps():
+    assert history_turns_for({}) == 0
+    assert history_turns_for({"history_turns": 3}) == 3
+    assert history_turns_for({"history_turns": "2"}) == 2
+    assert history_turns_for({"history_turns": -5}) == 0
+    assert history_turns_for({"history_turns": "oops"}) == 0
+    assert history_turns_for({"history_turns": 10_000}) == MAX_HISTORY_TURNS
+
+
+def test_trim_history_and_append_exchange():
+    msgs = [
+        {"role": "user", "content": "u1"},
+        {"role": "assistant", "content": "a1"},
+        {"role": "user", "content": "u2"},
+        {"role": "assistant", "content": "a2"},
+    ]
+    assert trim_history(msgs, 1) == msgs[-2:]
+    assert trim_history(msgs, 0) == []
+    assert trim_history(msgs, 5) == msgs
+    assert append_exchange([], "hi", "yo", 1) == [
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": "yo"},
+    ]
+    capped = append_exchange(append_exchange([], "hi", "yo", 1), "hi2", "yo2", 1)
+    assert capped == [
+        {"role": "user", "content": "hi2"},
+        {"role": "assistant", "content": "yo2"},
+    ]
+
+
+def test_trim_history_drops_dangling_assistant():
+    msgs = [
+        {"role": "assistant", "content": "a0"},
+        {"role": "user", "content": "u1"},
+        {"role": "assistant", "content": "a1"},
+    ]
+    assert trim_history(msgs, 2) == msgs[1:]
+
+
+def test_default_body_includes_history():
+    provider = {"model": "m", "system": "sys"}
+    history = [
+        {"role": "user", "content": "u1"},
+        {"role": "assistant", "content": "a1"},
+    ]
+    body = json.loads(build_body(provider, "now", {}, history))
+    assert [m["role"] for m in body["messages"]] == ["system", "user", "assistant", "user"]
+    assert body["messages"][-1]["content"] == "now"
+    assert [m["role"] for m in json.loads(build_body(provider, "now", {}))["messages"]] == [
+        "system",
+        "user",
+    ]
+
+
+def test_template_history_placeholder():
+    provider = {"model": "m", "body": '{"model":%MODEL%,"messages":%HISTORY%}'}
+    history = [{"role": "user", "content": "u1"}]
+    assert json.loads(build_body(provider, "now", {}, history))["messages"] == history
 
 
 def test_load_providers_missing_file():
@@ -340,6 +404,60 @@ async def test_colon_llm_sends_block_output_tokens(isolated_home, monkeypatch):
         await submit(pilot, ":llm ds $OUT")
         await wait_command_done(app, timeout=8.0)
     assert calls == ["l1\nl2 привет", "x2"]
+
+
+async def test_colon_llm_multi_turn_context_and_reset(isolated_home, monkeypatch):
+    """history_turns: контекст пары уходит в следующий запрос; :llm reset чистит."""
+    import app as app_module
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "default: ds\nproviders:\n  ds:\n    url: http://x\n    model: m\n"
+        "    history_turns: 2\n",
+        encoding="utf-8",
+    )
+    calls: list[tuple[str, list]] = []
+
+    def fake(provider, message, env, timeout=60, history=None):
+        calls.append((message, list(history or [])))
+        return f"ans-{len(calls)}"
+
+    monkeypatch.setattr(app_module, "perform_request", fake)
+
+    from app import CommandRunner, InfoBlock
+    from tests.conftest import submit, wait_command_done
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, ":llm first")
+        await wait_command_done(app, timeout=8.0)
+        await submit(pilot, ":llm second")
+        block2 = await wait_command_done(app, timeout=8.0)
+
+        # Второй запрос несёт первую пару; в шапке — счётчик контекста.
+        assert calls[1] == (
+            "second",
+            [
+                {"role": "user", "content": "first"},
+                {"role": "assistant", "content": "ans-1"},
+            ],
+        )
+        assert "ctx: 1/2 turns" in block2.header
+        assert app._llm_threads["ds"] == [
+            {"role": "user", "content": "first"},
+            {"role": "assistant", "content": "ans-1"},
+            {"role": "user", "content": "second"},
+            {"role": "assistant", "content": "ans-2"},
+        ]
+
+        # :llm reset — ветка провайдера по умолчанию очищается.
+        await submit(pilot, ":llm reset")
+        texts = " ".join(b.text_content for b in app.query(InfoBlock))
+        assert "LLM context reset: ds (2 turns)" in texts
+        assert app._llm_threads.get("ds") is None
+
+        await submit(pilot, ":llm third")
+        await wait_command_done(app, timeout=8.0)
+        assert calls[2][0] == "third" and calls[2][1] == []
 
 
 def test_llm_attachment_completions(isolated_home):

@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.65**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.66**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -141,7 +141,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.14 (app v1.65) |
+| `test_cmd.md` | Manual plan v1.15 (app v1.66) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -163,7 +163,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `app.py` | Launcher (`python3 app.py`) |
 | `pyproject.toml` / `setup.py` / `MANIFEST.in` | Корневая сборка: `pip install .` / `uv tool install git+…` (build_py вкладывает `src/` в `packaging/idvjpy_boot`) |
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
-| `src/app.py` | TUI (`CommandRunner`), v1.65 |
+| `src/app.py` | TUI (`CommandRunner`), v1.66 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -192,6 +192,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.66
+
+- **`:llm` — контекст беседы (`history_turns`).** Провайдер может задать `history_turns: N` — приложение держит в памяти сессии последние N пар `user/assistant` **на провайдера** и добавляет их в `messages` (авто-тело: между system и текущим сообщением; шаблон — плейсхолдер `%HISTORY%`, JSON-массив). По умолчанию `0` — как раньше (без контекста). `:llm reset [<провайдер>|*]` очищает ветку. В шапке блока — `ctx: K/N turns`. Обрезка не оставляет «висячих» assistant-ов; лимит `MAX_HISTORY_TURNS=50`. Контекст — только память сессии (в файлы/БД не пишется). Логика в `llm_client` (`history_turns_for`, `trim_history`, `append_exchange`). Docs: `:?`, README, `llm_providers.example.yml`. Тесты: +6 (обрезка/добавление, тело с историей, `%HISTORY%`, app-level два хода + reset).
 
 ## v1.65
 

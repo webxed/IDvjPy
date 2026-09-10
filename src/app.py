@@ -125,10 +125,12 @@ try:
     from llm_client import (
         DEFAULT_MAX_ATTACHMENT_BYTES,
         LlmError,
+        append_exchange,
         default_provider,
         describe,
         example_config_path,
         expand_file_refs,
+        history_turns_for,
         load_providers,
         perform_request,
         provider_names,
@@ -1323,7 +1325,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.65"
+    VERSION = "v1.66"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1506,6 +1508,9 @@ class CommandRunner(App):
         # через :o /needle даже после :c; только память, не пишется в БД/историю.
         self._output_history: list[dict[str, Any]] = []
         self._OUTPUT_HISTORY_CAP = 300
+        # Контекст беседы :llm по провайдерам: только память сессии, ключ
+        # history_turns в llm_providers.yml (0 = без контекста).
+        self._llm_threads: dict[str, list[dict[str, str]]] = {}
 
     def _extract_path_token(self, text: str) -> str:
         """Возвращает последний токен для path completion."""
@@ -5795,6 +5800,9 @@ class CommandRunner(App):
         known = provider_names(cfg)
         default = default_provider(cfg)
         first = args[0]
+        if first == "reset" and "reset" not in providers:
+            self._handle_llm_reset(args[1:], providers, default)
+            return
         if first in providers:
             provider_name = first
             message = " ".join(args[1:]).strip()
@@ -5846,6 +5854,8 @@ class CommandRunner(App):
             self.add_block(InfoBlock(f"Error: {e}"))
             return
         timeout = float(provider.get("timeout") or 60)
+        turns = history_turns_for(provider)
+        history = list(self._llm_threads.get(provider_name, [])) if turns else []
         now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         files_note = ""
         if attachments:
@@ -5853,7 +5863,8 @@ class CommandRunner(App):
             if len(attachments) > 3:
                 shown += ", …"
             files_note = f" · @files: {escape(shown)}"
-        header = f"{now} ({os.getcwd()}) $ :llm {provider_name}{files_note}"
+        ctx_note = f" · ctx: {len(history) // 2}/{turns} turns" if turns else ""
+        header = f"{now} ({os.getcwd()}) $ :llm {provider_name}{files_note}{ctx_note}"
         block = CommandBlock(
             header=header,
             raw_stdout=f"[Consulting {provider_name}…]",
@@ -5865,9 +5876,55 @@ class CommandRunner(App):
         self.add_block(block)
         threading.Thread(
             target=self._llm_worker,
-            args=(block, provider, message, timeout),
+            args=(block, provider, provider_name, message, timeout, history),
             daemon=True,
         ).start()
+
+    def _handle_llm_reset(
+        self, args: list[str], providers: dict, default: str | None
+    ) -> None:
+        """`:llm reset [<provider>|*]` — очистить контекст беседы (history_turns)."""
+        known = sorted(providers)
+        if args and args[0] == "*":
+            names = known
+        elif args:
+            names = [args[0]]
+        elif default is not None:
+            names = [default]
+        else:
+            self.add_block(
+                InfoBlock(
+                    "Usage: :llm reset [<provider>|*] — no default provider is set.\n"
+                    f"Known: {', '.join(known) or '(none)'}."
+                )
+            )
+            return
+        for name in names:
+            if name not in providers:
+                self.add_block(
+                    InfoBlock(
+                        f"Error: unknown provider '{name}'. "
+                        f"Known: {', '.join(known) or '(none)'}."
+                    )
+                )
+                return
+        details = []
+        for name in names:
+            had = len(self._llm_threads.get(name, [])) // 2
+            self._llm_threads.pop(name, None)
+            details.append(f"{name} ({had} turns)")
+        self.add_block(InfoBlock("LLM context reset: " + ", ".join(details)))
+
+    def _llm_remember_exchange(
+        self, provider_name: str, user_text: str, assistant_text: str, turns: int
+    ) -> None:
+        """Копит контекст беседы провайдера (только память сессии, ключ history_turns)."""
+        self._llm_threads[provider_name] = append_exchange(
+            self._llm_threads.get(provider_name, []),
+            user_text,
+            assistant_text,
+            turns,
+        )
 
     def _llm_expand_output_tokens(self, message: str) -> str | None:
         """Заменяет в сообщении `:llm` токены вывода блока.
@@ -5903,12 +5960,26 @@ class CommandRunner(App):
             return
         self.add_block(InfoBlock(describe(cfg)))
 
-    def _llm_worker(self, block: CommandBlock, provider: dict, message: str, timeout: float) -> None:
+    def _llm_worker(
+        self,
+        block: CommandBlock,
+        provider: dict,
+        provider_name: str,
+        message: str,
+        timeout: float,
+        history: list[dict[str, str]],
+    ) -> None:
         """Фоновый поток: запрос к LLM не должен блокировать UI."""
         env = {**os.environ, **self.local_env}
+        kwargs = {"history": history} if history else {}
         try:
-            answer = perform_request(provider, message, env, timeout=timeout)
+            answer = perform_request(provider, message, env, timeout=timeout, **kwargs)
             out, err, code = answer.strip() + "\n", "", 0
+            turns = history_turns_for(provider)
+            if turns:
+                self.call_from_thread(
+                    self._llm_remember_exchange, provider_name, message, answer, turns
+                )
         except LlmError as e:
             out, err, code = "", str(e), 1
         except Exception as e:  # Защита от неожиданного — показать, не ронять поток.

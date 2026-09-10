@@ -30,6 +30,9 @@ from update_check import (
 )
 
 DEFAULT_TIMEOUT = 60.0
+# Многоходовость: сколько последних пар (user+assistant) держать в контексте.
+DEFAULT_HISTORY_TURNS = 0
+MAX_HISTORY_TURNS = 50
 # Лимит на вложенный файл (`@путь`): больше — явная ошибка, не молчаливая обрезка.
 DEFAULT_MAX_ATTACHMENT_BYTES = 200_000
 # `@путь` в сообщении: не трогает email (`user@host`) и `@@literal`.
@@ -112,6 +115,46 @@ def _code_fence(content: str) -> str:
     """Безопасное ```-ограждение: длиннее любой серии бэктиков в файле."""
     longest = max((len(run) for run in re.findall(r"`+", content)), default=0)
     return "`" * max(3, longest + 1)
+
+
+def history_turns_for(provider: dict[str, Any]) -> int:
+    """Сколько пар (user+assistant) держать в контексте у провайдера.
+
+    Ключ `history_turns` в llm_providers.yml; нечисловое/отрицательное → 0
+    (без контекста), больше `MAX_HISTORY_TURNS` — обрезается.
+    """
+    try:
+        value = int(provider.get("history_turns") or 0)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(value, MAX_HISTORY_TURNS))
+
+
+def trim_history(messages: list[dict[str, str]], turns: int) -> list[dict[str, str]]:
+    """Оставляет последние `turns` пар, не начиная с «висячего» assistant."""
+    if turns <= 0:
+        return []
+    kept = list(messages[-turns * 2 :])
+    while kept and kept[0].get("role") != "user":
+        kept.pop(0)
+    return kept
+
+
+def append_exchange(
+    messages: list[dict[str, str]],
+    user_text: str,
+    assistant_text: str,
+    turns: int,
+) -> list[dict[str, str]]:
+    """Добавляет пару user/assistant и обрезает контекст до `turns` пар."""
+    if turns <= 0:
+        return []
+    updated = [
+        *messages,
+        {"role": "user", "content": user_text},
+        {"role": "assistant", "content": assistant_text},
+    ]
+    return trim_history(updated, turns)
 
 
 def expand_file_refs(
@@ -234,27 +277,46 @@ def _effective_system(provider: dict[str, Any]) -> str:
     return f"{base}\n\n{rule}" if base else rule
 
 
-def _default_body(model: str, system: str | None, message: str) -> dict[str, Any]:
-    messages = []
+def _default_body(
+    model: str,
+    system: str | None,
+    message: str,
+    history: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    messages: list[dict[str, str]] = []
     if system:
         messages.append({"role": "system", "content": system})
+    messages.extend(history or [])
     messages.append({"role": "user", "content": message})
     body: dict[str, Any] = {"model": model, "messages": messages, "stream": False}
     return body
 
 
-def build_body(provider: dict[str, Any], message: str, env: dict[str, str]) -> str:
-    """Тело запроса: пользовательский шаблон с плейсхолдерами или OpenAI-форма."""
+def build_body(
+    provider: dict[str, Any],
+    message: str,
+    env: dict[str, str],
+    history: list[dict[str, str]] | None = None,
+) -> str:
+    """Тело запроса: пользовательский шаблон с плейсхолдерами или OpenAI-форма.
+
+    `history` — предыдущие пары `{role, content}` (`:llm` многоходовость).
+    Шаблон получает их как `%HISTORY%` (JSON-массив, без кавычек); в авто-теле
+    они встают между system и текущим user-сообщением.
+    """
     model = str(provider.get("model") or "")
     system = _effective_system(provider)
     template = provider.get("body")
     if template is None:
-        return json.dumps(_default_body(model, system, message), ensure_ascii=False)
+        return json.dumps(
+            _default_body(model, system, message, history), ensure_ascii=False
+        )
     text = str(template)
     text = text.replace("%MSG_RAW%", message)
     text = text.replace("%MSG%", _json_literal(message))
     text = text.replace("%SYSTEM%", _json_literal(system))
     text = text.replace("%MODEL%", _json_literal(model))
+    text = text.replace("%HISTORY%", json.dumps(history or [], ensure_ascii=False))
     return _require_env(text, env, "body")
 
 
@@ -294,16 +356,18 @@ def perform_request(
     message: str,
     env: dict[str, str],
     timeout: float = DEFAULT_TIMEOUT,
+    history: list[dict[str, str]] | None = None,
 ) -> str:
     """Выполняет запрос и возвращает текстовый ответ модели.
 
+    `history` — предыдущие пары сообщений (многоходовость `:llm`).
     Бросает LlmError с понятным сообщением при сетевых/HTTP/разборных ошибках.
     """
     url = str(provider.get("url") or "").strip()
     if not url:
         raise LlmError("Provider has no `url`.")
     headers = build_headers(provider, env)
-    body = build_body(provider, message, env).encode("utf-8")
+    body = build_body(provider, message, env, history).encode("utf-8")
     request = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
         with _open_request(request, timeout, env) as response:
