@@ -1,0 +1,30 @@
+# Контекст сборки демостенда (docker/Dockerfile): в образ идут только код,
+# шаблоны и .md-справочники. Всё личное, генерируемое и тяжёлое — мимо.
+.git
+.github
+.gitignore
+.codegraph
+.claude
+.vscode
+.zed
+.venv
+venv
+pyvenv.cfg
+/bin
+/lib
+/lib64
+/include
+build
+dist
+backups
+packaging
+tests
+__pycache__
+*.py[cod]
+*.egg-info
+*.spec
+*.db
+*.json
+*.csv
+*.txt
+!requirements.txt

@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.74**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.75**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -141,7 +141,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.20 (app v1.74) |
+| `test_cmd.md` | Manual plan v1.22 (app v1.75) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -150,7 +150,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_demo.py` | YAML `--demo`, `:playbook`, `loop: N` / `loop: true` |
 | `tests/test_gui_open.py` | `:fm` / `:term` argv by OS, `$FILEMAN` / `$TERMINAL`, detached spawn |
 | `tests/test_screensaver.py` | starfield, `:screensaver`, idle timer, key swallowed |
-| `tests/test_seed_*.py` | linux / k8s chains / git / ops handbooks; pre-seed SQLite backup; empty-DB catalog text |
+| `tests/test_docker_stand.py` | Файлы docker-стенда: seed-скрипты в entrypoint, compose-том/TTY, Dockerfile, `.dockerignore` |
 
 Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then Enter.
 
@@ -163,7 +163,9 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `app.py` | Launcher (`python3 app.py`) |
 | `pyproject.toml` / `setup.py` / `MANIFEST.in` | Корневая сборка: `pip install .` / `uv tool install git+…` (build_py вкладывает `src/` в `packaging/idvjpy_boot`) |
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
-| `src/app.py` | TUI (`CommandRunner`), v1.74 |
+| `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `README.md` |
+| `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
+| `src/app.py` | TUI (`CommandRunner`), v1.75 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -195,6 +197,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.75
+
+- **Демостенд в Docker** — потрогать TUI без установки Python. `docker/Dockerfile` на `python:3.12-alpine` (плюс `bash` — приложение запускает команды и TTY через `/bin/bash`, `ncurses-terminfo-base` — terminfo для `TERM=xterm-256color`, `nano` — редактор из шаблона, `git`/`curl`/`jq`/`procps` — чтобы seed-команды реально работали); зависимости из `requirements.txt`; образ ~100 МБ. `docker/compose.yaml` — сервис `idvjpy` с `tty`/`stdin_open` (TUI без TTY не запустится) и именованным томом `idvjpy-demo-data`, контекст сборки — корень репозитория. `docker/entrypoint.sh`: в пустом томе создаёт `/data/settings.yml` и `llm_providers.yml` из шаблонов, один раз (если в БД нет live-команд) сеет linux/k8s/git/ops (~5 с, 849 команд) и убирает снимки, сделанные самим посевом, затем `exec` `app.py` с проброшенными аргументами (`--demo short --demo-quit` и т.п.). `.dockerignore` держит контекст маленьким (`.git`, `.venv`, `tests/`, `packaging/`, данные, сборки). Документация стенда — `docker/README.md` («что попробовать», автопоказ, данные/сброс, что заведомо не работает), краткая — в README. Тест `tests/test_docker_stand.py` статически стережёт согласованность (без сборки образа). Проверено сборкой и запуском: `docker compose run --rm idvjpy --help` и `--demo short --demo-quit` — exit 0, без трейсбеков.
 
 ## v1.74
 

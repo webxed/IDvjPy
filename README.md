@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.74 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.75 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -147,6 +147,20 @@ python3 app.py --demo full --demo-quit
 | `app.py` / `backup_db.py` | лаунчеры (не правят данные) |
 | `settings.yml` | личные настройки — **не в git** (`.gitignore`); копия `src/settings.example.yml`, создаётся при первом запуске |
 | `*.db`, `.bashrc_term*`, `history_*.txt` | теги, переменные, история — тоже вне git |
+
+## Демостенд в Docker
+
+Потрогать TUI, не ставя Python: маленький образ (~100 МБ) с уже наполненной
+библиотекой тегов, личные данные — в томе. Что попробовать и как сбросить —
+[`docker/README.md`](docker/README.md).
+
+```bash
+cd docker
+docker compose run --rm idvjpy                          # собрать и запустить
+docker compose run --rm idvjpy --demo short --demo-quit # автопоказ
+
+docker volume rm idvjpy-demo-data                       # сброс к заводским
+```
 
 ## Система префиксов
 

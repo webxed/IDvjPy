@@ -1,0 +1,22 @@
+# Демостенд IDvjPy_term (см. docker/README.md).
+# TUI требует настоящий TTY — запускать через `docker compose run`, не `up`.
+name: idvjpy-demo
+
+services:
+  idvjpy:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: idvjpy-demo
+    tty: true
+    stdin_open: true
+    environment:
+      TERM: xterm-256color
+    volumes:
+      # settings.yml, БД тегов, history: переживают пересборку образа.
+      - idvjpy-data:/data
+
+volumes:
+  idvjpy-data:
+    # Явное имя: «сброс к заводским» = docker volume rm idvjpy-demo-data.
+    name: idvjpy-demo-data
