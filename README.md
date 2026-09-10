@@ -85,6 +85,34 @@ python3 -m idvjpy_boot       # то же самое через python -m
 
 Версия пакета соответствует версии приложения (`CommandRunner.VERSION` → `MAJOR.MINOR.0`).
 
+### Установка в систему (pipx / uv / `--user`)
+
+Чтобы `idvjpy` была всегда доступна как обычная команда, ставьте wheel изолированно — системный Python при этом не трогается.
+
+```bash
+# pipx — отдельное окружение на приложение
+pipx install packaging/dist/idvjpy_term-*.whl
+pipx upgrade idvjpy-term        # после сборки нового wheel
+pipx uninstall idvjpy-term
+
+# uv (>= 0.4) — то же в стиле uv; ставит бинарь в ~/.local/bin
+uv tool install packaging/dist/idvjpy_term-*.whl
+uv tool list                    # idvjpy-term v1.60.0 / idvjpy
+uv tool upgrade idvjpy-term
+uv tool uninstall idvjpy-term
+
+# или в активный venv через uv
+uv venv && uv pip install packaging/dist/idvjpy_term-*.whl
+
+# пользовательская установка (без изоляции)
+python3 -m pip install --user packaging/dist/idvjpy_term-*.whl   # ~/.local/bin/idvjpy
+```
+
+Замечания:
+- На Debian/Ubuntu системный `pip install` без venv блокируется (PEP 668, `externally-managed-environment`) — используйте `pipx`/`uv` или `--user`.
+- Ставить нужно **собранный wheel**. Прямая установка из git/каталога `pipx install git+…` / `uv tool install git+…` пока не работает: у репозитория нет корневого `pyproject.toml`, а wheel нужно собрать через `packaging/build_wheel.sh` (он вкладывает `src/` в пакет).
+- Куда попадают данные при первом запуске — см. «Запуск» ниже: системный каталог ОС (`~/.config/idvjpy` и аналоги), либо `--data-dir` / `$IDVJPY_DATA_DIR`. При обновлении/удалении пакета теги, история и настройки сохраняются.
+
 ## Запуск
 
 ```bash
