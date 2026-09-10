@@ -11,7 +11,8 @@ python3 src/seed_k8s_chains.py --seed
 
 Не трогает `proc` / `file` / `net` / `kube`. Повторный `--seed` перезаписывает только
 `kvars` `kns` `kpod` `klog` `kev` `ksvc` `king` `kdep` `kres` `kjq`
-`kcrash` `knet` `kroll` `kwatch` `kquota`.
+`kavail` `kstore`
+`kcrash` `knet` `kroll` `kwatch` `kquota` `kscale` `kvolume`.
 
 `kubectl logs -f` / `exec -it` / `port-forward` — с префиксом `>` (настоящий TTY).  
 `delete` / `rollout restart` / `undo` — не в плейбуках.
@@ -52,6 +53,8 @@ $QUOTA=compute-resources
 | 3 | `kubectl get ns` | Список namespace |
 | 4 | `kubectl get ns $NS -o yaml` | YAML `$NS` |
 | 5 | `kubectl api-resources --namespaced=true --verbs=list` | Namespaced API |
+| 6 | `kubectl get nodes -o wide` | Ноды wide (версия/ОС/адреса) |
+| 7 | `kubectl auth can-i --list -n $NS` | Мои права в `$NS` |
 
 ---
 
@@ -67,6 +70,8 @@ $QUOTA=compute-resources
 | 6 | jsonpath containerStatuses name/state/lastState | State контейнеров |
 | 7 | `kubectl top pod -n $NS` | Метрики подов |
 | 8 | jsonpath nodeName / podIP / hostIP | Нода и IP |
+| 9 | jsonpath phase / reason / message | Почему под не Running (`Pending`, `FailedScheduling`) |
+| 10 | custom-columns NAME / RESTARTS / NODE / IP | Сводка с рестартами |
 
 ---
 
@@ -94,6 +99,8 @@ $QUOTA=compute-resources
 | 1 | `kubectl get events -n $NS --sort-by=.lastTimestamp` | Все events |
 | 2 | `kubectl get events -n $NS --field-selector involvedObject.name=$POD` | Events `$POD` |
 | 3 | `kubectl get events -n $NS --field-selector type=Warning …` | Warning |
+| 4 | `kubectl events -n $NS --types=Warning` | `kubectl events` (1.23+), Warning |
+| 5 | `kubectl events -n $NS --for pod/$POD` | `kubectl events` по `$POD` |
 
 ---
 
@@ -177,6 +184,34 @@ $QUOTA=compute-resources
 
 ---
 
+## kavail — HPA / PDB (tid)
+
+Масштабирование и защита от disruption (drain/evictions).
+
+| tid | Команда | Назначение |
+|-----|---------|------------|
+| 1 | `kubectl get hpa -n $NS -o wide` | HPA: текущие/целевые метрики |
+| 2 | `kubectl describe hpa -n $NS` | Describe HPA в `$NS` (`-l app=$APP` — узко) |
+| 3 | `kubectl get pdb -n $NS` | PDB: disruptions allowed |
+| 4 | `kubectl describe pdb -n $NS` | Describe PDB |
+| 5 | `kubectl get pdb -n $NS -o json` | JSON → F5 |
+
+---
+
+## kstore — PVC / PV (tid)
+
+Застрявший Pod часто ждёт том (`Pending` → нет PVC/StorageClass/привязки).
+
+| tid | Команда | Назначение |
+|-----|---------|------------|
+| 1 | `kubectl get pvc -n $NS` | PVC в `$NS` |
+| 2 | `kubectl get pvc -n $NS -o wide` | PVC: volume / storageclass |
+| 3 | `kubectl describe pvc -n $NS` | Describe PVC (Pending?) |
+| 4 | `kubectl get pvc -n $NS -o json` | JSON → F5 |
+| 5 | `kubectl get pv -o wide` | PV: статус/claim (кластер) |
+
+---
+
 ## Плейбуки
 
 | Тег | Цепочка | Зачем |
@@ -186,6 +221,8 @@ $QUOTA=compute-resources
 | `kroll[1]` | kdep[2,4,6] → kpod[2] | Rollout застрял |
 | `kwatch[1]` | kpod[1,2] → kev[3] | Что случилось в `$NS` |
 | `kquota[1]` | kres[1,2,4,6,8,10] | Квоты / лимиты / allocatable |
+| `kscale[1]` | kavail[1,3] → kpod[7] → kev[3] | HPA/PDB: не масштабируется / disruption |
+| `kvolume[1]` | kstore[1,3,5] → kev[3] | Pending / том не привязан |
 
 ```text
 $NS=my-ns
@@ -212,3 +249,7 @@ $QUOTA=compute-resources
 | Rollout 0/1 | `$NS`, `$DEPLOY`, `$APP` | `!! kroll[1]` |
 | OOMKilled | `$NS`, `$POD` | `!! kpod[5]` → F5 `.resources` |
 | Шум в ns | `$NS` | `!! kwatch[1]` + `:/error` |
+| HPA не масштабирует | `$NS`, `$APP` | `!! kscale[1]` (`!kavail[1]`, `!kpod[7]`) |
+| Pod Pending: нет тома | `$NS`, `$POD` | `!! kvolume[1]` (`!kstore[1,3]`) |
+| Forbidden / нет прав | `$NS` | `!kns[7]` (`auth can-i --list`) ; `!kns[1]` |
+| Drain/evict не идёт | `$NS` | `!kavail[3]` ; `!kavail[4]` |

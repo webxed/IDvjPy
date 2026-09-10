@@ -53,8 +53,48 @@ def test_seed_k8s_chains_tids_and_playbook_refs(tmp_path):
     kjq = database.get_commands_by_tag(db, "kjq")
     assert "status.hard" in kjq[6]["command"]  # tid 7
 
+    # v1.64: расширение kns/kpod/kev и новые секции kavail/kstore
+    kns = database.get_commands_by_tag(db, "kns")
+    assert kns[5]["command"] == "kubectl get nodes -o wide"  # tid 6
+    assert "auth can-i" in kns[6]["command"]  # tid 7
+
+    assert "status.message" in kpod[8]["command"]  # tid 9: phase/reason/message
+    assert "custom-columns" in kpod[9]["command"]  # tid 10: restarts/node/IP
+
+    assert kev[3]["command"].startswith("kubectl events")  # tid 4
+    assert "--for pod/$POD" in kev[4]["command"]  # tid 5
+
+    kavail = database.get_commands_by_tag(db, "kavail")
+    assert kavail[0]["command"].startswith("kubectl get hpa")
+    assert "get pdb" in kavail[2]["command"]
+
+    kstore = database.get_commands_by_tag(db, "kstore")
+    assert kstore[0]["command"] == "kubectl get pvc -n $NS"
+    assert kstore[4]["command"] == "kubectl get pv -o wide"
+
+    scale = database.get_command_by_tid(db, "kscale", 1)
+    assert "!kavail[1]" in scale["command"]
+    assert "!kpod[7]" in scale["command"]
+    volume = database.get_command_by_tid(db, "kvolume", 1)
+    assert "!kstore[3]" in volume["command"]
+    assert "!kstore[5]" in volume["command"]
+
     assert database.get_tag_comment(db, "kcrash")
     assert "CrashLoop" in database.get_command_comment(db, "kcrash", 1)
+
+
+def test_seed_k8s_chains_refs_point_to_existing_tids():
+    """Все !tag[tid] в цепочках указывают на существующий тег и существующий tid."""
+    import re
+
+    for tag, (_comment, commands) in SEED_TAGS.items():
+        for command, _cmd_comment in commands:
+            for ref, tid in re.findall(r"!(\w+)\[(\d+)\]", command):
+                assert ref in SEED_TAGS, f"{tag}: неизвестный тег в ссылке !{ref}[{tid}]"
+                max_tid = len(SEED_TAGS[ref][1])
+                assert 1 <= int(tid) <= max_tid, (
+                    f"{tag}: !{ref}[{tid}] вне диапазона (у {ref} {max_tid})"
+                )
 
 
 def test_seed_k8s_chains_does_not_touch_kube(tmp_path):

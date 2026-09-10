@@ -45,6 +45,8 @@ SEED_TAGS = {
             ("kubectl get ns", "список namespace"),
             ("kubectl get ns $NS -o yaml", "yaml namespace $NS"),
             ("kubectl api-resources --namespaced=true --verbs=list", "namespaced API"),
+            ("kubectl get nodes -o wide", "ноды wide (версия/OС/адреса)"),
+            ("kubectl auth can-i --list -n $NS", "мои права в $NS"),
         ],
     ),
     "kpod": (
@@ -70,6 +72,17 @@ SEED_TAGS = {
                 "kubectl get pod $POD -n $NS -o jsonpath="
                 "'{.spec.nodeName}{\"\\n\"}{.status.podIP}{\"\\n\"}{.status.hostIP}{\"\\n\"}'",
                 "node / podIP / hostIP",
+            ),
+            (
+                "kubectl get pod $POD -n $NS -o jsonpath="
+                "'{.status.phase}{\"\\n\"}{.status.reason}{\"\\n\"}{.status.message}{\"\\n\"}'",
+                "phase / reason / message $POD",
+            ),
+            (
+                "kubectl get pods -n $NS -o custom-columns="
+                "NAME:.metadata.name,RESTARTS:.status.containerStatuses[*].restartCount,"
+                "NODE:.spec.nodeName,IP:.status.podIP",
+                "restarts / node / IP (сводка)",
             ),
         ],
     ),
@@ -101,6 +114,8 @@ SEED_TAGS = {
                 "kubectl get events -n $NS --field-selector type=Warning --sort-by=.lastTimestamp",
                 "только Warning",
             ),
+            ("kubectl events -n $NS --types=Warning", "kubectl events: Warning (1.23+)"),
+            ("kubectl events -n $NS --for pod/$POD", "kubectl events по $POD"),
         ],
     ),
     "ksvc": (
@@ -197,6 +212,26 @@ SEED_TAGS = {
             ),
         ],
     ),
+    "kavail": (
+        "HPA / PDB: масштабирование и disruption",
+        [
+            ("kubectl get hpa -n $NS -o wide", "HPA: текущие/целевые метрики"),
+            ("kubectl describe hpa -n $NS", "describe HPA в $NS"),
+            ("kubectl get pdb -n $NS", "PDB: disruptions allowed"),
+            ("kubectl describe pdb -n $NS", "describe PDB в $NS"),
+            ("kubectl get pdb -n $NS -o json", "json PDB → F5"),
+        ],
+    ),
+    "kstore": (
+        "PVC / PV: тома",
+        [
+            ("kubectl get pvc -n $NS", "PVC в $NS"),
+            ("kubectl get pvc -n $NS -o wide", "PVC: volume / storageclass"),
+            ("kubectl describe pvc -n $NS", "describe PVC (Pending?)"),
+            ("kubectl get pvc -n $NS -o json", "json PVC → F5"),
+            ("kubectl get pv -o wide", "PV: статус/claim (кластер)"),
+        ],
+    ),
     "kcrash": (
         "под не Running: describe → previous logs → events",
         [
@@ -245,6 +280,26 @@ SEED_TAGS = {
                 "echo '--- json ---' ; !kres[4] ; echo '--- limitrange ---' ; !kres[6] ; "
                 "echo '--- top node ---' ; !kres[8] ; echo '--- quota events ---' ; !kres[10]",
                 "квоты / лимиты / allocatable",
+            ),
+        ],
+    ),
+    "kscale": (
+        "HPA / PDB / метрики при нагрузке",
+        [
+            (
+                "!kavail[1] ; echo '--- pdb ---' ; !kavail[3] ; "
+                "echo '--- metrics ---' ; !kpod[7] ; echo '--- events ---' ; !kev[3]",
+                "не масштабируется / disruption",
+            ),
+        ],
+    ),
+    "kvolume": (
+        "PVC / PV / events — том не привязан",
+        [
+            (
+                "!kstore[1] ; echo '--- describe ---' ; !kstore[3] ; "
+                "echo '--- pv ---' ; !kstore[5] ; echo '--- events ---' ; !kev[3]",
+                "Pending / нет тома",
             ),
         ],
     ),

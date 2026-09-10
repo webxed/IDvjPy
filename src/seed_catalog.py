@@ -34,7 +34,7 @@ def cmd_click(script: str) -> str:
 # script, one-line description, handbook markdown (empty if none)
 SEED_HANDBOOKS_CORE = (
     ("seed_linux_commands.py", "Linux: proc, file, net, kube", "SEED_LINUX_COMMANDS.md"),
-    ("seed_k8s_chains.py", "Цепочки для расследования k8s: kpod, klog, kquota, …", "K8S_CHAINS.md"),
+    ("seed_k8s_chains.py", "Цепочки для расследования k8s: kpod, klog, kavail, kstore, …", "K8S_CHAINS.md"),
     ("seed_git.py", "git: status, diff, branches; gstat / gsync", "SEED_GIT_COMMANDS.md"),
 )
 SEED_HANDBOOKS_OPS = (
