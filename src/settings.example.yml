@@ -1,20 +1,49 @@
-# IDvjPy_term — настройки по умолчанию.
-# Создаётся автоматически при первом запуске в новом data-каталоге
-# (если запущено из каталога с этим файлом — portable-режим, правьте его сам).
+# IDvjPy_term — настройки по умолчанию (шаблон).
+#
+# При первом запуске в новом data-каталоге этот файл копируется как settings.yml
+# (--data-dir / $IDVJPY_DATA_DIR / системный каталог; см. README).
+# Портативный режим: если settings.yml уже есть в каталоге запуска — берётся он,
+# шаблон не трогается. Личный settings.yml в git не попадает (.gitignore).
 #
 # Все относительные пути — от data-каталога (settings рядом с БД/history).
 
+# Максимум строк в буфере вывода.
 max_lines: 100000
+
+# История ввода: сколько последних строк держать и показывать.
 history_lines: 20
+# Хвост истории остаётся последовательностью; старые дубликаты уходят. 0 = выкл. :h compact
 history_keep: 500
+
+# Файл БД с тегами (относительно data-каталога).
 database_tags_file: mytags.db
+# Каталог снимков БД (:backup, --seed).
+backup_dir: backups
+
+# Таймаут выполнения команды (секунды). 0 = без таймаута (tsh login, долгие команды).
 command_timeout: 10
+
+# Протокол мыши в TUI: true — клик выделяет блок, колесо крутит журнал;
+# false — выделение текста мышью в терминале (клик по блоку не фокусирует).
+# Если параметр отсутствует, используется true.
 terminal_mouse: true
+
+# Цветовая тема TUI. `d` переключает textual-dark / textual-light и сохраняет сюда.
+# Другие имена: :theme  (nord, dracula, gruvbox, catppuccin-mocha, …)
 theme: textual-dark
+
+# Сверять VERSION с GitHub main при старте. :update проверяет всегда.
 check_updates: true
+
+# Скринсейвер (starfield). Секунды простоя; 0 = выкл. :screensaver — сразу.
 screensaver_idle: 120
+# Летающие звёзды (пыль + k8s/git/…). false — чёрный холст; часы, лента и load остаются.
 screensaver_stars: true
+
+# Подсказки имён k8s-ресурсов из живого кластера (`kubectl get pod <Tab>`).
 k8s_completion: false
-# Внешний редактор для :editor. Может содержать аргументы (code --wait).
-# Не задан — берётся $VISUAL / $EDITOR, затем системный редактор.
+
+# Внешний редактор для `:editor <файл>|$OUT|$BLOCK` (запуск в TTY, TUI на паузе).
+# Может содержать аргументы: `editor: code --wait`, `editor: nvim`. Пусто/нет —
+# берётся $VISUAL / $EDITOR, затем системный редактор (sensible-editor, nano, vi).
 editor: nano

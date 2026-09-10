@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.72 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.73 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -128,7 +128,7 @@ uv tool install git+https://github.com/webxed/IDvjPy
 python3 app.py [--data-dir PATH]
 ```
 
-Данные (settings/БД/history): `--data-dir` → `$IDVJPY_DATA_DIR` → текущий каталог (если в нём уже есть `settings.yml`) → системный каталог (`~/.config/idvjpy`, macOS `~/Library/Application Support/IDvjPy`, Windows `%APPDATA%\IDvjPy`). При первом запуске в новом каталоге создаются шаблоны `settings.yml` и `llm_providers.yml`.
+Данные (settings/БД/history): `--data-dir` → `$IDVJPY_DATA_DIR` → текущий каталог (если в нём уже есть `settings.yml`) → системный каталог (`~/.config/idvjpy`, macOS `~/Library/Application Support/IDvjPy`, Windows `%APPDATA%\IDvjPy`). При первом запуске в новом каталоге создаются `settings.yml` (копия [`src/settings.example.yml`](src/settings.example.yml)) и `llm_providers.yml` (копия примера). Личный `settings.yml` в git **не входит** — настройки не утекают в репозиторий.
 
 ```bash
 python3 app.py
@@ -145,7 +145,8 @@ python3 app.py --demo full --demo-quit
 |------|------------|
 | `src/` | TUI, CSS, seed-скрипты, шаблон `.bashrc_term.example` |
 | `app.py` / `backup_db.py` | лаунчеры (не правят данные) |
-| `settings.yml`, `*.db`, `.bashrc_term*` | настройки, теги, переменные |
+| `settings.yml` | личные настройки — **не в git** (`.gitignore`); копия `src/settings.example.yml`, создаётся при первом запуске |
+| `*.db`, `.bashrc_term*`, `history_*.txt` | теги, переменные, история — тоже вне git |
 
 ## Система префиксов
 
@@ -269,19 +270,22 @@ python3 app.py --demo full --demo-quit
 
 ## Конфигурация
 
-[`settings.yml`](settings.yml):
+Шаблон — [`src/settings.example.yml`](src/settings.example.yml) (он же копируется как `settings.yml` при первом запуске в новом data-каталоге; личный `settings.yml` в git не попадает):
 
 ```yaml
 max_lines: 100000
 history_lines: 20
-database_tags_file: mytags.db
-command_timeout: 10          # 0 = без таймаута
 history_keep: 500            # хвост истории как лента; старше — без повторов. 0 = не сжимать. :h compact
+database_tags_file: mytags.db
+backup_dir: backups          # снимки БД (:backup, --seed)
+command_timeout: 10          # 0 = без таймаута
 terminal_mouse: true         # true — мышь у приложения (клик/колесо; протяжка выделяет и копирует в буфер); false — выделение средствами терминала
 theme: textual-dark          # `d` / `:theme`; сохраняется при смене
 check_updates: true          # старт: сверка VERSION с GitHub main; :update всегда
 screensaver_idle: 120        # простой → starfield; 0 = выкл. :screensaver — сразу
 screensaver_stars: true      # летающие звёзды; false — чёрный холст (часы/лента/load остаются)
+k8s_completion: false        # имена k8s-ресурсов из кластера в подсказках (`kubectl get pod <Tab>`)
+editor: nano                 # `:editor`; можно с аргументами (code --wait); пусто → $VISUAL/$EDITOR
 ```
 
 Переменные читаются из `.bashrc_term_<instance>` (приоритет) и `.bashrc_term` (дополняет). Формат: `export VAR=val` или `VAR=val`. Если файлов нет, при старте копируется [`src/.bashrc_term.example`](src/.bashrc_term.example). В работающем приложении: `:env` или правка файла из `> vim .bashrc_term_default` (после выхода TTY перечитает файлы и снимет `export` той же оболочки). В `.bashrc_term` TTY-экспорты сами не пишутся — для этого `$VAR=val`.

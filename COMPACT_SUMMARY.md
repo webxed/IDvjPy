@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.72**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.73**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -141,7 +141,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.19 (app v1.72) |
+| `test_cmd.md` | Manual plan v1.19 (app v1.73) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -163,7 +163,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `app.py` | Launcher (`python3 app.py`) |
 | `pyproject.toml` / `setup.py` / `MANIFEST.in` | Корневая сборка: `pip install .` / `uv tool install git+…` (build_py вкладывает `src/` в `packaging/idvjpy_boot`) |
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
-| `src/app.py` | TUI (`CommandRunner`), v1.72 |
+| `src/app.py` | TUI (`CommandRunner`), v1.73 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -187,13 +187,18 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/help_texts.py` | Static `:?` / `:i` help texts |
 | `src/seed_*.py` | Handbook seeds (linux, k8s, git, ops, …) |
 | `src/app.css` | Styles (JSON viewer, line-nav border, block focus) |
-| `settings.yml` | DB path, timeout, `terminal_mouse`, `theme`, `check_updates`, `history_keep`, `screensaver_idle`, `screensaver_stars` (cwd) |
+| `settings.yml` | Личные настройки — **не в git** (`.gitignore`), создаётся копией `src/settings.example.yml` при первом запуске в новом data-каталоге |
+| `src/settings.example.yml` | Шаблон настроек: все ключи с комментариями, `editor: nano` по умолчанию |
 | `K8S_CHAINS.md` | k8s investigation overview |
 | `docs/SEED_*_COMMANDS.md` | Canonical tids per handbook |
 | `DATABASE.md` | How commands are read from SQLite |
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.73
+
+- **`settings.yml` больше не в git.** Личные настройки уходят в `.gitignore` (`/settings.yml`) и удалены из индекса: они не могут утечь во внешний репозиторий. Источник правды — шаблон `src/settings.example.yml`, из него файл создаётся при первом запуске в новом data-каталоге (портативный режим со своим `settings.yml` не трогается). Шаблон синхронизирован с прежним рабочим файлом: все ключи и комментарии на месте (`max_lines`, `history_lines`, `history_keep`, `database_tags_file`, `backup_dir`, `command_timeout`, `terminal_mouse`, `theme`, `check_updates`, `screensaver_idle`, `screensaver_stars`, `k8s_completion`, `editor`), редактор по умолчанию — `nano` (mcedit требует отдельной установки; иначе берётся `$VISUAL`/`$EDITOR`). Docs: README (раздел «Конфигурация» ссылается на шаблон), COMPACT/CLAUDE, AGENTS. Тесты: шаблон парсится и содержит все ключи + `editor: nano`; провижининг копирует именно шаблон; `/settings.yml` в `.gitignore`.
 
 ## v1.72
 

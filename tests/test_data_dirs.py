@@ -1,12 +1,53 @@
 """Выбор data-каталога: --data-dir / env / portable / platform (pip-package stage 1)."""
 import os
 import sys
+from pathlib import Path
 
 import pytest
+import yaml
 
 pytestmark = pytest.mark.slow
 
 from data_dirs import ensure_data_dir, platform_default_dir, resolve_data_dir
+
+ROOT = Path(__file__).resolve().parents[1]
+EXAMPLE_SETTINGS = ROOT / "src" / "settings.example.yml"
+
+
+def test_settings_example_has_all_keys_and_defaults_to_nano():
+    """Шаблон — источник правды: все ключи и комментарии, редактор по умолчанию nano."""
+    text = EXAMPLE_SETTINGS.read_text(encoding="utf-8")
+    cfg = yaml.safe_load(text)
+    expected = {
+        "max_lines",
+        "history_lines",
+        "history_keep",
+        "database_tags_file",
+        "backup_dir",
+        "command_timeout",
+        "terminal_mouse",
+        "theme",
+        "check_updates",
+        "screensaver_idle",
+        "screensaver_stars",
+        "k8s_completion",
+        "editor",
+    }
+    assert expected <= set(cfg), expected - set(cfg)
+    # mcedit и прочие редакторы требуют отдельной установки — дефолт nano.
+    assert cfg["editor"] == "nano"
+    # Комментарии-пояснения на месте (шаблон читают и правят руками).
+    comments = [line for line in text.splitlines() if line.lstrip().startswith("#")]
+    assert len(comments) >= 25
+
+
+def test_root_settings_yml_is_gitignored():
+    """Личный /settings.yml не должен попасть в репозиторий."""
+    patterns = [
+        line.strip()
+        for line in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    ]
+    assert "/settings.yml" in patterns
 
 
 def test_explicit_arg_wins(tmp_path, monkeypatch):
@@ -72,6 +113,7 @@ async def test_fresh_data_dir_provisioning(isolated_home):
         text = settings_path.read_text(encoding="utf-8")
         assert "command_timeout: 10" in text
         assert "database_tags_file: mytags.db" in text
+        assert "editor: nano" in text  # дефолт из шаблона (mcedit требует установки)
         llm_path = data_dir / "llm_providers.yml"
         assert llm_path.is_file()
         assert "providers:" in llm_path.read_text(encoding="utf-8")

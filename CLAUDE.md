@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.72) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.73) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.72` → `v1.73`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.73` → `v1.74`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -43,6 +43,7 @@ The setup script handles dependencies and configuration. On Linux, clipboard nee
 
 - **`src/`** — TUI, CSS, seed scripts, `.bashrc_term.example`
 - Launch cwd — `settings.yml`, SQLite command DB, `.bashrc_term*`, `history_<instance>.txt`. `:cd` / `cd` change the process cwd for shell commands; they do not move or recreate the tags DB.
+  The root `settings.yml` is **not tracked** (`.gitignore`): it is a copy of `src/settings.example.yml`, created on first run in a new data dir. Personal settings must not leak to GitHub; edit the example for defaults.
 - Data dir resolution: `--data-dir` → `$IDVJPY_DATA_DIR` → launch cwd if it holds `settings.yml` (portable) → OS default (`~/.config/idvjpy` / macOS App Support / Windows `%APPDATA%`). See `src/data_dirs.py`.
 - Root **`app.py`** / **`backup_db.py`** are launchers
 - **`packaging/`** — pip-упаковка (`idvjpy-term`). `build_wheel.sh` копирует текущий `src/` во вложенный ресурс `idvjpy_boot/src` и собирает wheel (без сети); boot-модуль при запуске (`idvjpy`, `python -m idvjpy_boot`) добавляет вложенную `src/` в `sys.path` — топ-левел импорты и ресурсы (`app.css`, `demos/`, примеры, `.bashrc_term.example`) читаются из пакета, а не из репозитория. Установка прямо из git (`pip install .`, `uv tool install git+…`) идёт через корневые `pyproject.toml`/`setup.py` (build_py вкладывает `src/`). Данные пользователя — всегда вне пакета (см. data dir выше).
