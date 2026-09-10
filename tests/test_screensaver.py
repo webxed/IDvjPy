@@ -322,8 +322,14 @@ async def test_screensaver_starts_after_idle(isolated_home):
             await asyncio.sleep(0.05)
             await pilot.pause()
         assert isinstance(app.screen, DevopsScreensaver)
+        # Отключаем авто-запуск: при idle 0.2с скринсейвер иначе успевает
+        # открыться заново, и проверка ловит уже новый экран (флейк).
+        app.screensaver_idle = 0
         await pilot.press("escape")
-        await pilot.pause()
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline and isinstance(app.screen, DevopsScreensaver):
+            await asyncio.sleep(0.05)
+            await pilot.pause()
         assert not isinstance(app.screen, DevopsScreensaver)
 
 
