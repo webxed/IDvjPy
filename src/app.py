@@ -170,6 +170,7 @@ try:
         parse_bashrc_assignment,
         parse_standalone_cd,
         substitute_variables,
+        unexpanded_variables,
         wrap_tty_command,
     )
     from update_check import (
@@ -1338,7 +1339,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.70"
+    VERSION = "v1.71"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -3500,6 +3501,10 @@ class CommandRunner(App):
         :editor $BLOCK   — весь stdout того же блока (${OUT} / ${BLOCK} тоже)
         :editor          — пустой буфер: набрать команду в редакторе
 
+        В пути раскрываются `$VAR` и ленивый `$OUT` (как в обычных командах):
+        `:editor $TMPDIR/pod-$OUT.json`. Нераскрытый `$` — явная ошибка (иначе
+        редактор создал бы файл с именем «$NOPE.yaml»).
+
         $OUT/$BLOCK и пустой буфер правятся во временной копии: одна строка
         уходит во ввод (запуск — отдельным Enter), много строк — файл остаётся
         по показанному пути (`@файл`, `| cmd`, `:md`). Файл на диске правится
@@ -3527,7 +3532,23 @@ class CommandRunner(App):
             temp_path = write_temp_text(before)
             path = temp_path
         elif token:
-            path = os.path.abspath(os.path.expanduser(token))
+            # `$VAR` (в т.ч. ленивый $OUT) раскрываются как в обычных командах;
+            # нераскрытый `$` — почти всегда опечатка в имени, не имя файла.
+            if command_requests_placeholder(token, "OUT") and not self._last_output_line():
+                self.add_block(InfoBlock("Error: $OUT is empty (no finished command block)."))
+                return
+            expanded = self._substitute_variables(token)
+            missing = unexpanded_variables(expanded)
+            if missing:
+                names = ", ".join(f"${name}" for name in missing)
+                self.add_block(
+                    InfoBlock(
+                        f"Error: undefined variable(s): {names}. "
+                        "Set via $NAME=value or in .bashrc_term."
+                    )
+                )
+                return
+            path = os.path.abspath(os.path.expanduser(expanded))
             if os.path.isdir(path):
                 self.add_block(InfoBlock(f"Error: {token} is a directory."))
                 return

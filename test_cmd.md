@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.70
+# План тестирования IDvjPy_term v1.71
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -936,6 +936,7 @@ x
 6. Ошибки: `:editor <каталог>` → `is a directory`; `:editor $BLOCK` без завершённого блока → `need a finished command block`; `editor: есть-нет` → `'…' not found (editor: in settings.yml…)`; `:editor` без `editor:` и без `$EDITOR`/`$VISUAL` → откат на системный редактор.
 7. `:editor a b` → `Usage: :editor [<file>|$OUT|$BLOCK]`.
 8. GUI-редактор (`editor: code --wait`) — флаг ожидания обязателен, иначе приложение продолжит работу сразу.
+9. Подстановка в пути: `$NS=prod`, затем `:editor /tmp/$NS-notes.txt` → открывается `/tmp/prod-notes.txt`; `$TMPDIR/pod-$OUT.json` — ленивый `$OUT` берёт последнюю строку блока (без блока — `$OUT is empty`); `:editor /tmp/$NOPE.yaml` → `undefined variable(s): $NOPE` (файл «$NOPE.yaml» не создаётся).
 
 Автотест: `tests/test_editor.py` (запуск редактора подменяется — TTY не нужен).
 
@@ -972,7 +973,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.17  
-**Версия приложения**: v1.70
+**Версия документа**: v1.18  
+**Версия приложения**: v1.71
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-10

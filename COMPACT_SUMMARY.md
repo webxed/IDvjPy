@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.70**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.71**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -141,7 +141,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.17 (app v1.70) |
+| `test_cmd.md` | Manual plan v1.18 (app v1.71) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -163,7 +163,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `app.py` | Launcher (`python3 app.py`) |
 | `pyproject.toml` / `setup.py` / `MANIFEST.in` | Корневая сборка: `pip install .` / `uv tool install git+…` (build_py вкладывает `src/` в `packaging/idvjpy_boot`) |
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
-| `src/app.py` | TUI (`CommandRunner`), v1.70 |
+| `src/app.py` | TUI (`CommandRunner`), v1.71 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -194,6 +194,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.71
+
+- **`:editor` — подстановка `$VAR`/`$OUT` в пути.** Аргумент-путь проходит через ту же подстановку, что обычные команды (`substitute_variables`): `local_env` (`$VAR=…` в TUI, `.bashrc_term`) → `os.environ`, плюс ленивый `$OUT` (последняя непустая строка сфокусированного/последнего блока). Так путь из вывода блока не надо перенабирать: `:editor $TMPDIR/pod-$OUT.json`. Нераскрытый `$NAME` — явная ошибка со списком имён (иначе редактор создал бы файл с именем «$NOPE.yaml»); `$OUT` в пути без завершённого блока — тоже явная ошибка («/tmp/.json» — не путь). Новый хелпер `shell_env.unexpanded_variables`. Docs: `:?`, README, test_cmd. Тесты: +4 app-level (`$DIR/$OUT` в пути, undefined-переменная, пустой `$OUT`, успешный `created`) и +1 юнит `shell_env`.
 
 ## v1.70
 

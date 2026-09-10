@@ -113,6 +113,17 @@ def command_requests_placeholder(command: str, name: str = "OUT") -> bool:
     return f"${name}" in (command or "") or f"${{{name}}}" in (command or "")
 
 
+def unexpanded_variables(text: str) -> list[str]:
+    """Имена `$VAR` / `${VAR}`, оставшихся в тексте после подстановки.
+
+    Нужны там, где литеральный `$` — почти наверняка опечатка в имени переменной
+    (например путь для `:editor`), и лучше явная ошибка, чем файл с именем
+    `$NOPE.yaml`.
+    """
+    names = {(match.group(1) or match.group(2)) for match in RE_VAR_SUBST.finditer(text or "")}
+    return sorted(names)
+
+
 def last_nonempty_line(text: str) -> str:
     """Last non-empty line without splitting the whole buffer into a list."""
     raw = text or ""

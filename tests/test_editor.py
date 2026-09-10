@@ -243,6 +243,56 @@ async def test_editor_missing_binary_is_reported(isolated_home):
         assert "settings.yml" in text
 
 
+async def test_editor_path_substitutes_vars_and_out(isolated_home, monkeypatch):
+    """В пути раскрываются `$VAR` (local_env) и ленивый `$OUT` из последнего блока."""
+    _fake_editor(monkeypatch, lambda text: text + "x\n")
+    target = isolated_home / "pod-7.txt"
+
+    from app import CommandRunner
+    from tests.conftest import info_texts, input_widget, submit, wait_command_done
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        app.editor = "true"
+        app.local_env["DIR"] = str(isolated_home)
+        await submit(pilot, "printf 'pod-7\\n'")
+        await wait_command_done(app, timeout=8.0)
+        await submit(pilot, ":editor $DIR/$OUT.txt")
+        await pilot.pause()
+
+        assert target.read_text(encoding="utf-8") == "x\n"
+        assert f"Editor: created {target}" in " ".join(info_texts(app))
+        assert input_widget(app).value == ""
+
+
+async def test_editor_undefined_variable_is_explicit(isolated_home):
+    """Нераскрытый `$` — явная ошибка, а не файл с именем «$NOPE.yaml»."""
+    from app import CommandRunner
+    from tests.conftest import last_info, submit
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        app.editor = "true"
+        await pilot.pause()
+        await submit(pilot, ":editor /tmp/$NOPE_FILE.yaml")
+        text = last_info(app).text_content
+        assert "undefined variable(s): $NOPE_FILE" in text
+        assert "Editor:" not in text  # до запуска редактора дело не дошло
+
+
+async def test_editor_path_with_empty_out_is_explicit(isolated_home):
+    """`$OUT` в пути без завершённого блока — явная ошибка («/tmp/.json» — не путь)."""
+    from app import CommandRunner
+    from tests.conftest import last_info, submit
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        app.editor = "true"
+        await pilot.pause()
+        await submit(pilot, ":editor /tmp/$OUT.json")
+        assert "$OUT is empty" in last_info(app).text_content
+
+
 async def test_editor_setting_from_settings_yml(isolated_home):
     """Ключ `editor:` из settings.yml попадает в приложение (дефолт — там же)."""
     from tests.conftest import TEST_SETTINGS

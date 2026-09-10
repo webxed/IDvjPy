@@ -6,6 +6,7 @@ from shell_env import (
     parse_alias_line,
     parse_bashrc_assignment,
     substitute_variables,
+    unexpanded_variables,
 )
 
 
@@ -48,6 +49,14 @@ def test_last_nonempty_line_does_not_split_whole_buffer():
     assert last_nonempty_line("aaa\nbbb\n") == "bbb"
     huge = ("x" * 10000 + "\n") * 50 + "tail-line\n\n"
     assert last_nonempty_line(huge) == "tail-line"
+
+
+def test_unexpanded_variables_lists_leftovers():
+    assert unexpanded_variables("$DIR/pod-$OUT.json") == ["DIR", "OUT"]
+    assert unexpanded_variables("${A}-${B}") == ["A", "B"]
+    assert unexpanded_variables("$A-$A") == ["A"]  # без повторов
+    assert unexpanded_variables("plain/path.txt") == []
+    assert unexpanded_variables("") == []
 
 
 def test_expand_aliases_positional_and_classic():

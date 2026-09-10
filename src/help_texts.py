@@ -29,6 +29,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 is edited in place. For $OUT/$BLOCK/empty buffer: a one-line
                 result goes into the input (Enter runs it); a multi-line one is
                 kept at a printed temp path (usable with `@file` / `| cmd`).
+                `$VAR` and the lazy `$OUT` are substituted in the path (e.g.
+                `:editor $TMPDIR/pod-$OUT.json`); an unresolved `$NAME` is an
+                explicit error, not a file named `$NAME`.
   :env        - Re-read .bashrc_term* (and ~/.bashrc aliases) into this process
   :session    - Show the current instance (history + .bashrc_term files)
   :session NAME - Switch to that instance or create it (tags DB stays shared)
