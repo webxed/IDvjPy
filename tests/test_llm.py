@@ -17,6 +17,7 @@ from llm_client import (
     _extract_text,
     build_body,
     build_headers,
+    expand_file_refs,
     load_providers,
     perform_request,
 )
@@ -29,6 +30,50 @@ DS_CFG = {
     "headers": {"Content-Type": "application/json", "Authorization": "Bearer $DEEPSEEK_API_KEY"},
     "response_path": "choices.0.message.content",
 }
+
+
+def test_expand_file_refs_inlines_utf8_text(tmp_path):
+    note = tmp_path / "note.txt"
+    note.write_text("hello\nworld\n", encoding="utf-8")
+    text, attachments = expand_file_refs("analyze @note.txt please", str(tmp_path))
+    assert "```note.txt\nhello\nworld\n```" in text
+    assert text.startswith("analyze ") and text.endswith(" please")
+    assert attachments == [(str(note), len("hello\nworld\n"))]
+
+
+def test_expand_file_refs_multiple_and_escaped(tmp_path):
+    (tmp_path / "a.py").write_text("A=1\n", encoding="utf-8")
+    (tmp_path / "b.log").write_text("B\n", encoding="utf-8")
+    text, attachments = expand_file_refs("@a.py @@literal user@host @b.log", str(tmp_path))
+    assert "A=1" in text and "B" in text
+    assert "@@literal" in text and "user@host" in text  # не раскрываются
+    assert [p.rsplit("/", 1)[-1] for p, _ in attachments] == ["a.py", "b.log"]
+
+
+def test_expand_file_refs_safe_fence(tmp_path):
+    (tmp_path / "md.md").write_text("a\n```\nb\n", encoding="utf-8")
+    text, _ = expand_file_refs("@md.md", str(tmp_path))
+    assert "````md.md" in text  # ограждение длиннее бэктиков в файле
+    assert text.rstrip().endswith("````")
+
+
+def test_expand_file_refs_errors(tmp_path):
+    with pytest.raises(LlmError, match="Cannot read"):
+        expand_file_refs("@missing.txt", str(tmp_path))
+    (tmp_path / "dir").mkdir()
+    with pytest.raises(LlmError, match="directory"):
+        expand_file_refs("@dir", str(tmp_path))
+    (tmp_path / "big.txt").write_text("x" * 50, encoding="utf-8")
+    with pytest.raises(LlmError, match="too large"):
+        expand_file_refs("@big.txt", str(tmp_path), max_bytes=10)
+    (tmp_path / "bin.dat").write_bytes(b"\x00\x01")
+    with pytest.raises(LlmError, match="binary"):
+        expand_file_refs("@bin.dat", str(tmp_path))
+
+
+def test_expand_file_refs_no_refs_keeps_text(tmp_path):
+    text, attachments = expand_file_refs("just a message", str(tmp_path))
+    assert text == "just a message" and attachments == []
 
 
 def test_load_providers_missing_file():
@@ -295,6 +340,53 @@ async def test_colon_llm_sends_block_output_tokens(isolated_home, monkeypatch):
         await submit(pilot, ":llm ds $OUT")
         await wait_command_done(app, timeout=8.0)
     assert calls == ["l1\nl2 привет", "x2"]
+
+
+def test_llm_attachment_completions(isolated_home):
+    """`:llm ds … @no` → подсказка @notes.md (только токен файла)."""
+    (isolated_home / "notes.md").write_text("x", encoding="utf-8")
+    from app import CommandRunner
+
+    app = CommandRunner()
+    items, preview = app.get_llm_completions(":llm ds see @no", len(":llm ds see @no"))
+    assert [item.insert for item in items] == ["@notes.md"]
+    assert preview == ""
+
+
+async def test_colon_llm_attaches_file_and_keeps_source(isolated_home, monkeypatch):
+    """`:llm … @file` шлёт содержимое, а в source_command/истории остаётся @file."""
+    import app as app_module
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "default: ds\nproviders:\n  ds:\n    url: http://x\n    model: m\n",
+        encoding="utf-8",
+    )
+    (isolated_home / "note.txt").write_text("HELLO-ATTACH\n", encoding="utf-8")
+    calls: list[str] = []
+
+    def fake(provider, message, env, timeout=60):
+        calls.append(message)
+        return "ok"
+
+    monkeypatch.setattr(app_module, "perform_request", fake)
+
+    from app import CommandRunner
+    from tests.conftest import submit, wait_command_done
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, ":llm summarize @note.txt")
+        block = await wait_command_done(app, timeout=8.0)
+
+    assert len(calls) == 1
+    assert "summarize" in calls[0] and "HELLO-ATTACH" in calls[0]
+    # Содержимое не оседает в source_command (нужно для :r) и в истории ввода.
+    assert "@note.txt" in block.source_command
+    assert "HELLO-ATTACH" not in block.source_command
+    assert "@files: note.txt" in block.header
+    history = (isolated_home / "history_default.txt").read_text(encoding="utf-8")
+    assert ":llm summarize @note.txt" in history
+    assert "HELLO-ATTACH" not in history
 
 
 async def test_colon_llm_output_tokens_without_block(isolated_home):

@@ -123,10 +123,12 @@ try:
         snapshots_for_cluster,
     )
     from llm_client import (
+        DEFAULT_MAX_ATTACHMENT_BYTES,
         LlmError,
         default_provider,
         describe,
         example_config_path,
+        expand_file_refs,
         load_providers,
         perform_request,
         provider_names,
@@ -1321,7 +1323,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.64"
+    VERSION = "v1.65"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1705,12 +1707,13 @@ class CommandRunner(App):
                 return [], ""
             needle = words[1]
         else:
-            return [], ""
+            # Сообщение уже идёт (в т.ч. '@путь') — подсказываем файлы.
+            return self._llm_attachment_completions(raw), ""
         try:
             cfg = load_providers(self.FILE_LLM_PROVIDERS)
             names = provider_names(cfg)
         except LlmError:
-            return [], ""
+            return self._llm_attachment_completions(raw), ""
         default = default_provider(cfg)
         items: list[CompletionItem] = []
         for name in names:
@@ -1727,7 +1730,48 @@ class CommandRunner(App):
                     add_space=True,
                 )
             )
-        return items, ""
+        if items:
+            return items, ""
+        # Имя провайдера не подошло — возможно, сообщение уже началось с '@'.
+        return self._llm_attachment_completions(raw), ""
+
+    def _llm_attachment_completions(self, raw: str) -> list[CompletionItem]:
+        """Подсказки файлов для `@путь` в сообщении `:llm` (каталоги — с `/`)."""
+        token = self._extract_path_token(raw)
+        if not token.startswith("@"):
+            return []
+        typed = token[1:]
+        expanded = os.path.expanduser(typed) if typed.startswith("~") else typed
+        parent = os.path.dirname(expanded) or "."
+        prefix = os.path.basename(expanded)
+        try:
+            names = sorted(os.listdir(parent))
+        except OSError:
+            return []
+        items: list[CompletionItem] = []
+        for name in names:
+            if prefix and not name.startswith(prefix):
+                continue
+            full = os.path.join(parent, name)
+            shown = full if parent != "." else name
+            if typed.startswith("~") and shown.startswith(os.path.expanduser("~")):
+                shown = "~" + shown[len(os.path.expanduser("~")):]
+            elif typed.startswith("./") and not shown.startswith("./"):
+                shown = f"./{shown}"
+            is_dir = os.path.isdir(full)
+            if is_dir:
+                shown += "/"
+            items.append(
+                CompletionItem(
+                    insert=f"@{shown}",
+                    display=shown,
+                    replace_token=True,
+                    add_space=not is_dir,
+                )
+            )
+            if len(items) >= 20:
+                break
+        return items
 
     def _tag_completion_items(self, tags: list[str]) -> list[CompletionItem]:
         """Пункты выбора тега: показ `file`, вставка `!file`."""
@@ -5779,6 +5823,7 @@ class CommandRunner(App):
             provider_name = default
             message = " ".join(args).strip()
         provider = providers[provider_name]
+        request_text = message  # исходный текст (без раскрытий) — для :r и source_command
         message = self._llm_expand_output_tokens(message)
         if message is None:
             self.add_block(
@@ -5788,15 +5833,33 @@ class CommandRunner(App):
                 )
             )
             return
+        # @путь … — вложить содержимое файла(ов) в сообщение (текст, UTF-8, лимит).
+        try:
+            message, attachments = expand_file_refs(
+                message,
+                os.getcwd(),
+                max_bytes=int(
+                    provider.get("max_attachment_bytes") or DEFAULT_MAX_ATTACHMENT_BYTES
+                ),
+            )
+        except LlmError as e:
+            self.add_block(InfoBlock(f"Error: {e}"))
+            return
         timeout = float(provider.get("timeout") or 60)
         now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
-        header = f"{now} ({os.getcwd()}) $ :llm {provider_name}"
+        files_note = ""
+        if attachments:
+            shown = ", ".join(f"{os.path.basename(p)} ({n})" for p, n in attachments[:3])
+            if len(attachments) > 3:
+                shown += ", …"
+            files_note = f" · @files: {escape(shown)}"
+        header = f"{now} ({os.getcwd()}) $ :llm {provider_name}{files_note}"
         block = CommandBlock(
             header=header,
             raw_stdout=f"[Consulting {provider_name}…]",
             raw_stderr="",
             return_code=0,
-            source_command=f":llm {provider_name} {message}",
+            source_command=f":llm {provider_name} {request_text}",
         )
         block.update(block.text_content)
         self.add_block(block)

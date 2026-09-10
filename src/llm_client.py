@@ -30,6 +30,10 @@ from update_check import (
 )
 
 DEFAULT_TIMEOUT = 60.0
+# Лимит на вложенный файл (`@путь`): больше — явная ошибка, не молчаливая обрезка.
+DEFAULT_MAX_ATTACHMENT_BYTES = 200_000
+# `@путь` в сообщении: не трогает email (`user@host`) и `@@literal`.
+RE_FILE_REF = re.compile(r"(?<![\w@$])@([^\s@]+)")
 LLM_PROXY_HINT = (
     "Proxy requires login: set $PROXY_USER and $PROXY_PASS "
     "(in .bashrc_term or type $PROXY_USER=… here), then retry :llm."
@@ -100,8 +104,61 @@ def describe(cfg: dict[str, Any]) -> str:
         model = prov.get("model") or ""
         mark = "  (default)" if name == default else ""
         lines.append(f"  [cyan]{name}[/cyan]{mark}  {model}")
-    lines.append("  [dim]Usage: :llm <provider> <message>[/dim]")
+    lines.append("  [dim]Usage: :llm <provider> <message> [@file …][/dim]")
     return "\n".join(lines) + "\n"
+
+
+def _code_fence(content: str) -> str:
+    """Безопасное ```-ограждение: длиннее любой серии бэктиков в файле."""
+    longest = max((len(run) for run in re.findall(r"`+", content)), default=0)
+    return "`" * max(3, longest + 1)
+
+
+def expand_file_refs(
+    text: str,
+    base_dir: str,
+    *,
+    max_bytes: int = DEFAULT_MAX_ATTACHMENT_BYTES,
+) -> tuple[str, list[tuple[str, int]]]:
+    """Раскрывает `@путь` в тексте в содержимое файла (блок в ```).
+
+    Возвращает ``(новый_текст, [(путь, число_символов), …])``.
+    Ошибки — `LlmError` с понятным текстом: нет файла, каталог, бинарный/
+    не-UTF-8, больше `max_bytes`. Относительные пути — от `base_dir` (cwd),
+    `~` раскрывается. Чтобы передать литеральный `@`, удвойте его: `@@`.
+    """
+    attachments: list[tuple[str, int]] = []
+
+    def repl(match: re.Match) -> str:
+        raw = match.group(1)
+        path = os.path.expanduser(raw)
+        if not os.path.isabs(path):
+            path = os.path.join(base_dir, path)
+        path = os.path.normpath(path)
+        if os.path.isdir(path):
+            raise LlmError(f"Attachment {raw} is a directory, not a file.")
+        try:
+            with open(path, "rb") as f:
+                data = f.read(max_bytes + 1)
+        except OSError as e:
+            raise LlmError(f"Cannot read attachment {raw}: {e}") from e
+        if len(data) > max_bytes:
+            raise LlmError(
+                f"Attachment {raw} is too large: > {max_bytes} bytes "
+                "(limit DEFAULT_MAX_ATTACHMENT_BYTES; split the file or paste a fragment)."
+            )
+        if b"\x00" in data:
+            raise LlmError(f"Attachment {raw} looks binary (NUL byte); only text files are supported.")
+        try:
+            content = data.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise LlmError(f"Attachment {raw} is not UTF-8 text: {e}") from e
+        attachments.append((path, len(content)))
+        fence = _code_fence(content)
+        body = content if content.endswith("\n") else content + "\n"
+        return f"{fence}{raw}\n{body}{fence}"
+
+    return RE_FILE_REF.sub(repl, text), attachments
 
 
 def _require_env(template: str, env: dict[str, str], where: str) -> str:
