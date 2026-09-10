@@ -15,3 +15,6 @@ check_updates: true
 screensaver_idle: 120
 screensaver_stars: true
 k8s_completion: false
+# Внешний редактор для :editor. Может содержать аргументы (code --wait).
+# Не задан — берётся $VISUAL / $EDITOR, затем системный редактор.
+editor: nano

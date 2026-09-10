@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.69
+# План тестирования IDvjPy_term v1.70
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -926,6 +926,19 @@ x
 
 Автотест: `tests/test_llm.py` (юнит `llm_context` + app-level `:llm ask` / `app_context`).
 
+### Внешний редактор — `:editor` (v1.70)
+
+1. В `settings.yml` задать `editor: nano` (или `vim`). Набрать `:editor notes.txt` → TUI на паузе, открывается nano; сохранить и выйти → `Editor: saved <путь>`. Файла нет — nano создаёт его (`Editor: created`), выход без записи — `was not created`.
+2. Ничего не менять → `Editor: <путь> unchanged`.
+3. Выполнить `docker ps` (или любое), затем `:editor $OUT` → в редакторе последняя непустая строка вывода; правка в одну строку `:wq` → строка оказалась во вводе (рядом `Editor: $OUT → input`), Enter — запуск. Несколько строк — файл остаётся по напечатанному пути (`kept at …`).
+4. `:editor $BLOCK` → весь stdout блока (несколько строк → файл остаётся, путь виден; при сведении к одной строке — уходит во ввод).
+5. `:editor` без аргумента — пустой буфер: набрать команду, сохранить → она во вводе.
+6. Ошибки: `:editor <каталог>` → `is a directory`; `:editor $BLOCK` без завершённого блока → `need a finished command block`; `editor: есть-нет` → `'…' not found (editor: in settings.yml…)`; `:editor` без `editor:` и без `$EDITOR`/`$VISUAL` → откат на системный редактор.
+7. `:editor a b` → `Usage: :editor [<file>|$OUT|$BLOCK]`.
+8. GUI-редактор (`editor: code --wait`) — флаг ожидания обязателен, иначе приложение продолжит работу сразу.
+
+Автотест: `tests/test_editor.py` (запуск редактора подменяется — TTY не нужен).
+
 ---
 
 ## Критерии успеха
@@ -939,6 +952,7 @@ x
 - `$VAR` подставляется; `$JSON` после Enter в viewer; `$OUT` — последняя строка блока по запросу; `:env` перечитывает `.bashrc_term*`
 - `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:fm` `:term` `:env` `:session` `:welcome` `:backup` `:screensaver` `:r` `:theme` `:playbook` `:update` работают
 - `:llm ask <задача>` шлёт контекст приложения и предлагает только существующие `!tag[tid]` (ключ `app_context` — то же для обычного `:llm`)
+- `:editor <файл>|$OUT|$BLOCK` открывает редактор из `settings.yml`; однострочная правка `$OUT` попадает во ввод, многострочная — остаётся файлом
 - YAML `--demo` / `:playbook`: `loop: true` / `loop: N` крутит шаги, Esc останавливает
 - Soft-delete `#tag-` / `#tag-tid`; handbook hide `#name--` / `#name!!`; `# command` паркуется без запуска
 - Пустая БД: каталог сверху; клик `--seed` → ввод; `.md` / `:md` — Markdown-viewer (колесо не крутит журнал)
@@ -958,7 +972,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.16  
-**Версия приложения**: v1.69
+**Версия документа**: v1.17  
+**Версия приложения**: v1.70
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-10

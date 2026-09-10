@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.69**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.70**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -141,7 +141,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.16 (app v1.69) |
+| `test_cmd.md` | Manual plan v1.17 (app v1.70) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -163,7 +163,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `app.py` | Launcher (`python3 app.py`) |
 | `pyproject.toml` / `setup.py` / `MANIFEST.in` | Корневая сборка: `pip install .` / `uv tool install git+…` (build_py вкладывает `src/` в `packaging/idvjpy_boot`) |
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
-| `src/app.py` | TUI (`CommandRunner`), v1.69 |
+| `src/app.py` | TUI (`CommandRunner`), v1.70 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -179,6 +179,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/llm_providers.example.yml` | Образец конфига провайдеров LLM |
 | `src/settings.example.yml` | Шаблон настроек для первого запуска в новом data-каталоге |
 | `src/gui_open.py` | `:fm` / `:term` detached file manager / terminal |
+| `src/editor_open.py` | Внешний редактор для `:editor` (settings.yml `editor:` → `$VISUAL`/`$EDITOR` → системный; временные копии для `$OUT`/`$BLOCK`) |
 | `src/json_viewer.py` | JSON tree modal |
 | `src/ingress_analyzer.py` | `:i` k8s |
 | `src/command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
@@ -193,6 +194,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.70
+
+- **`:editor` — внешний редактор для файла, `$OUT` и `$BLOCK`.** Новый модуль `src/editor_open.py` (без Textual): `resolve_editor` (settings.yml `editor:` → `$VISUAL` → `$EDITOR` → системный список: sensible-editor / nano / vi / vim, Windows — notepad; значение может содержать аргументы, напр. `editor: code --wait`), `build_editor_command` (shlex-экранирование пути), `write_temp_text`/`read_text_file`. Запуск — в настоящем TTY через существующий `_run_in_tty` (TUI на паузе, как `> cmd`), после — подхват env/PWD. `:editor <файл>` правит файл на месте (`saved` / `unchanged` / `created` / `was not created`); `:editor $OUT` / `$BLOCK` (и `${…}`) берут последнюю непустую строку / весь stdout сфокусированного-или-последнего блока в временную копию: одна строка результата уходит во ввод (запуск — Enter), многострочный остаётся файлом с показанным путём (для `@файл` / `| cmd`); `:editor` без аргумента — пустой буфер. Ключ `editor:` добавлен в `src/settings.example.yml` и рабочий `settings.yml`. Ошибки явные: каталог вместо файла, нет блока, нет редактора, битые кавычки. Docs: `:?`, README, COMPACT/CLAUDE, test_cmd. Тесты: `tests/test_editor.py` — 15 (юнит: приоритет источника, отсутствие бинарника, кавычки, temp-roundtrip; app-level: файл на месте, создание/не-создание, `$OUT` → ввод, `$BLOCK` → файл, пустой буфер, unchanged, нет блока, usage/каталог, нет редактора, ключ из settings.yml).
 
 ## v1.69
 

@@ -22,6 +22,13 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :fm [path]  - Open the OS file manager in a new window (cwd or path)
   :term [path] - Open a system terminal in a new window (cwd or path)
                 $FILEMAN / $TERMINAL override the OS default
+  :editor [<file>|$OUT|$BLOCK] - Open a file (or the block's last line / full
+                stdout / an empty buffer) in the external editor; the TUI is
+                paused while it runs. Editor: `editor:` in settings.yml, else
+                $VISUAL / $EDITOR, else sensible-editor / nano / vi. A disk file
+                is edited in place. For $OUT/$BLOCK/empty buffer: a one-line
+                result goes into the input (Enter runs it); a multi-line one is
+                kept at a printed temp path (usable with `@file` / `| cmd`).
   :env        - Re-read .bashrc_term* (and ~/.bashrc aliases) into this process
   :session    - Show the current instance (history + .bashrc_term files)
   :session NAME - Switch to that instance or create it (tags DB stays shared)

@@ -24,3 +24,8 @@ check_updates: true
 screensaver_idle: 120
 # Летающие звёзды (пыль + k8s/git/…). false — чёрный холст; часы, лента и load остаются.
 screensaver_stars: true
+
+# Внешний редактор для `:editor <файл>|$OUT|$BLOCK` (запуск в TTY, TUI на паузе).
+# Может содержать аргументы: `editor: code --wait`, `editor: nvim`. Пусто/нет —
+# берётся $VISUAL / $EDITOR, затем системный редактор (sensible-editor, nano, vi).
+editor: nano

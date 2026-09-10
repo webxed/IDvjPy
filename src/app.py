@@ -97,6 +97,13 @@ try:
     from command_parser_v2 import CommandParser
     from data_dirs import ensure_data_dir, resolve_data_dir
     from demo import dump_playbook_yaml, load_demo_for_cli, play_demo, session_to_playbook
+    from editor_open import (
+        EditorError,
+        build_editor_command,
+        read_text_file,
+        resolve_editor,
+        write_temp_text,
+    )
     from gui_open import GuiOpenError, format_opened, open_file_manager, open_terminal
     from help_texts import CALC_HELP_TEXT, INGRESS_HELP_TEXT, MAIN_HELP_TEXT
     from history_store import (
@@ -1331,7 +1338,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.69"
+    VERSION = "v1.70"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1431,9 +1438,11 @@ class CommandRunner(App):
     CMD_BACKUP = "backup"
     CMD_FM = "fm"
     CMD_TERM = "term"
+    CMD_EDITOR = "editor"
     CMD_ENV = "env"
     KEY_CHECK_UPDATES = "check_updates"
     KEY_THEME = "theme"
+    KEY_EDITOR = "editor"
     KEY_SCREENSAVER_IDLE = "screensaver_idle"
     KEY_SCREENSAVER_STARS = "screensaver_stars"
     KEY_K8S_COMPLETION = "k8s_completion"
@@ -1503,6 +1512,8 @@ class CommandRunner(App):
         self.screensaver_idle: float = 0
         self.screensaver_stars: bool = True
         self.k8s_completion: bool = False
+        # Внешний редактор для :editor (`editor:` в settings.yml; откат — $VISUAL/$EDITOR)
+        self.editor: str = ""
         self._ss_timer = None
         # Запущенные фоновые процессы (shell-команды): CommandBlock -> Popen.
         # Нужны для F4 / :kill — остановить долгую команду, не дожидаясь timeout.
@@ -2178,6 +2189,7 @@ class CommandRunner(App):
                     self.k8s_completion = bool(
                         settings.get(self.KEY_K8S_COMPLETION, False)
                     )
+                    self.editor = str(settings.get(self.KEY_EDITOR) or "").strip()
         except (FileNotFoundError, KeyError, yaml.YAMLError):
             pass
 
@@ -3448,6 +3460,8 @@ class CommandRunner(App):
             self._handle_gui_open(self.CMD_FM, parts[1:])
         elif command == self.CMD_TERM:
             self._handle_gui_open(self.CMD_TERM, parts[1:])
+        elif command == self.CMD_EDITOR:
+            self._handle_editor_command(parts[1:])
         elif command == self.CMD_ENV:
             self._handle_env_reload(parts[1:])
         else:
@@ -3476,6 +3490,133 @@ class CommandRunner(App):
             self.add_block(InfoBlock(str(exc)))
             return
         self.add_block(InfoBlock(format_opened(argv, proc.pid)))
+
+    def _handle_editor_command(self, args: list[str]) -> None:
+        """
+        `:editor` — открыть в редакторе файл или вывод блока (TUI на паузе).
+
+        :editor <file>   — файл на диске: правки остаются в файле
+        :editor $OUT     — последняя непустая строка сфокусированного/последнего блока
+        :editor $BLOCK   — весь stdout того же блока (${OUT} / ${BLOCK} тоже)
+        :editor          — пустой буфер: набрать команду в редакторе
+
+        $OUT/$BLOCK и пустой буфер правятся во временной копии: одна строка
+        уходит во ввод (запуск — отдельным Enter), много строк — файл остаётся
+        по показанному пути (`@файл`, `| cmd`, `:md`). Файл на диске правится
+        на месте и во ввод не дублируется.
+        """
+        if len(args) > 1:
+            self.add_block(InfoBlock("Usage: :editor [<file>|$OUT|$BLOCK]"))
+            return
+        env = {**os.environ, **self.local_env}
+        try:
+            editor_argv = resolve_editor(self.editor, env)
+        except EditorError as e:
+            self.add_block(InfoBlock(f"Error: {e}"))
+            return
+
+        token = (args[0] if args else "").strip()
+        label = token or "scratch"
+        before: str | None = None  # None — файла на диске ещё не было
+        temp_path = ""
+        if token in ("$OUT", "${OUT}", "$BLOCK", "${BLOCK}"):
+            text = self._editor_block_text(token)
+            if text is None:
+                return  # ошибка уже показана
+            before = text if text.endswith("\n") else text + "\n"
+            temp_path = write_temp_text(before)
+            path = temp_path
+        elif token:
+            path = os.path.abspath(os.path.expanduser(token))
+            if os.path.isdir(path):
+                self.add_block(InfoBlock(f"Error: {token} is a directory."))
+                return
+            if os.path.exists(path):
+                before = read_text_file(path)
+        else:
+            before = ""
+            temp_path = write_temp_text("")
+            path = temp_path
+
+        try:
+            code = self._run_in_tty(build_editor_command(editor_argv, path))
+        except SuspendNotSupported:
+            self._discard_temp(temp_path)
+            self.add_block(
+                InfoBlock("Error: this terminal cannot suspend the TUI for the editor.")
+            )
+            return
+        except Exception as e:
+            self._discard_temp(temp_path)
+            self.add_block(InfoBlock(f"Editor error: {e}"))
+            return
+        self._tty_followup_lines = []  # env/PWD из сессии редактора не показываем
+
+        if not temp_path:
+            self._report_editor_file(path, before)
+            return
+        after = ""
+        try:
+            after = read_text_file(temp_path)
+        except OSError:
+            pass
+        if after == (before or ""):
+            self._discard_temp(temp_path)
+            self.add_block(InfoBlock(f"Editor: {label} unchanged."))
+            return
+        edited = after.rstrip("\n")
+        exit_note = f", exit code {code}" if code else ""
+        if "\n" not in edited:
+            # Одна строка — кладём во ввод (запуск отдельным Enter), копию убираем.
+            self._discard_temp(temp_path)
+            self.set_input_draft(edited)
+            self.add_block(InfoBlock(f"Editor: {label} → input{exit_note}. Enter runs it."))
+            return
+        # Много строк в однострочный ввод не влезает: файл остаётся и его путь виден.
+        self.add_block(
+            InfoBlock(
+                f"Editor: {label} edited ({len(after.splitlines())} line(s){exit_note}); "
+                f"kept at {temp_path} — use it with `@file`, `| cmd` or `:md`."
+            )
+        )
+
+    def _editor_block_text(self, token: str) -> str | None:
+        """Текст $OUT / $BLOCK для :editor; None — ошибка уже показана."""
+        block = self._output_block_for_placeholder()
+        stdout = "" if block is None else (block.raw_stdout or "")
+        if block is None or getattr(block, "pending", False) or stdout == "[Executing...]":
+            self.add_block(
+                InfoBlock(
+                    "Error: $OUT / $BLOCK need a finished command block "
+                    "(focused or the last CommandBlock)."
+                )
+            )
+            return None
+        text = last_nonempty_line(stdout) if "OUT" in token else stdout
+        if not text.strip():
+            self.add_block(InfoBlock(f"Error: {token} is empty."))
+            return None
+        return text
+
+    def _report_editor_file(self, path: str, before: str | None) -> None:
+        """Итог правки файла на диске (файл уже сохранён редактором)."""
+        if not os.path.exists(path):
+            self.add_block(InfoBlock(f"Editor: {path} was not created"))
+        elif before is None:
+            self.add_block(InfoBlock(f"Editor: created {path}"))
+        elif read_text_file(path) != before:
+            self.add_block(InfoBlock(f"Editor: saved {path}"))
+        else:
+            self.add_block(InfoBlock(f"Editor: {path} unchanged"))
+
+    @staticmethod
+    def _discard_temp(path: str) -> None:
+        if not path:
+            return
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
 
     def _handle_env_reload(self, args: list[str]) -> None:
         """Re-read `.bashrc_term*` (and `~/.bashrc` aliases) into this process."""
