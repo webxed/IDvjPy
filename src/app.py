@@ -1319,7 +1319,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.60"
+    VERSION = "v1.61"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -3026,7 +3026,7 @@ class CommandRunner(App):
         даже если начинаются с !. Это позволяет использовать ссылки в составных командах.
         """
         user_input = message.value.strip()
-        input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+        input_widget = self.query_one(f"#{self.ID_INPUT}", CommandInput)
         input_widget.value = ""
         input_widget.reset_undo()  # новая строка — «чистая» история правок
         self._reset_history_walk()

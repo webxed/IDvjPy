@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# Корневая сборка: `pip install .` / `uv tool install git+https://github.com/webxed/IDvjPy`.
+# Версию и вложение src/ в пакет делает setup.py (build_py): у git-установки нет
+# готового packaging/idvjpy_boot/src, его копируют на этапе сборки.
+[project]
+name = "idvjpy-term"
+dynamic = ["version"]
+description = "Keyboard-driven TUI: tags as command templates, join and run"
+readme = { text = "IDvjPy_term - Define your variables, join your command.", content-type = "text/plain" }
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+    "textual==7.3.0",
+    "rich==14.3.0",
+    "pyperclip==1.11.0",
+    "PyYAML==6.0.3",
+    "Pygments==2.19.2",
+    "portalocker",
+]
+
+[project.scripts]
+idvjpy = "idvjpy_boot:main"
+
+[tool.setuptools]
+packages = ["idvjpy_boot"]
+# Данные пакета перечисляем явно: src/ вкладывается build_py на этапе сборки.
+include-package-data = false
+
+[tool.setuptools.package-dir]
+idvjpy_boot = "packaging/idvjpy_boot"
+
+[tool.setuptools.package-data]
+idvjpy_boot = ["src/**/*", "src/.bashrc_term.example"]

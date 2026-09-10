@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.60**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.61**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -141,7 +141,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.11 (app v1.60) |
+| `test_cmd.md` | Manual plan v1.12 (app v1.61) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -161,8 +161,9 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | File | Purpose |
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
+| `pyproject.toml` / `setup.py` / `MANIFEST.in` | Корневая сборка: `pip install .` / `uv tool install git+…` (build_py вкладывает `src/` в `packaging/idvjpy_boot`) |
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
-| `src/app.py` | TUI (`CommandRunner`), v1.60 |
+| `src/app.py` | TUI (`CommandRunner`), v1.61 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -191,6 +192,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.61
+
+- **Установка прямо из git.** Корневой `pyproject.toml` + `setup.py` с кастомным `build_py`: на этапе сборки актуальный `src/` копируется во вложенный ресурс `packaging/idvjpy_boot/src` (как `packaging/build_wheel.sh`), версия берётся из `CommandRunner.VERSION`. Теперь работают `pipx install git+https://github.com/webxed/IDvjPy`, `uv tool install git+https://github.com/webxed/IDvjPy`, `pip install .`; `MANIFEST.in` везёт `src/` в sdist. `packaging/idvjpy_boot` читает версию и из исходного `src/app.py` (в checkout нет вложенной копии). Тесты: `tests/test_packaging_root.py` (корневой и packaging pyproject не разъезжаются, `setup.py --version`, MANIFEST).
 
 ## v1.60
 

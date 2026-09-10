@@ -1,0 +1,8 @@
+# sdist: код приложения + примеры. Вложенный packaging/idvjpy_boot/src
+# не включаем — его создаёт build_py (setup.py) при сборке wheel.
+include README.md
+include LICENSE
+recursive-include src *
+include src/.bashrc_term.example
+recursive-include packaging *.py *.toml *.sh
+recursive-include tests *.py

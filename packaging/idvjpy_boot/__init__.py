@@ -15,17 +15,23 @@ import sys
 from typing import Any
 
 _SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
+# В checkout (git-установка) вложенной src/ ещё нет — версию читаем из
+# исходного ../../../src/app.py (пакет лежит в packaging/idvjpy_boot).
+_REPO_SRC_APP = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "src", "app.py"
+)
 
 
 def _package_version() -> str:
-    """Версия wheel берётся из CommandRunner.VERSION вложенной src/app.py."""
-    try:
-        with open(os.path.join(_SRC, "app.py"), encoding="utf-8") as f:
-            match = re.search(r'VERSION = "v(\d+)\.(\d+)"', f.read())
+    """Версия пакета = CommandRunner.VERSION (`vMAJOR.MINOR` → `MAJOR.MINOR.0`)."""
+    for candidate in (_SRC + os.sep + "app.py", _REPO_SRC_APP):
+        try:
+            with open(candidate, encoding="utf-8") as f:
+                match = re.search(r'VERSION = "v(\d+)\.(\d+)"', f.read())
+        except OSError:
+            continue
         if match:
             return f"{match.group(1)}.{match.group(2)}.0"
-    except OSError:
-        pass
     return "1.0.0"
 
 

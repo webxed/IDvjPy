@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.60 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.61 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -110,7 +110,14 @@ python3 -m pip install --user packaging/dist/idvjpy_term-*.whl   # ~/.local/bin/
 
 Замечания:
 - На Debian/Ubuntu системный `pip install` без venv блокируется (PEP 668, `externally-managed-environment`) — используйте `pipx`/`uv` или `--user`.
-- Ставить нужно **собранный wheel**. Прямая установка из git/каталога `pipx install git+…` / `uv tool install git+…` пока не работает: у репозитория нет корневого `pyproject.toml`, а wheel нужно собрать через `packaging/build_wheel.sh` (он вкладывает `src/` в пакет).
+- Установка прямо из git тоже работает: корневой [`pyproject.toml`](pyproject.toml) + [`setup.py`](setup.py) на этапе сборки вкладывают `src/` в пакет (то же, что `packaging/build_wheel.sh`).
+
+```bash
+# прямо из GitHub — без локальной сборки wheel
+pipx install git+https://github.com/webxed/IDvjPy
+uv tool install git+https://github.com/webxed/IDvjPy
+```
+
 - Куда попадают данные при первом запуске — см. «Запуск» ниже: системный каталог ОС (`~/.config/idvjpy` и аналоги), либо `--data-dir` / `$IDVJPY_DATA_DIR`. При обновлении/удалении пакета теги, история и настройки сохраняются.
 
 ## Запуск

@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.60
+# План тестирования IDvjPy_term v1.61
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -866,6 +866,10 @@ x
 4. `idvjpy --demo short --demo-quit` — автотур из установленного пакета, корректный выход.
 5. `python3 -m idvjpy_boot --demo short --demo-quit` — тот же запуск через `python -m`.
 6. Ресурсы (CSS/demos/примеры) берутся из пакета: демо и темы работают без каталога репозитория рядом.
+7. Из корня репозитория: `uv tool install .` → `idvjpy --help`; зависимости ставятся автоматически (textual и др.). `uv tool uninstall idvjpy-term`.
+8. Из GitHub без локальной сборки: `pipx install git+https://github.com/webxed/IDvjPy` / `uv tool install git+https://github.com/webxed/IDvjPy` — корневой `setup.py` вкладывает `src/` на этапе сборки.
+
+Автотест: `tests/test_packaging_root.py` (корневой и packaging pyproject не разъезжаются, `setup.py --version`, MANIFEST).
 
 Проверено вручную: wheel `idvjpy_term-1.56.0` поставлен в чистый каталог; headless-`run_test` с `data_dir` (provisioning из встроенных примеров) и реальный pty-прогон `--demo short --demo-quit` (exit 0).
 
@@ -927,7 +931,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.11  
-**Версия приложения**: v1.60
+**Версия документа**: v1.12  
+**Версия приложения**: v1.61
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-09
