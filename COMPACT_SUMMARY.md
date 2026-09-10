@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.73**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.74**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -141,7 +141,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.19 (app v1.73) |
+| `test_cmd.md` | Manual plan v1.20 (app v1.74) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -163,7 +163,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `app.py` | Launcher (`python3 app.py`) |
 | `pyproject.toml` / `setup.py` / `MANIFEST.in` | Корневая сборка: `pip install .` / `uv tool install git+…` (build_py вкладывает `src/` в `packaging/idvjpy_boot`) |
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
-| `src/app.py` | TUI (`CommandRunner`), v1.73 |
+| `src/app.py` | TUI (`CommandRunner`), v1.74 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -195,6 +195,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.74
+
+- **Порядок в `.gitignore`.** Разделы с заголовками (личные данные приложения / корневой скретч / venv / сборка / кэш), убраны мёртвые строки (шаблон `.`, дубль `packaging/dist/`). Добавлены явные исключения для файлов, которые специально живут в репозитории, но попадали под широкие шаблоны: `!/requirements.txt`, `!/requirements-dev.txt` (от `/*.txt`), `!/test_cmd.md` (от `/test*.*`). Добавлен `playbook.yml` — локальный сценарий `:playbook`, который не должен уезжать в git (в `AGENTS.md` уже был в списке «не коммитить», теперь обеспечен технически). Venv-каталоги привязаны к корню, `lib64` — без слэша (обычно симлинк на `lib`, шаблон с `/` его не ловит). Набор игнорируемых файлов до/после сверен — ничего локального не стало видимым.
 
 ## v1.73
 

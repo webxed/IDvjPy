@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.73 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.74 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 

@@ -48,6 +48,12 @@ def test_root_settings_yml_is_gitignored():
         for line in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
     ]
     assert "/settings.yml" in patterns
+    # `:playbook` — локальный сценарий демо, тоже вне git.
+    assert "playbook.yml" in patterns
+    # Файлы, которые специально лежат в репозитории, не прячем широкими шаблонами.
+    assert "!/requirements.txt" in patterns
+    assert "!/requirements-dev.txt" in patterns
+    assert "!/test_cmd.md" in patterns
 
 
 def test_explicit_arg_wins(tmp_path, monkeypatch):
