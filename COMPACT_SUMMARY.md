@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.62**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.63**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -141,7 +141,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.13 (app v1.62) |
+| `test_cmd.md` | Manual plan v1.13 (app v1.63) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -163,7 +163,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `app.py` | Launcher (`python3 app.py`) |
 | `pyproject.toml` / `setup.py` / `MANIFEST.in` | Корневая сборка: `pip install .` / `uv tool install git+…` (build_py вкладывает `src/` в `packaging/idvjpy_boot`) |
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
-| `src/app.py` | TUI (`CommandRunner`), v1.62 |
+| `src/app.py` | TUI (`CommandRunner`), v1.63 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -192,6 +192,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.63
+
+- **Актуализация seed-справочников.** `seed_linux_commands.py` (tag `kube`): команды pod/deploy/svc переведены на переменные стека — `$POD`, `$DEPLOY`, `$SVC` (были литералы `POD/DEPLOY/SVC` рядом с `$NS`; теперь как в `seed_k8s_chains.py` и `:kctx`), у строки логина — подсказка про `:kctx`. В `src/.bashrc_term.example` добавлены недостающие переменные kubectl-стека (`POD DEPLOY ING APP QUOTA`; `SVC`/`CTR` — в блоке docker). Доки: `docs/SEED_LINUX_COMMANDS.md` синхронизирован; в `seed_systemd.py` start/stop помечены «меняет сервис» (как restart). Проверено: остальное актуально (git switch/restore, `helm uninstall` без `--name/--purge`, `docker compose` v2 первичен, `netstat` — «старые хосты», `strace` — с `timeout`).
 
 ## v1.62
 

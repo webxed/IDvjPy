@@ -73,23 +73,23 @@
 
 | tid | Команда | Назначение |
 |-----|---------|------------|
-| 1 | `tsh kube login CLUSTER` | Авторизация Teleport в Kubernetes-кластере |
+| 1 | `tsh kube login CLUSTER` | Авторизация Teleport (`:kctx` помнит NS/POD по кластеру) |
 | 2 | `kubectl config get-contexts` | Список kube context |
 | 3 | `kubectl config current-context` | Текущий context |
 | 4 | `kubectl cluster-info` | Информация о кластере |
 | 5 | `kubectl get ns` | Список namespace |
 | 6 | `kubectl get all -n $NS` | Все ресурсы в namespace `$NS` |
 | 7 | `kubectl get pods -n $NS` | Поды в namespace `$NS` |
-| 8 | `kubectl describe pod POD -n $NS` | Детали по pod |
-| 9 | `kubectl logs POD -n $NS` | Логи pod |
-| 10 | `kubectl logs -f POD -n $NS` | Логи pod (follow) |
-| 11 | `kubectl exec -it POD -n $NS -- sh` | Exec внутрь pod |
+| 8 | `kubectl describe pod $POD -n $NS` | Детали по pod `$POD` |
+| 9 | `kubectl logs $POD -n $NS` | Логи pod `$POD` |
+| 10 | `kubectl logs -f $POD -n $NS` | Логи pod `$POD` (follow) |
+| 11 | `kubectl exec -it $POD -n $NS -- sh` | Exec внутрь pod `$POD` |
 | 12 | `kubectl get deploy -n $NS` | Deployments в namespace `$NS` |
-| 13 | `kubectl describe deploy DEPLOY -n $NS` | Детали по deployment |
-| 14 | `kubectl rollout status deploy/DEPLOY -n $NS` | Статус rollout |
-| 15 | `kubectl rollout restart deploy/DEPLOY -n $NS` | Рестарт rollout |
+| 13 | `kubectl describe deploy $DEPLOY -n $NS` | Детали по deployment `$DEPLOY` |
+| 14 | `kubectl rollout status deploy/$DEPLOY -n $NS` | Статус rollout `$DEPLOY` |
+| 15 | `kubectl rollout restart deploy/$DEPLOY -n $NS` | Рестарт rollout `$DEPLOY` |
 | 16 | `kubectl get svc -n $NS` | Services в namespace `$NS` |
-| 17 | `kubectl port-forward svc/SVC 8080:80 -n $NS` | Port-forward на service |
+| 17 | `kubectl port-forward svc/$SVC 8080:80 -n $NS` | Port-forward на service `$SVC` |
 | 18 | `kubectl apply -f FILE.yaml -n $NS` | Применить манифест в namespace `$NS` |
 | 19 | `kubectl delete -f FILE.yaml -n $NS` | Удалить манифест в namespace `$NS` |
 

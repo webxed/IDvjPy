@@ -40,8 +40,8 @@ $BOOT=0
 | 10 | `systemctl daemon-reload` | Перечитать unit-файлы |
 | 11 | `systemctl reload $UNIT` | Reload (меняет сервис) |
 | 12 | `systemctl restart $UNIT` | Restart (меняет сервис) |
-| 13 | `systemctl start $UNIT` | Start |
-| 14 | `systemctl stop $UNIT` | Stop |
+| 13 | `systemctl start $UNIT` | Start (меняет сервис) |
+| 14 | `systemctl stop $UNIT` | Stop (меняет сервис) |
 | 15 | `systemctl reset-failed $UNIT` | Сбросить failed |
 
 В плейбуках нет tid 10–15.

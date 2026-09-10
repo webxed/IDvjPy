@@ -13,7 +13,14 @@
 # export FILEMAN=explorer
 # export TERMINAL=wt
 
+# kubectl-стек (seed_k8s_chains.py, история — :kctx): NS POD DEPLOY ING APP QUOTA
+# SVC и CTR — в блоке docker ниже; :kctx <cluster> запоминает/возвращает эти значения.
 # export NS=default
+# export POD=
+# export DEPLOY=
+# export ING=
+# export APP=
+# export QUOTA=
 # export EDITOR=nvim
 # export HOST=api.example.local
 
