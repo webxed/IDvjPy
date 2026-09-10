@@ -15,6 +15,9 @@
 
 Извлечение ответа: `response_path` точками (`choices.0.message.content`); без
 него — эвристика по списку известных полей. Сеть только через urllib (stdlib).
+
+Контекст приложения (`:llm ask <задача>` или ключ `app_context` провайдера)
+собирает `llm_context.py` и дописывается в system-сообщение (до правила языка).
 """
 import json
 import os
@@ -107,7 +110,8 @@ def describe(cfg: dict[str, Any]) -> str:
         model = prov.get("model") or ""
         mark = "  (default)" if name == default else ""
         lines.append(f"  [cyan]{name}[/cyan]{mark}  {model}")
-    lines.append("  [dim]Usage: :llm <provider> <message> [@file …][/dim]")
+    lines.append("  [dim]Usage: :llm <message> · :llm <provider> <message> [@file …][/dim]")
+    lines.append("  [dim]       :llm ask <task> — default provider + saved tags → !tag[tid] refs[/dim]")
     return "\n".join(lines) + "\n"
 
 
@@ -262,19 +266,26 @@ def _extract_text(payload: Any, response_path: str | None) -> str:
     )
 
 
-def _effective_system(provider: dict[str, Any]) -> str:
-    """Системный промпт + жёсткое правило языка (answer_language).
+def _effective_system(
+    provider: dict[str, Any], app_context: str | None = None
+) -> str:
+    """Системный промпт: base + контекст приложения + правило языка.
 
-    Без answer_language возвращает provider.system как есть. С языком —
-    к system дописывается инструкция (DeepSeek и другие билингвы иначе
-    периодически отвечают не на языке пользователя).
+    `app_context` — «шпаргалка» приложения и выжимка библиотеки тегов
+    (`llm_context.build_app_context`); идёт до правила языка, чтобы оно
+    оставалось последней и самой сильной инструкцией. Без answer_language
+    и контекста возвращает provider.system как есть.
     """
+    parts: list[str] = []
     base = str(provider.get("system") or "").strip()
+    if base:
+        parts.append(base)
+    if app_context and str(app_context).strip():
+        parts.append(str(app_context).strip())
     lang = str(provider.get("answer_language") or "").strip()
-    if not lang:
-        return base
-    rule = _LANG_RULE.format(lang=lang)
-    return f"{base}\n\n{rule}" if base else rule
+    if lang:
+        parts.append(_LANG_RULE.format(lang=lang))
+    return "\n\n".join(parts)
 
 
 def _default_body(
@@ -297,15 +308,18 @@ def build_body(
     message: str,
     env: dict[str, str],
     history: list[dict[str, str]] | None = None,
+    app_context: str | None = None,
 ) -> str:
     """Тело запроса: пользовательский шаблон с плейсхолдерами или OpenAI-форма.
 
     `history` — предыдущие пары `{role, content}` (`:llm` многоходовость).
     Шаблон получает их как `%HISTORY%` (JSON-массив, без кавычек); в авто-теле
     они встают между system и текущим user-сообщением.
+    `app_context` — контекст приложения (`:llm ask` / ключ app_context);
+    дописывается в system-сообщение (оно же уходит в `%SYSTEM%`).
     """
     model = str(provider.get("model") or "")
-    system = _effective_system(provider)
+    system = _effective_system(provider, app_context)
     template = provider.get("body")
     if template is None:
         return json.dumps(
@@ -357,17 +371,19 @@ def perform_request(
     env: dict[str, str],
     timeout: float = DEFAULT_TIMEOUT,
     history: list[dict[str, str]] | None = None,
+    app_context: str | None = None,
 ) -> str:
     """Выполняет запрос и возвращает текстовый ответ модели.
 
     `history` — предыдущие пары сообщений (многоходовость `:llm`).
+    `app_context` — контекст приложения (шпаргалка + библиотека тегов).
     Бросает LlmError с понятным сообщением при сетевых/HTTP/разборных ошибках.
     """
     url = str(provider.get("url") or "").strip()
     if not url:
         raise LlmError("Provider has no `url`.")
     headers = build_headers(provider, env)
-    body = build_body(provider, message, env, history).encode("utf-8")
+    body = build_body(provider, message, env, history, app_context).encode("utf-8")
     request = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
         with _open_request(request, timeout, env) as response:

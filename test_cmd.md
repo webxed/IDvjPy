@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.66
+# План тестирования IDvjPy_term v1.67
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -914,6 +914,18 @@ x
 
 Автотест: `tests/test_mouse_selection.py` (эмуляция протяжки через MouseDown/Move/Up).
 
+### LLM знает библиотеку тегов — `:llm ask` (v1.67)
+
+1. Заполнить библиотеку: выполнить `#kpod kubectl get pods -n $NS`, `#klog kubectl logs $POD -n $NS --tail=200`.
+2. В `llm_providers.yml` задать `default: ds`. Набрать `:llm ask найди все поды XXX и покажи их логи` → в шапке блока `app-ctx: N tags`; в запрос уходит задача + шпаргалка префиксов + выжимка тегов (проверить на локальном `echo-demo`/ollama, подменив URL на свой).
+3. Ответ содержит `!kpod[1]` / `!! kpod[1] && klog[1]`. Под блоком — строка кликабельных ссылок; при `terminal_mouse: true` клик вставляет `!kpod[1] ` во ввод (без запуска), Enter — запуск.
+4. Выдуманные ссылки (`!ghost[9]`) в строку ссылок не попадают.
+5. `:llm ask` (без задачи) → `Usage: :llm ask <task in your words>`; без `default:` → `needs a default provider`.
+6. Обычный `:llm ds вопрос` без ключа `app_context` в шапке `app-ctx` не показывает (поведение прежнее); с `app_context: true` — показывает и шлёт тот же контекст.
+7. `:llm ` (Tab) предлагает провайдеров и `ask`; `:llm as` → `ask`; `:r` на блоке `:llm ask` возвращает `:llm ask <задача>`.
+
+Автотест: `tests/test_llm.py` (юнит `llm_context` + app-level `:llm ask` / `app_context`).
+
 ---
 
 ## Критерии успеха
@@ -926,6 +938,7 @@ x
 - `| cmd` берёт stdout сфокусированного/последнего блока
 - `$VAR` подставляется; `$JSON` после Enter в viewer; `$OUT` — последняя строка блока по запросу; `:env` перечитывает `.bashrc_term*`
 - `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:fm` `:term` `:env` `:session` `:welcome` `:backup` `:screensaver` `:r` `:theme` `:playbook` `:update` работают
+- `:llm ask <задача>` шлёт контекст приложения и предлагает только существующие `!tag[tid]` (ключ `app_context` — то же для обычного `:llm`)
 - YAML `--demo` / `:playbook`: `loop: true` / `loop: N` крутит шаги, Esc останавливает
 - Soft-delete `#tag-` / `#tag-tid`; handbook hide `#name--` / `#name!!`; `# command` паркуется без запуска
 - Пустая БД: каталог сверху; клик `--seed` → ввод; `.md` / `:md` — Markdown-viewer (колесо не крутит журнал)
@@ -945,7 +958,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.15  
-**Версия приложения**: v1.66
+**Версия документа**: v1.16  
+**Версия приложения**: v1.67
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
-**Дата**: 2026-09-09
+**Дата**: 2026-09-10

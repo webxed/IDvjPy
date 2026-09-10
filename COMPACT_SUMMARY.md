@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.66**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.67**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -141,7 +141,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.15 (app v1.66) |
+| `test_cmd.md` | Manual plan v1.16 (app v1.67) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -163,7 +163,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `app.py` | Launcher (`python3 app.py`) |
 | `pyproject.toml` / `setup.py` / `MANIFEST.in` | Корневая сборка: `pip install .` / `uv tool install git+…` (build_py вкладывает `src/` в `packaging/idvjpy_boot`) |
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
-| `src/app.py` | TUI (`CommandRunner`), v1.66 |
+| `src/app.py` | TUI (`CommandRunner`), v1.67 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -175,6 +175,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/data_dirs.py` | Data-каталог: `--data-dir` / `$IDVJPY_DATA_DIR` / portable / OS default |
 | `src/kctx_store.py` | Кластерный журнал kubectl-стека (`kctx.json` в data-dir, снимки NS/POD/… по кластерам) |
 | `src/llm_client.py` | LLM-запросы по `llm_providers.yml` (`:llm`) |
+| `src/llm_context.py` | Контекст приложения для LLM: шпаргалка префиксов + выжимка тегов/команд (`:llm ask`, ключ `app_context`) |
 | `src/llm_providers.example.yml` | Образец конфига провайдеров LLM |
 | `src/settings.example.yml` | Шаблон настроек для первого запуска в новом data-каталоге |
 | `src/gui_open.py` | `:fm` / `:term` detached file manager / terminal |
@@ -192,6 +193,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.67
+
+- **`:llm ask <задача>` — обучение LLM возможностям приложения.** Новый режим: провайдеру по умолчанию уходит задача + «шпаргалка» (префиксы `#tag` / `?tag` / `!tag[tid]` / `!!` / `|` / `$OUT` / `$BLOCK` / `:llm`) + выжимка живой библиотеки тегов (тег, комментарий, tid, команда). Теги сортируются по совпадению слов задачи (комментарии seed-справочников на русском, поэтому и русский запрос попадает), в бюджет влезают детально, остальные — списком имён (модель не выдумывает tid). Ответ — готовые ссылки; существующие `!tag[tid]` из ответа дополнительно показываются кликабельной строкой (`action_insert_bang_draft` — вставка во ввод, без автозапуска). Тот же контекст для обычного `:llm` даёт ключ провайдера `app_context: true|N` (`N` — бюджет символов, по умолчанию 6000; нет ключа/false — выключено, поведение прежнее). Контекст идёт в system перед правилом языка (`answer_language`). Модуль `src/llm_context.py` без Textual и сети; в шапке блока — `app-ctx: N tags`. Подсказки: `ask` после `:llm ` (провайдеры первыми, Enter по-прежнему выбирает default). Docs: `:?`, README, `llm_providers.example.yml`. Тесты: +11 (юнит: парсинг ключа, приоритет тегов, бюджет/индекс, фильтр ссылок, порядок system; app-level: ask шлёт контекст, кликабельные refs только реальные, ask без default/задачи, ключ провайдера, completion `ask`).
 
 ## v1.66
 

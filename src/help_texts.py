@@ -58,8 +58,14 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 Context: provider key history_turns: N keeps the last N user/assistant
                 pairs in memory for this session; :llm reset [<provider>|*] clears it
                 Placeholders: %MSG% (JSON-safe), %MSG_RAW%, %SYSTEM%, %MODEL%, %HISTORY%
-                Tab completes provider names after `:llm `
+                Tab completes provider names and `ask` after `:llm `
                 Proxy 407: set $PROXY_USER / $PROXY_PASS (as with :update)
+  :llm ask <task> - Task + app cheat-sheet + the saved tag library go to the
+                default provider, so the answer can be ready refs like `!kpod[1]`
+                or `!! kpod[1] && klog[1]`. Only existing tag[tid] are offered
+                (a clickable ref line is added; terminal_mouse needed to click).
+                Same context for a plain `:llm` with provider key app_context:
+                true|N (N = char budget; absent/false = off).
   :o [N]        - Last N finished command outputs of this session (default 5)
   :o /text      - grep the stored outputs (stdout/stderr); survives :c
   :o clear      - Forget the stored outputs (memory only, not the DB)

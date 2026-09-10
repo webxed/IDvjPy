@@ -135,6 +135,12 @@ try:
         perform_request,
         provider_names,
     )
+    from llm_context import (
+        DEFAULT_MAX_CHARS,
+        app_context_chars,
+        build_app_context,
+        extract_refs,
+    )
     from md_viewer import HandbookMarkdownScreen, handbook_md_path
     from screensaver import DevopsScreensaver
     from seed_catalog import (
@@ -1325,7 +1331,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.66"
+    VERSION = "v1.67"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1731,6 +1737,17 @@ class CommandRunner(App):
                 CompletionItem(
                     insert=name,
                     display=f"{name}{mark}  {model}",
+                    replace_token=True,
+                    add_space=True,
+                )
+            )
+        if "ask" not in names and (not needle or "ask".startswith(needle)):
+            # Псевдо-режим `:llm ask <задача>`: default-провайдер + библиотека тегов.
+            # После реальных провайдеров — Enter на `:llm ` по-прежнему выбирает default.
+            items.append(
+                CompletionItem(
+                    insert="ask",
+                    display="ask  (default provider + tag library → !tag[tid] chain)",
                     replace_token=True,
                     add_space=True,
                 )
@@ -5785,6 +5802,9 @@ class CommandRunner(App):
         :llm                        — список провайдеров
         :llm <сообщение>            — запрос провайдеру по умолчанию (`default:`)
         :llm <имя> <сообщение>      — запрос конкретному провайдеру
+        :llm ask <задача>           — провайдер по умолчанию + шпаргалка приложения
+                                      и выжимка библиотеки тегов: ответ — связка
+                                      !tag[tid] / !! tag[tid] под задачу
         """
         if not args:
             self._show_llm_providers()
@@ -5803,7 +5823,32 @@ class CommandRunner(App):
         if first == "reset" and "reset" not in providers:
             self._handle_llm_reset(args[1:], providers, default)
             return
-        if first in providers:
+        ask_mode = first == "ask" and "ask" not in providers
+        if ask_mode:
+            task = " ".join(args[1:]).strip()
+            if not task:
+                self.add_block(
+                    InfoBlock(
+                        "Usage: :llm ask <task in your words>\n"
+                        "The default provider gets your task plus the saved tag library,\n"
+                        "so the answer can be ready refs like !kpod[1] or !! kpod[1] && klog[1]."
+                    )
+                )
+                return
+            if default is None:
+                self.add_block(
+                    InfoBlock(
+                        "Error: :llm ask needs a default provider "
+                        f"(`default:` in {self.FILE_LLM_PROVIDERS}) or use "
+                        ":llm <provider> <message>."
+                    )
+                )
+                return
+            # Имя провайдера не разбираем: всё после `ask` — задача (иначе слово,
+            # совпавшее с именем провайдера, съело бы часть задачи).
+            provider_name = default
+            message = task
+        elif first in providers:
             provider_name = first
             message = " ".join(args[1:]).strip()
             if not message:
@@ -5853,6 +5898,31 @@ class CommandRunner(App):
         except LlmError as e:
             self.add_block(InfoBlock(f"Error: {e}"))
             return
+        # Контекст приложения: шпаргалка + релевантные теги из БД, чтобы модель
+        # вернула готовые refs (!tag[tid]). Включается ключом app_context у
+        # провайдера; `:llm ask` — всегда (независимо от ключа).
+        app_context = ""
+        app_ctx_tags = 0
+        known_tids: dict[str, set[int]] = {}
+        max_chars = app_context_chars(provider)
+        if ask_mode and not max_chars:
+            max_chars = DEFAULT_MAX_CHARS
+        if max_chars:
+            library = self._library()
+            try:
+                tag_comments = dict(database.get_all_tags_with_comments(self.db_file))
+            except Exception:
+                tag_comments = {}
+            ctx = build_app_context(
+                library,
+                task=request_text,
+                tag_comments=tag_comments,
+                max_chars=max_chars,
+            )
+            app_context = ctx.text
+            app_ctx_tags = ctx.tags
+            for row in library:
+                known_tids.setdefault(row["tag"], set()).add(row["tid"])
         timeout = float(provider.get("timeout") or 60)
         turns = history_turns_for(provider)
         history = list(self._llm_threads.get(provider_name, [])) if turns else []
@@ -5864,19 +5934,34 @@ class CommandRunner(App):
                 shown += ", …"
             files_note = f" · @files: {escape(shown)}"
         ctx_note = f" · ctx: {len(history) // 2}/{turns} turns" if turns else ""
-        header = f"{now} ({os.getcwd()}) $ :llm {provider_name}{files_note}{ctx_note}"
+        app_note = f" · app-ctx: {app_ctx_tags} tags" if app_context else ""
+        header = (
+            f"{now} ({os.getcwd()}) $ :llm {provider_name}{files_note}{ctx_note}{app_note}"
+        )
+        # Для :r исходная строка без раскрытий: обычный запрос с именем провайдера,
+        # `ask` — со своим подкомандным словом (иначе задача потеряла бы режим).
+        source_command = (
+            f":llm ask {request_text}"
+            if ask_mode
+            else f":llm {provider_name} {request_text}"
+        )
         block = CommandBlock(
             header=header,
             raw_stdout=f"[Consulting {provider_name}…]",
             raw_stderr="",
             return_code=0,
-            source_command=f":llm {provider_name} {request_text}",
+            source_command=source_command,
         )
         block.update(block.text_content)
         self.add_block(block)
         threading.Thread(
             target=self._llm_worker,
             args=(block, provider, provider_name, message, timeout, history),
+            kwargs={
+                "app_context": app_context,
+                "suggest_refs": ask_mode,
+                "known_tids": known_tids if ask_mode else None,
+            },
             daemon=True,
         ).start()
 
@@ -5968,10 +6053,17 @@ class CommandRunner(App):
         message: str,
         timeout: float,
         history: list[dict[str, str]],
+        app_context: str = "",
+        suggest_refs: bool = False,
+        known_tids: dict[str, set[int]] | None = None,
     ) -> None:
         """Фоновый поток: запрос к LLM не должен блокировать UI."""
         env = {**os.environ, **self.local_env}
-        kwargs = {"history": history} if history else {}
+        kwargs: dict = {}
+        if history:
+            kwargs["history"] = history
+        if app_context:
+            kwargs["app_context"] = app_context
         try:
             answer = perform_request(provider, message, env, timeout=timeout, **kwargs)
             out, err, code = answer.strip() + "\n", "", 0
@@ -5980,11 +6072,39 @@ class CommandRunner(App):
                 self.call_from_thread(
                     self._llm_remember_exchange, provider_name, message, answer, turns
                 )
+            if suggest_refs:
+                # Ссылки, реально существующие в библиотеке (`:llm ask`).
+                refs = extract_refs(answer, known_tids)
+                if refs:
+                    self.call_from_thread(self._show_llm_refs, refs)
         except LlmError as e:
             out, err, code = "", str(e), 1
         except Exception as e:  # Защита от неожиданного — показать, не ронять поток.
             out, err, code = "", f"LLM error: {e}", 1
         self.call_from_thread(self._on_command_finished, block, out, err, code)
+
+    def _show_llm_refs(self, refs: list[tuple[str, int]]) -> None:
+        """Кликабельные ссылки из ответа `:llm ask` — вставка во ввод без запуска.
+
+        Ссылки уже отфильтрованы по живой библиотеке (known_tids), поэтому
+        выдуманный моделью tid сюда не попадает. Нужен terminal_mouse; с
+        клавиатуры те же `!tag[tid]` набираются руками.
+        """
+        links = [self._llm_ref_link(tag, tid) for tag, tid in refs]
+        rows = ["  " + "  ".join(links[i : i + 6]) for i in range(0, len(links), 6)]
+        self.add_block(
+            InfoBlock(
+                "[dim]Refs from the answer (click to insert, then Enter to run):[/dim]\n"
+                + "\n".join(rows)
+            )
+        )
+
+    def _llm_ref_link(self, tag: str, tid: int) -> str:
+        """Rich-ссылка `!tag[tid]` → action_insert_bang_draft (клик по ссылке)."""
+        return (
+            f"[@click=app.action_insert_bang_draft('{tag}', '{tid}')]"
+            f"[underline #8a6bb5]!{escape(tag)}[{tid}][/][/]"
+        )
 
     def _refresh_running_title(self) -> None:
         """Показать в заголовке число активных фоновых команд (:kill / :watch)."""

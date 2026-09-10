@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.66) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.67) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.66` → `v1.67`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.67` → `v1.68`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -72,6 +72,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/update_check.py`**: GitHub `VERSION` check (`:update`)
 - **`src/k8s_complete.py`**: live-cluster name completion for `kubectl get …` (gated by `k8s_completion: true`)
 - **`src/llm_client.py`**: `:llm` calls to LLM providers described in `llm_providers.yml` (env-only secrets, urllib, background thread); `expand_file_refs` turns `@file` into inlined text; `history_turns` keeps the last N pairs in memory (`%HISTORY%` in custom bodies)
+- **`src/llm_context.py`**: app context for LLMs — prefix cheat-sheet plus a budgeted digest of the live tag library (`tag`/`tid`/`command`/`comment`, task-relevant tags first). Powers `:llm ask <task>` (always) and the `app_context: true|N` provider key (opt-in for plain `:llm`); `extract_refs` filters answers down to refs that really exist
 - **`src/gui_open.py`**: `:fm` / `:term` — detach a file manager or system terminal (Linux / macOS / Windows; `$FILEMAN` / `$TERMINAL` override)
 - **`src/screensaver.py`**: idle starfield (`:screensaver`); flying live clock/date; full-width green library ticker; bottom-left command-help typewriter and bottom-right load/RAM (1s `/proc`; may overlap when the window is narrow); `screensaver_idle` seconds, `0` = off; `screensaver_stars: false` hides flying dust/tokens
 - **`src/seed_catalog.py`**: empty-DB welcome catalog (click `--seed` → input)

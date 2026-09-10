@@ -3,8 +3,10 @@
 Конфиг llm_providers.yml описывает URL/заголовки/тело/response_path.
 Сеть не дёргаем: urllib и perform_request подменяются заглушками.
 """
+import asyncio
 import io
 import json
+import time
 import urllib.error
 
 import pytest
@@ -24,6 +26,12 @@ from llm_client import (
     load_providers,
     perform_request,
     trim_history,
+)
+from llm_context import (
+    DEFAULT_MAX_CHARS,
+    app_context_chars,
+    build_app_context,
+    extract_refs,
 )
 
 DS_CFG = {
@@ -610,3 +618,247 @@ async def test_colon_llm_missing_config_hint(isolated_home):
         text = last_info(app).text_content
         assert "Config not found" in text
         assert "llm_providers.example.yml" in text
+
+
+# --- app_context / :llm ask -------------------------------------------------
+
+ASK_ROWS = [
+    {
+        "tag": "kpod",
+        "tid": 1,
+        "command": "kubectl get pods -n $NS -o wide",
+        "comment": "все поды wide",
+    },
+    {
+        "tag": "kpod",
+        "tid": 2,
+        "command": "kubectl describe pod $POD -n $NS",
+        "comment": "describe $POD",
+    },
+    {
+        "tag": "klog",
+        "tid": 1,
+        "command": "kubectl logs $POD -n $NS --tail=200",
+        "comment": "логи $POD",
+    },
+    {"tag": "gstat", "tid": 1, "command": "git status -sb", "comment": "кратко"},
+]
+ASK_COMMENTS = {
+    "kpod": "поды в $NS",
+    "klog": "логи $POD (без follow)",
+    "gstat": "git status",
+}
+
+
+async def _wait_info_contains(app, needle: str, timeout: float = 5.0) -> bool:
+    """Дождаться InfoBlock с подстрокой (refs появляются из фонового потока)."""
+    from tests.conftest import info_texts
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if any(needle in text for text in info_texts(app)):
+            return True
+        await asyncio.sleep(0.05)
+    return False
+
+
+def test_app_context_chars_parses_provider_key():
+    assert app_context_chars({}) == 0
+    assert app_context_chars({"app_context": False}) == 0
+    assert app_context_chars({"app_context": True}) == DEFAULT_MAX_CHARS
+    assert app_context_chars({"app_context": 2500}) == 2500
+    assert app_context_chars({"app_context": 0}) == 0
+    assert app_context_chars({"app_context": "true"}) == DEFAULT_MAX_CHARS
+    assert app_context_chars({"app_context": "no"}) == 0
+    # Непонятное значение — выключено (контекст не уезжает в запрос случайно).
+    assert app_context_chars({"app_context": "wat"}) == 0
+
+
+def test_build_app_context_syntax_tids_and_relevance():
+    ctx = build_app_context(
+        ASK_ROWS, task="найти все поды и показать логи", tag_comments=ASK_COMMENTS
+    )
+    assert ctx.tags == 3
+    assert ctx.chars == len(ctx.text)
+    text = ctx.text
+    # Шпаргалка по префиксам и запрет выдумывать tid.
+    assert "!tag[3]" in text
+    assert "inventing a tid" in text
+    # Релевантные задаче теги выше нерелевантного (kpod/klog перед gstat).
+    assert text.index("kpod — поды в $NS") < text.index("gstat — git status")
+    # Команды с точными tid-ами.
+    assert "  1: kubectl get pods -n $NS -o wide" in text
+    assert "  2: kubectl describe pod $POD -n $NS" in text
+    assert "Saved library: 4 commands in 3 tags" in text
+
+
+def test_build_app_context_empty_library_still_teaches_syntax():
+    ctx = build_app_context([])
+    assert ctx.tags == 0
+    assert "no saved commands yet" in ctx.text
+    assert "#tag cmd" in ctx.text
+
+
+def test_build_app_context_budget_leaves_tag_index():
+    rows = [
+        {"tag": f"t{i:03d}", "tid": 1, "command": "x" * 300, "comment": ""}
+        for i in range(60)
+    ]
+    ctx = build_app_context(rows, task="", max_chars=4000)
+    assert 0 < ctx.tags < 60
+    assert "Other tags" in ctx.text
+    assert ctx.chars <= 4000 + 400  # head + резерв индекса — потолок бюджета
+
+
+def test_extract_refs_filters_unknown_and_dedupes():
+    text = "План: !kpod[1], затем !! kpod[1] && klog[2]. Ещё !ghost[9] и arr[3]."
+    assert extract_refs(text, {"kpod": {1}, "klog": {2}}) == [("kpod", 1), ("klog", 2)]
+    # Без карты known фильтра нет — выдуманные ссылки отсекает вызывающий.
+    assert ("ghost", 9) in extract_refs(text)
+
+
+def test_app_context_goes_into_system_before_language_rule():
+    body = json.loads(
+        build_body(
+            {"model": "m", "system": "Base.", "answer_language": "Russian"},
+            "hi",
+            {},
+            app_context="HAND-BOOK",
+        )
+    )
+    content = body["messages"][0]["content"]
+    assert content.startswith("Base.")
+    assert content.index("HAND-BOOK") < content.index("Always answer in Russian")
+
+
+def test_llm_completion_offers_ask_after_providers(isolated_home):
+    from app import CommandRunner
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "default: ds\nproviders:\n  ds:\n    url: http://x\n    model: m\n",
+        encoding="utf-8",
+    )
+    app = CommandRunner()
+    inserts = [item.insert for item in app.get_llm_completions(":llm ", len(":llm "))[0]]
+    # Провайдеры первыми: Enter на `:llm ` по-прежнему выбирает default.
+    assert inserts == ["ds", "ask"]
+    assert [
+        item.insert for item in app.get_llm_completions(":llm as", len(":llm as"))[0]
+    ] == ["ask"]
+    # Реальные провайдеры не подменяются псевдо-режимом.
+    assert [
+        item.insert for item in app.get_llm_completions(":llm d", len(":llm d"))[0]
+    ] == ["ds"]
+
+
+async def test_colon_llm_ask_sends_task_with_library_context(isolated_home, monkeypatch):
+    """:llm ask шлёт задачу + шпаргалку и выжимку тегов провайдеру по умолчанию."""
+    import app as app_module
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "default: ds\nproviders:\n  ds:\n    url: http://x\n    model: m\n",
+        encoding="utf-8",
+    )
+    calls: list[tuple[str, str]] = []
+
+    def fake(provider, message, env, timeout=60, **kwargs):
+        calls.append((message, kwargs.get("app_context", "")))
+        return "План: !kpod[1], затем !klog[1]."
+
+    monkeypatch.setattr(app_module, "perform_request", fake)
+
+    from app import CommandRunner
+    from tests.conftest import submit, wait_command_done
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, "#kpod kubectl get pods -n $NS")
+        await submit(pilot, "#klog kubectl logs $POD -n $NS --tail=200")
+        await submit(pilot, ":llm ask найди поды и покажи логи")
+        block = await wait_command_done(app, timeout=8.0)
+
+    assert block.source_command == ":llm ask найди поды и покажи логи"
+    assert "app-ctx: 2 tags" in block.header
+    assert len(calls) == 1
+    message, context = calls[0]
+    assert message == "найди поды и покажи логи"
+    assert "kpod" in context and "klog" in context
+    assert "1: kubectl get pods -n $NS" in context
+    assert "!tag[3]" in context  # шпаргалка по синтаксису
+
+
+async def test_colon_llm_ask_offers_only_existing_refs(isolated_home, monkeypatch):
+    """Кликабельные refs из ответа: только реальные tag[tid] из библиотеки."""
+    import app as app_module
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "default: ds\nproviders:\n  ds:\n    url: http://x\n    model: m\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        app_module,
+        "perform_request",
+        lambda *a, **k: "План: !kpod[1], потом !ghost[9].",
+    )
+
+    from app import CommandRunner
+    from tests.conftest import info_texts, submit, wait_command_done
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, "#kpod kubectl get pods -n $NS")
+        await submit(pilot, ":llm ask что с подами")
+        await wait_command_done(app, timeout=8.0)
+        assert await _wait_info_contains(app, "!kpod[1]")
+        assert "action_insert_bang_draft" in " ".join(info_texts(app))
+        # Выдуманный моделью tid не предлагается.
+        assert not any("ghost" in text for text in info_texts(app))
+
+
+async def test_colon_llm_ask_needs_default_and_task(isolated_home):
+    from app import CommandRunner
+    from tests.conftest import last_info, submit
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "providers:\n  ds:\n    url: http://x\n    model: m\n", encoding="utf-8"
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await pilot.pause()
+        # Пустая задача — Usage (до проверки default).
+        await submit(pilot, ":llm ask")
+        assert "Usage: :llm ask <task in your words>" in last_info(app).text_content
+        # Задача есть, но default не задан — явная ошибка.
+        await submit(pilot, ":llm ask найди поды")
+        assert "needs a default provider" in last_info(app).text_content
+
+
+async def test_colon_llm_provider_app_context_key(isolated_home, monkeypatch):
+    """Ключ app_context включает контекст; без ключа поведение прежнее (выключено)."""
+    import app as app_module
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "default: ds\nproviders:\n"
+        "  ds:\n    url: http://x\n    model: m\n    app_context: true\n"
+        "  plain:\n    url: http://x\n    model: m\n",
+        encoding="utf-8",
+    )
+    calls: list[tuple[str, bool]] = []
+
+    def fake(provider, message, env, timeout=60, **kwargs):
+        calls.append((message, bool(kwargs.get("app_context"))))
+        return "ok"
+
+    monkeypatch.setattr(app_module, "perform_request", fake)
+
+    from app import CommandRunner
+    from tests.conftest import submit, wait_command_done
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, "#kpod kubectl get pods -n $NS")
+        await submit(pilot, ":llm ds hi")
+        await wait_command_done(app, timeout=8.0)
+        await submit(pilot, ":llm plain hi")
+        await wait_command_done(app, timeout=8.0)
+    assert calls == [("hi", True), ("hi", False)]
