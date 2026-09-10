@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.68
+# План тестирования IDvjPy_term v1.69
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -917,12 +917,12 @@ x
 ### LLM знает библиотеку тегов — `:llm ask` (v1.67)
 
 1. Заполнить библиотеку: выполнить `#kpod kubectl get pods -n $NS`, `#klog kubectl logs $POD -n $NS --tail=200`.
-2. В `llm_providers.yml` задать `default: ds`. Набрать `:llm ask найди все поды XXX и покажи их логи` → в шапке блока `app-ctx: N tags`; в запрос уходит задача + шпаргалка префиксов + выжимка тегов (проверить на локальном `echo-demo`/ollama, подменив URL на свой).
+2. В `llm_providers.yml` задать `default: ds`. Набрать `:llm ask найди все поды XXX и покажи их логи` → в шапке блока `app-ctx: N tags`; в запрос уходит задача + шпаргалка префиксов + выжимка тегов (проверить на локальном `echo-demo`/ollama, подменив URL на свой). Выбор модели: `:llm ask <провайдер> <задача>` — слово сразу после `ask`, совпавшее с именем из `providers`, берётся как провайдер; иначе — `default:`.
 3. Ответ содержит `!kpod[1]` / `!! kpod[1] && klog[1]`. Под блоком — строка кликабельных ссылок; при `terminal_mouse: true` клик вставляет `!kpod[1] ` во ввод (без запуска), Enter — запуск.
 4. Выдуманные ссылки (`!ghost[9]`) в строку ссылок не попадают.
-5. `:llm ask` (без задачи) → `Usage: :llm ask <task in your words>`; без `default:` → `needs a default provider`.
+5. `:llm ask` (без задачи) → `Usage: :llm ask [<provider>] <task in your words>`; без `default:` и без имени провайдера → `needs a provider`.
 6. Обычный `:llm ds вопрос` без ключа `app_context` в шапке `app-ctx` не показывает (поведение прежнее); с `app_context: true` — показывает и шлёт тот же контекст.
-7. `:llm ` (Tab) предлагает провайдеров и `ask`; `:llm as` → `ask`; `:r` на блоке `:llm ask` возвращает `:llm ask <задача>`.
+7. `:llm ` (Tab) предлагает провайдеров и `ask`; `:llm as` → `ask`; `:llm ask ` → провайдеры; `:llm ask <Tab>` без default выбирает провайдера для ask; `:r` на блоке `:llm ask` возвращает `:llm ask [<провайдер>] <задача>`.
 
 Автотест: `tests/test_llm.py` (юнит `llm_context` + app-level `:llm ask` / `app_context`).
 
@@ -959,6 +959,6 @@ cat history_default.txt
 ---
 
 **Версия документа**: v1.16  
-**Версия приложения**: v1.68
+**Версия приложения**: v1.69
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-10

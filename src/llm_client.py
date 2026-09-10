@@ -111,7 +111,7 @@ def describe(cfg: dict[str, Any]) -> str:
         mark = "  (default)" if name == default else ""
         lines.append(f"  [cyan]{name}[/cyan]{mark}  {model}")
     lines.append("  [dim]Usage: :llm <message> · :llm <provider> <message> [@file …][/dim]")
-    lines.append("  [dim]       :llm ask <task> — default provider + saved tags → !tag[tid] refs[/dim]")
+    lines.append("  [dim]       :llm ask <task> — provider + saved tags → !tag[tid] refs[/dim]")
     return "\n".join(lines) + "\n"
 
 

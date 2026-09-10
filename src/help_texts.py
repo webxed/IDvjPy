@@ -61,9 +61,11 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 Tab completes provider names and `ask` after `:llm `
                 Proxy 407: set $PROXY_USER / $PROXY_PASS (as with :update)
   :llm ask <task> - Task + app cheat-sheet + the saved tag library go to the
-                default provider, so the answer can be ready refs like `!kpod[1]`
+                provider, so the answer can be ready refs like `!kpod[1]`
                 or `!! kpod[1] && klog[1]`. Only existing tag[tid] are offered
                 (a clickable ref line is added; terminal_mouse needed to click).
+  :llm ask <provider> <task> - Same, but ask that provider instead of the
+                default one (`default:` in llm_providers.yml).
                 Same context for a plain `:llm` with provider key app_context:
                 true|N (N = char budget; absent/false = off).
   :o [N]        - Last N finished command outputs of this session (default 5)

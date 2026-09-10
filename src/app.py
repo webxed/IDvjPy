@@ -1331,7 +1331,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.68"
+    VERSION = "v1.69"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1699,6 +1699,8 @@ class CommandRunner(App):
 
         Показываются, пока второй аргумент ещё не начат (после ':llm ' и после
         пробела за выбранным именем список гаснет — дальше сообщение).
+        В режиме `:llm ask [<провайдер>] …` провайдеры подсказываются после `ask`,
+        а после выбранного имени начинается задача — там только `@файлы`.
         """
         raw = (text or "")[:pos]
         stripped_end = raw.rstrip()
@@ -1707,16 +1709,28 @@ class CommandRunner(App):
         words = stripped_end.split()
         if words[0] != ":llm":
             return [], ""
+        after_ask = len(words) >= 2 and words[1] == "ask"
+        # Позиция, в которой слово — это провайдер после `ask` (а не задача).
+        ask_provider_slot = after_ask and (raw.endswith(" ") or len(words) >= 3)
         if len(words) == 1:
             # Список показываем после ':llm ' (пробел набран), не в процессе ':llm'.
             if not raw.endswith(" "):
                 return [], ""
             needle = ""
         elif len(words) == 2:
-            # Пробел за выбранным именем — начинается сообщение, список гасим.
+            if after_ask:
+                # `:llm ask` — ещё набирается слово `ask`; `:llm ask ` — провайдер.
+                needle = "" if raw.endswith(" ") else words[1]
+            elif raw.endswith(" "):
+                # Пробел за выбранным именем — начинается сообщение, список гасим.
+                return [], ""
+            else:
+                needle = words[1]
+        elif len(words) == 3 and after_ask:
+            # `:llm ask <провайдер>`: пробел за именем — начинается задача.
             if raw.endswith(" "):
                 return [], ""
-            needle = words[1]
+            needle = words[2]
         else:
             # Сообщение уже идёт (в т.ч. '@путь') — подсказываем файлы.
             return self._llm_attachment_completions(raw), ""
@@ -1741,13 +1755,17 @@ class CommandRunner(App):
                     add_space=True,
                 )
             )
-        if "ask" not in names and (not needle or "ask".startswith(needle)):
-            # Псевдо-режим `:llm ask <задача>`: default-провайдер + библиотека тегов.
+        if (
+            not ask_provider_slot
+            and "ask" not in names
+            and (not needle or "ask".startswith(needle))
+        ):
+            # Псевдо-режим `:llm ask [<провайдер>] <задача>`: библиотека тегов + refs.
             # После реальных провайдеров — Enter на `:llm ` по-прежнему выбирает default.
             items.append(
                 CompletionItem(
                     insert="ask",
-                    display="ask  (default provider + tag library → !tag[tid] chain)",
+                    display="ask  (tag library → !tag[tid] chain)",
                     replace_token=True,
                     add_space=True,
                 )
@@ -5812,6 +5830,7 @@ class CommandRunner(App):
         :llm ask <задача>           — провайдер по умолчанию + шпаргалка приложения
                                       и выжимка библиотеки тегов: ответ — связка
                                       !tag[tid] / !! tag[tid] под задачу
+        :llm ask <имя> <задача>     — то же, но выбранному провайдеру
         """
         if not args:
             self._show_llm_providers()
@@ -5831,29 +5850,37 @@ class CommandRunner(App):
             self._handle_llm_reset(args[1:], providers, default)
             return
         ask_mode = first == "ask" and "ask" not in providers
+        ask_provider_explicit = False
         if ask_mode:
-            task = " ".join(args[1:]).strip()
+            rest = args[1:]
+            # `:llm ask <provider> <task>`: слово сразу после `ask`, совпавшее с
+            # именем провайдера, — это провайдер (детерминированно, без догадок).
+            if rest and rest[0] in providers:
+                ask_provider_explicit = True
+                provider_name = rest[0]
+                rest = rest[1:]
+            else:
+                provider_name = default
+            task = " ".join(rest).strip()
             if not task:
                 self.add_block(
                     InfoBlock(
-                        "Usage: :llm ask <task in your words>\n"
-                        "The default provider gets your task plus the saved tag library,\n"
-                        "so the answer can be ready refs like !kpod[1] or !! kpod[1] && klog[1]."
+                        "Usage: :llm ask [<provider>] <task in your words>\n"
+                        "The provider gets your task plus the saved tag library,\n"
+                        "so the answer can be ready refs like !kpod[1] or !! kpod[1] && klog[1].\n"
+                        f"Providers: {', '.join(known) or '(none)'}"
                     )
                 )
                 return
-            if default is None:
+            if provider_name is None:
                 self.add_block(
                     InfoBlock(
-                        "Error: :llm ask needs a default provider "
-                        f"(`default:` in {self.FILE_LLM_PROVIDERS}) or use "
-                        ":llm <provider> <message>."
+                        "Error: :llm ask needs a provider: name one "
+                        "(:llm ask <provider> <task>) or set `default:` in "
+                        f"{self.FILE_LLM_PROVIDERS}."
                     )
                 )
                 return
-            # Имя провайдера не разбираем: всё после `ask` — задача (иначе слово,
-            # совпавшее с именем провайдера, съело бы часть задачи).
-            provider_name = default
             message = task
         elif first in providers:
             provider_name = first
@@ -5945,13 +5972,13 @@ class CommandRunner(App):
         header = (
             f"{now} ({os.getcwd()}) $ :llm {provider_name}{files_note}{ctx_note}{app_note}"
         )
-        # Для :r исходная строка без раскрытий: обычный запрос с именем провайдера,
-        # `ask` — со своим подкомандным словом (иначе задача потеряла бы режим).
-        source_command = (
-            f":llm ask {request_text}"
-            if ask_mode
-            else f":llm {provider_name} {request_text}"
-        )
+        # Для :r — исходная строка без раскрытий; в режиме ask сохраняем и
+        # явно указанного провайдера (если он был).
+        if ask_mode:
+            ask_prefix = f":llm ask {provider_name}" if ask_provider_explicit else ":llm ask"
+            source_command = f"{ask_prefix} {request_text}"
+        else:
+            source_command = f":llm {provider_name} {request_text}"
         block = CommandBlock(
             header=header,
             raw_stdout=f"[Consulting {provider_name}…]",

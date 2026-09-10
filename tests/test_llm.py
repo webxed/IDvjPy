@@ -745,6 +745,19 @@ def test_llm_completion_offers_ask_after_providers(isolated_home):
     assert [
         item.insert for item in app.get_llm_completions(":llm as", len(":llm as"))[0]
     ] == ["ask"]
+    # Слово `ask` ещё набирается — предлагаем сам режим.
+    assert [
+        item.insert for item in app.get_llm_completions(":llm ask", len(":llm ask"))[0]
+    ] == ["ask"]
+    # После `:llm ask ` и по префиксу — провайдеры (псевдо-`ask` уже не нужен).
+    assert [
+        item.insert for item in app.get_llm_completions(":llm ask ", len(":llm ask "))[0]
+    ] == ["ds"]
+    assert [
+        item.insert for item in app.get_llm_completions(":llm ask d", len(":llm ask d"))[0]
+    ] == ["ds"]
+    # Провайдер выбран — начинается задача, список гаснет.
+    assert app.get_llm_completions(":llm ask ds ", len(":llm ask ds ")) == ([], "")
     # Реальные провайдеры не подменяются псевдо-режимом.
     assert [
         item.insert for item in app.get_llm_completions(":llm d", len(":llm d"))[0]
@@ -818,22 +831,69 @@ async def test_colon_llm_ask_offers_only_existing_refs(isolated_home, monkeypatc
         assert not any("ghost" in text for text in info_texts(app))
 
 
-async def test_colon_llm_ask_needs_default_and_task(isolated_home):
+async def test_colon_llm_ask_needs_provider_and_task(isolated_home, monkeypatch):
+    """Задача обязательна; без `default:` нужно явное имя провайдера."""
+    import app as app_module
     from app import CommandRunner
-    from tests.conftest import last_info, submit
+    from tests.conftest import last_info, submit, wait_command_done
 
     (isolated_home / "llm_providers.yml").write_text(
         "providers:\n  ds:\n    url: http://x\n    model: m\n", encoding="utf-8"
     )
+    monkeypatch.setattr(app_module, "perform_request", lambda *a, **k: "ok")
     app = CommandRunner()
     async with app.run_test(size=(110, 30)) as pilot:
         await pilot.pause()
-        # Пустая задача — Usage (до проверки default).
+        # Пустая задача — Usage (со списком провайдеров).
         await submit(pilot, ":llm ask")
-        assert "Usage: :llm ask <task in your words>" in last_info(app).text_content
-        # Задача есть, но default не задан — явная ошибка.
+        text = last_info(app).text_content
+        assert "Usage: :llm ask [<provider>] <task in your words>" in text
+        assert "ds" in text
+        # Задача есть, но ни имени, ни `default:` — явная ошибка.
         await submit(pilot, ":llm ask найди поды")
-        assert "needs a default provider" in last_info(app).text_content
+        assert "needs a provider" in last_info(app).text_content
+        # Явное имя работает и без `default:`.
+        await submit(pilot, ":llm ask ds найди поды")
+        await wait_command_done(app, timeout=8.0)
+
+
+async def test_colon_llm_ask_named_provider(isolated_home, monkeypatch):
+    """`:llm ask <провайдер> <задача>`: имя берётся, только если есть в providers."""
+    import app as app_module
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "default: ds\nproviders:\n"
+        "  ds:\n    url: http://x\n    model: deepseek-chat\n"
+        "  grok:\n    url: http://x\n    model: grok-2\n",
+        encoding="utf-8",
+    )
+    calls: list[tuple[str, str, str]] = []
+
+    def fake(provider, message, env, timeout=60, **kwargs):
+        calls.append((provider["model"], message, kwargs.get("app_context", "")))
+        return "ok"
+
+    monkeypatch.setattr(app_module, "perform_request", fake)
+
+    from app import CommandRunner
+    from tests.conftest import submit, wait_command_done
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, "#kpod kubectl get pods -n $NS")
+        # Явный провайдер: первое слово после `ask` — имя из providers.
+        await submit(pilot, ":llm ask grok найди поды")
+        block = await wait_command_done(app, timeout=8.0)
+        # Не имя провайдера — уходит default-провайдеру с полной задачей.
+        await submit(pilot, ":llm ask найди поды")
+        await wait_command_done(app, timeout=8.0)
+    assert block.source_command == ":llm ask grok найди поды"
+    assert [(model, task) for model, task, _ in calls] == [
+        ("grok-2", "найди поды"),
+        ("deepseek-chat", "найди поды"),
+    ]
+    # Контекст приложения прикладывается в обоих случаях.
+    assert all("kpod" in context for _, _, context in calls)
 
 
 async def test_colon_llm_provider_app_context_key(isolated_home, monkeypatch):
