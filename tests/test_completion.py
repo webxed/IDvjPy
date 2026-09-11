@@ -5,6 +5,33 @@ from app import CommandBlock, CommandRunner
 from tests.conftest import input_widget, submit, type_keys, wait_command_done
 
 
+async def test_dir_slash_shows_files_after_many_dirs(isolated_home):
+    """`./` отдаёт и файлы, а не только каталоги: список путей не режется до 20.
+
+    Регрессия: файлы сортируются после каталогов, и при обрезке в 20 записей
+    (`./t` сверху) они не попадали в подсказки вообще — `./` показывал только
+    каталоги, а файлы находились только по началу имени.
+    """
+    for i in range(25):
+        (isolated_home / f"dir_{i:02d}").mkdir()
+    (isolated_home / "zz-file.txt").write_text("x\n", encoding="utf-8")
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.press("escape")
+        await type_keys(pilot, "./")
+        await pilot.pause()
+        clist = app._completion_list
+        assert clist.is_visible()
+        # Ничего не потеряли: записей больше, чем старый лимит 20.
+        assert clist.total_candidates > 20
+        # Файл из хвоста списка доступен (и его видно в окне прокруткой).
+        assert "./zz-file.txt" in clist.all_candidates
+        assert "./dir_00/" in clist.all_candidates  # каталоги по-прежнему с /
+        status = clist._window_status()
+        assert f"/ {clist.total_candidates}" in status
+
+
 async def test_path_completion_keeps_existing_command(isolated_home):
     (isolated_home / "alpha.txt").write_text("x\n", encoding="utf-8")
     (isolated_home / "subdir").mkdir()
