@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.83
+# План тестирования IDvjPy_term v1.84
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -59,6 +59,25 @@ echo $EDITOR
 Синтаксис: `$VAR=value` или `$ VAR=value`. Локальные переменные приоритетнее `os.environ`. `$OUT` — не переменная сессии, см. секцию 23.
 
 Автотест: `test_s01_variables`.
+
+### 1b. Секретные переменные `$$VAR=value`
+
+```
+$$TOKEN=supersecret
+$$TOKEN
+echo prefix-$TOKEN suffix
+$$TOKEN-
+$$TOKEN
+```
+
+**Ожидание:**
+- При наборе/вставке значения поле ввода маскируется (точки), в подзаголовке `Secret $TOKEN: value hidden`.
+- После Enter: `Secret $TOKEN set (value hidden, secrets_default.json)` — значение в журнале не видно; `echo prefix-$TOKEN` даёт блок с `prefix-****` (raw_stdout при этом настоящий — `F3`/`|`/`$OUT` работают).
+- Значение в `secrets_default.json` (права `0600`), нет в `.bashrc_term_default` и `history_default.txt`.
+- `$$TOKEN` → `is set (value hidden)`; `$$TOKEN-` → `removed`; после — `is not set`.
+- Перезапуск: `secrets_default.json` подхватывается, `echo $TOKEN` работает.
+
+Автотест: `tests/test_secrets.py`.
 
 ---
 
@@ -975,7 +994,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.30  
-**Версия приложения**: v1.83
+**Версия документа**: v1.31  
+**Версия приложения**: v1.84
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11

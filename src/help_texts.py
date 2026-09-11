@@ -138,6 +138,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   $OUT       - On demand: last non-empty line of the focused (or last) command block.
                Not stored in .bashrc_term. Type $OUT alone to peek. `$OUT=` is rejected.
   $VAR=val   - Set environment variable
+  $$VAR=val  - Set a SECRET variable: value is hidden in the input line and in the
+               journal (shown as ****); stored in secrets_<instance>.json (0600).
+               Use it as $VAR. `$$VAR` — status, `$$VAR-` — remove.
   aliases    - From ~/.bashrc. If the body has $1 / $2 / $@, args are substituted
                (klogin cluster → tsh kube login cluster). Else the rest of the line
                is appended as in a classic alias.

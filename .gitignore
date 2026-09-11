@@ -24,6 +24,8 @@ backups/
 library.md
 library.sh
 run.sh
+# Секреты `$$NAME=…` (и их .tmp при записи) — отдельный файл только для владельца
+secrets_*.json*
 # Записи тура (asciinema); сами гифки кладём осознанно
 *.cast
 

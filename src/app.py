@@ -604,6 +604,21 @@ class CommandBlock(LineNavigable, Static):
         app = getattr(self, "app", None)
         return bool(app and getattr(app, "simple_output_mode", False))
 
+    def _mask_for_display(self, text: str) -> str:
+        """Спрятать значения секретов ($$NAME=…) в показываемом тексте.
+
+        Маскируется только отображение: ``raw_stdout`` остаётся настоящим,
+        чтобы `|`, `$OUT` и F3 работали с реальными данными.
+        """
+        app = getattr(self, "app", None)
+        mask = getattr(app, "_mask_secrets", None)
+        if callable(mask):
+            try:
+                return cast("Callable[[str], str]", mask)(text)
+            except Exception:
+                return text
+        return text
+
     def _truncate_output(self, text: str) -> str:
         """
         Обрезает вывод для стабильного рендера UI, сохраняя полный raw_stdout.
@@ -634,14 +649,15 @@ class CommandBlock(LineNavigable, Static):
         # Основной вывод (с обрезкой если нужно)
         if self.raw_stdout:
             stdout_display = self._truncate_output(self.raw_stdout.rstrip())
-            parts.append(stdout_display)
+            parts.append(self._mask_for_display(stdout_display))
 
         # Stderr внизу с подсветкой ошибки
         if self.raw_stderr and self.raw_stderr.strip():
+            stderr_display = self._mask_for_display(self.raw_stderr.rstrip())
             if self._simple_mode():
-                parts.append(f"STDERR:\n{self.raw_stderr.rstrip()}")
+                parts.append(f"STDERR:\n{stderr_display}")
             else:
-                parts.append(f"[bold red]STDERR:[/bold red]\n{self.raw_stderr.rstrip()}")
+                parts.append(f"[bold red]STDERR:[/bold red]\n{stderr_display}")
 
         # Return code если != 0
         if self.return_code != 0:
@@ -943,6 +959,10 @@ class CompletionList(Static):
         self.styles.display = "none"
 
 
+# `$$NAME=value` — ввод секрета: значение после `=` прячем в поле ввода.
+RE_SECRET_ENTRY = re.compile(r"^\$\$[A-Za-z_][A-Za-z0-9_]*=.")
+
+
 class CommandInput(Input):
     """Поле ввода: Tab — в журнал; Ctrl+D — очистить строку."""
 
@@ -1166,6 +1186,7 @@ class CommandInput(Input):
         """Вызывается при изменении value (reactive watcher)."""
         # Сначала вызываем родительский метод
         super()._watch_value(value)
+        self._apply_secret_masking(value)
         # Undo: перед каждым реальным изменением запоминаем предыдущее состояние.
         # Во время самого undo и применения completion не пишем в стек.
         if not self._applying_undo:
@@ -1186,6 +1207,27 @@ class CommandInput(Input):
             app._bump_screensaver_idle()
         # Затем показываем подсказки
         self.call_after_refresh(self._show_completions)
+
+    def _apply_secret_masking(self, value: str) -> None:
+        """`$$NAME=value` — прятать значение секрета прямо в строке ввода.
+
+        Textual маскирует всё поле (`password`), поэтому как только после `=`
+        появляется первый символ значения, строка целиком рисуется точками;
+        имя секрета при этом напоминается в подзаголовке.
+        """
+        secret_line = bool(value) and bool(RE_SECRET_ENTRY.match(value.strip()))
+        if secret_line != bool(self.password):
+            self.password = secret_line
+        if not secret_line:
+            return
+        name = value.strip()[2:].split("=", 1)[0]
+        clist = self._completion_list
+        if clist is not None and clist.is_visible():
+            clist.hide()
+        try:
+            self.app.sub_title = f"Secret ${name}: value hidden"
+        except Exception:
+            pass
 
     def _show_completions(self) -> None:
         """Показать подсказки."""
@@ -1339,7 +1381,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.83"
+    VERSION = "v1.84"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1403,6 +1445,7 @@ class CommandRunner(App):
     PREFIX_DOUBLE_BANG = "!!"
     PREFIX_PIPE = "|"
     PREFIX_VAR = "$" # Новый префикс для переменных
+    PREFIX_SECRET = "$$"  # Секретные переменные: ввод/вывод маскируются
     PREFIX_TTY = ">"
     PREFIX_NO_TIMEOUT = "@"  # run the rest of the line without command_timeout
     
@@ -1502,6 +1545,8 @@ class CommandRunner(App):
         self.simple_output_mode: bool = False
         # Словарь локальных переменных окружения (имеют приоритет над os.environ)
         self.local_env: dict[str, str] = {}
+        # Имена секретных переменных ($$NAME=…): значения маскируются в UI
+        self._secret_names: set[str] = set()
         # Словарь для хранения алиасов {alias: command}
         self.aliases: dict[str, str] = {}
         # v1.1.9+: Парсер команд с поддержкой ссылок
@@ -2122,6 +2167,7 @@ class CommandRunner(App):
         self.FILE_BASHRC = self._data_path(bashrc_file_for(name))
         self.FILE_LLM_PROVIDERS = self._data_path("llm_providers.yml")
         self.FILE_KCTX = self._data_path("kctx.json")
+        self.FILE_SECRETS = self._data_path(f"secrets_{name}.json")
 
     @staticmethod
     def _settings_example_path() -> str:
@@ -2238,6 +2284,7 @@ class CommandRunner(App):
 
         # 3. Загрузка переменных из файла .bashrc_term
         self.load_bashrc()
+        self.load_secrets()
         self.load_aliases()
 
         # 4. Автоматическая загрузка всех команд для работы !!
@@ -3171,7 +3218,8 @@ class CommandRunner(App):
                 self.CMD_PLAYBOOK, self.CMD_QUIT, self.CMD_UPDATE, self.CMD_SESSION,
                 self.CMD_SCREENSAVER, self.CMD_WELCOME,
             }:
-                self._playbook_log.append(user_input)
+                if not user_input.startswith(self.PREFIX_SECRET):
+                    self._playbook_log.append(user_input)
 
         self.log_to_history(user_input)
         if self._is_history_comment(user_input):
@@ -3219,6 +3267,8 @@ class CommandRunner(App):
             self.handle_bang_command(user_input)
         elif user_input.startswith(self.PREFIX_PIPE):
             self.handle_pipe_command(user_input)
+        elif user_input.startswith(self.PREFIX_SECRET):
+            self.handle_secret_assignment(user_input)
         elif user_input.startswith(self.PREFIX_VAR):
             if self._handle_lazy_placeholder_query(user_input):
                 return
@@ -3951,6 +4001,7 @@ class CommandRunner(App):
             if os.environ.get(key) == value:
                 os.environ.pop(key, None)
         self.local_env.clear()
+        self._secret_names = set()
 
     def _handle_session_command(self, args: list[str]) -> None:
         """`:session` — show; `:session NAME` — switch or create."""
@@ -3995,6 +4046,7 @@ class CommandRunner(App):
         self._history_file_folded = []
         self._history_file_stat = None
         self.load_bashrc()
+        self.load_secrets()
         compacted = self._maybe_compact_history(force=False)
         extra = ""
         if compacted and compacted[2]:
@@ -4520,6 +4572,139 @@ class CommandRunner(App):
         except Exception as e:
             return str(e)
         return None
+
+    # --- Секретные переменные (PREFIX_SECRET = "$$") ---
+
+    def handle_secret_assignment(self, user_input: str) -> None:
+        """`$$NAME=value` — секретная переменная; значение нигде не показывается.
+
+        Формы: `$$NAME=value` (задать), `$$NAME` (статус), `$$NAME-` (удалить).
+        Значение хранится в `secrets_<instance>.json` (0600), не пишется в
+        `.bashrc_term`, history и журнал; в командах подставляется как `$NAME`,
+        а в заголовке блока маскируется.
+        """
+        body = user_input[len(self.PREFIX_SECRET):].strip()
+        if not body:
+            self.add_block(InfoBlock(
+                "Usage: $$NAME=value (hidden)  |  $$NAME (status)  |  $$NAME- (remove)"
+            ))
+            return
+
+        if "=" not in body and body.endswith("-"):
+            name = body[:-1].strip()
+            if not RE_VAR_NAME.match(name):
+                self.add_block(InfoBlock(f"Error: Invalid variable name '{name}'."))
+                return
+            if self._unset_secret_var(name):
+                self.add_block(InfoBlock(f"Secret ${name} removed."))
+            else:
+                self.add_block(InfoBlock(f"Secret ${name} was not set."))
+            return
+
+        if "=" not in body:
+            name = body
+            if not RE_VAR_NAME.match(name):
+                self.add_block(InfoBlock(f"Error: Invalid variable name '{name}'."))
+                return
+            state = "is set (value hidden)" if name in self._secret_names else "is not set"
+            self.add_block(InfoBlock(f"Secret ${name} {state}."))
+            return
+
+        name, value = body.split("=", 1)
+        name = name.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        if not RE_VAR_NAME.match(name):
+            self.add_block(InfoBlock(f"Error: Invalid variable name '{name}'."))
+            return
+        if name in LAZY_PLACEHOLDERS:
+            self.add_block(InfoBlock(f"${name} is a reserved placeholder."))
+            return
+        if not value:
+            self.add_block(InfoBlock("Error: empty secret value. Use: $$NAME=value"))
+            return
+        error = self._set_secret_var(name, value)
+        if error:
+            self.add_block(InfoBlock(f"Error saving secret: {error}"))
+            return
+        self.add_block(InfoBlock(
+            f"Secret ${name} set (value hidden, {os.path.basename(self.FILE_SECRETS)})"
+        ))
+
+    def _set_secret_var(self, name: str, value: str) -> str | None:
+        """Запомнить секрет в памяти/окружении и сохранить в secrets-файл (0600)."""
+        if not RE_VAR_NAME.match(name):
+            return f"Invalid variable name '{name}'."
+        self.local_env[name] = value
+        os.environ[name] = value
+        self._secret_names.add(name)
+        return self._save_secrets()
+
+    def _unset_secret_var(self, name: str) -> bool:
+        """Убрать секрет из памяти и файла. True — если он был задан."""
+        existed = name in self._secret_names
+        self._secret_names.discard(name)
+        if os.environ.get(name) == self.local_env.get(name):
+            os.environ.pop(name, None)
+        self.local_env.pop(name, None)
+        self._save_secrets()
+        return existed
+
+    def _save_secrets(self) -> str | None:
+        """Атомарно записать secrets-файл с правами 0600. Ошибка или None."""
+        data = {n: self.local_env.get(n, "") for n in sorted(self._secret_names)}
+        tmp = self.FILE_SECRETS + ".tmp"
+        try:
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding=self.ENCODING) as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, self.FILE_SECRETS)
+            self._chmod_secrets()
+        except OSError as e:
+            return str(e)
+        return None
+
+    def _chmod_secrets(self) -> None:
+        """Секреты — только владельцу (best effort)."""
+        try:
+            os.chmod(self.FILE_SECRETS, 0o600)
+        except OSError:
+            pass
+
+    def load_secrets(self) -> None:
+        """Загрузить секреты из `secrets_<instance>.json` в env.
+
+        Делает их доступными как `$NAME` (и в дочерних процессах через
+        os.environ), но не пишет в `.bashrc_term` и не показывает в UI.
+        """
+        self._secret_names = set()
+        if not os.path.exists(self.FILE_SECRETS):
+            return
+        try:
+            with open(self.FILE_SECRETS, encoding=self.ENCODING) as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return
+        if not isinstance(data, dict):
+            return
+        for raw_name, raw_value in data.items():
+            name = str(raw_name)
+            if not RE_VAR_NAME.match(name):
+                continue
+            value = str(raw_value)
+            self.local_env[name] = value
+            os.environ[name] = value
+            self._secret_names.add(name)
+
+    def _mask_secrets(self, text: str) -> str:
+        """Заменить значения секретов на `****` для показа в журнале."""
+        if not text or not self._secret_names:
+            return text
+        values = {self.local_env.get(n, "") for n in self._secret_names}
+        for value in sorted((v for v in values if v), key=len, reverse=True):
+            text = text.replace(value, "****")
+        return text
 
     def _remember_kctx_snapshot(self) -> None:
         """Кластерный журнал: снимок kubectl-стека для текущего кластера.
@@ -5428,7 +5613,7 @@ class CommandRunner(App):
             return
         extra = getattr(self, "_tty_followup_lines", None) or []
         self._tty_followup_lines = []
-        text = f"TTY: {escape(final_command)}\nExit code: {return_code}"
+        text = f"TTY: {escape(self._mask_secrets(final_command))}\nExit code: {return_code}"
         if extra:
             text += "\n" + "\n".join(extra)
         self.add_block(InfoBlock(text))
@@ -6411,7 +6596,7 @@ class CommandRunner(App):
                     head = self._strip_formatting_tags(rec["command"])[:80]
                     hits.append(f"[dim]{rec['time']} $ {head} (exit {rec['code']})[/dim]")
                     for ln in matched[:5]:
-                        hits.append(f"    {escape(ln[:200])}")
+                        hits.append(f"    {escape(self._mask_secrets(ln[:200]))}")
                     if len(matched) > 5:
                         hits.append(f"    [dim]… {len(matched) - 5} more line(s)[/dim]")
             if not hits:
@@ -6434,11 +6619,11 @@ class CommandRunner(App):
             lines.append(f"[dim]{rec['time']} $ {head} (exit {rec['code']})[/dim]")
             out = (rec["stdout"] or "").splitlines()
             for ln in out[:20]:
-                lines.append(f"    {escape(ln[:240])}")
+                lines.append(f"    {escape(self._mask_secrets(ln[:240]))}")
             if len(out) > 20:
                 lines.append(f"    [dim]… {len(out) - 20} more line(s)[/dim]")
             if rec["stderr"]:
-                lines.append(f"    [red]stderr: {escape(rec['stderr'][:200])}[/red]")
+                lines.append(f"    [red]stderr: {escape(self._mask_secrets(rec['stderr'][:200]))}[/red]")
         self.add_block(InfoBlock("\n".join(lines) + "\n"))
 
     def _handle_stats_command(self) -> None:
@@ -6516,7 +6701,7 @@ class CommandRunner(App):
         """Создаёт блок :watch и поток-цикл; тики обновляют тот же блок."""
         final_command = self._expand_aliases(self._substitute_variables(command))
         now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
-        header = f"{now} ({os.getcwd()}) $ watch: {final_command}"
+        header = f"{now} ({os.getcwd()}) $ watch: {self._mask_secrets(final_command)}"
         block = CommandBlock(
             header=header,
             raw_stdout="",
@@ -6697,7 +6882,7 @@ class CommandRunner(App):
         except Exception:
             pass  # Статистика не должна ломать запуск команды
         
-        header = f"{timestamp} ({cwd}) $ {final_command}"
+        header = f"{timestamp} ({cwd}) $ {self._mask_secrets(final_command)}"
 
         block = CommandBlock(
             header=header,

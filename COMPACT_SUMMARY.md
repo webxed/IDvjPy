@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.83**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.84**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -31,6 +31,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
+| `$$VAR=val` | Secret env: masked in the input line and journal (`****`); `secrets_<instance>.json` (0600); use as `$VAR` |
 
 Aliases from `~/.bashrc`: bodies with `$1` / `$2` / `$@` substitute args; otherwise the rest of the line is appended.
 
@@ -127,6 +128,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 - `:env` re-reads those files (and `~/.bashrc` aliases) in a running app.
 - After `> cmd`, the same bash dumps its environment: new/changed exports overlay `local_env` / `os.environ` for this session (not written to `.bashrc_term`). `$PWD` is adopted if the TTY shell `cd`'d. Nested `> bash` then `export` inside that inner shell is not visible.
 - `$VAR=val` writes the instance file (`.bashrc_term_default` by default).
+- `$$VAR=val` — секрет: значение не показывается при вводе и в журнале, файл `secrets_<instance>.json` (0600), не в `.bashrc_term` и не в history; в командах — `$VAR`.
 - `-n` without value → explicit error (no silent fallback).
 
 ### CLI
@@ -141,7 +143,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.30 (app v1.83) |
+| `test_cmd.md` | Manual plan v1.31 (app v1.84) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -165,7 +167,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.83 |
+| `src/app.py` | TUI (`CommandRunner`), v1.84 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -197,6 +199,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.84
+
+- **Секретные переменные `$$NAME=value` (маскированный ввод/вывод).** Префикс `$$` задаёт секрет: значение прячется прямо в строке ввода (`CommandInput.password` включается, как только после `=` появился первый символ; имя секрета видно в подзаголовке), хранится в отдельном `secrets_<instance>.json` с правами `0600` (не в `.bashrc_term`, не в `history_*.txt`, не в playbook-логе), а в командах подставляется как обычный `$NAME`. При выполнении значение маскируется `****` в шапке блока, в показываемых stdout/stderr (только отображение — `raw_stdout` остаётся настоящим для `|`, `$OUT`, F3) и в `:o`. Формы: `$$NAME=value` (задать), `$$NAME` (статус), `$$NAME-` (удалить). Файл в `.gitignore` (`secrets_*.json*`). Модуль — `src/app.py` (`handle_secret_assignment`, `_set_secret_var`, `_unset_secret_var`, `_save_secrets`, `load_secrets`, `_mask_secrets`); `CommandBlock._mask_for_display`. Тесты: `tests/test_secrets.py`.
 
 ## v1.83
 
