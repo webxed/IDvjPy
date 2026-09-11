@@ -72,6 +72,7 @@ RE_INSTANCE_NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$")
 # Check dependencies before importing
 try:
     import datetime
+    import glob
     import json
     import os
     import threading
@@ -1381,7 +1382,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.85"
+    VERSION = "v1.86"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -2579,6 +2580,8 @@ class CommandRunner(App):
             pass
 
     def on_unmount(self) -> None:
+        # Выход: секреты не остаются на диске после закрытия приложения.
+        self._purge_secrets_file()
         try:
             driver = getattr(self, "_driver", None)
             if driver is not None:
@@ -4706,6 +4709,24 @@ class CommandRunner(App):
             text = text.replace(value, "****")
         return text
 
+    def _purge_secrets_file(self) -> None:
+        """Удалить файлы секретов при выходе: значения не переживают сессию.
+
+        Подчищаются все `secrets_*.json*` в data-каталоге (включая .tmp и другие
+        инстансы), а имена убираются из памяти/os.environ.
+        """
+        base = getattr(self, "_data_dir", None) or os.getcwd()
+        for path in glob.glob(os.path.join(base, "secrets_*.json*")):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        for name in list(self._secret_names):
+            if os.environ.get(name) == self.local_env.get(name):
+                os.environ.pop(name, None)
+            self.local_env.pop(name, None)
+        self._secret_names.clear()
+
     def _remember_kctx_snapshot(self) -> None:
         """Кластерный журнал: снимок kubectl-стека для текущего кластера.
 
@@ -6288,6 +6309,11 @@ class CommandRunner(App):
         except LlmError as e:
             self.add_block(InfoBlock(f"Error: {e}"))
             return
+        # Секреты никогда не уходят в LLM: значения `$$NAME=…` маскируются в
+        # сообщении даже если попали туда через $OUT / $BLOCK / @файл.
+        masked_message = self._mask_secrets(message)
+        secrets_hidden = masked_message != message
+        message = masked_message
         # Контекст приложения: шпаргалка + релевантные теги из БД, чтобы модель
         # вернула готовые refs (!tag[tid]). Включается ключом app_context у
         # провайдера; `:llm ask` — всегда (независимо от ключа).
@@ -6325,8 +6351,10 @@ class CommandRunner(App):
             files_note = f" · @files: {escape(shown)}"
         ctx_note = f" · ctx: {len(history) // 2}/{turns} turns" if turns else ""
         app_note = f" · app-ctx: {app_ctx_tags} tags" if app_context else ""
+        secret_note = " · secrets: hidden" if secrets_hidden else ""
         header = (
-            f"{now} ({os.getcwd()}) $ :llm {provider_name}{files_note}{ctx_note}{app_note}"
+            f"{now} ({os.getcwd()}) $ :llm {provider_name}"
+            f"{files_note}{ctx_note}{app_note}{secret_note}"
         )
         # Для :r — исходная строка без раскрытий; в режиме ask сохраняем и
         # явно указанного провайдера (если он был).

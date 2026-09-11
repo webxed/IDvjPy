@@ -6,6 +6,7 @@
 """
 import os
 import stat
+import time
 from pathlib import Path
 
 import pytest
@@ -105,3 +106,43 @@ async def test_secrets_reload_on_start(isolated_home):
         await pilot.pause()
         assert app.local_env.get("API_KEY") == "k-123"
         assert "API_KEY" in app._secret_names
+
+
+async def test_secrets_file_removed_on_exit(isolated_home):
+    """Файл секретов удаляется при выходе из приложения (сессия не хранит их)."""
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, f"$$TOKEN={SECRET}")
+        path = app.FILE_SECRETS
+        assert os.path.isfile(path)
+    assert not os.path.exists(path)
+    assert not os.path.exists(path + ".tmp")
+
+
+async def test_secrets_never_sent_to_llm(isolated_home, monkeypatch):
+    """Значение секрета не уходит в LLM даже через $OUT."""
+    import app as app_module
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "default: ds\nproviders:\n  ds:\n    url: http://x\n    model: m\n",
+        encoding="utf-8",
+    )
+    seen: list[str] = []
+
+    def fake(provider, message, env, timeout=60, **kwargs):
+        seen.append(message)
+        return "ok"
+
+    monkeypatch.setattr(app_module, "perform_request", fake)
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, f"$$TOKEN={SECRET}")
+        await submit(pilot, "echo $TOKEN")
+        await wait_command_done(app, timeout=8.0)
+        await submit(pilot, ":llm ds explain this: $OUT")
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline and not seen:
+            await pilot.pause()
+    assert seen
+    assert all(SECRET not in message for message in seen)
+    assert any("****" in message for message in seen)

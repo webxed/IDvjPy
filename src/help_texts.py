@@ -139,7 +139,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                Not stored in .bashrc_term. Type $OUT alone to peek. `$OUT=` is rejected.
   $VAR=val   - Set environment variable
   $$VAR=val  - Set a SECRET variable: value is hidden in the input line and in the
-               journal (shown as ****); stored in secrets_<instance>.json (0600).
+               journal (shown as ****); stored in secrets_<instance>.json (0600),
+               deleted on exit (session only); never sent to :llm (masked to ****).
                Use it as $VAR. `$$VAR` — status, `$$VAR-` — remove.
                The whole input line is masked (name shows in the subtitle); in a
                real `> cmd` TTY the value is visible; F3 copies the real output.
