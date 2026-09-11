@@ -1,6 +1,6 @@
 # Сценарий демонстрации IDvjPy_term
 
-Версия приложения: **v1.44**. Длительность живого рассказа: **12–15 минут**.
+Версия приложения: **v1.79**. Длительность живого рассказа: **12–15 минут**.
 
 Тезис для зрителя: теги — переменные с шаблонами команд; приложение собирает их в строку. `!` / `!!` только подставляют текст во ввод, запуск — отдельным Enter.
 
@@ -17,6 +17,7 @@ python3 app.py --demo                     # bundled short, ~2–3 мин
 python3 app.py --demo full                # bundled full, без htop / kubectl / :q
 python3 app.py --demo ip                  # myip → jq .cc → Wiki URL → hello pipe → echo Hello, $OUT
 python3 app.py --demo features            # новые команды v1.44: ?text, :mv, :stats, F4, :watch, :diff, :o, :export *, :alias
+python3 app.py --demo all                 # всё подряд: calc/ipcalc/JSON/теги/утилиты (без сети и кластера)
 python3 app.py --demo --demo-speed 1.5    # быстрее (2 = вдвое)
 python3 app.py --demo full --demo-quit    # выйти, когда сценарий закончится
 python3 app.py --demo path/to/tour.yml    # свой файл
@@ -24,12 +25,12 @@ python3 app.py --demo path/to/tour.yml    # свой файл
 
 | Флаг | Что делает |
 |---|---|
-| `--demo` | Имя bundled-тура (`short` по умолчанию, ещё `full`, `ip`, `features`) или путь к `.yml` |
+| `--demo` | Имя bundled-тура (`short` по умолчанию, ещё `full`, `ip`, `features`, `all`) или путь к `.yml` |
 | `--demo-speed N` | Множитель скорости: паузы и набор делятся на N (`1` = как в YAML) |
 | `--demo-quit` | После последнего шага приложение закрывается (удобно для asciinema) |
 | `--instance-name=…` | Как обычно: отдельные `.bashrc_term_*` и `history_*.txt` (БД тегов общая) |
 
-Bundled-сценарии: `src/demos/short.yml`, `src/demos/full.yml`, `src/demos/ip.yml`, `src/demos/features.yml`.
+Bundled-сценарии: `src/demos/short.yml`, `src/demos/full.yml`, `src/demos/ip.yml`, `src/demos/features.yml`, `src/demos/all.yml`.
 
 Во время тура в subtitle: `DEMO · … · Esc stops`. **Esc** останавливает проигрывание, сессия остаётся — можно продолжить руками. `:q` выходит из приложения.
 
@@ -60,6 +61,28 @@ python3 app.py --demo features --demo-quit
 Сбрасываемые перед повтором теги: `deploy` / `kube` / `mine` (и все, что `#`-сохранены в YAML). Файлы `library.md` / `run.sh` создаются в каталоге запуска — для чистой записи используйте пустой каталог, как выше.
 
 Автотест-гвард: `tests/test_demo.py::test_bundled_features_tour_guards`.
+
+## Тур all («всё подряд»)
+
+```bash
+python3 app.py --demo all --demo-quit
+```
+
+Самый полный автотур: один прогон по максимуму возможностей, **без сети и кластера** (годится для asciinema и CI). Порядок — четыре акта:
+
+- **A. Локальный счёт.** `:?`; калькулятор `1024*3`, `512Mi + 20% in Gi`, `20% of 512Mi`; `ipcalc` `192.168.1.0/24`, `300 hosts`, `8.8.8.8`. Блоки помечены `calc:`, shell не запускается.
+- **B. Журнал.** `seq 1 12` → `| grep 7`; JSON `Tab → F5` (дерево, `↓`, `Enter` → `$JSON` и черновик `| jq`), явный `| jq '.pods[0].status'`, `:o /CrashLoop`.
+- **C. Теги.** `#api`, `?chain[1]`, `??`, `!api[1]` + Enter, `!! api[1] && logs[1]`, `#api+1` (правка → второй Enter), `#api=2=…`, `#api-1` → `?api` → `#api!1`, `:mv tmp[1] logs`, `:stats`, `:export * library.md`, `:alias api run.sh`.
+- **D. Обвязка.** `$HOST=localhost` + `echo ping $HOST`, `:env`, `:h 8`, `:c` и `:o /CrashLoop` (память выводов переживает очистку), `:diff` двух `printf`, `:r 1`, `:watch 1 date +%s` / `:watch stop`, `@ sleep 60` + F4, `:backup`, `:kctx`, `:screensaver 120` / `:screensaver 0`, `#`-комментарий в историю.
+
+Тур создаёт в каталоге запуска файлы `library.md` / `run.sh` и теги `api` / `logs` / `chain` / `tmp` (перед повтором сбрасываются только они; handbook-теги не трогаются). Для чистой записи запускайте из пустого каталога:
+
+```bash
+mkdir -p /tmp/idvj-all && cd /tmp/idvj-all
+python3 /path/to/Idivjopy/app.py --demo all --demo-quit
+```
+
+Автотесты: `tests/test_demo.py::test_bundled_all_tour_guards`, `::test_bundled_all_plays`.
 
 ## Свой YAML
 
@@ -278,6 +301,23 @@ Ctrl+D                    стереть ввод
 ```
 
 Перезапуск `python3 app.py` → `$HOST` и теги на месте.
+
+---
+
+## Акт 5. Мозг и инструменты (live, ~2 мин)
+
+То, что нельзя безопасно проиграть автотуром (сеть, ключи, TTY). Показывайте руками — только при живом рассказе:
+
+| Что показать | Как | Зачем |
+|---|---|---|
+| LLM-подбор связки | `:llm ask найди поды с именем api, покажи логи` | задача + шпаргалка приложения + выжимка тегов; ответ — ссылки `!tag[tid]`, кликом вставляются во ввод |
+| Провайдер на выбор | `:llm ask openai <задача>` | ключ — из окружения (`$DEEPSEEK_API_KEY` и т.п.), конфиг — `llm_providers.yml` (создаётся из `src/llm_providers.example.yml`) |
+| Файл в запрос | `:llm объясни @demo.json` | `@file` — вложить текст (≤200 КБ), `$OUT` / `$BLOCK` — вывод блока |
+| Внешний редактор | `:ed $OUT` / `:ed notes.md` | TUI на паузе, редактор из `settings.yml` (`editor: nano`), `$VAR`/`$OUT` в пути |
+| Справочник | `:md SEED_LINUX_COMMANDS.md` | форматированный Markdown в модалке |
+| Ingress | `:i` / `:i analyze <ingress>` | нужен кластер и `crossplane` (опционально) |
+
+Фраза: «Приложение само собирает контекст: команды из библиотеки, вывод блока, файл — и отдаёт задачу выбранному провайдеру.»
 
 ---
 

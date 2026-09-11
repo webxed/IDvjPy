@@ -49,7 +49,7 @@ Examples:
         nargs='?',
         const='short',
         default=None,
-        help='Play a demo scenario: bundled name (short, full) or path to a .yml file',
+        help='Play a demo scenario: bundled name (short, full, ip, features, all) or path to a .yml file',
     )
     parser.add_argument(
         '--demo-speed',
@@ -1339,7 +1339,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.78"
+    VERSION = "v1.79"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"

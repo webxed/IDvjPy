@@ -83,6 +83,62 @@ def test_bundled_features_tour_guards():
     assert not any(st.get("kind") == KIND_LOOP for st in steps)
 
 
+def test_bundled_all_tour_guards():
+    """Тур all («всё подряд»): максимум возможностей, пригоден для записи."""
+    names = bundled_demo_names()
+    assert "all" in names
+    path = resolve_demo_path("all")
+    assert path is not None and path.is_file()
+    scenario = load_scenario(path)
+    assert scenario["steps"]
+    assert scenario["title"]
+    for tag in ("api", "logs", "chain", "tmp"):
+        assert tag in collect_reset_tags(scenario)
+    steps = [normalize_step(s) for s in scenario["steps"]]
+    types = [st["type"] for st in steps]
+    # Каждая возможность представлена шагом тура.
+    for needle in (
+        ":?",
+        "1024*3",
+        "192.168.1.0/24",
+        "300 hosts",
+        "| jq '.pods[0].status'",
+        ":o /CrashLoop",
+        "#api echo GET http://localhost/health",
+        "?chain[1]",
+        "!! api[1] && logs[1]",
+        "#api+1",
+        "#api-1",
+        "#api!1",
+        ":mv tmp[1] logs",
+        ":stats",
+        ":export * library.md",
+        ":alias api run.sh",
+        ":env",
+        ":h 8",
+        ":c",
+        ":diff",
+        ":r 1",
+        ":watch 1 date +%s",
+        ":watch stop",
+        "@ sleep 60",
+        ":backup",
+        ":kctx",
+        ":screensaver 120",
+        ":screensaver 0",
+    ):
+        assert any(needle in t for t in types), needle
+    keys = {k for st in steps for k in (st["keys"] or [])}
+    assert {"tab", "f5", "f4"} <= keys
+    # Безопасен для автотура: никаких :q, TTY, :fm/:term/:ed, wait на colon-шагах,
+    # никаких бесконечных циклов.
+    assert not any(t.startswith(":q") for t in types)
+    assert not any(t.startswith(">") for t in types)
+    assert not any(t.startswith((":fm", ":term", ":ed")) for t in types)
+    assert not any(t.startswith(":") and st["wait_command"] for t, st in zip(types, steps, strict=True))
+    assert not any(st.get("kind") == KIND_LOOP for st in steps)
+
+
 def test_session_to_playbook_heuristics():
     scenario = session_to_playbook(
         [
@@ -265,6 +321,45 @@ async def test_bundled_features_plays(isolated_home):
         assert len(run_me) == 2
         assert all(r["stdout"] == "run-me" for r in run_me)
         assert any("needle-42" in r["command"] for r in app._output_history)
+        assert (isolated_home / "library.md").is_file()
+        assert (isolated_home / "run.sh").is_file()
+
+
+async def test_bundled_all_plays(isolated_home):
+    """Прогон тура all: calc/ipcalc/JSON/теги/утилиты выполняются без поломок."""
+    path = resolve_demo_path("all")
+    assert path is not None
+    scenario = load_scenario(path)
+    scenario["start_pause"] = 0
+    scenario["type_delay"] = 0
+    scenario["pause"] = 0
+    app = CommandRunner(demo=scenario, demo_speed=25)
+    async with app.run_test(size=(120, 40)) as pilot:
+        deadline = time.monotonic() + 120
+        seen: list[str] = []
+        seen_info: list[str] = []
+        while app._demo_active and time.monotonic() < deadline:
+            seen.extend(b.raw_stdout for b in app.query(CommandBlock))
+            seen_info.extend(b.text_content for b in app.query(InfoBlock))
+            await pilot.pause()
+        seen.extend(b.raw_stdout for b in app.query(CommandBlock))
+        seen_info.extend(b.text_content for b in app.query(InfoBlock))
+        assert app._demo_active is False
+        assert "Demo error" not in (app.sub_title or "")
+        # `:c` в туре чистит журнал — поэтому снимки stdout собираются по ходу.
+        stdout = " ".join(seen)
+        assert "= 3072" in stdout          # calc: 1024*3
+        assert "0.6Gi" in stdout           # calc: единицы данных
+        assert "255.255.254.0" in stdout   # ipcalc: 300 hosts
+        assert "CrashLoop" in stdout       # JSON + jq
+        infos = " ".join(seen_info)
+        assert "Library stats" in infos
+        assert "Output search 'CrashLoop'" in infos
+        assert "Exported 5 command(s) to library.md" in infos
+        assert "Exported 2 shell function(s) to run.sh" in infos
+        assert "Backup:" in infos
+        assert "kctx — кластеры" in infos
+        assert app.local_env.get("JSON")
         assert (isolated_home / "library.md").is_file()
         assert (isolated_home / "run.sh").is_file()
 

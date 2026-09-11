@@ -45,6 +45,7 @@ docker compose run --rm idvjpy        # образ соберётся при п�
 docker compose run --rm idvjpy --demo short --demo-quit   # короткий тур
 docker compose run --rm idvjpy --demo full  --demo-quit   # полный
 docker compose run --rm idvjpy --demo ip                  # myip → jq → wiki
+docker compose run --rm idvjpy --demo all   --demo-quit   # всё подряд: calc/ipcalc/JSON/теги/утилиты (без сети)
 ```
 
 Один шаг полного тура ходит в сеть (`curl` на `api.agify.io`) — без сети он просто

@@ -1,0 +1,254 @@
+# Тур «всё подряд»: максимум возможностей IDvjPy_term в одном прогоне.
+#   python3 app.py --demo all --demo-quit
+# Без сети, без кластера, без TTY (> cmd), без :q, без :fm/:term/:ed, без loop.
+# Создаёт теги api / logs / chain / tmp (сбрасываются перед повтором) и файлы
+# library.md / run.sh в каталоге запуска. Для чистой записи:
+#   mkdir -p /tmp/idvj-all && cd /tmp/idvj-all
+#   python3 /path/to/Idivjopy/app.py --demo all --demo-quit
+
+title: IDvjPy — всё подряд
+start_pause: 2.0
+type_delay: 0.05
+pause: 0.9
+command_timeout: 12
+
+reset_tags:
+  - api
+  - logs
+  - chain
+  - tmp
+
+steps:
+  # ---- Акт A. Локальный счёт: calc и ipcalc ----
+  - caption: "Акт A. Считает сам: калькулятор и ipcalc, shell не запускается"
+    type: ":?"
+    pause: 2.0
+
+  - caption: "Арифметика: 1024*3 (блок помечен calc:)"
+    type: "1024*3"
+    pause: 1.3
+
+  - caption: "Единицы данных: 512Mi + 20% in Gi"
+    type: "512Mi + 20% in Gi"
+    pause: 1.3
+
+  - caption: "Проценты: 20% of 512Mi"
+    type: "20% of 512Mi"
+    pause: 1.3
+
+  - caption: "ipcalc: 192.168.1.0/24 — как на jodies.de/ipcalc"
+    type: "192.168.1.0/24"
+    pause: 1.6
+
+  - caption: "ipcalc: 300 hosts — подбор маски"
+    type: "300 hosts"
+    pause: 1.6
+
+  - caption: "Хост: 8.8.8.8 — адрес, маска, reverse-имя"
+    type: "8.8.8.8"
+    pause: 1.4
+
+  # ---- Акт B. Журнал: пайп, JSON-дерево, поиск ----
+  - caption: "Акт B. Журнал — набор блоков, а не лог"
+    type: "seq 1 12"
+    wait_command: true
+    pause: 1.0
+
+  - caption: "Пайп с блока: | grep 7"
+    type: "| grep 7"
+    wait_command: true
+    pause: 1.2
+
+  - caption: "JSON в выводе: Tab → F5 — дерево"
+    type: "echo '{\"service\":\"api\",\"pods\":[{\"name\":\"api-7f\",\"status\":\"CrashLoop\"}]}'"
+    wait_command: true
+    pause: 1.0
+
+  - keys: [tab, f5]
+    pause: 2.2
+
+  - caption: "↓ — выбрать узел"
+    keys: [down]
+    pause: 0.8
+
+  - caption: "Enter — $JSON и черновик | jq во вводе"
+    keys: [enter]
+    pause: 1.5
+
+  - caption: "Enter — черновик уже выполнен по блоку"
+    keys: [enter]
+    wait_command: true
+    pause: 1.4
+
+  - caption: "Явный пайп: | jq по сфокусированному блоку"
+    type: "| jq '.pods[0].status'"
+    wait_command: true
+    pause: 1.4
+
+  - caption: "Память выводов: :o /CrashLoop — grep по stdout прошлых команд"
+    type: ":o /CrashLoop"
+    pause: 2.6
+
+  # ---- Акт C. Теги: библиотека шаблонов ----
+  - caption: "Акт C. Теги — переменные с шаблонами команд"
+    type: "#api echo GET http://localhost/health"
+    pause: 1.1
+
+  - type: "#api=healthcheck of local service"
+    pause: 1.0
+
+  - type: "#logs echo kubectl logs -l app=api --tail=50"
+    pause: 1.0
+
+  - type: "#chain !api[1] && !logs[1]"
+    pause: 1.1
+
+  - type: "#tmp echo move-me-into-logs"
+    pause: 1.0
+
+  - caption: "?chain[1] — превью, как раскроются ссылки"
+    type: "?chain[1]"
+    pause: 1.8
+
+  - caption: "?? — вся библиотека с комментариями"
+    type: "??"
+    pause: 2.0
+
+  - caption: "!api[1] — только подстановка, ещё не запуск"
+    type: "!api[1]"
+    pause: 1.2
+
+  - caption: "Enter — запуск собранной строки"
+    keys: [enter]
+    wait_command: true
+    pause: 1.3
+
+  - caption: "!! — собрать строку из двух тегов"
+    type: "!! api[1] && logs[1]"
+    pause: 1.4
+
+  - keys: [enter]
+    wait_command: true
+    pause: 1.3
+
+  - caption: "Правка шаблона: #api+1 кладёт команду во ввод"
+    type: "#api+1"
+    pause: 1.3
+
+  - keys: [end]
+    pause: 0.3
+
+  - type: " (v2)"
+    enter: true
+    clear: false
+    pause: 1.2
+
+  - caption: "#api=2=comment — комментарий к конкретной команде"
+    type: "#api=2=newer healthcheck"
+    pause: 1.2
+
+  - caption: "Мягкое удаление: #api-1, восстановление #api!1"
+    type: "#api-1"
+    pause: 1.0
+
+  - type: "?api"
+    pause: 1.4
+
+  - type: "#api!1"
+    pause: 1.0
+
+  - caption: ":mv tmp[1] logs — перенести команду между тегами"
+    type: ":mv tmp[1] logs"
+    pause: 1.6
+
+  - type: "?logs"
+    pause: 1.6
+
+  - caption: ":stats — сводка библиотеки"
+    type: ":stats"
+    pause: 2.8
+
+  - caption: ":export * library.md — каталог в Markdown"
+    type: ":export * library.md"
+    pause: 2.0
+
+  - caption: ":alias api run.sh — теги как bash-функции"
+    type: ":alias api run.sh"
+    pause: 2.0
+
+  # ---- Акт D. Обвязка сессии и инструменты ----
+  - caption: "Акт D. Сессия: переменные, история, diff, watch"
+    type: "$HOST=localhost"
+    pause: 0.9
+
+  - type: "echo ping $HOST"
+    wait_command: true
+    pause: 1.1
+
+  - caption: ":env — перечитать .bashrc_term и алиасы"
+    type: ":env"
+    pause: 1.6
+
+  - caption: ":h 8 — история оболочки одним блоком"
+    type: ":h 8"
+    pause: 1.8
+
+  - caption: ":c очищает журнал…"
+    type: ":c"
+    pause: 1.4
+
+  - caption: "…но :o /CrashLoop находит старый вывод"
+    type: ":o /CrashLoop"
+    pause: 2.4
+
+  - caption: "Сравнение выводов: две версии"
+    type: "printf 'a\\nb\\nc\\n'"
+    wait_command: true
+    pause: 1.1
+
+  - type: "printf 'a\\nB\\nc\\n'"
+    wait_command: true
+    pause: 1.1
+
+  - caption: ":diff — unified diff (-b / +B)"
+    type: ":diff"
+    pause: 2.6
+
+  - caption: ":r 1 — вернуть команду блока во ввод"
+    type: ":r 1"
+    pause: 1.8
+
+  - caption: ":watch 1 date +%s — тики в одном блоке"
+    type: ":watch 1 date +%s"
+    pause: 3.0
+
+  - caption: ":watch stop — остановить"
+    type: ":watch stop"
+    pause: 2.0
+
+  - caption: "@ sleep 60 — команда без таймаута"
+    type: "@ sleep 60"
+    pause: 1.0
+
+  - caption: "F4 — SIGTERM группе процесса"
+    keys: [f4]
+    pause: 2.2
+
+  - caption: ":backup — снимок SQLite в backups/"
+    type: ":backup"
+    pause: 1.8
+
+  - caption: ":kctx — кластеры и снимки переменных из журнала"
+    type: ":kctx"
+    pause: 2.0
+
+  - caption: ":screensaver 120 / 0 — простой до скринсейвера"
+    type: ":screensaver 120"
+    pause: 1.4
+
+  - type: ":screensaver 0"
+    pause: 1.4
+
+  - caption: "# комментарий — строка в историю без запуска"
+    type: "# спасибо, что посмотрели IDvjPy_term"
+    pause: 1.6

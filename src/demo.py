@@ -246,7 +246,7 @@ def load_demo_for_cli(name: str) -> dict[str, Any]:
         print(
             f"Demo not found: {name!r}\n"
             f"Bundled scenarios: {available}\n"
-            "Pass a name (short, full) or a path to a .yml file.",
+            "Pass a name (short, full, ip, features, all) or a path to a .yml file.",
             file=sys.stderr,
         )
         sys.exit(2)

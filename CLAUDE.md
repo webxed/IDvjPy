@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.78) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.79) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.78` → `v1.79`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.79` → `v1.80`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -18,6 +18,7 @@ python3 app.py --instance-name=user1   # .bashrc_term_user1 и history_user1.txt
 python3 app.py --demo                  # короткий тур (Esc — стоп)
 python3 app.py --demo ip               # myip → jq .cc → F2 copy → Wiki URL → hello pipe → echo Hello, $OUT
 python3 app.py --demo features         # v1.44: ?text, :mv, :stats, F4-stop, :watch, :diff, :o, :export *, :alias
+python3 app.py --demo all              # всё подряд: calc/ipcalc/JSON/теги/утилиты (без сети, без кластера)
 python3 app.py --demo full --demo-quit # длинный тур и выход (удобно для asciinema)
 ```
 

@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.78**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.79**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -141,13 +141,13 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.25 (app v1.78) |
+| `test_cmd.md` | Manual plan v1.26 (app v1.79) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
 | `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
-| `tests/test_demo.py` | YAML `--demo`, `:playbook`, `loop: N` / `loop: true` |
+| `tests/test_demo.py` | YAML `--demo` (short/full/ip/features/all, guardrails тура `all`), `:playbook`, `loop: N` / `loop: true` |
 | `tests/test_gui_open.py` | `:fm` / `:term` argv by OS, `$FILEMAN` / `$TERMINAL`, detached spawn |
 | `tests/test_screensaver.py` | starfield, `:screensaver`, idle timer, key swallowed |
 | `tests/test_docker_stand.py` | Файлы docker-стенда: seed-скрипты в entrypoint, compose-том/TTY, Dockerfile, `.dockerignore`, job CI |
@@ -165,7 +165,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.78 |
+| `src/app.py` | TUI (`CommandRunner`), v1.79 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -197,6 +197,12 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.79
+
+- **Новый bundled-тур `all` — «всё подряд» (`src/demos/all.yml`).** Один прогон по максимуму возможностей, без сети и кластера: локальный счёт (`calc`: `1024*3`, единицы `512Mi + 20% in Gi`; `ipcalc`: `192.168.1.0/24`, `300 hosts`, `8.8.8.8`), журнал (`| grep`, JSON-дерево `Tab → F5` с `$JSON`/черновиком `| jq`, `:o /CrashLoop`), библиотека тегов (`#api`, `?tag[1]`, `??`, `!`/`!!`, `#api+1`, `#api=2=…`, `#api-1` → `#api!1`, `:mv tmp[1] logs`, `:stats`, `:export * library.md`, `:alias api run.sh`), обвязка (`$HOST`, `:env`, `:h 8`, `:c` + `:o`, `:diff`, `:r 1`, `:watch 1 date +%s` / `:watch stop`, `@ sleep 60` + F4, `:backup`, `:kctx`, `:screensaver 120`/`0`). Тур не трогает handbook-теги и не пишет в них: перед повтором жёстко сбрасываются только свои `api` / `logs` / `chain` / `tmp`. Запуск: `python3 app.py --demo all --demo-quit`.
+- **Тесты тура `all`:** `tests/test_demo.py::test_bundled_all_tour_guards` (каждая возможность — шагом; нет `:q`, TTY `>`, `:fm`/`:term`/`:ed`, `wait_command` на colon-шагах, бесконечных `loop`) и `test_bundled_all_plays` (прогон: `calc`/`ipcalc` строки, `CrashLoop` из JSON, `:stats`, экспорт `library.md`/`run.sh`, `:backup`, `:kctx`). Документация: `DEMO.md` (автотур + Акт 5), `README.md`, `CLAUDE.md`.
+- **CLI-подсказки `--demo`** перечисляют все bundled-имена: `short, full, ip, features, all` (argparse help и `load_demo_for_cli`).
 
 ## v1.78
 
