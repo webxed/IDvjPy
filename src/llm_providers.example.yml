@@ -18,6 +18,8 @@
 #   response_path  — где в ответе текст модели (точки: choices.0.message.content);
 #                    без него — эвристика по известным полям
 #   timeout        — секунды ожидания ответа (по умолчанию 60)
+#   mock           — true: не ходить в сеть, вернуть `answer` сразу (офлайн-заглушка)
+#   answer         — текст ответа для `mock: true`
 #   history_turns  — сколько последних пар user/assistant держать в контексте :llm
 #                    (память текущей сессии; 0/нет = без контекста; сброс — :llm reset)
 #   max_attachment_bytes — лимит файла для `@путь` в сообщении (по умолчанию 200000)
@@ -82,6 +84,14 @@ providers:
     headers:
       Content-Type: application/json
     response_path: choices.0.message.content
+
+  # Встроенная офлайн-заглушка: mock-ответ без HTTP и ключей. Присутствует
+  # всегда, даже если этот блок удалить (см. llm_client.OFFLINE_PROVIDER).
+  # Полезна для демо и проверки `:llm` / `:llm ask` без сети.
+  offline:
+    model: stub
+    mock: true
+    answer: "[offline] Заглушка IDvjPy_term: запрос в сеть не уходил."
 
   # Пример с ручным шаблоном тела и без JSON-разбора ответа.
   echo-demo:

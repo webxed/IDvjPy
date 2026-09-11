@@ -16,6 +16,8 @@ pytestmark = pytest.mark.slow
 import llm_client
 from llm_client import (
     MAX_HISTORY_TURNS,
+    OFFLINE_ANSWER,
+    OFFLINE_PROVIDER_NAME,
     LlmError,
     _extract_text,
     append_exchange,
@@ -153,6 +155,26 @@ def test_load_providers_missing_file():
         load_providers("/no/such/llm_providers.yml")
 
 
+def test_offline_provider_is_builtin(tmp_path):
+    """Встроенный `offline` есть в любом конфиге; mock-ответ без сети/ключей."""
+    cfg_path = tmp_path / "llm_providers.yml"
+    cfg_path.write_text(
+        "providers:\n  ds:\n    url: http://x\n    model: m\n", encoding="utf-8"
+    )
+    cfg = load_providers(str(cfg_path))
+    assert OFFLINE_PROVIDER_NAME in cfg["providers"]
+    provider = cfg["providers"][OFFLINE_PROVIDER_NAME]
+    assert provider["mock"] is True
+    # Возвращает answer без url/headers/сети.
+    assert perform_request(provider, "hi", {}) == OFFLINE_ANSWER
+    # Свой `offline:` в конфиге не перетирается.
+    cfg_path.write_text(
+        "providers:\n  offline:\n    model: mine\n    mock: true\n    answer: custom\n",
+        encoding="utf-8",
+    )
+    assert load_providers(str(cfg_path))["providers"]["offline"]["model"] == "mine"
+
+
 def test_default_body_is_openai_compatible_json():
     body = json.loads(build_body(DS_CFG, 'hi "quoted" \n', {"DEEPSEEK_API_KEY": "k"}))
     assert body["model"] == "deepseek-chat"
@@ -260,7 +282,7 @@ def test_llm_completion_items(isolated_home):
     assert "(default)" in ds_item.display
     # По префиксу; после начала сообщения/пробела список не показываем.
     items, _ = app.get_llm_completions(":llm o", len(":llm o"))
-    assert [i.insert for i in items] == ["openai"]
+    assert [i.insert for i in items] == ["offline", "openai"]
     assert app.get_llm_completions(":llm ds hi", 10) == ([], "")
     assert app.get_llm_completions(":llm ds ", len(":llm ds ")) == ([], "")
 
@@ -741,7 +763,7 @@ def test_llm_completion_offers_ask_after_providers(isolated_home):
     app = CommandRunner()
     inserts = [item.insert for item in app.get_llm_completions(":llm ", len(":llm "))[0]]
     # Провайдеры первыми: Enter на `:llm ` по-прежнему выбирает default.
-    assert inserts == ["ds", "ask"]
+    assert inserts == ["ds", "offline", "ask"]
     assert [
         item.insert for item in app.get_llm_completions(":llm as", len(":llm as"))[0]
     ] == ["ask"]
@@ -752,7 +774,7 @@ def test_llm_completion_offers_ask_after_providers(isolated_home):
     # После `:llm ask ` и по префиксу — провайдеры (псевдо-`ask` уже не нужен).
     assert [
         item.insert for item in app.get_llm_completions(":llm ask ", len(":llm ask "))[0]
-    ] == ["ds"]
+    ] == ["ds", "offline"]
     assert [
         item.insert for item in app.get_llm_completions(":llm ask d", len(":llm ask d"))[0]
     ] == ["ds"]

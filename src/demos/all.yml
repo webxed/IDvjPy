@@ -2,8 +2,11 @@
 #   python3 app.py --demo all --demo-quit
 # Без сети, без кластера, без TTY (> cmd), без :q, без :fm/:term/:ed, без loop.
 # Создаёт теги api / logs / chain / tmp (сбрасываются перед повтором) и файлы
-# library.md / run.sh в каталоге запуска. Для чистой записи:
+# library.md / run.sh в каталоге запуска. Для `:llm` нужен любой llm_providers.yml
+# (акт E использует встроенного офлайн-провайдера `offline` — без ключа и сети).
+# Для чистой записи:
 #   mkdir -p /tmp/idvj-all && cd /tmp/idvj-all
+#   cp /path/to/Idivjopy/src/llm_providers.example.yml llm_providers.yml
 #   python3 /path/to/Idivjopy/app.py --demo all --demo-quit
 
 title: IDvjPy — всё подряд
@@ -252,3 +255,16 @@ steps:
   - caption: "# комментарий — строка в историю без запуска"
     type: "# спасибо, что посмотрели IDvjPy_term"
     pause: 1.6
+
+  # ---- Акт E. LLM: :llm и :llm ask через встроенную офлайн-заглушку ----
+  - caption: "Акт E. LLM: :llm — провайдеры (offline — встроенный, без ключа)"
+    type: ":llm"
+    pause: 2.4
+
+  - caption: ":llm <провайдер> <сообщение> — ответ без ключей и сети"
+    type: ":llm offline Привет! Ответь одной строкой."
+    pause: 2.4
+
+  - caption: ":llm ask — задача + шпаргалка приложения и выжимка тегов (app-ctx)"
+    type: ":llm ask offline Найди поды api и покажи логи"
+    pause: 2.8

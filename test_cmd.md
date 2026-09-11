@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.80
+# План тестирования IDvjPy_term v1.81
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -923,6 +923,7 @@ x
 5. `:llm ask` (без задачи) → `Usage: :llm ask [<provider>] <task in your words>`; без `default:` и без имени провайдера → `needs a provider`.
 6. Обычный `:llm ds вопрос` без ключа `app_context` в шапке `app-ctx` не показывает (поведение прежнее); с `app_context: true` — показывает и шлёт тот же контекст.
 7. `:llm ` (Tab) предлагает провайдеров и `ask`; `:llm as` → `ask`; `:llm ask ` → провайдеры; `:llm ask <Tab>` без default выбирает провайдера для ask; `:r` на блоке `:llm ask` возвращает `:llm ask [<провайдер>] <задача>`.
+8. Встроенный офлайн-провайдер `offline` (`mock: true`) есть в любом конфиге и отвечает без сети/ключа: `:llm offline Привет`, `:llm ask offline найди поды` (в шапке `app-ctx: N tags`). Используется в акте E тура `--demo all`.
 
 Автотест: `tests/test_llm.py` (юнит `llm_context` + app-level `:llm ask` / `app_context`).
 
@@ -974,7 +975,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.27  
-**Версия приложения**: v1.80
+**Версия документа**: v1.28  
+**Версия приложения**: v1.81
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11

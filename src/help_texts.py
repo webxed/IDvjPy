@@ -58,6 +58,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :alias <tag> [file.sh] / :alias * [library.sh] - export commands as
                 bash functions tag_tid() { ...; }
   :llm          - List LLM providers from llm_providers.yml (see example in src/)
+  :llm offline <message> - Built-in offline stub (mock: no network, no key);
+                present in every config unless you define your own `offline:`
   :llm <provider> <message> - Ask the given LLM via its API (headers/body from config;
                 secrets come from the environment, e.g. $DEEPSEEK_API_KEY)
   :llm <message> - Ask the default provider (`default:` in llm_providers.yml)

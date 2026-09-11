@@ -68,17 +68,19 @@ python3 app.py --demo features --demo-quit
 python3 app.py --demo all --demo-quit
 ```
 
-Самый полный автотур: один прогон по максимуму возможностей, **без сети и кластера** (годится для asciinema и CI). Порядок — четыре акта:
+Самый полный автотур: один прогон по максимуму возможностей, **без сети и кластера** (годится для asciinema и CI). Порядок — пять актов:
 
 - **A. Локальный счёт.** `:?`; калькулятор `1024*3`, `512Mi + 20% in Gi`, `20% of 512Mi`; `ipcalc` `192.168.1.0/24`, `300 hosts`, `8.8.8.8`. Блоки помечены `calc:`, shell не запускается.
 - **B. Журнал.** `seq 1 12` → `| grep 7`; JSON `Tab → F5` (дерево, `↓`, `Enter` → `$JSON` и черновик `| jq`), явный `| jq '.pods[0].status'`, `:o /CrashLoop`.
 - **C. Теги.** `#api`, `?chain[1]`, `??`, `!api[1]` + Enter, `!! api[1] && logs[1]`, `#api+1` (правка → второй Enter), `#api=2=…`, `#api-1` → `?api` → `#api!1`, `:mv tmp[1] logs`, `:stats`, `:export * library.md`, `:alias api run.sh`.
 - **D. Обвязка.** `$HOST=localhost` + `echo ping $HOST`, `:env`, `:h 8`, `:c` и `:o /CrashLoop` (память выводов переживает очистку), `:diff` двух `printf`, `:r 1`, `:watch 1 date +%s` / `:watch stop`, `@ sleep 60` + F4, `:backup`, `:kctx`, `:screensaver 120` / `:screensaver 0`, `#`-комментарий в историю.
+- **E. LLM.** `:llm` (список провайдеров), `:llm offline <сообщение>` и `:llm ask offline <задача>` — через встроенную офлайн-заглушку `offline` (`mock: true`): ответ без ключа и сети, в шапке `ask`-блока видно `app-ctx: N tags`. Настоящие провайдеры (`ds`, `openai`, `ollama`, …) — так же, по `llm_providers.yml`.
 
-Тур создаёт в каталоге запуска файлы `library.md` / `run.sh` и теги `api` / `logs` / `chain` / `tmp` (перед повтором сбрасываются только они; handbook-теги не трогаются). Для чистой записи запускайте из пустого каталога:
+Тур создаёт в каталоге запуска файлы `library.md` / `run.sh` и теги `api` / `logs` / `chain` / `tmp` (перед повтором сбрасываются только они; handbook-теги не трогаются). Для акта E нужен любой валидный `llm_providers.yml` (как и для любого `:llm`) — обычно он создаётся сам; в пустом каталоге скопируйте пример. Для чистой записи:
 
 ```bash
 mkdir -p /tmp/idvj-all && cd /tmp/idvj-all
+cp /path/to/Idivjopy/src/llm_providers.example.yml llm_providers.yml
 python3 /path/to/Idivjopy/app.py --demo all --demo-quit
 ```
 

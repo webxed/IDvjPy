@@ -16,6 +16,10 @@
 Извлечение ответа: `response_path` точками (`choices.0.message.content`); без
 него — эвристика по списку известных полей. Сеть только через urllib (stdlib).
 
+Встроенный провайдер `offline` (`mock: true`) отвечает заранее заданным текстом,
+не ходит в сеть и не требует ключей — для демо и проверки `:llm` / `:llm ask`.
+Доступен в любом конфиге; свой `offline:` в llm_providers.yml имеет приоритет.
+
 Контекст приложения (`:llm ask <задача>` или ключ `app_context` провайдера)
 собирает `llm_context.py` и дописывается в system-сообщение (до правила языка).
 """
@@ -36,6 +40,23 @@ DEFAULT_TIMEOUT = 60.0
 # Многоходовость: сколько последних пар (user+assistant) держать в контексте.
 DEFAULT_HISTORY_TURNS = 0
 MAX_HISTORY_TURNS = 50
+
+# Встроенный офлайн-провайдер `offline`: mock-ответ без HTTP/ключа. Нужен для
+# демо и проверки проводки `:llm` / `:llm ask` (контекст, форматирование) там,
+# где нет сети или API-ключа. Появляется в любом конфиге; собственная секция
+# `offline:` в llm_providers.yml не перетирается.
+OFFLINE_PROVIDER_NAME = "offline"
+OFFLINE_ANSWER = (
+    "[offline] Встроенная заглушка IDvjPy_term: запрос в сеть не уходил.\n"
+    "Так проверяются :llm и :llm ask без ключей; настоящие ответы — "
+    "у провайдеров из llm_providers.yml."
+)
+OFFLINE_PROVIDER: dict[str, Any] = {
+    "model": "stub",
+    "mock": True,
+    "answer": OFFLINE_ANSWER,
+    "timeout": 1,
+}
 # Лимит на вложенный файл (`@путь`): больше — явная ошибка, не молчаливая обрезка.
 DEFAULT_MAX_ATTACHMENT_BYTES = 200_000
 # `@путь` в сообщении: не трогает email (`user@host`) и `@@literal`.
@@ -89,6 +110,8 @@ def load_providers(path: str) -> dict[str, Any]:
             f"{path} must be a mapping with a `providers:` section "
             "(see {example_config_path()})."
         )
+    # Встроенная офлайн-заглушка доступна всегда (свой `offline:` — приоритетнее).
+    cfg["providers"].setdefault(OFFLINE_PROVIDER_NAME, dict(OFFLINE_PROVIDER))
     return cfg
 
 
@@ -378,7 +401,10 @@ def perform_request(
     `history` — предыдущие пары сообщений (многоходовость `:llm`).
     `app_context` — контекст приложения (шпаргалка + библиотека тегов).
     Бросает LlmError с понятным сообщением при сетевых/HTTP/разборных ошибках.
+    Провайдер с `mock: true` возвращает `answer` сразу, без HTTP и без ключей.
     """
+    if provider.get("mock"):
+        return str(provider.get("answer") or "")
     url = str(provider.get("url") or "").strip()
     if not url:
         raise LlmError("Provider has no `url`.")

@@ -126,6 +126,9 @@ def test_bundled_all_tour_guards():
         ":kctx",
         ":screensaver 120",
         ":screensaver 0",
+        ":llm",
+        ":llm offline Привет! Ответь одной строкой.",
+        ":llm ask offline Найди поды api и покажи логи",
     ):
         assert any(needle in t for t in types), needle
     keys = {k for st in steps for k in (st["keys"] or [])}
@@ -327,6 +330,13 @@ async def test_bundled_features_plays(isolated_home):
 
 async def test_bundled_all_plays(isolated_home):
     """Прогон тура all: calc/ipcalc/JSON/теги/утилиты выполняются без поломок."""
+    import shutil
+
+    from llm_client import example_config_path
+
+    # `:llm` требует конфиг в каталоге запуска; в свежем data-каталоге он так и
+    # провижинится (копия примера). Встроенный провайдер `offline` — без сети.
+    shutil.copy(example_config_path(), isolated_home / "llm_providers.yml")
     path = resolve_demo_path("all")
     assert path is not None
     scenario = load_scenario(path)
@@ -338,12 +348,21 @@ async def test_bundled_all_plays(isolated_home):
         deadline = time.monotonic() + 120
         seen: list[str] = []
         seen_info: list[str] = []
+        seen_headers: list[str] = []
         while app._demo_active and time.monotonic() < deadline:
             seen.extend(b.raw_stdout for b in app.query(CommandBlock))
             seen_info.extend(b.text_content for b in app.query(InfoBlock))
+            seen_headers.extend(b.header for b in app.query(CommandBlock))
+            await pilot.pause()
+        # `:llm` отвечает в фоновом потоке — дожидаемся ответа заглушки.
+        llm_deadline = time.monotonic() + 8
+        while time.monotonic() < llm_deadline and any(
+            b.raw_stdout.startswith("[Consulting") for b in app.query(CommandBlock)
+        ):
             await pilot.pause()
         seen.extend(b.raw_stdout for b in app.query(CommandBlock))
         seen_info.extend(b.text_content for b in app.query(InfoBlock))
+        seen_headers.extend(b.header for b in app.query(CommandBlock))
         assert app._demo_active is False
         assert "Demo error" not in (app.sub_title or "")
         # `:c` в туре чистит журнал — поэтому снимки stdout собираются по ходу.
@@ -352,6 +371,7 @@ async def test_bundled_all_plays(isolated_home):
         assert "0.6Gi" in stdout           # calc: единицы данных
         assert "255.255.254.0" in stdout   # ipcalc: 300 hosts
         assert "CrashLoop" in stdout       # JSON + jq
+        assert "[offline]" in stdout  # :llm offline (встроенный провайдер)
         infos = " ".join(seen_info)
         assert "Library stats" in infos
         assert "Output search 'CrashLoop'" in infos
@@ -359,6 +379,9 @@ async def test_bundled_all_plays(isolated_home):
         assert "Exported 2 shell function(s) to run.sh" in infos
         assert "Backup:" in infos
         assert "kctx — кластеры" in infos
+        assert "LLM providers:" in infos
+        assert "offline" in infos
+        assert "app-ctx:" in " ".join(seen_headers)  # :llm ask приложил библиотеку
         assert app.local_env.get("JSON")
         assert (isolated_home / "library.md").is_file()
         assert (isolated_home / "run.sh").is_file()

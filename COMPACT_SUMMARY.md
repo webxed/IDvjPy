@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.80**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.81**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -141,7 +141,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.27 (app v1.80) |
+| `test_cmd.md` | Manual plan v1.28 (app v1.81) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -165,7 +165,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.80 |
+| `src/app.py` | TUI (`CommandRunner`), v1.81 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -197,6 +197,12 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.81
+
+- **Встроенный офлайн-провайдер `offline` для `:llm`.** `src/llm_client.py` добавляет в любой загруженный конфиг provider `offline` с `mock: true`: `perform_request` при `mock` возвращает `answer` сразу, без HTTP и без ключей (`load_providers` делает `setdefault` — собственный `offline:` в `llm_providers.yml` имеет приоритет). Нужен для демо и проверки проводки `:llm` / `:llm ask` (контекст, формат, кликабельные refs) там, где нет сети или API-ключа. В `src/llm_providers.example.yml` добавлен пример секции `offline` и поля `mock`/`answer`; в `:?` и README — строка про `:llm offline <сообщение>`.
+- **Акт E в туре `all`.** `src/demos/all.yml` теперь показывает LLM: `:llm` (список провайдеров), `:llm offline <сообщение>` и `:llm ask offline <задача>` (в шапке `app-ctx: N tags`). Тур остаётся без сети и ключей; `tests/test_demo.py::test_bundled_all_plays` копирует `llm_providers.example.yml` в data-каталог (как провижининг) и проверяет ответ заглушки. `test_bundled_all_tour_guards` знает про `:llm`-шаги.
+- **Тесты LLM:** `tests/test_llm.py::test_offline_provider_is_builtin` (инъекция + mock-ответ + приоритет своего `offline:`); обновлены ожидания подсказок (`:llm o` → `offline, openai`; `:llm ` → `ds, offline, ask`).
 
 ## v1.80
 
