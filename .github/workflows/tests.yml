@@ -69,3 +69,10 @@ jobs:
           docker run --rm -v idvjpy-ci:/data --entrypoint python3 idvjpy-demo:ci \
             /usr/local/bin/tui-smoke.py --expect IDvjPy_term --timeout 180 \
               -- /usr/local/bin/idvjpy-demo --demo short --demo-quit
+
+      - name: The all tour (calc/ipcalc/JSON/tags/tools) plays under a pty
+        # Самый полный bundled-тур, без сети и кластера; ускоряем вдвое для CI.
+        run: |
+          docker run --rm -v idvjpy-ci:/data --entrypoint python3 idvjpy-demo:ci \
+            /usr/local/bin/tui-smoke.py --expect IDvjPy_term --timeout 300 \
+              -- /usr/local/bin/idvjpy-demo --demo all --demo-speed 2 --demo-quit
