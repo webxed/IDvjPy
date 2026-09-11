@@ -138,6 +138,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   $OUT       - On demand: last non-empty line of the focused (or last) command block.
                Not stored in .bashrc_term. Type $OUT alone to peek. `$OUT=` is rejected.
   $VAR=val   - Set environment variable
+  $VAR=@key  - Take the value from the focused/last finished block: the line whose
+               first token is `key` (vault `key  value` tables); `@last` — last line.
+               With `$$` it stores a secret: `$$VAULT_TOKEN=@token`.
   $$VAR=val  - Set a SECRET variable: value is hidden in the input line and in the
                journal (shown as ****); stored in secrets_<instance>.json (0600),
                deleted on exit (session only); never sent to :llm (masked to ****).

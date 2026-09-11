@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.86
+# План тестирования IDvjPy_term v1.87
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -81,6 +81,21 @@ $$TOKEN
 **Ограничения (проверить, что ведут себя именно так):** маскируется вся строка ввода — имя видно только в подзаголовке; в `> cmd` реальный терминал показывает значение, пока TUI на паузе (журнальная строка `TTY: …` уже маскирована); если команда печатает секрет, в журнале `****`, но `F3` отдаёт настоящий вывод; строка, начинающаяся с `$$`, всегда трактуется как секрет.
 
 Автотест: `tests/test_secrets.py`.
+
+### 1c. Захват значения из вывода блока (`@key`)
+
+```
+printf 'Key        Value\n---        -----\nrole_id    2474a21f-uuid\n'
+$MYROLE=@role_id
+$$MYSEC=@role_id
+$X=@nope
+printf 'a\nb\nlast-val\n'
+$V=@last
+```
+
+**Ожидание:** `$MYROLE=@role_id` → `Variable $MYROLE set (from block @role_id)`, значение `2474a21f-uuid`; `$$MYSEC=@role_id` — то же, но секрет (значение не в журнале); `@nope` → `not found in block output (keys: …)`; `@last` — `last-val`. Без завершённого блока — `no finished command block to capture from`. Подробный сценарий — `docs/SEED_VAULT_COMMANDS.md` (тег `vapprole`).
+
+Автотест: `tests/test_capture.py`.
 
 ---
 
@@ -997,7 +1012,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.33  
-**Версия приложения**: v1.86
+**Версия документа**: v1.34  
+**Версия приложения**: v1.87
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11

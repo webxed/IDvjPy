@@ -3,6 +3,8 @@
 Seed HashiCorp Vault handbook tags (see SEED_VAULT_COMMANDS.md).
 
 Playbooks are inspect-only: no seal, revoke, kv put/delete.
+`vapprole` logs in via AppRole (generates a short-lived secret-id and a token —
+credentials, not data changes).
 vvars does not echo VAULT_TOKEN (only set/unset).
 
 Run: python3 src/seed_vault.py --seed
@@ -74,6 +76,31 @@ SEED_TAGS = {
                 "!vault[13] ; echo '--- metadata ---' ; !vault[14]",
                 "kv list $SECRET → metadata get (не kv get)",
             ),
+        ],
+    ),
+    "vapprole": (
+        "AppRole: role_id → secret_id → login (значения — `$$…=@key`)",
+        [
+            ("$ROLE=custom-role", "имя AppRole (поправьте под свой)"),
+            (
+                "vault read auth/approle/role/$ROLE/role-id",
+                "role_id из табличного вывода",
+            ),
+            ("$$ROLE_ID=@role_id", "секрет: role_id из прошлого блока"),
+            (
+                "vault write -force auth/approle/role/$ROLE/secret-id",
+                "новый secret_id (меняет креденшелы, не данные)",
+            ),
+            ("$$SECRET_ID=@secret_id", "секрет: secret_id из прошлого блока"),
+            (
+                'vault write auth/approle/login role_id="$ROLE_ID" secret_id="$SECRET_ID"',
+                "login → token",
+            ),
+            (
+                "$$VAULT_TOKEN=@token",
+                "секрет: обновить `$VAULT_TOKEN` на approle-токен",
+            ),
+            ("vault read $SECRET", "проверить доступ новым токеном"),
         ],
     ),
 }

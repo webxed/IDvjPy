@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.86) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.87) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.86` → `v1.87`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.87` → `v1.88`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -108,6 +108,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `$OUT` | On demand: last line of focused/last block (not stored in `.bashrc_term`) |
 | `$VAR=val` | Set env in `.bashrc_term_<instance>` and the current session. `:env` re-reads the files. |
 | `$$VAR=val` | Secret env: value is masked in the input line and journal (`****`); stored in `secrets_<instance>.json` (0600), deleted on app exit (session only), masked out of `:llm` messages. Use as `$VAR`; `$$VAR` status, `$$VAR-` remove. |
+| `$VAR=@key` | Value from the focused/last finished block: line whose first token is `key` (vault tables); `@last` = last line. `$$VAR=@key` stores a secret. |
 
 `!` / `!!` only insert text. Run with a separate Enter.
 

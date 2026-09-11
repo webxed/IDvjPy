@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.86**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.87**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -31,6 +31,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
+| `$VAR=@key` | Value from the focused/last finished block: line whose first token is `key` (`@last` = last line); `$$VAR=@key` → secret |
 | `$$VAR=val` | Secret env: masked in the input line and journal (`****`); `secrets_<instance>.json` (0600), deleted on exit; never sent to `:llm`; use as `$VAR` |
 
 Aliases from `~/.bashrc`: bodies with `$1` / `$2` / `$@` substitute args; otherwise the rest of the line is appended.
@@ -129,6 +130,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 - After `> cmd`, the same bash dumps its environment: new/changed exports overlay `local_env` / `os.environ` for this session (not written to `.bashrc_term`). `$PWD` is adopted if the TTY shell `cd`'d. Nested `> bash` then `export` inside that inner shell is not visible.
 - `$VAR=val` writes the instance file (`.bashrc_term_default` by default).
 - `$$VAR=val` — секрет: значение не показывается при вводе и в журнале, файл `secrets_<instance>.json` (0600) удаляется при выходе (только сессия), в LLM не уходит; в командах — `$VAR`.
+- `$VAR=@key` / `$$VAR=@key` — значение из вывода блока (строка с первым токеном `key`; `@last` — последняя).
 - `-n` without value → explicit error (no silent fallback).
 
 ### CLI
@@ -143,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.33 (app v1.86) |
+| `test_cmd.md` | Manual plan v1.34 (app v1.87) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -167,7 +169,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.86 |
+| `src/app.py` | TUI (`CommandRunner`), v1.87 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -199,6 +201,12 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.87
+
+- **Захват значения из вывода блока: `$VAR=@key` / `$$VAR=@key`.** Значение берётся из сфокусированного (или последнего) завершённого блока: строка, первый токен которой равен `key` (таблицы `vault read` / `vault write` — `Key  Value`); `@last` — последняя непустая строка (после `| jq -r .field`). С `$$` сохраняется как секрет (маскирование/файл/`secrets: hidden` в `:llm` — как обычно). Ошибки явные: нет завершённого блока или ключ не найден (со списком ключей). Реализация — `CommandRunner._capture_from_block` + `RE_CAPTURE_VALUE`. Тесты: `tests/test_capture.py`.
+- **Vault seed: плейбук `vapprole`.** `role_id` → `secret_id` → login → временный токен, значения переносятся через `$$…=@key`. Обновлены `src/seed_vault.py` и `docs/SEED_VAULT_COMMANDS.md`; тест `tests/test_seed_ops.py::test_seed_vault_inspect_playbooks`.
+- Docs: README (таблица префиксов + раздел секретов), `:?` (help_texts), CLAUDE.md, test_cmd.md (1c).
 
 ## v1.86
 

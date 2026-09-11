@@ -962,6 +962,10 @@ class CompletionList(Static):
 
 # `$$NAME=value` — ввод секрета: значение после `=` прячем в поле ввода.
 RE_SECRET_ENTRY = re.compile(r"^\$\$[A-Za-z_][A-Za-z0-9_]*=.")
+# `$VAR=@key` / `$$VAR=@key` — значение берётся из вывода блока: строка, первый
+# токен которой равен `key` (таблицы `vault read` / `key  value`). `@last` —
+# последняя непустая строка (после `| jq -r .field`).
+RE_CAPTURE_VALUE = re.compile(r"^@([A-Za-z0-9_][A-Za-z0-9_.:-]*)$")
 
 
 class CommandInput(Input):
@@ -1382,7 +1386,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.86"
+    VERSION = "v1.87"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -4509,11 +4513,24 @@ class CommandRunner(App):
                 ))
                 return
 
+            capture = RE_CAPTURE_VALUE.match(var_value)
+            captured_note = ""
+            if capture:
+                key = capture.group(1)
+                captured, capture_error = self._capture_from_block(key)
+                if capture_error or captured is None:
+                    self.add_block(InfoBlock(f"Error: {capture_error or 'capture failed'}."))
+                    return
+                var_value = captured
+                captured_note = f" (from block @{key})"
             error = self._set_env_var(var_name, var_value)
             if error:
                 self.add_block(InfoBlock(f"Error setting variable: {error}"))
                 return
-            self.add_block(InfoBlock(f"Variable ${var_name} set to '{var_value}'"))
+            if captured_note:
+                self.add_block(InfoBlock(f"Variable ${var_name} set{captured_note}"))
+            else:
+                self.add_block(InfoBlock(f"Variable ${var_name} set to '{var_value}'"))
             if var_name in KUBE_STACK_VARS:
                 self._remember_kctx_snapshot()
         else:
@@ -4627,6 +4644,13 @@ class CommandRunner(App):
         if not value:
             self.add_block(InfoBlock("Error: empty secret value. Use: $$NAME=value"))
             return
+        capture = RE_CAPTURE_VALUE.match(value)
+        if capture:
+            captured, capture_error = self._capture_from_block(capture.group(1))
+            if capture_error or captured is None:
+                self.add_block(InfoBlock(f"Error: {capture_error or 'capture failed'}."))
+                return
+            value = captured
         error = self._set_secret_var(name, value)
         if error:
             self.add_block(InfoBlock(f"Error saving secret: {error}"))
@@ -4708,6 +4732,43 @@ class CommandRunner(App):
         for value in sorted((v for v in values if v), key=len, reverse=True):
             text = text.replace(value, "****")
         return text
+
+    def _capture_from_block(self, key: str) -> tuple[str | None, str | None]:
+        """Достать значение из вывода сфокусированного/последнего блока.
+
+        `@key` — первая строка, первый токен которой равен `key`; значение —
+        остаток строки (таблицы `vault read` / `vault write`: `Key  Value`).
+        `@last` — последняя непустая строка (удобно после `| jq -r .field`).
+        Возвращает (значение, ошибка); блок должен быть завершён.
+        """
+        block = self._output_block_for_placeholder()
+        if block is None or getattr(block, "pending", False):
+            return None, "no finished command block to capture from"
+        stdout = block.raw_stdout or ""
+        if stdout == "[Executing...]":
+            return None, "no finished command block to capture from"
+        lines = stdout.splitlines()
+        if key == "last":
+            for line in reversed(lines):
+                if line.strip():
+                    return line.strip(), None
+            return None, "block output is empty"
+        keys: list[str] = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            parts = stripped.split(None, 1)
+            row_key = parts[0]
+            if row_key in ("Key", "---"):  # шапка таблицы vault
+                continue
+            keys.append(row_key)
+            if row_key == key:
+                if len(parts) > 1 and parts[1].strip():
+                    return parts[1].strip(), None
+                return None, f"key '{key}' has an empty value"
+        shown = ", ".join(keys[:8]) + ("…" if len(keys) > 8 else "")
+        return None, f"key '{key}' not found in block output (keys: {shown or 'none'})"
 
     def _purge_secrets_file(self) -> None:
         """Удалить файлы секретов при выходе: значения не переживают сессию.

@@ -289,6 +289,24 @@ def test_seed_vault_inspect_playbooks(tmp_path):
     assert "!vault[14]" in vkv["command"]
     assert "kv get $SECRET" not in vkv["command"]
     assert "kv put" not in vkv["command"]
+    # AppRole: role_id → secret_id → login через захват из вывода (@key).
+    assert database.get_command_by_tid(db, "vapprole", 2)["command"] == (
+        "vault read auth/approle/role/$ROLE/role-id"
+    )
+    assert database.get_command_by_tid(db, "vapprole", 3)["command"] == (
+        "$$ROLE_ID=@role_id"
+    )
+    assert database.get_command_by_tid(db, "vapprole", 5)["command"] == (
+        "$$SECRET_ID=@secret_id"
+    )
+    login = database.get_command_by_tid(db, "vapprole", 6)["command"]
+    assert 'role_id="$ROLE_ID"' in login and 'secret_id="$SECRET_ID"' in login
+    assert database.get_command_by_tid(db, "vapprole", 7)["command"] == (
+        "$$VAULT_TOKEN=@token"
+    )
+    assert database.get_command_by_tid(db, "vapprole", 8)["command"] == (
+        "vault read $SECRET"
+    )
 
 
 def test_seed_text_grep_awk_sed(tmp_path):

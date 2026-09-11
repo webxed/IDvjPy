@@ -1,6 +1,6 @@
 # Справочник HashiCorp Vault для IDvjPy
 
-Тег **`vault`**. Плейбуки: `vstat`, `vkv` (осмотр).  
+Тег **`vault`**. Плейбуки: `vstat`, `vkv`, `vapprole` (осмотр и вход).  
 `kv get` печатает секреты **в журнал** — в автоцепочку не входит; для осмотра пути — `kv metadata get`.
 
 `vvars` не печатает `VAULT_TOKEN`, только `token=set` / `token=unset`.
@@ -56,6 +56,50 @@ $FIELD=
 Не в плейбуке: `operator seal`, `token revoke`, `kv delete` / `destroy`, `kv put`.
 
 Для KV v2 путь в CLI — `secret/app`, не `secret/data/app`.
+
+---
+
+## AppRole: вход (тег `vapprole`)
+
+Сценарий: `role_id` → `secret_id` → `login` → временный токен. Значения из
+таблиц `vault` переносятся в переменные прямо из вывода блока — запись
+`$VAR=@key` / `$$VAR=@key` берёт остаток строки, первый токен которой равен
+`key` (учитывается только сфокусированный или последний **завершённый** блок).
+`@last` — последняя непустая строка (удобно после `| jq -r .field`).
+
+| tid | Шаг | Что делает |
+|-----|-----|------------|
+| 1 | `$ROLE=custom-role` | имя AppRole (поправьте) |
+| 2 | `vault read auth/approle/role/$ROLE/role-id` | `role_id` |
+| 3 | `$$ROLE_ID=@role_id` | секрет из шага 2 |
+| 4 | `vault write -force auth/approle/role/$ROLE/secret-id` | новый `secret_id` |
+| 5 | `$$SECRET_ID=@secret_id` | секрет из шага 4 |
+| 6 | `vault write auth/approle/login role_id="$ROLE_ID" secret_id="$SECRET_ID"` | вход, `token` |
+| 7 | `$$VAULT_TOKEN=@token` | обновить токен |
+| 8 | `vault read $SECRET` | проверка доступа новым токеном |
+
+```text
+# начальный токен (админ):
+> vault login
+# или
+$$VAULT_TOKEN=hvs.начальный_токен
+
+$SECRET=services/service/stage/key
+!vapprole[1]   # $ROLE=custom-role
+!vapprole[2]   # role-id  → блок с role_id
+!vapprole[3]   # $$ROLE_ID=@role_id
+!vapprole[4]   # secret-id
+!vapprole[5]   # $$SECRET_ID=@secret_id
+!vapprole[6]   # login
+!vapprole[7]   # $$VAULT_TOKEN=@token
+!vapprole[8]   # vault read $SECRET
+```
+
+Шаги идут отдельными Enter: `$$VAR=@key` — это префикс переменной, его нельзя
+приклеить к команде через `;`. Каждый `!vapprole[N]` только вставляет строку.
+
+Секреты (`$$…`) не показываются на экране и живут только до выхода из
+приложения (`secrets_<instance>.json` удаляется при выходе).
 
 ---
 
