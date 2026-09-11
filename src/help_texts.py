@@ -141,6 +141,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   $$VAR=val  - Set a SECRET variable: value is hidden in the input line and in the
                journal (shown as ****); stored in secrets_<instance>.json (0600).
                Use it as $VAR. `$$VAR` — status, `$$VAR-` — remove.
+               The whole input line is masked (name shows in the subtitle); in a
+               real `> cmd` TTY the value is visible; F3 copies the real output.
   aliases    - From ~/.bashrc. If the body has $1 / $2 / $@, args are substituted
                (klogin cluster → tsh kube login cluster). Else the rest of the line
                is appended as in a classic alias.

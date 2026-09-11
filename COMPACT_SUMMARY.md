@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.84**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.85**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -143,7 +143,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.31 (app v1.84) |
+| `test_cmd.md` | Manual plan v1.32 (app v1.85) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -167,7 +167,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.84 |
+| `src/app.py` | TUI (`CommandRunner`), v1.85 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -199,6 +199,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.85
+
+- **Секреты: раздел в README с ограничениями.** В «Системе префиксов» добавлен подраздел «Секретные переменные (`$$VAR=value`)» — ввод/хранение/вывод и честные ограничения: маскируется вся строка ввода (имя — в подзаголовке); в интерактивном `> cmd` реальный терминал показывает значение, пока TUI на паузе; напечатанный командой секрет в журнале `****`, но `F3` отдаёт настоящий вывод; строка, начинающаяся с `$$`, всегда трактуется как секрет. Те же оговорки — в `:?` (help_texts) и `test_cmd.md` (секция 1b).
 
 ## v1.84
 
