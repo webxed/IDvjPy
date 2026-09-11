@@ -43,7 +43,7 @@ screensaver_stars: true
 # Подсказки имён k8s-ресурсов из живого кластера (`kubectl get pod <Tab>`).
 k8s_completion: false
 
-# Внешний редактор для `:editor <файл>|$OUT|$BLOCK` (запуск в TTY, TUI на паузе).
+# Внешний редактор для `:ed <файл>|$OUT|$BLOCK` (запуск в TTY, TUI на паузе).
 # Может содержать аргументы: `editor: code --wait`, `editor: nvim`. Пусто/нет —
 # берётся $VISUAL / $EDITOR, затем системный редактор (sensible-editor, nano, vi).
 editor: nano

@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.76
+# План тестирования IDvjPy_term v1.77
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -926,17 +926,17 @@ x
 
 Автотест: `tests/test_llm.py` (юнит `llm_context` + app-level `:llm ask` / `app_context`).
 
-### Внешний редактор — `:editor` (v1.70)
+### Внешний редактор — `:ed` (v1.70)
 
-1. В `settings.yml` задать `editor: nano` (или `vim`). Набрать `:editor notes.txt` → TUI на паузе, открывается nano; сохранить и выйти → `Editor: saved <путь>`. Файла нет — nano создаёт его (`Editor: created`), выход без записи — `was not created`.
+1. В `settings.yml` задать `editor: nano` (или `vim`). Набрать `:ed notes.txt` → TUI на паузе, открывается nano; сохранить и выйти → `Editor: saved <путь>`. Файла нет — nano создаёт его (`Editor: created`), выход без записи — `was not created`.
 2. Ничего не менять → `Editor: <путь> unchanged`.
-3. Выполнить `docker ps` (или любое), затем `:editor $OUT` → в редакторе последняя непустая строка вывода; правка в одну строку `:wq` → строка оказалась во вводе (рядом `Editor: $OUT → input`), Enter — запуск. Несколько строк — файл остаётся по напечатанному пути (`kept at …`).
-4. `:editor $BLOCK` → весь stdout блока (несколько строк → файл остаётся, путь виден; при сведении к одной строке — уходит во ввод).
-5. `:editor` без аргумента — пустой буфер: набрать команду, сохранить → она во вводе.
-6. Ошибки: `:editor <каталог>` → `is a directory`; `:editor $BLOCK` без завершённого блока → `need a finished command block`; `editor: есть-нет` → `'…' not found (editor: in settings.yml…)`; `:editor` без `editor:` и без `$EDITOR`/`$VISUAL` → откат на системный редактор.
-7. `:editor a b` → `Usage: :editor [<file>|$OUT|$BLOCK]`.
+3. Выполнить `docker ps` (или любое), затем `:ed $OUT` → в редакторе последняя непустая строка вывода; правка в одну строку `:wq` → строка оказалась во вводе (рядом `Editor: $OUT → input`), Enter — запуск. Несколько строк — файл остаётся по напечатанному пути (`kept at …`).
+4. `:ed $BLOCK` → весь stdout блока (несколько строк → файл остаётся, путь виден; при сведении к одной строке — уходит во ввод).
+5. `:ed` без аргумента — пустой буфер: набрать команду, сохранить → она во вводе.
+6. Ошибки: `:ed <каталог>` → `is a directory`; `:ed $BLOCK` без завершённого блока → `need a finished command block`; `editor: есть-нет` → `'…' not found (editor: in settings.yml…)`; `:ed` без `editor:` и без `$EDITOR`/`$VISUAL` → откат на системный редактор.
+7. `:ed a b` → `Usage: :ed [<file>|$OUT|$BLOCK]`.
 8. GUI-редактор (`editor: code --wait`) — флаг ожидания обязателен, иначе приложение продолжит работу сразу.
-9. Подстановка в пути: `$NS=prod`, затем `:editor /tmp/$NS-notes.txt` → открывается `/tmp/prod-notes.txt`; `$TMPDIR/pod-$OUT.json` — ленивый `$OUT` берёт последнюю строку блока (без блока — `$OUT is empty`); `:editor /tmp/$NOPE.yaml` → `undefined variable(s): $NOPE` (файл «$NOPE.yaml» не создаётся).
+9. Подстановка в пути: `$NS=prod`, затем `:ed /tmp/$NS-notes.txt` → открывается `/tmp/prod-notes.txt`; `$TMPDIR/pod-$OUT.json` — ленивый `$OUT` берёт последнюю строку блока (без блока — `$OUT is empty`); `:ed /tmp/$NOPE.yaml` → `undefined variable(s): $NOPE` (файл «$NOPE.yaml» не создаётся).
 
 Автотест: `tests/test_editor.py` (запуск редактора подменяется — TTY не нужен).
 
@@ -953,7 +953,7 @@ x
 - `$VAR` подставляется; `$JSON` после Enter в viewer; `$OUT` — последняя строка блока по запросу; `:env` перечитывает `.bashrc_term*`
 - `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:fm` `:term` `:env` `:session` `:welcome` `:backup` `:screensaver` `:r` `:theme` `:playbook` `:update` работают
 - `:llm ask <задача>` шлёт контекст приложения и предлагает только существующие `!tag[tid]` (ключ `app_context` — то же для обычного `:llm`)
-- `:editor <файл>|$OUT|$BLOCK` открывает редактор из `settings.yml`; однострочная правка `$OUT` попадает во ввод, многострочная — остаётся файлом
+- `:ed <файл>|$OUT|$BLOCK` открывает редактор из `settings.yml`; однострочная правка `$OUT` попадает во ввод, многострочная — остаётся файлом
 - `:o /text` и `:h /text` — поиск, а не листинг `/`: файловых подсказок нет (`:cd /…` и другие пути дополняются как раньше)
 - YAML `--demo` / `:playbook`: `loop: true` / `loop: N` крутит шаги, Esc останавливает
 - Soft-delete `#tag-` / `#tag-tid`; handbook hide `#name--` / `#name!!`; `# command` паркуется без запуска
@@ -974,7 +974,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.23  
-**Версия приложения**: v1.76
+**Версия документа**: v1.24  
+**Версия приложения**: v1.77
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-10

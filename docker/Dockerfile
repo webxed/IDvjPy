@@ -6,7 +6,7 @@ FROM python:3.12-alpine
 
 # bash            — приложение гоняет команды и TTY-сессии через /bin/bash (src/app.py);
 # ncurses-terminfo-base — terminfo: без него Textual не знает про TERM=xterm-256color;
-# nano            — редактор по умолчанию из settings.example.yml (`:editor`);
+# nano            — редактор по умолчанию из settings.example.yml (`:ed`);
 # git/curl/jq/procps — чтобы команды из seed-библиотеки реально выполнялись.
 RUN apk add --no-cache \
         bash \

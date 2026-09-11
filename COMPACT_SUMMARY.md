@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.76**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.77**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -141,7 +141,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.23 (app v1.76) |
+| `test_cmd.md` | Manual plan v1.24 (app v1.77) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -165,7 +165,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.76 |
+| `src/app.py` | TUI (`CommandRunner`), v1.77 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -181,7 +181,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/llm_providers.example.yml` | Образец конфига провайдеров LLM |
 | `src/settings.example.yml` | Шаблон настроек для первого запуска в новом data-каталоге |
 | `src/gui_open.py` | `:fm` / `:term` detached file manager / terminal |
-| `src/editor_open.py` | Внешний редактор для `:editor` (settings.yml `editor:` → `$VISUAL`/`$EDITOR` → системный; временные копии для `$OUT`/`$BLOCK`) |
+| `src/editor_open.py` | Внешний редактор для `:ed` (settings.yml `editor:` → `$VISUAL`/`$EDITOR` → системный; временные копии для `$OUT`/`$BLOCK`) |
 | `src/json_viewer.py` | JSON tree modal |
 | `src/ingress_analyzer.py` | `:i` k8s |
 | `src/command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
@@ -197,6 +197,11 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.77
+
+- **`:ed` — короткое имя внешнего редактора** (было `:editor`; фича из v1.70, переименование до релиза, поведение не менялось). Внутренние имена остались описательными: модуль `src/editor_open.py`, ключ `editor:` в `settings.yml`, `_handle_editor_command`. Заменено везде: `:?`, подсказки/ошибки («`Usage: :ed [<file>|$OUT|$BLOCK]`»), докстринги, `docker/README.md`, тесты.
+- **README: список `:`-команд и Docker.** В перечень команд приложения добавлены отсутствовавшие: `:llm` / `:llm ask` / `:llm reset`, `:ed`, `:o`, `:stats`, `:mv`, `:diff`, `:kill` / `:watch`, `:alias`, `:kctx` (раньше они были только в разделах-возможностях). Раздел «Демостенд в Docker» дополнен: что внутри образа (alpine, `bash`/`nano`/`git`/`curl`/`jq`/`procps`, без CLI `docker`/`kubectl`), что делает первый запуск (шаблон + 849 команд), запуск без compose и CI-смоук.
 
 ## v1.76
 
@@ -216,15 +221,15 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 
 ## v1.72
 
-- **Фикс: `:o /` давало файловые подсказки.** Аргумент `:o /text` (grep по сессионной истории выводов) начинался с `/`, и path-completion предлагал листинг корня — лишний список поверх поиска. Теперь `:h`, `:o`, `:g` объявлены командами без путей (`CommandRunner.COLON_NO_PATH_ARGS`) и файловое дополнение для них не работает (для `:h /` такое исключение было точечно). `:cd /`, `:w /…`, `:editor /…`, `:md` и прочие пути по-прежнему дополняются. Тесты: `tests/test_output_history.py` (`:o /` без файловых подсказок; `:cd /…` — всё ещё путь).
+- **Фикс: `:o /` давало файловые подсказки.** Аргумент `:o /text` (grep по сессионной истории выводов) начинался с `/`, и path-completion предлагал листинг корня — лишний список поверх поиска. Теперь `:h`, `:o`, `:g` объявлены командами без путей (`CommandRunner.COLON_NO_PATH_ARGS`) и файловое дополнение для них не работает (для `:h /` такое исключение было точечно). `:cd /`, `:w /…`, `:ed /…`, `:md` и прочие пути по-прежнему дополняются. Тесты: `tests/test_output_history.py` (`:o /` без файловых подсказок; `:cd /…` — всё ещё путь).
 
 ## v1.71
 
-- **`:editor` — подстановка `$VAR`/`$OUT` в пути.** Аргумент-путь проходит через ту же подстановку, что обычные команды (`substitute_variables`): `local_env` (`$VAR=…` в TUI, `.bashrc_term`) → `os.environ`, плюс ленивый `$OUT` (последняя непустая строка сфокусированного/последнего блока). Так путь из вывода блока не надо перенабирать: `:editor $TMPDIR/pod-$OUT.json`. Нераскрытый `$NAME` — явная ошибка со списком имён (иначе редактор создал бы файл с именем «$NOPE.yaml»); `$OUT` в пути без завершённого блока — тоже явная ошибка («/tmp/.json» — не путь). Новый хелпер `shell_env.unexpanded_variables`. Docs: `:?`, README, test_cmd. Тесты: +4 app-level (`$DIR/$OUT` в пути, undefined-переменная, пустой `$OUT`, успешный `created`) и +1 юнит `shell_env`.
+- **`:ed` — подстановка `$VAR`/`$OUT` в пути.** Аргумент-путь проходит через ту же подстановку, что обычные команды (`substitute_variables`): `local_env` (`$VAR=…` в TUI, `.bashrc_term`) → `os.environ`, плюс ленивый `$OUT` (последняя непустая строка сфокусированного/последнего блока). Так путь из вывода блока не надо перенабирать: `:ed $TMPDIR/pod-$OUT.json`. Нераскрытый `$NAME` — явная ошибка со списком имён (иначе редактор создал бы файл с именем «$NOPE.yaml»); `$OUT` в пути без завершённого блока — тоже явная ошибка («/tmp/.json» — не путь). Новый хелпер `shell_env.unexpanded_variables`. Docs: `:?`, README, test_cmd. Тесты: +4 app-level (`$DIR/$OUT` в пути, undefined-переменная, пустой `$OUT`, успешный `created`) и +1 юнит `shell_env`.
 
 ## v1.70
 
-- **`:editor` — внешний редактор для файла, `$OUT` и `$BLOCK`.** Новый модуль `src/editor_open.py` (без Textual): `resolve_editor` (settings.yml `editor:` → `$VISUAL` → `$EDITOR` → системный список: sensible-editor / nano / vi / vim, Windows — notepad; значение может содержать аргументы, напр. `editor: code --wait`), `build_editor_command` (shlex-экранирование пути), `write_temp_text`/`read_text_file`. Запуск — в настоящем TTY через существующий `_run_in_tty` (TUI на паузе, как `> cmd`), после — подхват env/PWD. `:editor <файл>` правит файл на месте (`saved` / `unchanged` / `created` / `was not created`); `:editor $OUT` / `$BLOCK` (и `${…}`) берут последнюю непустую строку / весь stdout сфокусированного-или-последнего блока в временную копию: одна строка результата уходит во ввод (запуск — Enter), многострочный остаётся файлом с показанным путём (для `@файл` / `| cmd`); `:editor` без аргумента — пустой буфер. Ключ `editor:` добавлен в `src/settings.example.yml` и рабочий `settings.yml`. Ошибки явные: каталог вместо файла, нет блока, нет редактора, битые кавычки. Docs: `:?`, README, COMPACT/CLAUDE, test_cmd. Тесты: `tests/test_editor.py` — 15 (юнит: приоритет источника, отсутствие бинарника, кавычки, temp-roundtrip; app-level: файл на месте, создание/не-создание, `$OUT` → ввод, `$BLOCK` → файл, пустой буфер, unchanged, нет блока, usage/каталог, нет редактора, ключ из settings.yml).
+- **`:ed` — внешний редактор для файла, `$OUT` и `$BLOCK`.** Новый модуль `src/editor_open.py` (без Textual): `resolve_editor` (settings.yml `editor:` → `$VISUAL` → `$EDITOR` → системный список: sensible-editor / nano / vi / vim, Windows — notepad; значение может содержать аргументы, напр. `editor: code --wait`), `build_editor_command` (shlex-экранирование пути), `write_temp_text`/`read_text_file`. Запуск — в настоящем TTY через существующий `_run_in_tty` (TUI на паузе, как `> cmd`), после — подхват env/PWD. `:ed <файл>` правит файл на месте (`saved` / `unchanged` / `created` / `was not created`); `:ed $OUT` / `$BLOCK` (и `${…}`) берут последнюю непустую строку / весь stdout сфокусированного-или-последнего блока в временную копию: одна строка результата уходит во ввод (запуск — Enter), многострочный остаётся файлом с показанным путём (для `@файл` / `| cmd`); `:ed` без аргумента — пустой буфер. Ключ `editor:` добавлен в `src/settings.example.yml` и рабочий `settings.yml`. Ошибки явные: каталог вместо файла, нет блока, нет редактора, битые кавычки. Docs: `:?`, README, COMPACT/CLAUDE, test_cmd. Тесты: `tests/test_editor.py` — 15 (юнит: приоритет источника, отсутствие бинарника, кавычки, temp-roundtrip; app-level: файл на месте, создание/не-создание, `$OUT` → ввод, `$BLOCK` → файл, пустой буфер, unchanged, нет блока, usage/каталог, нет редактора, ключ из settings.yml).
 
 ## v1.69
 

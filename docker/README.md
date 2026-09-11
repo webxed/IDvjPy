@@ -33,7 +33,7 @@ docker compose run --rm idvjpy        # образ соберётся при п�
 | `seq 1 12` → `\| grep 7` | пайп stdout сфокусированного блока |
 | `$OUT` | последняя непустая строка вывода блока |
 | `:llm ask найди поды и покажи логи` | LLM получает задачу + библиотеку тегов (нужен ключ) |
-| `:editor $OUT` | правка строки вывода во внешнем редакторе (`nano`) |
+| `:ed $OUT` | правка строки вывода во внешнем редакторе (`nano`) |
 | `:md SEED_LINUX_COMMANDS.md` | справочник с форматированием |
 | `:stats` / `:export * catalog.md` | метрики библиотеки / каталог в Markdown |
 | `:screensaver` | starfield |
@@ -64,7 +64,7 @@ docker run --rm -t -v idvjpy-demo-data:/data idvjpy-demo --demo short --demo-qui
 В томе `idvjpy-demo-data` лежит всё изменяемое: `settings.yml`, `mytags.db`,
 `history_default.txt`, `.bashrc_term_default`.
 
-- **Настройки** — правьте изнутри приложения: `:editor settings.yml` (в контейнере
+- **Настройки** — правьте изнутри приложения: `:ed settings.yml` (в контейнере
   стоит `nano`). Так же можно править `llm_providers.yml`.
 - **Ключ для `:llm`** — либо `docker compose run --rm -e DEEPSEEK_API_KEY=... idvjpy`,
   либо прямо в TUI: `$DEEPSEEK_API_KEY=sk-...`, затем `:llm ...`.
@@ -89,7 +89,7 @@ docker run --rm -t -v idvjpy-demo-data:/data idvjpy-demo --demo short --demo-qui
 - `:fm` / `:term` не откроются — в контейнере нет X/Wayland.
 - `:i` (Ingress Analyzer) требует `kubectl` и живой кластер.
 - При старте приложение сверяет версию с GitHub (`check_updates: true` из шаблона).
-  Без сети это просто сообщение; отключается в `:editor settings.yml`.
+  Без сети это просто сообщение; отключается в `:ed settings.yml`.
 - Процессы внутри контейнера работают под `root` — для демо это нормально, том
   именованный (прав хоста это не касается).
 

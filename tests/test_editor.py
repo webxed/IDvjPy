@@ -1,4 +1,4 @@
-"""`:editor` — внешний редактор для файла, $OUT и $BLOCK (фича editor).
+"""`:ed` — внешний редактор для файла, $OUT и $BLOCK (фича editor).
 
 Редактор не запускаем: `_run_in_tty` подменяется заглушкой, которая правит
 файл так, как это сделал бы человек. TTY и сеть не нужны.
@@ -93,7 +93,7 @@ async def test_editor_file_saved_in_place(isolated_home, monkeypatch):
     async with app.run_test(size=(110, 30)) as pilot:
         app.editor = "true"
         await pilot.pause()
-        await submit(pilot, f":editor {target}")
+        await submit(pilot, f":ed {target}")
         await pilot.pause()
 
         assert target.read_text(encoding="utf-8") == "old\nadded\n"
@@ -114,12 +114,12 @@ async def test_editor_file_created_and_not_created(isolated_home, monkeypatch):
         await pilot.pause()
         # Редактор ничего не создал — явный отчёт, без падения.
         _fake_editor(monkeypatch, lambda text: None)
-        await submit(pilot, f":editor {target}")
+        await submit(pilot, f":ed {target}")
         await pilot.pause()
         assert f"Editor: {target} was not created" in " ".join(info_texts(app))
         # Редактор создал файл.
         _fake_editor(monkeypatch, lambda text: "created\n")
-        await submit(pilot, f":editor {target}")
+        await submit(pilot, f":ed {target}")
         await pilot.pause()
         assert target.read_text(encoding="utf-8") == "created\n"
         assert f"Editor: created {target}" in " ".join(info_texts(app))
@@ -136,7 +136,7 @@ async def test_editor_out_single_line_goes_to_input(isolated_home, monkeypatch):
         app.editor = "true"
         await submit(pilot, "printf 'pod-7\\n'")
         await wait_command_done(app, timeout=8.0)
-        await submit(pilot, ":editor $OUT")
+        await submit(pilot, ":ed $OUT")
         await pilot.pause()
 
         assert input_widget(app).value == "POD-7"
@@ -155,7 +155,7 @@ async def test_editor_block_multiline_kept_at_path(isolated_home, monkeypatch):
         app.editor = "true"
         await submit(pilot, "printf 'l1\\nl2\\n'")
         await wait_command_done(app, timeout=8.0)
-        await submit(pilot, ":editor $BLOCK")
+        await submit(pilot, ":ed $BLOCK")
         await pilot.pause()
 
         text = " ".join(info_texts(app))
@@ -179,7 +179,7 @@ async def test_editor_scratch_buffer_goes_to_input(isolated_home, monkeypatch):
     async with app.run_test(size=(110, 30)) as pilot:
         app.editor = "true"
         await pilot.pause()
-        await submit(pilot, ":editor")
+        await submit(pilot, ":ed")
         await pilot.pause()
 
         assert input_widget(app).value == "ls -la /tmp"
@@ -196,7 +196,7 @@ async def test_editor_unchanged_keeps_input_empty(isolated_home, monkeypatch):
         app.editor = "true"
         await submit(pilot, "printf 'pod-7\\n'")
         await wait_command_done(app, timeout=8.0)
-        await submit(pilot, ":editor $OUT")
+        await submit(pilot, ":ed $OUT")
         await pilot.pause()
 
         assert "Editor: $OUT unchanged." in " ".join(info_texts(app))
@@ -211,7 +211,7 @@ async def test_editor_block_without_block_is_explicit(isolated_home):
     async with app.run_test(size=(110, 30)) as pilot:
         app.editor = "true"
         await pilot.pause()
-        await submit(pilot, ":editor $BLOCK")
+        await submit(pilot, ":ed $BLOCK")
         assert "need a finished command block" in last_info(app).text_content
 
 
@@ -223,9 +223,9 @@ async def test_editor_usage_and_directory(isolated_home):
     async with app.run_test(size=(110, 30)) as pilot:
         app.editor = "true"
         await pilot.pause()
-        await submit(pilot, ":editor a b")
-        assert "Usage: :editor [<file>|$OUT|$BLOCK]" in last_info(app).text_content
-        await submit(pilot, f":editor {isolated_home}")
+        await submit(pilot, ":ed a b")
+        assert "Usage: :ed [<file>|$OUT|$BLOCK]" in last_info(app).text_content
+        await submit(pilot, f":ed {isolated_home}")
         assert "is a directory" in last_info(app).text_content
 
 
@@ -237,7 +237,7 @@ async def test_editor_missing_binary_is_reported(isolated_home):
     async with app.run_test(size=(110, 30)) as pilot:
         app.editor = "definitely-not-an-editor-xyz"
         await pilot.pause()
-        await submit(pilot, ":editor")
+        await submit(pilot, ":ed")
         text = last_info(app).text_content
         assert "not found" in text
         assert "settings.yml" in text
@@ -257,7 +257,7 @@ async def test_editor_path_substitutes_vars_and_out(isolated_home, monkeypatch):
         app.local_env["DIR"] = str(isolated_home)
         await submit(pilot, "printf 'pod-7\\n'")
         await wait_command_done(app, timeout=8.0)
-        await submit(pilot, ":editor $DIR/$OUT.txt")
+        await submit(pilot, ":ed $DIR/$OUT.txt")
         await pilot.pause()
 
         assert target.read_text(encoding="utf-8") == "x\n"
@@ -274,7 +274,7 @@ async def test_editor_undefined_variable_is_explicit(isolated_home):
     async with app.run_test(size=(110, 30)) as pilot:
         app.editor = "true"
         await pilot.pause()
-        await submit(pilot, ":editor /tmp/$NOPE_FILE.yaml")
+        await submit(pilot, ":ed /tmp/$NOPE_FILE.yaml")
         text = last_info(app).text_content
         assert "undefined variable(s): $NOPE_FILE" in text
         assert "Editor:" not in text  # до запуска редактора дело не дошло
@@ -289,7 +289,7 @@ async def test_editor_path_with_empty_out_is_explicit(isolated_home):
     async with app.run_test(size=(110, 30)) as pilot:
         app.editor = "true"
         await pilot.pause()
-        await submit(pilot, ":editor /tmp/$OUT.json")
+        await submit(pilot, ":ed /tmp/$OUT.json")
         assert "$OUT is empty" in last_info(app).text_content
 
 

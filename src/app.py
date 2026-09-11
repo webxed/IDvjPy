@@ -1339,7 +1339,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.76"
+    VERSION = "v1.77"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1439,7 +1439,7 @@ class CommandRunner(App):
     CMD_BACKUP = "backup"
     CMD_FM = "fm"
     CMD_TERM = "term"
-    CMD_EDITOR = "editor"
+    CMD_EDITOR = "ed"
     CMD_ENV = "env"
     # Colon-команды, у которых аргументы — не пути: числа и поисковые шаблоны.
     # Для них `/` — начало `:o /text` (grep по выводам) / `:h /text`, а не листинг корня.
@@ -1518,7 +1518,7 @@ class CommandRunner(App):
         self.screensaver_idle: float = 0
         self.screensaver_stars: bool = True
         self.k8s_completion: bool = False
-        # Внешний редактор для :editor (`editor:` в settings.yml; откат — $VISUAL/$EDITOR)
+        # Внешний редактор для :ed (`editor:` в settings.yml; откат — $VISUAL/$EDITOR)
         self.editor: str = ""
         self._ss_timer = None
         # Запущенные фоновые процессы (shell-команды): CommandBlock -> Popen.
@@ -3499,15 +3499,15 @@ class CommandRunner(App):
 
     def _handle_editor_command(self, args: list[str]) -> None:
         """
-        `:editor` — открыть в редакторе файл или вывод блока (TUI на паузе).
+        `:ed` — открыть в редакторе файл или вывод блока (TUI на паузе).
 
-        :editor <file>   — файл на диске: правки остаются в файле
-        :editor $OUT     — последняя непустая строка сфокусированного/последнего блока
-        :editor $BLOCK   — весь stdout того же блока (${OUT} / ${BLOCK} тоже)
-        :editor          — пустой буфер: набрать команду в редакторе
+        :ed <file>   — файл на диске: правки остаются в файле
+        :ed $OUT     — последняя непустая строка сфокусированного/последнего блока
+        :ed $BLOCK   — весь stdout того же блока (${OUT} / ${BLOCK} тоже)
+        :ed          — пустой буфер: набрать команду в редакторе
 
         В пути раскрываются `$VAR` и ленивый `$OUT` (как в обычных командах):
-        `:editor $TMPDIR/pod-$OUT.json`. Нераскрытый `$` — явная ошибка (иначе
+        `:ed $TMPDIR/pod-$OUT.json`. Нераскрытый `$` — явная ошибка (иначе
         редактор создал бы файл с именем «$NOPE.yaml»).
 
         $OUT/$BLOCK и пустой буфер правятся во временной копии: одна строка
@@ -3516,7 +3516,7 @@ class CommandRunner(App):
         на месте и во ввод не дублируется.
         """
         if len(args) > 1:
-            self.add_block(InfoBlock("Usage: :editor [<file>|$OUT|$BLOCK]"))
+            self.add_block(InfoBlock("Usage: :ed [<file>|$OUT|$BLOCK]"))
             return
         env = {**os.environ, **self.local_env}
         try:
@@ -3607,7 +3607,7 @@ class CommandRunner(App):
         )
 
     def _editor_block_text(self, token: str) -> str | None:
-        """Текст $OUT / $BLOCK для :editor; None — ошибка уже показана."""
+        """Текст $OUT / $BLOCK для :ed; None — ошибка уже показана."""
         block = self._output_block_for_placeholder()
         stdout = "" if block is None else (block.raw_stdout or "")
         if block is None or getattr(block, "pending", False) or stdout == "[Executing...]":
