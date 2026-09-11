@@ -20,6 +20,12 @@ playbook.yml
 !pyrightconfig.json
 *.csv
 backups/
+# Артефакты демо-тура: :export * library.md, :alias … library.sh / run.sh
+library.md
+library.sh
+run.sh
+# Записи тура (asciinema); сами гифки кладём осознанно
+*.cast
 
 # --- Корневой скретч: логи, demo_cmd.txt, test_ses.txt, test_*.yml и т.п. ---
 # Исключения — файлы, которые специально лежат в репозитории.
