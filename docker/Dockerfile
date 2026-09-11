@@ -36,7 +36,8 @@ COPY src/ ./src/
 COPY docs/ ./docs/
 COPY K8S_CHAINS.md DEMO.md DATABASE.md ./
 COPY docker/entrypoint.sh /usr/local/bin/idvjpy-demo
-RUN chmod +x /usr/local/bin/idvjpy-demo
+COPY docker/tui-smoke.py /usr/local/bin/tui-smoke.py
+RUN chmod +x /usr/local/bin/idvjpy-demo /usr/local/bin/tui-smoke.py
 
 # Данные (settings.yml, БД тегов, history) — в томе: переживают пересборку,
 # сбрасываются удалением тома (docker volume rm idvjpy-demo-data).

@@ -1,8 +1,9 @@
 {
-  "include": ["src", "tests"],
+  "include": ["src", "tests", "docker"],
   "executionEnvironments": [
     { "root": "tests", "extraPaths": ["src", "."] },
-    { "root": "src" }
+    { "root": "src" },
+    { "root": "docker" }
   ],
   "typeCheckingMode": "basic",
   "exclude": ["build", "dist", "backups", "**/__pycache__"]

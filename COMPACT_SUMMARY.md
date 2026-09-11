@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.75**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.76**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -141,7 +141,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.22 (app v1.75) |
+| `test_cmd.md` | Manual plan v1.23 (app v1.76) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -150,7 +150,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_demo.py` | YAML `--demo`, `:playbook`, `loop: N` / `loop: true` |
 | `tests/test_gui_open.py` | `:fm` / `:term` argv by OS, `$FILEMAN` / `$TERMINAL`, detached spawn |
 | `tests/test_screensaver.py` | starfield, `:screensaver`, idle timer, key swallowed |
-| `tests/test_docker_stand.py` | Файлы docker-стенда: seed-скрипты в entrypoint, compose-том/TTY, Dockerfile, `.dockerignore` |
+| `tests/test_docker_stand.py` | Файлы docker-стенда: seed-скрипты в entrypoint, compose-том/TTY, Dockerfile, `.dockerignore`, job CI |
 
 Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then Enter.
 
@@ -163,9 +163,9 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `app.py` | Launcher (`python3 app.py`) |
 | `pyproject.toml` / `setup.py` / `MANIFEST.in` | Корневая сборка: `pip install .` / `uv tool install git+…` (build_py вкладывает `src/` в `packaging/idvjpy_boot`) |
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
-| `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `README.md` |
+| `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.75 |
+| `src/app.py` | TUI (`CommandRunner`), v1.76 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -197,6 +197,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.76
+
+- **CI собирает демостенд и смоукит его.** Job `docker-demo` в `.github/workflows/tests.yml`: сборка `docker/Dockerfile` через BuildKit с кэшем GitHub Actions (`docker/build-push-action`), затем проверки — первый запуск создаёт `/data/settings.yml` и `/data/llm_providers.yml` из шаблонов и сеет библиотеку; в томе действительно непустая библиотека (`usage_stats`); второй запуск не пересеивает и не оставляет снимков посева; TUI рендерится и короткий тур завершается. Для последней проверки в образ добавлен `docker/tui-smoke.py`: поднимает настоящий pty (в CI терминала нет, а Textual требует tty), задаёт размер 120×40, читает отрисованное, падает на traceback/таймауте и умеет требовать подстроку (`--expect`). `pyrightconfig.json` теперь проверяет и `docker/`. Тесты: `tests/test_docker_stand.py` +1 (job существует, использует build-push-action и смоук-скрипт); полный набор — 580.
 
 ## v1.75
 

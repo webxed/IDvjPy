@@ -1339,7 +1339,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.75"
+    VERSION = "v1.76"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"

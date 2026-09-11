@@ -21,3 +21,51 @@ jobs:
       - name: Run test suite
         # --timeout bounds a single hanging test; the plugin ships in requirements-dev.txt.
         run: python -m pytest tests/ -v --timeout=1200
+
+  docker-demo:
+    # Демостенд (docker/README.md): собираем образ и проверяем, что стенд
+    # действительно заводится — провижининг, посев, идемпотентность, TUI под pty.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the demo image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          tags: idvjpy-demo:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: First run provisions /data and seeds the tag library
+        run: |
+          docker run --rm -v idvjpy-ci:/data idvjpy-demo:ci --help > /tmp/first.log 2>&1
+          cat /tmp/first.log
+          grep -q "settings.yml ← src/settings.example.yml" /tmp/first.log
+          grep -q "llm_providers.yml ← src/llm_providers.example.yml" /tmp/first.log
+          grep -q "наполняю библиотеку тегов" /tmp/first.log
+          grep -q "^usage: app.py" /tmp/first.log  # аргументы дошли до приложения
+
+      - name: Library is populated in the volume
+        run: |
+          docker run --rm -v idvjpy-ci:/data --entrypoint python3 idvjpy-demo:ci -c 'import sys; sys.path.insert(0, "/app/src"); import database_v2 as db; s = db.usage_stats("/data/mytags.db"); print("library:", s["live"], "commands,", s["tags"], "tags"); assert s["live"] > 100 and s["tags"] > 10, s'
+
+      - name: Second run keeps the volume (no reseed, no seed backups)
+        run: |
+          docker run --rm -v idvjpy-ci:/data idvjpy-demo:ci --help > /tmp/second.log 2>&1
+          if grep -q "наполняю библиотеку тегов" /tmp/second.log; then
+            echo "::error::the library was seeded again on the second run"
+            exit 1
+          fi
+          # Снимки, сделанные самим посевом, не должны оставаться в стартовом состоянии.
+          docker run --rm -v idvjpy-ci:/data --entrypoint sh idvjpy-demo:ci -c 'test ! -d /data/backups'
+
+      - name: TUI renders under a pty and the short tour exits cleanly
+        # В CI нет терминала, а Textual требует tty — tui-smoke.py создаёт pty сам.
+        run: |
+          docker run --rm -v idvjpy-ci:/data --entrypoint python3 idvjpy-demo:ci \
+            /usr/local/bin/tui-smoke.py --expect IDvjPy_term --timeout 180 \
+              -- /usr/local/bin/idvjpy-demo --demo short --demo-quit

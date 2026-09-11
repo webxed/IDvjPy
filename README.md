@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.75 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.76 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -161,6 +161,9 @@ docker compose run --rm idvjpy --demo short --demo-quit # автопоказ
 
 docker volume rm idvjpy-demo-data                       # сброс к заводским
 ```
+
+CI собирает этот образ и прогоняет смоук (job `docker-demo` в
+[`.github/workflows/tests.yml`](.github/workflows/tests.yml)).
 
 ## Система префиксов
 

@@ -93,6 +93,24 @@ docker run --rm -t -v idvjpy-demo-data:/data idvjpy-demo --demo short --demo-qui
 - Процессы внутри контейнера работают под `root` — для демо это нормально, том
   именованный (прав хоста это не касается).
 
+## Проверка стенда
+
+- **Смоук TUI локально.** В образе есть `tui-smoke.py`: он поднимает настоящий pty
+  (Textual без tty не работает), задаёт размер 120×40, читает отрисованное,
+  падает на traceback/таймауте и умеет требовать подстроку:
+
+  ```bash
+  docker run --rm -v idvjpy-demo-data:/data --entrypoint python3 idvjpy-demo \
+    /usr/local/bin/tui-smoke.py --expect IDvjPy_term --timeout 180 \
+      -- /usr/local/bin/idvjpy-demo --demo short --demo-quit
+  ```
+
+- **CI** (`.github/workflows/tests.yml`, job `docker-demo`): сборка образа через
+  BuildKit с кэшем GitHub Actions, затем первый запуск (шаблоны + посев), проверка
+  непустой библиотеки в томе, идемпотентность второго запуска и рендер TUI под pty.
+- Статические проверки согласованности стенда — `tests/test_docker_stand.py`
+  (без сборки образа).
+
 ## Как это собрано
 
 - `docker/Dockerfile` — образ; контекст сборки — корень репозитория.
