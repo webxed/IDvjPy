@@ -41,12 +41,36 @@ mkdir -p /tmp/idvj-demo && cd /tmp/idvj-demo
 python3 /path/to/Idivjopy/app.py --demo --demo-quit
 ```
 
-Asciinema:
+## Запись гифки (asciinema → agg)
+
+Как пересобрать README-гиф `idvj-all.gif` или записать свой тур.
+
+Установка (один раз): `sudo apt install asciinema` (или `python3 -m pip install --user asciinema`) и `cargo install --locked agg` (либо готовый бинарник/`.deb` из [asciinema/agg](https://github.com/asciinema/agg/releases)).
+
+Запись — из **нейтрального каталога** (`/tmp/…`): шапки блоков печатают `cwd`, иначе в кадры попадёт личный путь. Туры работают в portable-режиме: рядом кладём `settings.yml` (маркер) и `llm_providers.yml`, поэтому рабочая БД тегов и история не затрагиваются.
 
 ```bash
-cd /tmp/idvj-demo   # или рабочая копия проекта
-asciinema rec idvj-demo.cast -c 'python3 /path/to/Idivjopy/app.py --demo --demo-quit'
+# 0. Изолированный data-каталог (из корня репозитория)
+mkdir -p /tmp/idvj-demo
+cp src/settings.example.yml      /tmp/idvj-demo/settings.yml
+cp src/llm_providers.example.yml /tmp/idvj-demo/llm_providers.yml
+
+# 1. Запись: env -C меняет cwd процесса (без cd) — в кадре будет /tmp/idvj-demo
+asciinema rec -q --overwrite --cols 120 --rows 34 \
+  -t "IDvjPy_term --demo all" \
+  -c "env -C /tmp/idvj-demo python3 $PWD/app.py --demo all --demo-speed 2 --demo-quit" \
+  /tmp/idvj-demo/idvj-all.cast
+
+# 2. GIF
+agg --theme nord --font-size 14 --line-height 1.25 \
+    --speed 1.3 --idle-time-limit 0.8 --fps-cap 12 \
+    /tmp/idvj-demo/idvj-all.cast idvj-all.gif
 ```
+
+- `--demo-speed N` ускоряет сам тур; `agg --speed N` — уже записанное. `--idle-time-limit` срезает паузы, `--fps-cap` / `--font-size` / `--line-height` / `--cols` / `--rows` уменьшают размер GIF (`agg -h` — все ключи, `--theme` — темы).
+- Проверка, что личное не утекло: `grep -c "$HOME" idvj-all.cast` → `0`.
+- Без `--demo-quit` после тура останется живая сессия (Esc останавливает проигрывание).
+- Уже запущенное приложение можно записать вручную: `asciinema rec out.cast` (играете сами; `exit`/`:q` завершает).
 
 ## Тур features (новое в v1.44)
 
