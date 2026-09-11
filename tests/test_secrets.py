@@ -146,3 +146,65 @@ async def test_secrets_never_sent_to_llm(isolated_home, monkeypatch):
     assert seen
     assert all(SECRET not in message for message in seen)
     assert any("****" in message for message in seen)
+
+
+def _enable_clear_clip(isolated_home) -> None:
+    """Дописать флаг очистки буфера в settings.yml (до создания app)."""
+    path = isolated_home / "settings.yml"
+    path.write_text(
+        path.read_text(encoding="utf-8") + "\nclear_clipboard_after_secret: true\n",
+        encoding="utf-8",
+    )
+
+
+async def test_secret_paste_clears_clipboard_when_enabled(isolated_home):
+    """С флагом: вставка значения в `$$NAME=` очищает буфер обмена."""
+    import pyperclip
+
+    _enable_clear_clip(isolated_home)
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        assert app.clear_clipboard_after_secret is True
+        inp = input_widget(app)
+        inp.value = "$$TOKEN="
+        inp.cursor_position = len(inp.value)
+        await pilot.pause()
+        pyperclip.copy(SECRET)
+        await pilot.press("shift+insert")
+        await pilot.pause()
+        assert inp.value == f"$$TOKEN={SECRET}"
+        assert pyperclip.paste() == ""
+
+
+async def test_secret_paste_keeps_clipboard_by_default(isolated_home):
+    """Без флага (по умолчанию) буфер не трогается; обычный текст — всегда."""
+    import pyperclip
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        assert app.clear_clipboard_after_secret is False
+        inp = input_widget(app)
+        inp.value = "$$TOKEN="
+        inp.cursor_position = len(inp.value)
+        pyperclip.copy(SECRET)
+        await pilot.press("shift+insert")
+        await pilot.pause()
+        assert inp.value == f"$$TOKEN={SECRET}"
+        assert pyperclip.paste() == SECRET
+
+
+async def test_non_secret_paste_keeps_clipboard(isolated_home):
+    """Даже с включённым флагом обычная вставка буфер не чистит."""
+    import pyperclip
+
+    _enable_clear_clip(isolated_home)
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        inp = input_widget(app)
+        inp.value = "echo "
+        inp.cursor_position = len(inp.value)
+        pyperclip.copy("plain-text")
+        await pilot.press("shift+insert")
+        await pilot.pause()
+        assert inp.value == "echo plain-text"
+        assert pyperclip.paste() == "plain-text"

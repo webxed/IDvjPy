@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.88
+# План тестирования IDvjPy_term v1.89
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -77,6 +77,7 @@ $$TOKEN
 - **Выход.** `:q` (или `--demo-quit`, Ctrl+C) — файл `secrets_default.json` удаляется, значения не переживают перезапуск.
 - `$$TOKEN` → `is set (value hidden)`; `$$TOKEN-` → `removed`; после — `is not set`.
 - **LLM.** `:llm ds explain $OUT`, где в выводе был секрет → в отправленном сообщении `****`, в шапке блока `secrets: hidden`.
+- **Буфер.** С `clear_clipboard_after_secret: true` вставка значения в `$$TOKEN=` (Ctrl+V / Shift+Insert) очищает CLIPBOARD/PRIMARY; обычная вставка (`echo `) буфер не трогает.
 
 **Ограничения (проверить, что ведут себя именно так):** маскируется вся строка ввода — имя видно только в подзаголовке; в `> cmd` реальный терминал показывает значение, пока TUI на паузе (журнальная строка `TTY: …` уже маскирована); если команда печатает секрет, в журнале `****`, но `F3` отдаёт настоящий вывод; строка, начинающаяся с `$$`, всегда трактуется как секрет.
 
@@ -1012,7 +1013,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.35  
-**Версия приложения**: v1.88
+**Версия документа**: v1.36  
+**Версия приложения**: v1.89
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11

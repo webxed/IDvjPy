@@ -43,6 +43,11 @@ screensaver_stars: true
 # Подсказки имён k8s-ресурсов из живого кластера (`kubectl get pod <Tab>`).
 k8s_completion: false
 
+# Очищать буфер обмена, если в него извлекли значение секрета в строку `$$NAME=…`.
+# true — после такой вставки CLIPBOARD/PRIMARY очищаются (секрет не остаётся в буфере);
+# false (по умолчанию) — буфер не трогаем.
+clear_clipboard_after_secret: false
+
 # Внешний редактор для `:ed <файл>|$OUT|$BLOCK` (запуск в TTY, TUI на паузе).
 # Может содержать аргументы: `editor: code --wait`, `editor: nvim`. Пусто/нет —
 # берётся $VISUAL / $EDITOR, затем системный редактор (sensible-editor, nano, vi).

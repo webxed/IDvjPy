@@ -150,6 +150,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                Use it as $VAR. `$$VAR` — status, `$$VAR-` — remove.
                The whole input line is masked (name shows in the subtitle); in a
                real `> cmd` TTY the value is visible; F3 copies the real output.
+               settings key `clear_clipboard_after_secret: true` clears the
+               clipboard after pasting a value into `$$NAME=…`.
   aliases    - From ~/.bashrc. If the body has $1 / $2 / $@, args are substituted
                (klogin cluster → tsh kube login cluster). Else the rest of the line
                is appended as in a classic alias.

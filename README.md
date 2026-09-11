@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.88 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.89 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -30,7 +30,7 @@ IDvjPy — терминальное приложение (TUI) на Python (Text
 - Построчный режим в выводе блока (копирование и дописывание во ввод)
 - JSON viewer (F5) с черновиком `jq` и `$JSON`
 - Переменные `$VAR` (файлы `.bashrc_term` / `.bashrc_term_<instance>`); `$OUT` — последняя строка блока, только в момент команды
-- Секреты `$$VAR=value`: значение прячется при вводе и в журнале (`****`), хранится в `secrets_<instance>.json` (0600) — не в `.bashrc_term`/history; в командах — `$VAR`
+- Секреты `$$VAR=value`: значение прячется при вводе и в журнале (`****`), хранится в `secrets_<instance>.json` (0600) — не в `.bashrc_term`/history; в командах — `$VAR`. Ключ `clear_clipboard_after_secret` очищает буфер обмена после вставки значения в `$$NAME=…`
 - Остановка фоновой команды без ожидания timeout: `F4` / `:kill` (SIGTERM всей группе)
 - Поиск по содержимому команд: `?kubectl wide` — если тега нет, ищет по тексту/комментариям
 - Мониторинг командой: `:watch 5 kubectl get pods` — перезапуск каждые N сек в одном блоке
@@ -220,6 +220,7 @@ curl -H "Bearer $TOKEN" https://api.example   # обычная подстано�
 - **Вывод.** В журнале значение — `****`: шапка блока, показываемые stdout/stderr, `:o` и строка `TTY: …`. При этом `raw_stdout` настоящий — `|`, `$OUT` и `F3` работают с реальными данными.
 - **LLM.** Секреты не уходят в `:llm`: значения в сообщении (в т.ч. попавшие туда через `$OUT` / `$BLOCK` / `@файл`) заменяются на `****` перед отправкой, в шапке блока — `secrets: hidden`.
 - **Захват из вывода.** `$VAR=@key` / `$$VAR=@key` берёт значение из сфокусированного (или последнего) завершённого блока: строка, первый токен которой равен `key` — удобно для таблиц `vault read` / `vault write` (`Key  Value`); `@last` — последняя непустая строка (например, после `| jq -r .field`). Пример — плейбук `vapprole` ([`docs/SEED_VAULT_COMMANDS.md`](docs/SEED_VAULT_COMMANDS.md)).
+- **Буфер обмена при вставке секрета.** `clear_clipboard_after_secret: true` в `settings.yml` — после вставки значения в строку `$$NAME=…` CLIPBOARD/PRIMARY/внутренний буфер очищаются (по умолчанию `false`; обычная вставка буфер не трогает; некоторые clipboard-менеджеры могут сохранить историю).
 
 Ограничения: маскируется вся строка ввода (имя тоже — оно видно в подзаголовке); в интерактивном `> cmd` реальный терминал показывает значение, пока TUI на паузе; если команда сама печатает секрет, в журнале — `****`, но `F3` отдаст настоящий вывод; строка, начинающаяся с `$$`, всегда трактуется как секрет.
 
@@ -351,6 +352,7 @@ check_updates: true          # старт: сверка VERSION с GitHub main; 
 screensaver_idle: 120        # простой → starfield; 0 = выкл. :screensaver — сразу
 screensaver_stars: true      # летающие звёзды; false — чёрный холст (часы/лента/load остаются)
 k8s_completion: false        # имена k8s-ресурсов из кластера в подсказках (`kubectl get pod <Tab>`)
+clear_clipboard_after_secret: false  # вставка значения в `$$NAME=…` очищает CLIPBOARD/PRIMARY
 editor: nano                 # `:ed`; можно с аргументами (code --wait); пусто → $VISUAL/$EDITOR
 ```
 

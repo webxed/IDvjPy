@@ -1386,7 +1386,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.88"
+    VERSION = "v1.89"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1501,6 +1501,7 @@ class CommandRunner(App):
     KEY_SCREENSAVER_IDLE = "screensaver_idle"
     KEY_SCREENSAVER_STARS = "screensaver_stars"
     KEY_K8S_COMPLETION = "k8s_completion"
+    KEY_CLEAR_CLIP_AFTER_SECRET = "clear_clipboard_after_secret"
     FILE_LLM_PROVIDERS = "llm_providers.yml"
     FILE_KCTX = "kctx.json"  # Кластерный журнал kubectl-стека (:kctx, v1.57)
     DEFAULT_THEME = "textual-dark"
@@ -1569,6 +1570,9 @@ class CommandRunner(App):
         self.screensaver_idle: float = 0
         self.screensaver_stars: bool = True
         self.k8s_completion: bool = False
+        # Очищать буфер обмена после вставки значения в `$$NAME=…`
+        # (settings.yml: clear_clipboard_after_secret).
+        self.clear_clipboard_after_secret: bool = False
         # Внешний редактор для :ed (`editor:` в settings.yml; откат — $VISUAL/$EDITOR)
         self.editor: str = ""
         self._ss_timer = None
@@ -2076,6 +2080,9 @@ class CommandRunner(App):
         if isinstance(focused, LineNavigable) and getattr(focused, "line_nav_active", False):
             focused.append_current_line_to_input()
             event.stop()
+            return
+        # Обычная вставка: Input вставит текст сам; после — проверить секрет.
+        self.call_after_refresh(self._maybe_clear_clipboard_after_secret)
 
     def action_paste_clipboard(self) -> None:
         """Вставляет текст из буфера обмена в command input.
@@ -2103,10 +2110,36 @@ class CommandRunner(App):
             pos = input_widget.cursor_position
         input_widget.value = current[:pos] + clip + current[pos:]
         input_widget.cursor_position = pos + len(clip)
+        self._maybe_clear_clipboard_after_secret()
 
     def copy_text(self, text: str) -> None:
         """Копирует текст в CLIPBOARD, PRIMARY и внутренний буфер Textual."""
         copy_text_to_clipboards(text or "", self)
+
+    def _clear_clipboards(self) -> None:
+        """Очистить CLIPBOARD, PRIMARY и внутренний буфер (best effort)."""
+        try:
+            copy_text_to_clipboards("", self)
+        except Exception:
+            pass
+
+    def _maybe_clear_clipboard_after_secret(self) -> None:
+        """После вставки в строку `$$NAME=…` очистить буфер, если включено.
+
+        Ключ `clear_clipboard_after_secret` в settings.yml (по умолчанию выкл).
+        Проверяем итоговое поле ввода (вставили ли весь `$$NAME=value` или
+        только значение в `$$NAME=`), поэтому срабатывает и Ctrl+V/Shift+Insert,
+        и Paste-событие терминала.
+        """
+        if not self.clear_clipboard_after_secret:
+            return
+        inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        value = (inp.value or "").lstrip()
+        if not RE_SECRET_ENTRY.match(value):
+            return
+        self._clear_clipboards()
+        self.sub_title = "Clipboard cleared (secret pasted)"
+        self.set_timer(3, self.clear_subtitle)
 
     def _copy_selection_to_clipboard(self) -> bool:
         """Копирует выделенный мышью текст (если он есть).
@@ -2250,6 +2283,9 @@ class CommandRunner(App):
                     )
                     self.k8s_completion = bool(
                         settings.get(self.KEY_K8S_COMPLETION, False)
+                    )
+                    self.clear_clipboard_after_secret = bool(
+                        settings.get(self.KEY_CLEAR_CLIP_AFTER_SECRET, False)
                     )
                     self.editor = str(settings.get(self.KEY_EDITOR) or "").strip()
         except (FileNotFoundError, KeyError, yaml.YAMLError):
