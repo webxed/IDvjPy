@@ -40,6 +40,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :screensaver  - Starfield; full-width ticker; bottom-left help; bottom-right load/mem (idle: screensaver_idle; 0 = off; screensaver_stars: false hides flying dust)
   :r          - Put the focused (or last) block command into the input
   :r N        - Put the command N blocks back into the input (0 = last)
+  :cmd [N] [show] - Materialize the block command with current $VAR values (secrets
+                included) and copy it to the clipboard; `show` also prints it
+                (secrets become visible). N = blocks back (0 = last).
   :kill [all] - Stop the running background command (focused block or the last one;
                 `:kill all` stops every running command). SIGTERM, then SIGKILL.
   :watch <sec> <command> - Rerun <command> every <sec> seconds in one block

@@ -1386,7 +1386,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.87"
+    VERSION = "v1.88"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1463,6 +1463,7 @@ class CommandRunner(App):
     CMD_HELP = "?"
     CMD_CD = "cd"
     CMD_REPLAY = "r"
+    CMD_EXPAND = "cmd"  # материализовать команду блока (с секретами)
     CMD_KILL = "kill"
     CMD_WATCH = "watch"
     CMD_MOVE = "mv"
@@ -3493,6 +3494,8 @@ class CommandRunner(App):
                 self._change_cwd(" ".join(parts[1:]))
         elif command == self.CMD_REPLAY:
             self._handle_replay_command(parts[1:])
+        elif command == self.CMD_EXPAND:
+            self._handle_expand_command(parts[1:])
         elif command == self.CMD_ALIAS:
             self._handle_alias_command(parts[1:])
         elif command == self.CMD_LLM:
@@ -3891,6 +3894,44 @@ class CommandRunner(App):
     def _replay_focused_command(self) -> None:
         """Обратная совместимость: :r без аргумента (последний блок)."""
         self._handle_replay_command([])
+
+    def _handle_expand_command(self, args: list[str]) -> None:
+        """`:cmd [N] [show]` — материализованная команда блока (со значениями).
+
+        Подставляет текущие значения переменных (включая секреты) в команду
+        блока и копирует результат в буфер обмена; в журнал — маскированная
+        верстка. `show` допечатывает полную строку (секреты становятся видны).
+        N — сколько блоков назад (0 = последний).
+        """
+        show = any(arg.lower() == "show" for arg in args)
+        nums = [arg for arg in args if arg.isdigit()]
+        blocks = list(self.query(CommandBlock))
+        if not blocks:
+            self.add_block(InfoBlock("No command block to expand."))
+            return
+        back = int(nums[0]) if nums else 0
+        idx = len(blocks) - 1 - back
+        if idx < 0:
+            self.add_block(InfoBlock(
+                f"Error: only {len(blocks)} command block(s); :cmd {back} is too far back."
+            ))
+            return
+        source = self._command_from_block(blocks[idx])
+        if not source:
+            self.add_block(InfoBlock("No command block to expand."))
+            return
+        expanded = self._expand_aliases(self._substitute_variables(source))
+        self.copy_text(expanded)
+        if show:
+            self.add_block(InfoBlock(
+                "[bold]Expanded command[/bold] [red](secrets visible!)[/red]:\n"
+                + escape(expanded)
+            ))
+            return
+        self.add_block(InfoBlock(
+            f"Expanded command copied ({len(expanded)} chars; secrets included).\n"
+            f"[dim]{escape(self._mask_secrets(expanded))}[/dim]"
+        ))
 
     def _collect_line_hits(self, lowered: str) -> list[tuple[Static, int]]:
         """Совпадения (блок, индекс строки) по видимым строкам журнала."""

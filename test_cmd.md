@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.87
+# План тестирования IDvjPy_term v1.88
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -591,7 +591,7 @@ cd /tmp
 :theme textual-dark
 ```
 
-**Ожидание:** `:r` кладёт команду сфокусированного (или последнего) блока во ввод. `cd` / `:cd` меняет cwd для shell-команд; нет каталога — ошибка, не молчание. База тегов / история / `.bashrc_term*` остаются в каталоге запуска (пустой `mytags.db` в новой папке не появляется). `:theme` показывает / ставит тему в `settings.yml`. `d` на журнале переключает dark/light.
+**Ожидание:** `:r` кладёт команду сфокусированного (или последнего) блока во ввод. `:cmd [N] [show]` — материализует команду блока с текущими `$VAR`/секретами и кладёт в буфер обмена; в журнале — маскированная версия, `show` печатает полную (секреты видны). `:cmd 5` при одном блоке — `too far back`. `cd` / `:cd` меняет cwd для shell-команд; нет каталога — ошибка, не молчание. База тегов / история / `.bashrc_term*` остаются в каталоге запуска (пустой `mytags.db` в новой папке не появляется). `:theme` показывает / ставит тему в `settings.yml`. `d` на журнале переключает dark/light.
 
 ```
 #demo echo one
@@ -833,7 +833,7 @@ x
 
 ### UX-мелочи (`:r N`, running, `:alias`)
 
-1. `echo a`, `echo b`, `echo c`; `:r 1` — во вводе `echo b`; `:r 0` — `echo c`; `:r 5` — `too far back`.
+1. `echo a`, `echo b`, `echo c`; `:r 1` — во вводе `echo b`; `:r 0` — `echo c`; `:r 5` — `too far back`. С секретом: `$$S=xyz`, `echo v=$S`, `:cmd` — в буфере `echo v=xyz`, в журнале `echo v=****`; `:cmd show` печатает `echo v=xyz`.
 2. `@ sleep 30` — заголовок `IDvjPy_term — 1 running`; `:kill` — счётчик исчезает.
 3. `#mine echo hello`, `:alias mine out.sh` — файл содержит `mine_1() {` и `echo hello`; `:alias * lib.sh` — все теги.
 4. `:alias` — Usage; `:alias ghost` — `no live commands for 'ghost'`.
@@ -989,7 +989,7 @@ x
 - `!! tag[tid]` работает сразу; `!! 1 2` — из кэша (старт или `??`)
 - `| cmd` берёт stdout сфокусированного/последнего блока
 - `$VAR` подставляется; `$JSON` после Enter в viewer; `$OUT` — последняя строка блока по запросу; `:env` перечитывает `.bashrc_term*`
-- `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:fm` `:term` `:env` `:session` `:welcome` `:backup` `:screensaver` `:r` `:theme` `:playbook` `:update` работают
+- `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:fm` `:term` `:env` `:session` `:welcome` `:backup` `:screensaver` `:r` `:cmd` `:theme` `:playbook` `:update` работают
 - `:llm ask <задача>` шлёт контекст приложения и предлагает только существующие `!tag[tid]` (ключ `app_context` — то же для обычного `:llm`)
 - `:ed <файл>|$OUT|$BLOCK` открывает редактор из `settings.yml`; однострочная правка `$OUT` попадает во ввод, многострочная — остаётся файлом
 - `:o /text` и `:h /text` — поиск, а не листинг `/`: файловых подсказок нет (`:cd /…` и другие пути дополняются как раньше)
@@ -1012,7 +1012,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.34  
-**Версия приложения**: v1.87
+**Версия документа**: v1.35  
+**Версия приложения**: v1.88
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11

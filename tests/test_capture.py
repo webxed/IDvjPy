@@ -89,3 +89,40 @@ async def test_capture_value_keeps_spaces(isolated_home):
         await submit(pilot, "$POL=@token_policies")
         await pilot.pause()
         assert app.local_env.get("POL") == '["default" "stage:ro"]'
+
+
+async def test_cmd_materializes_expanded_command(isolated_home):
+    """`:cmd` копирует команду блока с подставленными значениями (вкл. секреты)."""
+    import pyperclip
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "$$ROLE_ID=2474-uuid")
+        await submit(pilot, "$$SECRET_ID=abc-def")
+        await submit(pilot, 'echo login role_id="$ROLE_ID" secret_id="$SECRET_ID"')
+        await wait_command_done(app, timeout=8.0)
+
+        await submit(pilot, ":cmd")
+        await pilot.pause()
+        expanded = 'echo login role_id="2474-uuid" secret_id="abc-def"'
+        assert pyperclip.paste() == expanded
+        info = last_info(app).text_content
+        assert "Expanded command copied" in info
+        assert "2474-uuid" not in info        # в журнал — маскированная версия
+        assert "****" in info
+
+        # `show` — явно печатает строку с секретами.
+        await submit(pilot, ":cmd show")
+        await pilot.pause()
+        assert "2474-uuid" in last_info(app).text_content
+
+
+async def test_cmd_too_far_back_errors(isolated_home):
+    """`:cmd N` дальше числа блоков — явная ошибка."""
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "echo one")
+        await wait_command_done(app, timeout=8.0)
+        await submit(pilot, ":cmd 5")
+        await pilot.pause()
+        assert "too far back" in last_info(app).text_content
