@@ -3,7 +3,8 @@
   "executionEnvironments": [
     { "root": "tests", "extraPaths": ["src", "."] },
     { "root": "src" },
-    { "root": "docker" }
+    { "root": "docker" },
+    { "root": ".", "extraPaths": ["src"] }
   ],
   "typeCheckingMode": "basic",
   "exclude": ["build", "dist", "backups", "**/__pycache__"]
