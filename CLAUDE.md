@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.93) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.94) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.93` → `v1.94`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.94` → `v1.95`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -66,6 +66,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/database_v2.py`**: SQLite tagged history
 - **`src/command_parser_v2.py`**: `!tag[tid]` / `!ID` / `!!` assembly
 - **`src/history_store.py`**: `history_<instance>.txt` append/read/compact + portalocker file-lock helpers
+- **`src/session_mailbox.py`**: cross-session command relay (`:send` / `:send!`) — per-session `inbox_<instance>.jsonl` (JSON Lines, 0600, same portalocker pattern as `history_store`); `send_message` appends, `drain_inbox` reads-and-truncates, `pending_sessions` lists non-empty inboxes
 - **`src/kctx_store.py`**: cluster journal `kctx.json` (data dir): snapshots of the kubectl var stack (`NS POD DEPLOY SVC ING APP CTR QUOTA`) per cluster, captured on `$VAR=` after a `klogin` / `tsh kube login` / `kubectl config use-context` line; UI `:kctx` lists clusters and applies saved sets
 - **`src/help_texts.py`**: static `:?` / `:i` help text constants
 - **`src/clipboard.py`**: CLIPBOARD / PRIMARY / OSC 52
@@ -103,7 +104,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no exact tag) = substring search over command text + comments. Click tag in `??` inserts `!tag ` at the cursor (does not replace the line, does not run). |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble refs into the input line |
-| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:fm`, `:term`, `:env`, `:session`, `:new`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:cmd`, `:/`, `:n`, `:N`, `:export`, `:import`, `:md`, `:playbook`, `:update`, `:kill`, `:watch`, `:mv`, `:stats`, `:diff`, `:o`, `:kctx`, `:alias`, `:llm`, `:ed`, `:theme`) |
+| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:fm`, `:term`, `:env`, `:session`, `:new`, `:send`, `:send!`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:cmd`, `:/`, `:n`, `:N`, `:export`, `:import`, `:md`, `:playbook`, `:update`, `:kill`, `:watch`, `:mv`, `:stats`, `:diff`, `:o`, `:kctx`, `:alias`, `:llm`, `:ed`, `:theme`) |
 | `\| cmd` | Pipe stdout from the focused block, add to history |
 | `$OUT` | On demand: last line of focused/last block (not stored in `.bashrc_term`) |
 | `$VAR=val` | Set env in `.bashrc_term_<instance>` and the current session. `:env` re-reads the files. |

@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.93
+# План тестирования IDvjPy_term v1.94
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -690,6 +690,21 @@ $ALPHA=from-default
 
 Автотест: `test_colon_session_creates_and_switches`.
 
+### Пересылка команд между сессиями (`:send`)
+
+```
+:send
+:send default echo from-other
+:send stage uptime
+:send! default seq 3
+:send * echo everyone
+:send ../oops echo hi
+```
+
+**Ожидание:** `:send` без аргументов — справка (`:send[!] <session|*> <command…>`, текущая и другие сессии, `pending inbox`). `:send default echo …` (своя сессия) — команда дописывается во ввод, блок `Forwarded from default: …`; запуск — Enter. `:send <сессия> …` — команда уходит в ящик `inbox_<сессия>.jsonl` (0600) в data-каталоге, журнал `Sent to <сессия> (insert): …`. `:send!` — режим `run`: целевая сессия выполнит команду сразу. `*` — всем сессиям, кроме своей. Команда материализуется у отправителя (`$VAR`/`$OUT`, алиасы); значения секретов `$$` маскируются (`****`) и в ящик не пишутся. Целевая сессия опрашивает ящик раз в секунду; сообщение для незапущенной сессии ждёт её старта. Пересылка, пришедшая во время набранного текста, дописывается в конец, не затирая. Неверное имя — `Usage: :send`.
+
+Автотест: `tests/test_session_mailbox.py`.
+
 ---
 
 ## Секция 31: Каталог seed (`:welcome`)
@@ -1028,7 +1043,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.40  
-**Версия приложения**: v1.93
+**Версия документа**: v1.41  
+**Версия приложения**: v1.94
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11

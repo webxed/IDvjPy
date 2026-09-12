@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.93**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.94**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,8 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.40 (app v1.93) |
+| `test_cmd.md` | Manual plan v1.40 (app v1.94) |
+| `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -169,7 +170,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.93 |
+| `src/app.py` | TUI (`CommandRunner`), v1.94 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -190,6 +191,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/ingress_analyzer.py` | `:i` k8s |
 | `src/command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
 | `src/history_store.py` | `history_<instance>.txt` append/read/compact, file locks |
+| `src/session_mailbox.py` | Пересылка команд между сессиями (`:send`): `inbox_<instance>.jsonl` 0600, append под lock / drain |
 | `src/help_texts.py` | Static `:?` / `:i` help texts |
 | `src/seed_*.py` | Handbook seeds (linux, k8s, git, ops, …) |
 | `src/app.css` | Styles (JSON viewer, line-nav border, block focus) |
@@ -201,6 +203,12 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.94
+
+- **`:send <сессия|*> <команда>` — пересылка команды в другую сессию** (окно `:new`): команда вставляется во ввод целевой сессии (запуск там — отдельным Enter); `:send!` — выполнить сразу; `*` — всем сессиям, кроме своей. Команда материализуется у отправителя (`$VAR`/`$OUT`, алиасы), значения секретов `$$` маскируются (`****`) и в ящик не попадают. Новая сессия — модуль `src/session_mailbox.py`, ящик `inbox_<instance>.jsonl` (0600, JSON Lines, append под portalocker-lock как `history_*.txt`); получатель опрашивает свой ящик таймером (`MAILBOX_POLL_INTERVAL = 1` с) и `drain_inbox` читает-обнуляет файл — сообщение для незапущенной сессии ждёт её старта. Пересылка дописывается к набранному тексту, не затирая его; во время демо откладывается.
+- Docs: README (возможности + таблица префиксов + `:`), `:?` (help_texts), тикер скринсэйвера, CLAUDE.md (модуль + `:`), `.gitignore` (`inbox_*.jsonl`).
+- Тесты: `tests/test_session_mailbox.py` (21: unit ящика + Pilot `:send`/`:send!`/`*`/self/секреты/offline-очередь).
 
 ## v1.93
 

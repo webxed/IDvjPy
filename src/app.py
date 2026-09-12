@@ -166,6 +166,15 @@ try:
         seed_invoke,
     )
     from seed_lib import backup_sqlite
+    from session_mailbox import (
+        MODE_INSERT,
+        MODE_RUN,
+        MailboxError,
+        drain_inbox,
+        inbox_file_for,
+        pending_sessions,
+        send_message,
+    )
     from shell_env import (
         LAZY_PLACEHOLDERS,
         RE_VAR_NAME,
@@ -1395,7 +1404,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.93"
+    VERSION = "v1.94"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1443,7 +1452,8 @@ class CommandRunner(App):
     TIMER_DELAY = 2
     COMMAND_TIMEOUT = 10
     FILE_LOCK_TIMEOUT = 5  # Таймаут для получения блокировки файла (секунды)
-    DB_RELOAD_INTERVAL = 5  # Интервал перезагрузки БД для актуальности (секунды) 
+    DB_RELOAD_INTERVAL = 5  # Интервал перезагрузки БД для актуальности (секунды)
+    MAILBOX_POLL_INTERVAL = 1  # Опрос ящика пересылки команд (:send), секунды 
     
     MSG_COPIED = "Copied to clipboard!"
     MSG_NO_FOCUS = "No command block focused."
@@ -1500,10 +1510,18 @@ class CommandRunner(App):
     CMD_TERM = "term"
     CMD_EDITOR = "ed"
     CMD_ENV = "env"
+    CMD_SEND = "send"  # переслать команду в другую сессию (вставить во ввод)
+    CMD_SEND_RUN = "send!"  # то же, но сразу выполнить в целевой сессии
     # Colon-команды, у которых аргументы — не пути: числа и поисковые шаблоны.
     # Для них `/` — начало `:o /text` (grep по выводам) / `:h /text`, а не листинг корня.
     COLON_NO_PATH_ARGS = frozenset(
-        (PREFIX_CMD + CMD_HISTORY, PREFIX_CMD + CMD_OUT, PREFIX_CMD + CMD_GREP)
+        (
+            PREFIX_CMD + CMD_HISTORY,
+            PREFIX_CMD + CMD_OUT,
+            PREFIX_CMD + CMD_GREP,
+            PREFIX_CMD + CMD_SEND,
+            PREFIX_CMD + CMD_SEND_RUN,
+        )
     )
     KEY_CHECK_UPDATES = "check_updates"
     KEY_THEME = "theme"
@@ -1596,6 +1614,8 @@ class CommandRunner(App):
         # через :o /needle даже после :c; только память, не пишется в БД/историю.
         self._output_history: list[dict[str, Any]] = []
         self._OUTPUT_HISTORY_CAP = 300
+        # Сообщения `:send`, отложенные на время демо (тур не прерываем).
+        self._forward_pending: list[dict[str, str]] = []
         # Контекст беседы :llm по провайдерам: только память сессии, ключ
         # history_turns в llm_providers.yml (0 = без контекста).
         self._llm_threads: dict[str, list[dict[str, str]]] = {}
@@ -2349,6 +2369,9 @@ class CommandRunner(App):
             self.DB_RELOAD_INTERVAL,
             self._periodic_db_reload
         )
+
+        # 6. Пересылка команд между сессиями (:send): вычерпываем свой ящик
+        self.set_timer(self.MAILBOX_POLL_INTERVAL, self._poll_session_inbox)
 
     def _read_library_rows(self) -> list[dict]:
         """Все live-команды БД как dict-строки (id/tag/tid/command/comment/use)."""
@@ -3271,6 +3294,7 @@ class CommandRunner(App):
             if not colon or colon[0] not in {
                 self.CMD_PLAYBOOK, self.CMD_QUIT, self.CMD_UPDATE, self.CMD_SESSION,
                 self.CMD_SCREENSAVER, self.CMD_WELCOME,
+                self.CMD_SEND, self.CMD_SEND_RUN,
             }:
                 if not user_input.startswith(self.PREFIX_SECRET):
                     self._playbook_log.append(user_input)
@@ -3568,6 +3592,8 @@ class CommandRunner(App):
             self._handle_session_command(parts[1:])
         elif command == self.CMD_NEW:
             self._handle_new_window(parts[1:])
+        elif command in (self.CMD_SEND, self.CMD_SEND_RUN):
+            self._handle_send_command(parts[1:], run=command == self.CMD_SEND_RUN)
         elif command == self.CMD_SCREENSAVER:
             self._handle_screensaver_command(parts[1:])
         elif command == self.CMD_WELCOME:
@@ -4181,6 +4207,156 @@ class CommandRunner(App):
         self.add_block(InfoBlock(
             f"New window (session {name}, cwd {target_dir}): {format_opened(argv, proc.pid)}"
         ))
+
+    # --- Пересылка команд между сессиями (:send) ---------------------------
+
+    def _session_inbox_path(self) -> str:
+        """Ящик текущей сессии в data-каталоге."""
+        name = getattr(self, "instance_name", None) or INSTANCE_NAME
+        return self._data_path(inbox_file_for(name))
+
+    def _handle_send_command(self, args: list[str], *, run: bool = False) -> None:
+        """`:send[!] <session|*> <command…>` — переслать команду в другую сессию.
+
+        Без `!` — вставить во ввод целевой сессии (запуск там — отдельным Enter),
+        `:send!` — выполнить сразу. `*` — всем сессиям, кроме своей. Команда
+        материализуется у отправителя (текущие `$VAR` / `$OUT` / алиасы);
+        значения секретов `$$` в ящик не попадают — маскируются `****`.
+        """
+        if not args:
+            self._show_send_help()
+            return
+        if len(args) < 2:
+            self.add_block(InfoBlock("Usage: :send[!] <session|*> <command…>"))
+            return
+        target = args[0]
+        payload = " ".join(args[1:]).strip()
+        if not payload:
+            self.add_block(InfoBlock("Usage: :send[!] <session|*> <command…>"))
+            return
+
+        expanded = self._expand_aliases(self._substitute_variables(payload))
+        masked = self._mask_secrets(expanded)
+        secret_hidden = masked != expanded
+        current = getattr(self, "instance_name", None) or INSTANCE_NAME
+        mode = MODE_RUN if run else MODE_INSERT
+
+        if target == "*":
+            names = [
+                name for name in list_session_names(self._data_dir or ".")
+                if name != current
+            ]
+            if not names:
+                self.add_block(InfoBlock("No other sessions to send to."))
+                return
+        elif target == current:
+            self._deliver_forwarded(
+                {"from": current, "mode": mode, "command": masked}
+            )
+            return
+        else:
+            name = validate_instance_name(target)
+            if name is None:
+                self.add_block(InfoBlock(
+                    "Usage: :send[!] <session|*> <command…>  "
+                    "NAME: letters, digits, _ - (max 64)"
+                ))
+                return
+            names = [name]
+
+        sent: list[str] = []
+        failed: list[str] = []
+        for name in names:
+            try:
+                send_message(
+                    self._data_dir or ".",
+                    name,
+                    masked,
+                    sender=current,
+                    mode=mode,
+                )
+                sent.append(name)
+            except MailboxError:
+                failed.append(name)
+
+        verb = "run" if run else "insert"
+        preview = masked if len(masked) <= 120 else masked[:117] + "…"
+        note = " [yellow](secret values masked)[/yellow]" if secret_hidden else ""
+        if sent:
+            self.add_block(InfoBlock(
+                f"Sent to {', '.join(sent)} ({verb}):{note}\n{escape(preview)}"
+            ))
+        if failed:
+            self.add_block(InfoBlock(f"Error: could not send to {', '.join(failed)}."))
+
+    def _show_send_help(self) -> None:
+        """`:send` без аргументов — что это и какие сессии видны."""
+        current = getattr(self, "instance_name", None) or INSTANCE_NAME
+        names = list_session_names(self._data_dir or ".")
+        others = [name for name in names if name != current]
+        lines = [
+            ":send[!] <session|*> <command…>",
+            "  :send    — insert into the target session's input (Enter there runs it)",
+            "  :send!   — run immediately in the target session",
+            "  *        — every other session",
+            f"  this session: {current}",
+            f"  other sessions: {', '.join(others) or 'none'}",
+        ]
+        pending = pending_sessions(self._data_dir or ".")
+        if pending:
+            lines.append(f"  pending inbox: {', '.join(pending)}")
+        self.add_block(InfoBlock("\n".join(lines)))
+
+    def _poll_session_inbox(self) -> None:
+        """Доставить команды из своего ящика; перезапустить таймер опроса."""
+        try:
+            drained = drain_inbox(self._session_inbox_path())
+        except Exception:
+            drained = []
+        batch = self._forward_pending + drained
+        self._forward_pending = []
+        for message in batch:
+            if self._demo_active or self._demo_pressing:
+                self._forward_pending.append(message)  # тур не прерываем
+                continue
+            self._deliver_forwarded(message)
+        self.set_timer(self.MAILBOX_POLL_INTERVAL, self._poll_session_inbox)
+
+    def _deliver_forwarded(self, message: dict[str, str]) -> None:
+        """Доставить одно сообщение: вставить во ввод или выполнить."""
+        command = str(message.get("command") or "").strip()
+        if not command:
+            return
+        sender = str(message.get("from") or "?")
+        mode = message.get("mode")
+        if mode == MODE_RUN:
+            self.log_to_history(command)
+            self.add_block(InfoBlock(
+                f"[bold]Forwarded[/bold] from {escape(sender)} — running: "
+                f"{escape(self._mask_secrets(command))}"
+            ))
+            self.handle_normal_command(command)
+            return
+        self._append_forwarded_input(command)
+        self.add_block(InfoBlock(
+            f"[bold]Forwarded[/bold] from {escape(sender)}: "
+            f"{escape(self._mask_secrets(command))}"
+        ))
+
+    def _append_forwarded_input(self, text: str) -> None:
+        """Дописать пересланную команду в конец ввода, не затирая набранное."""
+        chunk = (text or "").strip()
+        if not chunk:
+            return
+        inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        current = (inp.value or "").strip()
+        new_value = f"{current} {chunk}" if current else chunk
+        inp._applying_completion = True
+        inp.value = new_value
+        inp.cursor_position = len(new_value)
+        inp.focus()
+        if getattr(self, "_completion_list", None) is not None:
+            self._completion_list.hide()
 
     def action_new_window(self) -> None:
         """:new без аргументов — новое окно (кнопка «New session» в футере / Ctrl+N)."""

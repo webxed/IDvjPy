@@ -80,6 +80,7 @@ COMMAND_HELP_LINES = (
     ":session [NAME]  — show or switch instance",
     ":session new [NAME] [DIR]  — app window in a new terminal",
     ":new [NAME|-] [DIR]  — app window in a new terminal (own session)",
+    ":send <session|*> cmd  — forward a command to another session (:send! runs it)",
     ":welcome  — seed catalog",
     ":backup  — snapshot the tags DB",
     ":screensaver  — starfield now (idle: screensaver_idle; stars: screensaver_stars)",

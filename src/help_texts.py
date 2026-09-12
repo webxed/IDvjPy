@@ -39,6 +39,13 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 .bashrc_term_<NAME> / history_<NAME>.txt, same data dir and tags DB;
                 DIR — working dir (default: data dir); `-`/no name — auto `sN`.
                 Secrets are not passed. Also `:session new …`. Footer: Ctrl+N.
+  :send <session|*> <cmd> - Forward a command to another app session (its own
+                window): it is inserted into that session's input (Enter there
+                runs it). `:send!` runs it at once. `*` = every other session.
+                The command is materialized here ($VAR/$OUT, aliases); `$$`
+                secrets are masked (****) and never written to disk. The inbox is
+                inbox_<session>.jsonl (0600) in the data dir; a message for a
+                stopped session waits for its start.
   :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
   :screensaver  - Starfield; full-width ticker; bottom-left help; bottom-right load/mem (idle: screensaver_idle; 0 = off; screensaver_stars: false hides flying dust)
