@@ -1058,12 +1058,14 @@ async def test_journal_search_focuses_matching_block(isolated_home):
 async def test_journal_search_jumps_to_matching_line(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(80, 24)) as pilot:
-        await submit(pilot, "seq 1 40")
+        # Уникальная иголка: голое «27» могло совпасть с таймштампом в заголовке
+        # (`17:27:…`), а заголовок тоже участвует в поиске — тест качался по часам.
+        await submit(pilot, "seq -f 'hit-%02g' 1 40")
         await wait_command_done(app)
-        await submit(pilot, ":/27")
+        await submit(pilot, ":/hit-27")
         assert isinstance(app.focused, CommandBlock)
         assert app.focused.line_nav_active
-        assert app.focused._current_plain_line().strip() == "27"
+        assert app.focused._current_plain_line().strip() == "hit-27"
 
 
 async def test_journal_search_next_and_prev_line(isolated_home):
