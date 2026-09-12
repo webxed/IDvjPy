@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.90
+# План тестирования IDvjPy_term v1.91
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -673,6 +673,19 @@ $ALPHA=from-default
 
 **Ожидание:** `:session` показывает текущий инстанс и список. `:session ops` создаёт `.bashrc_term_ops` / пишет в `history_ops.txt`; `$ALPHA` из default не течёт в ops. Журнал не очищается, БД тегов общая. Плейбук-лог сбрасывается. Неверное имя — `Usage:`. Демо (`--demo`) — нельзя переключить, пока тур идёт.
 
+### Новое окно приложения (`:new`)
+
+```
+:new
+:new stage
+:session new stage2
+:new ../oops
+```
+
+**Ожидание:** `:new` открывает **новое окно терминала** с ещё одним экземпляром приложения: своя сессия (`.bashrc_term_<NAME>` / `history_<NAME>.txt`), общий data-каталог и БД тегов; в журнале `New window (session NAME): Opened: … pid N`. Без имени — свободное `s2`/`s3`. `:session new NAME` — то же. Неверное имя — `Usage: :new`. Секреты (`$$…`) в новое окно не переносятся. Терминал: `$TERMINAL` (напр. `kitty` / `alacritty -e`), иначе из системных; запуск — `$IDVJPY_LAUNCH` (`uv run idvjpy`) или `python3 <запущенный app.py>`. Без доступного терминала — явная ошибка `set $TERMINAL=`.
+
+Автотесты: `tests/test_new_window.py`, `tests/test_gui_open.py` (`build_terminal_exec_argv`).
+
 Автотест: `test_colon_session_creates_and_switches`.
 
 ---
@@ -990,7 +1003,7 @@ x
 - `!! tag[tid]` работает сразу; `!! 1 2` — из кэша (старт или `??`)
 - `| cmd` берёт stdout сфокусированного/последнего блока
 - `$VAR` подставляется; `$JSON` после Enter в viewer; `$OUT` — последняя строка блока по запросу; `:env` перечитывает `.bashrc_term*`
-- `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:fm` `:term` `:env` `:session` `:welcome` `:backup` `:screensaver` `:r` `:cmd` `:theme` `:playbook` `:update` работают
+- `:q` `:w` `:h` `:c` `:?` `:md` `:cd` `:fm` `:term` `:env` `:session` `:new` `:welcome` `:backup` `:screensaver` `:r` `:cmd` `:theme` `:playbook` `:update` работают
 - `:llm ask <задача>` шлёт контекст приложения и предлагает только существующие `!tag[tid]` (ключ `app_context` — то же для обычного `:llm`)
 - `:ed <файл>|$OUT|$BLOCK` открывает редактор из `settings.yml`; однострочная правка `$OUT` попадает во ввод, многострочная — остаётся файлом
 - `:o /text` и `:h /text` — поиск, а не листинг `/`: файловых подсказок нет (`:cd /…` и другие пути дополняются как раньше)
@@ -1013,7 +1026,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.37  
-**Версия приложения**: v1.90
+**Версия документа**: v1.38  
+**Версия приложения**: v1.91
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11

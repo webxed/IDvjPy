@@ -10,6 +10,7 @@ Usage:
 """
 import argparse
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -105,7 +106,13 @@ try:
         resolve_editor,
         write_temp_text,
     )
-    from gui_open import GuiOpenError, format_opened, open_file_manager, open_terminal
+    from gui_open import (
+        GuiOpenError,
+        format_opened,
+        open_file_manager,
+        open_terminal,
+        open_terminal_command,
+    )
     from help_texts import CALC_HELP_TEXT, INGRESS_HELP_TEXT, MAIN_HELP_TEXT
     from history_store import (
         DEFAULT_HISTORY_KEEP,
@@ -1386,7 +1393,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.90"
+    VERSION = "v1.91"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1483,6 +1490,7 @@ class CommandRunner(App):
     CMD_PLAYBOOK = "playbook"
     CMD_UPDATE = "update"
     CMD_SESSION = "session"
+    CMD_NEW = "new"  # новое окно приложения в отдельном терминале
     CMD_SCREENSAVER = "screensaver"
     CMD_WELCOME = "welcome"
     CMD_BACKUP = "backup"
@@ -3556,6 +3564,8 @@ class CommandRunner(App):
             self._handle_update_command()
         elif command == self.CMD_SESSION:
             self._handle_session_command(parts[1:])
+        elif command == self.CMD_NEW:
+            self._handle_new_window(parts[1:])
         elif command == self.CMD_SCREENSAVER:
             self._handle_screensaver_command(parts[1:])
         elif command == self.CMD_WELCOME:
@@ -4076,7 +4086,7 @@ class CommandRunner(App):
             f"  {os.path.basename(self.FILE_BASHRC)}  {os.path.basename(self.FILE_HISTORY)}\n"
             f"  Tags DB is shared ({os.path.basename(self.db_file)}).\n"
             f"Sessions: {names}\n"
-            "Usage: :session NAME"
+            "Usage: :session NAME   |   :new [NAME] — окно в отдельном терминале"
         )
 
     def _unload_session_env(self) -> None:
@@ -4088,14 +4098,76 @@ class CommandRunner(App):
         self._secret_names = set()
 
     def _handle_session_command(self, args: list[str]) -> None:
-        """`:session` — show; `:session NAME` — switch or create."""
+        """`:session` — show; `:session NAME` — switch; `:session new [NAME]` — новое окно."""
+        if args and args[0] == self.CMD_NEW:
+            self._handle_new_window(args[1:])
+            return
         if not args:
             self.add_block(InfoBlock(self._session_status_text()))
             return
         if len(args) > 1:
-            self.add_block(InfoBlock("Usage: :session [NAME]"))
+            self.add_block(InfoBlock("Usage: :session [NAME]  |  :session new [NAME]"))
             return
         self._switch_session(args[0])
+
+    def _next_session_name(self) -> str:
+        """Свободное имя сессии для нового окна: s2, s3, …"""
+        base_dir = getattr(self, "_data_dir", ".") or "."
+        used = set(list_session_names(base_dir))
+        n = 2
+        while f"s{n}" in used:
+            n += 1
+        return f"s{n}"
+
+    def _self_launch_argv(self, name: str) -> list[str]:
+        """Команда запуска ещё одной копии приложения в сессии `name`.
+
+        По умолчанию — `python3 <как запущен этот экземпляр> --instance-name=NAME
+        --data-dir=<тот же каталог>`. Переопределение — `$IDVJPY_LAUNCH`
+        (напр. `IDVJPY_LAUNCH="uv run idvjpy"`): дописываются те же два флага.
+        """
+        data_dir = getattr(self, "_data_dir", "") or ""
+        flags = [f"--instance-name={name}"]
+        if data_dir:
+            flags.append(f"--data-dir={data_dir}")
+        override = (os.environ.get("IDVJPY_LAUNCH") or "").strip()
+        if override:
+            return shlex.split(override) + flags
+        script = os.path.abspath(sys.argv[0] or "")
+        return [sys.executable or "python3", script, *flags]
+
+    def _handle_new_window(self, args: list[str]) -> None:
+        """`:new [NAME]` — запустить новое окно приложения в отдельном терминале.
+
+        Отдельная сессия (свои `.bashrc_term_<NAME>` / `history_<NAME>.txt`),
+        общий data-каталог и БД тегов. Секреты (`$$`) в новое окно не переносятся.
+        """
+        if len(args) > 1:
+            self.add_block(InfoBlock("Usage: :new [NAME]"))
+            return
+        raw = args[0] if args else ""
+        name = validate_instance_name(raw) if raw else self._next_session_name()
+        if name is None:
+            self.add_block(InfoBlock(
+                "Usage: :new [NAME]  NAME: letters, digits, _ - (no path, max 64)"
+            ))
+            return
+        command = self._self_launch_argv(name)
+        env = {**os.environ, **self.local_env}
+        for secret in self._secret_names:
+            env.pop(secret, None)  # секреты не переносим в новое окно
+        cwd = getattr(self, "_data_dir", "") or os.getcwd()
+        try:
+            argv, proc = open_terminal_command(command, cwd=cwd, environ=env)
+        except GuiOpenError as exc:
+            self.add_block(InfoBlock(str(exc)))
+            return
+        except OSError as exc:
+            self.add_block(InfoBlock(str(exc)))
+            return
+        self.add_block(InfoBlock(
+            f"New window (session {name}): {format_opened(argv, proc.pid)}"
+        ))
 
     def _switch_session(self, raw_name: str) -> None:
         if self._demo_active or self._demo_pressing:

@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.90**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.91**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -27,7 +27,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no such tag) searches command text + comments across tags |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:fm` `:term` `:env` `:session` `:welcome` `:backup` `:screensaver` `:r` `:cmd` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:update` `:kill` `:watch` `:mv` `:stats` `:diff` `:o` `:alias` `:llm` |
+| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:fm` `:term` `:env` `:session` `:new` `:welcome` `:backup` `:screensaver` `:r` `:cmd` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:update` `:kill` `:watch` `:mv` `:stats` `:diff` `:o` `:alias` `:llm` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.37 (app v1.90) |
+| `test_cmd.md` | Manual plan v1.38 (app v1.91) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -169,7 +169,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.90 |
+| `src/app.py` | TUI (`CommandRunner`), v1.91 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -201,6 +201,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.91
+
+- **`:new [NAME]` — новое окно приложения в отдельном терминале** (алиас `:session new [NAME]`). Запускает ещё один экземпляр с `--instance-name=NAME --data-dir=<data-каталог>`: своя сессия (`.bashrc_term_<NAME>` / `history_<NAME>.txt`), общий data-каталог и БД тегов. Без имени — свободное `s2`/`s3`. Секреты `$$` в новое окно **не** переносятся (вычищаются из env). Реализация: `gui_open.build_terminal_exec_argv` / `open_terminal_command` (флаг запуска по терминалу: `xdg-terminal-exec`/`kitty` — без флага, `gnome-terminal`/`kgx` — `--`, X-терминалы — `-e`, `xfce4-terminal`/`terminator` — `-x`; `$TERMINAL` используется как есть), `app.CommandRunner._handle_new_window` / `_self_launch_argv` / `_next_session_name`; запуск — `$IDVJPY_LAUNCH` либо `python3 <запущенный app.py>`. Тесты: `tests/test_new_window.py`, `tests/test_gui_open.py`.
 
 ## v1.90
 

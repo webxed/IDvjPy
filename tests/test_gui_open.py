@@ -8,6 +8,7 @@ from gui_open import (
     GuiOpenError,
     build_fileman_argv,
     build_term_argv,
+    build_terminal_exec_argv,
     format_opened,
     resolve_target_dir,
     spawn_detached,
@@ -192,3 +193,49 @@ def test_resolve_expands_user(monkeypatch, tmp_path):
     nested.mkdir()
     monkeypatch.chdir(tmp_path)
     assert resolve_target_dir("~/docs") == str(nested.resolve())
+
+
+def test_exec_linux_known_terminal_prefix(monkeypatch):
+    _which_only({"kgx", "xterm"}, monkeypatch)
+    argv = build_terminal_exec_argv(["python3", "app.py"], {}, platform="linux")
+    assert argv == ["kgx", "--", "python3", "app.py"]
+
+
+def test_exec_linux_xterm_dash_e(monkeypatch):
+    _which_only({"xterm"}, monkeypatch)
+    assert build_terminal_exec_argv(["app"], {}, platform="linux") == [
+        "xterm",
+        "-e",
+        "app",
+    ]
+
+
+def test_exec_override_appended_as_is(monkeypatch):
+    _which_only({"kitty"}, monkeypatch)
+    argv = build_terminal_exec_argv(["app"], {"TERMINAL": "kitty"}, platform="linux")
+    assert argv == ["kitty", "app"]
+
+
+def test_exec_override_with_flag(monkeypatch):
+    _which_only({"alacritty"}, monkeypatch)
+    argv = build_terminal_exec_argv(
+        ["app"], {"TERMINAL": "alacritty -e"}, platform="linux"
+    )
+    assert argv == ["alacritty", "-e", "app"]
+
+
+def test_exec_linux_none(monkeypatch):
+    _which_only(set(), monkeypatch)
+    with pytest.raises(GuiOpenError, match=r"set \$TERMINAL="):
+        build_terminal_exec_argv(["app"], {}, platform="linux")
+
+
+def test_exec_darwin_requires_terminal(monkeypatch):
+    _which_only({"open"}, monkeypatch)
+    with pytest.raises(GuiOpenError, match=r"set \$TERMINAL="):
+        build_terminal_exec_argv(["app"], {}, platform="darwin")
+
+
+def test_exec_empty_command():
+    with pytest.raises(GuiOpenError, match="empty command"):
+        build_terminal_exec_argv([], {}, platform="linux")
