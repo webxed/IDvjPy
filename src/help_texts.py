@@ -49,7 +49,7 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 after `:send `.
   :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
-  :screensaver  - Starfield; full-width ticker; bottom-left help; bottom-right load/mem (idle: screensaver_idle; 0 = off; screensaver_stars: false hides flying dust)
+  :screensaver  - Starfield; full-width ticker; bottom-left help; bottom-right load/mem (idle: screensaver_idle; keys/clicks/scroll/mouse move reset it; 0 = off; screensaver_stars: false hides flying dust)
   :r          - Put the focused (or last) block command into the input
   :r N        - Put the command N blocks back into the input (0 = last)
   :cmd [N] [show] - Materialize the block command with current $VAR values (secrets

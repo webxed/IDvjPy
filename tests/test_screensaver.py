@@ -406,3 +406,38 @@ async def test_colon_screensaver_off(isolated_home):
         await submit(pilot, ":screensaver 0")
         assert "off" in last_info(app).text_content.lower()
         assert app.screensaver_idle == 0
+
+
+async def test_mouse_scroll_resets_screensaver_idle(isolated_home):
+    """Колесо мыши — активность: чтение журнала не уходит в скринсейвер."""
+    from textual import events
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        app.screensaver_idle = 30
+        app._bump_screensaver_idle()
+        first = app._ss_timer
+        assert first is not None
+        app.on_mouse_scroll_down(events.MouseScrollDown(None, 0, 0, 0, 1, 0, False, False, False))
+        app.on_mouse_scroll_up(events.MouseScrollUp(None, 0, 0, 0, -1, 0, False, False, False))
+        await pilot.pause()
+        assert app._ss_timer is not None and app._ss_timer is not first
+        app.screensaver_idle = 0
+
+
+async def test_mouse_move_resets_screensaver_idle(isolated_home):
+    from textual import events
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        app.screensaver_idle = 30
+        app._bump_screensaver_idle()
+        first = app._ss_timer
+        assert first is not None
+        app._ss_move_bump = 0.0  # снять throttle
+        app.on_mouse_move(events.MouseMove(None, 0, 0, 0, 0, 0, False, False, False))
+        await pilot.pause()
+        assert app._ss_timer is not None and app._ss_timer is not first
+        app.screensaver_idle = 0

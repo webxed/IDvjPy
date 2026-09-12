@@ -1309,6 +1309,8 @@ class CommandInput(Input):
     def on_mouse_scroll_down(self, event: events.MouseScrollDown) -> None:
         """Колесо над полем ввода — прокрутка области вывода команд (не истории сессии)."""
         app = self.app
+        if hasattr(app, "_bump_screensaver_idle"):
+            app._bump_screensaver_idle()  # скролл — активность, не простой
         if getattr(app.screen, "_modal", False):
             return
         inp = app.query_one(f"#{app.ID_INPUT}", Input)
@@ -1321,6 +1323,8 @@ class CommandInput(Input):
 
     def on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
         app = self.app
+        if hasattr(app, "_bump_screensaver_idle"):
+            app._bump_screensaver_idle()  # скролл — активность, не простой
         if getattr(app.screen, "_modal", False):
             return
         inp = app.query_one(f"#{app.ID_INPUT}", Input)
@@ -1409,7 +1413,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.95"
+    VERSION = "v1.96"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1609,6 +1613,8 @@ class CommandRunner(App):
         # Внешний редактор для :ed (`editor:` в settings.yml; откат — $VISUAL/$EDITOR)
         self.editor: str = ""
         self._ss_timer = None
+        # Последнее движение мыши (throttle): MouseMove сыплется очень часто.
+        self._ss_move_bump: float = 0.0
         # Запущенные фоновые процессы (shell-команды): CommandBlock -> Popen.
         # Нужны для F4 / :kill — остановить долгую команду, не дожидаясь timeout.
         self._proc_registry: dict[CommandBlock, subprocess.Popen] = {}
@@ -2257,8 +2263,17 @@ class CommandRunner(App):
     def on_mouse_down(self, event: events.MouseDown) -> None:
         self._bump_screensaver_idle()
 
+    def on_mouse_move(self, event: events.MouseMove) -> None:
+        """Движение мыши — тоже активность, но событий много: не чаще 2 раз в секунду."""
+        now = time.monotonic()
+        if now - self._ss_move_bump < 0.5:
+            return
+        self._ss_move_bump = now
+        self._bump_screensaver_idle()
+
     def on_mouse_scroll_down(self, event) -> None:
         """Скролл вниз всегда идёт в контейнер вывода."""
+        self._bump_screensaver_idle()  # чтение журнала колесом — не простой
         if getattr(self.screen, "_modal", False):
             return
         inp = self.query_one(f"#{self.ID_INPUT}", Input)
@@ -2271,6 +2286,7 @@ class CommandRunner(App):
 
     def on_mouse_scroll_up(self, event) -> None:
         """Скролл вверх всегда идёт в контейнер вывода."""
+        self._bump_screensaver_idle()  # чтение журнала колесом — не простой
         if getattr(self.screen, "_modal", False):
             return
         inp = self.query_one(f"#{self.ID_INPUT}", Input)
