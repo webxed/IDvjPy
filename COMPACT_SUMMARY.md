@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.92**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.93**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.39 (app v1.92) |
+| `test_cmd.md` | Manual plan v1.40 (app v1.93) |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
@@ -169,7 +169,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.92 |
+| `src/app.py` | TUI (`CommandRunner`), v1.93 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -201,6 +201,16 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.93
+
+- **Аудит документации под v1.92.** Синхронизированы описания, отставшие от фактического поведения:
+  - `src/screensaver.py` (`COMMAND_HELP_LINES`): добавлены `:new`, `:cmd`, `:session new`, `:llm offline`, `$VAR=@key`, `$$VAR=val`.
+  - `DATABASE.md`: состояние на v1.93; колонки `use_count` / `last_used` (миграция v1.39), `bump_command_usage` / `usage_stats`, поиск `?text` (`search_commands_by_content`, `_escape_like`).
+  - `backup_db.md`: актуальная версия, Python 3.12+ вместо 3.7+.
+  - `docker/README.md`: в таблицу добавлены `:new`, `:cmd`, `$$`-секреты, `$VAR=@key`, `:o`, `:watch`, `:kctx`.
+  - `CLAUDE.md`: `:cmd` / `:new` / `:import` / `:theme` в списке команд; `gui_open.py` — запуск команды в терминале для `:new`.
+  - `DEMO.md`: версия приложения (v1.79 → v1.93).
 
 ## v1.92
 

@@ -1,6 +1,6 @@
 # Как приложение читает команды из базы данных
 
-IDvjPy_term хранит тегированные команды в SQLite. Этот файл описывает текущую схему, кэш в памяти и все пути чтения (состояние на **v1.28**).
+IDvjPy_term хранит тегированные команды в SQLite. Этот файл описывает текущую схему, кэш в памяти и все пути чтения (состояние на **v1.93**).
 
 Код: `src/database_v2.py` (доступ к SQLite), `src/app.py` (маршрутизация `?`, `!`, `!!`, Tab, старт).
 
@@ -37,8 +37,12 @@ database_tags_file: mytags.db
 | `timestamp` | Время записи |
 | `deleted` | Soft-delete: `0` живая, `1` скрыта |
 | `comment` | Комментарий к этой команде (`#tag=ID=text`) |
+| `use_count` | Счётчик запусков (v1.39; добавляется `ALTER TABLE` на лету) |
+| `last_used` | Время последнего запуска (v1.39) |
 
 Уникальность: `(tag, tid)`. Индекс: `idx_tag_tid` по `(tag, tid)` для `deleted = 0`.
+
+Колонки `use_count` / `last_used` появились в v1.39 и добавляются миграцией `ALTER TABLE` при каждом `init_db()`, поэтому старая БД открывается без ручных правок. Их пишет `bump_command_usage()` — по тексту выполненной строки (в т.ч. после `!tag[tid]` / `!ID` / повтора из истории) — и читает `usage_stats()` для `:stats` (запуски по тегам, top-10, «никогда не запускались»); `!tag` — Tab-completion сортируется по использованию.
 
 ### `tags`
 
@@ -108,6 +112,12 @@ database_tags_file: mytags.db
 - ссылки в тексте раскрываются через `_resolve_command_references()` (дополнительные чтения БД на каждую `!tag[tid]` / `!ID`)
 - в UI шаги Original → Final
 
+### `?text` (поиск по содержимому)
+
+- `search_commands_by_content(needle)` — подстрочный поиск (`LIKE`, ASCII case-insensitive) по тексту команд **и** комментариям всех тегов; `%` / `_` / `\` ищутся буквально (`_escape_like` + `ESCAPE '\'`)
+- Возвращает `(rows, total)`: до `limit` строк `id, tag, tid, command, comment` и полное число совпадений
+- Срабатывает, только если введён `?text` длиной 2+ и такого тега нет; в UI — строки `<id> tag[tid]`, Esc → ввод, затем Enter по `!ID`
+
 ### `!tag[tid]`
 
 Всегда SQL: `get_command_by_tid`. Текст **вставляется во ввод**, команда не запускается. Enter после этого — уже выполнение (и при наличии ссылок — ещё одно раскрытие).
@@ -170,6 +180,9 @@ ORDER BY command
 | `get_command_by_global_id` | одна команда по `id` |
 | `get_all_commands_with_ids` | все живые: `id, tag, tid, command, comment` |
 | `get_commands_by_prefix` | `command LIKE prefix%` для completion |
+| `search_commands_by_content` | подстрочный `LIKE` по `command` + `comment` (поиск `?text`); `_escape_like` экранирует `%`/`_`/`\` |
+| `bump_command_usage` | `use_count = use_count + 1, last_used = now` по тексту команды (запись) |
+| `usage_stats` | агрегаты для `:stats`: теги, top-10 по запускам, never-run |
 | `get_tag_comment` / `get_all_tags_with_comments` | таблица `tags` |
 | `get_command_comment` | `commands.comment` |
 
