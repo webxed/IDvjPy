@@ -412,6 +412,7 @@ async def test_colon_session_creates_and_switches(isolated_home):
             switched = last_info(app).text_content
             assert "Created session ops" in switched
             assert app.instance_name == "ops"
+            assert app.title == app._base_title() and "ops" in app.title
             assert os.path.basename(app.FILE_HISTORY) == "history_ops.txt"
             assert os.path.basename(app.FILE_BASHRC) == ".bashrc_term_ops"
             assert Path(app.FILE_HISTORY).resolve() == (isolated_home / "history_ops.txt").resolve()
@@ -433,6 +434,7 @@ async def test_colon_session_creates_and_switches(isolated_home):
             await submit(pilot, ":session default")
             assert "Switched to session default" in last_info(app).text_content
             assert app.instance_name == "default"
+            assert "default" in app.title
             assert app.local_env.get("ALPHA") == "from-default"
             assert app.local_env.get("BETA") != "from-ops"
             default_hist = (isolated_home / "history_default.txt").read_text(encoding="utf-8")

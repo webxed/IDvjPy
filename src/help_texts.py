@@ -34,7 +34,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 explicit error, not a file named `$NAME`.
   :env        - Re-read .bashrc_term* (and ~/.bashrc aliases) into this process
   :session    - Show the current instance (history + .bashrc_term files)
-  :session NAME - Switch to that instance or create it (tags DB stays shared)
+  :session NAME - Switch to that instance or create it (tags DB stays shared).
+                The current session name is shown in the app header and in the
+                terminal window/tab title (IDvjPy_term · NAME).
   :new [NAME|-] [DIR] - Open another app instance in a NEW terminal window: own
                 .bashrc_term_<NAME> / history_<NAME>.txt, same data dir and tags DB;
                 DIR — working dir (default: data dir); `-`/no name — auto `sN`.

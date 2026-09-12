@@ -1,5 +1,6 @@
 """UX-мелочи: :r N, индикатор running, :alias (фича ux-extras)."""
 import asyncio
+from typing import Any, cast
 
 import pytest
 
@@ -49,10 +50,40 @@ async def test_title_shows_running_count(isolated_home):
         assert app._proc_registry
         await asyncio.sleep(0.2)
         assert "1 running" in app.title
+        assert app.instance_name in app.title  # заголовок несёт имя сессии
         await submit(pilot, ":kill")
         await wait_command_done(app, timeout=8.0)
         await asyncio.sleep(0.2)
-        assert app.title == app.TITLE
+        assert "running" not in app.title
+        assert app.title == app._base_title()
+
+
+async def test_terminal_title_has_session_and_osc(isolated_home):
+    """Заголовок окна/вкладки: OSC 0 с именем сессии (кроме headless)."""
+    writes: list[str] = []
+
+    class _Driver:
+        is_headless = False
+
+        def write(self, data: str) -> None:
+            writes.append(data)
+
+        def flush(self) -> None:
+            writes.append("<flush>")
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        real_driver = app._driver
+        cast(Any, app)._driver = _Driver()
+        try:
+            app._refresh_running_title()
+        finally:
+            cast(Any, app)._driver = real_driver
+    assert any(
+        w.startswith("\x1b]0;") and "default" in w and w.endswith("\x07")
+        for w in writes
+    )
 
 
 async def test_alias_exports_shell_functions(isolated_home):

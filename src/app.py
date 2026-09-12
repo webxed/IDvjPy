@@ -1413,7 +1413,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.96"
+    VERSION = "v1.97"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1424,14 +1424,21 @@ class CommandRunner(App):
     )
 
     @classmethod
-    def format_startup_help(cls) -> str:
+    def format_startup_help(cls, session: str = "") -> str:
         """Короткая справка на один экран: логотип, суть, основные команды."""
         bang_ref = escape("!tag[tid]")
+        session_rows = (
+            [f"  [bold]session:[/] [bold #67e8f9]{escape(session)}[/]   "
+             "[dim]:session NAME — switch  ·  :new — another window[/]" ]
+            if session
+            else []
+        )
         return "\n".join(
             [
                 f"[bold #b794f4]{cls.STARTUP_LOGO}[/]",
                 f"  [bold]{cls.TITLE}[/]  {cls.VERSION}   теги → шаблоны → командная строка",
                 "  [dim]Define your variables, join your command.[/]",
+                *session_rows,
                 "",
                 f"  [bold]{bang_ref}[/] / [bold]!![/] собирают строку, [bold]Enter[/] запускает.  Полная справка: [bold]:?[/]",
                 "  [dim]────────────────────────────────────────────────────────[/]",
@@ -2359,6 +2366,7 @@ class CommandRunner(App):
         self._data_dir = ensure_data_dir(resolve_data_dir(self._requested_data_dir))
         self._pin_instance_files()
         self._provision_fresh_data_dir()
+        self._refresh_running_title()  # заголовок окна/вкладки: IDvjPy_term · <сессия>
 
         # 0. Привязать список подсказок к полю ввода
         cmd_input = self.query_one(f"#{self.ID_INPUT}", CommandInput)
@@ -2680,7 +2688,7 @@ class CommandRunner(App):
 
     def on_ready(self) -> None:
         """Приветствие: справка; пустая БД — каталог seed; иначе — разделы тегов."""
-        self.add_block(InfoBlock(self.format_startup_help()), follow_end=False)
+        self.add_block(InfoBlock(self.format_startup_help(self.instance_name)), follow_end=False)
         if getattr(self, "_fresh_command_db", False):
             self.add_block(InfoBlock(format_empty_db_hint(self.db_file)), follow_end=False)
         else:
@@ -4465,6 +4473,7 @@ class CommandRunner(App):
         apply_instance_name(name)
         self.instance_name = name
         self._pin_instance_files()
+        self._refresh_running_title()  # заголовок окна/вкладки — имя новой сессии
         self.session_history = []
         self.session_history_pos = 0
         self._playbook_log.clear()
@@ -6140,6 +6149,7 @@ class CommandRunner(App):
                     executable="/bin/bash",
                     env=child_env,
                 )
+            self._refresh_running_title()  # ребёнок мог поменять заголовок (vim/htop)
             self._tty_followup_lines = self._ingest_tty_session(
                 env_path, pwd_path, before
             )
@@ -7006,13 +7016,35 @@ class CommandRunner(App):
         """
         return self._clickable_bang_ref(tag, tid, prefix="!")
 
+    def _base_title(self) -> str:
+        """Базовый заголовок: приложение и текущая сессия."""
+        name = getattr(self, "instance_name", None) or INSTANCE_NAME
+        return f"{self.TITLE} · {name}"
+
+    def _set_terminal_title(self, label: str) -> None:
+        """Заголовок окна/вкладки терминала (OSC 0). Textual сам его не ставит.
+
+        Пишем прямо в драйвер, как Textual шлёт OSC 52 для буфера. Управляющие
+        символы вычищаем, чтобы имя сессии не сломало последовательность.
+        """
+        driver = getattr(self, "_driver", None)
+        if driver is None or getattr(driver, "is_headless", False):
+            return
+        safe = "".join(ch for ch in str(label) if ch >= " " and ch != "\x7f")
+        try:
+            driver.write(f"\x1b]0;{safe}\x07")
+            driver.flush()
+        except Exception:
+            pass
+
     def _refresh_running_title(self) -> None:
-        """Показать в заголовке число активных фоновых команд (:kill / :watch)."""
+        """Заголовок: приложение + сессия + число активных фоновых команд."""
         n = len(self._proc_registry) + (1 if self._watch_state is not None else 0)
-        label: str = self.TITLE
+        label = self._base_title()
         if n:
-            label = f"{self.TITLE} — {n} running"
+            label = f"{label} — {n} running"
         self.title = label
+        self._set_terminal_title(label)
 
     def _handle_diff_command(self) -> None:
         """`:diff` — сравнить stdout сфокусированного блока с предыдущим CommandBlock.

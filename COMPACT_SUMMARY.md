@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.96**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.97**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.43 (app v1.96) |
+| `test_cmd.md` | Manual plan v1.44 (app v1.97) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
@@ -170,7 +170,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.96 |
+| `src/app.py` | TUI (`CommandRunner`), v1.97 |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
 | `src/database_v2.py` | SQLite tagged history |
@@ -203,6 +203,12 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.97
+
+- **Имя сессии в заголовке окна терминала и в шапке приложения.** `_base_title()` = `IDvjPy_term · <сессия>`; `_refresh_running_title()` достраивает `— N running` и пишет OSC 0 в драйвер (`_set_terminal_title`; Textual сам заголовок окна не ставит), обновляется на старте, при `:session` (`_switch_session`) и после выхода из `> cmd` / `:ed` (ребёнок вроде `vim`/`htop` мог поменять заголовок). Стартовый блок показывает `session: <имя>` (`format_startup_help(session)`).
+- Docs: README, `:?` (help_texts), CLAUDE.md.
+- Тесты: `test_title_shows_running_count` (заголовок с сессией), `test_terminal_title_has_session_and_osc`, `test_colon_session_creates_and_switches`.
 
 ## v1.96
 
