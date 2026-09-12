@@ -228,3 +228,49 @@ async def test_poll_offline_queue_from_previous_send(isolated_home):
         app._poll_session_inbox()
         await pilot.pause()
         assert input_widget(app).value == "echo late"
+
+
+# --- Автодополнение имён сессий после `:send ` ------------------------------ 
+
+
+def test_send_completion_items_and_prefix(isolated_home):
+    (isolated_home / "history_alpha.txt").write_text("echo a\n", encoding="utf-8")
+    (isolated_home / "history_beta.txt").write_text("echo b\n", encoding="utf-8")
+    app = CommandRunner()
+    items, preview = app.get_send_completions(":send ", len(":send "))
+    assert preview == ""
+    inserts = [i.insert for i in items]
+    assert {"default", "alpha", "beta", "*"} <= set(inserts)
+    current = next(i for i in items if i.insert == "default")
+    assert "(this session)" in current.display
+    # По префиксу — только подходящие имена.
+    items, _ = app.get_send_completions(":send al", len(":send al"))
+    assert [i.insert for i in items] == ["alpha"]
+    # До `:send!` доходят те же подсказки.
+    items, _ = app.get_send_completions(":send! be", len(":send! be"))
+    assert [i.insert for i in items] == ["beta"]
+
+
+def test_send_completion_hides_after_command_starts(isolated_home):
+    app = CommandRunner()
+    assert app.get_send_completions(":send", len(":send")) == ([], "")
+    assert app.get_send_completions(":send alpha ", len(":send alpha ")) == ([], "")
+    assert app.get_send_completions(":send alpha echo hi", 19) == ([], "")
+    # Другая colon-команда не перехватывается.
+    assert app.get_send_completions(":session ", len(":session ")) == ([], "")
+
+
+async def test_send_tab_applies_session_name(isolated_home):
+    (isolated_home / "history_stage.txt").write_text("echo s\n", encoding="utf-8")
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        inp = input_widget(app)
+        inp.value = ":send st"
+        inp.cursor_position = len(":send st")
+        await pilot.pause()
+        assert app._completion_list.is_visible()
+        assert app._completion_list.total_candidates == 1
+        await pilot.press("tab")
+        await pilot.pause()
+        assert inp.value == ":send stage "

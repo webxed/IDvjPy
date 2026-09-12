@@ -1272,6 +1272,11 @@ class CommandInput(Input):
             if llm_items or llm_preview:
                 self._completion_list.update_candidates(llm_items, preview=llm_preview)
                 return
+        if hasattr(app, "get_send_completions"):
+            send_items, send_preview = app.get_send_completions(raw_value, self.cursor_position)
+            if send_items or send_preview:
+                self._completion_list.update_candidates(send_items, preview=send_preview)
+                return
         if self._typed_command_is_complete():
             # `ls   ` — выполнить ls, не держать список `ls -la`.
             self._completion_list.hide()
@@ -1404,7 +1409,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.94"
+    VERSION = "v1.95"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1914,6 +1919,63 @@ class CommandRunner(App):
             if len(items) >= 20:
                 break
         return items
+
+    def get_send_completions(
+        self, text: str, cursor_pos: int
+    ) -> tuple[list[CompletionItem], str]:
+        """Подсказки имён сессий для `:send <сессия>` / `:send! <сессия>`.
+
+        Список гаснет, как только начинается команда (пробел после выбранного
+        имени), — как у `:llm <провайдер>`. `*` — рассылка всем другим сессиям;
+        текущая помечается `(this session)`.
+        """
+        raw = (text or "")[:cursor_pos]
+        stripped_end = raw.rstrip()
+        if not stripped_end.startswith(":send"):
+            return [], ""
+        words = stripped_end.split()
+        if not words or words[0] not in (
+            f":{self.CMD_SEND}",
+            f":{self.CMD_SEND_RUN}",
+        ):
+            return [], ""
+        if len(words) == 1:
+            # Список показываем после `:send ` (пробел набран).
+            if not raw.endswith(" "):
+                return [], ""
+            needle = ""
+        elif len(words) == 2:
+            # Пробел за выбранным именем — начинается команда, список гасим.
+            if raw.endswith(" "):
+                return [], ""
+            needle = words[1]
+        else:
+            return [], ""  # команда уже идёт
+        current = getattr(self, "instance_name", None) or INSTANCE_NAME
+        names = list_session_names(self._data_dir or ".")
+        items: list[CompletionItem] = []
+        for name in names:
+            if needle and not name.startswith(needle):
+                continue
+            mark = "  (this session)" if name == current else ""
+            items.append(
+                CompletionItem(
+                    insert=name,
+                    display=f"{name}{mark}",
+                    replace_token=True,
+                    add_space=True,
+                )
+            )
+        if not needle or "*".startswith(needle):
+            items.append(
+                CompletionItem(
+                    insert="*",
+                    display="*  (all other sessions)",
+                    replace_token=True,
+                    add_space=True,
+                )
+            )
+        return items, ""
 
     def _tag_completion_items(self, tags: list[str]) -> list[CompletionItem]:
         """Пункты выбора тега: показ `file`, вставка `!file`."""

@@ -45,7 +45,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 The command is materialized here ($VAR/$OUT, aliases); `$$`
                 secrets are masked (****) and never written to disk. The inbox is
                 inbox_<session>.jsonl (0600) in the data dir; a message for a
-                stopped session waits for its start.
+                stopped session waits for its start. Tab completes session names
+                after `:send `.
   :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
   :screensaver  - Starfield; full-width ticker; bottom-left help; bottom-right load/mem (idle: screensaver_idle; 0 = off; screensaver_stars: false hides flying dust)
