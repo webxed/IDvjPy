@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.97) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.98) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.97` → `v1.98`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.98` → `v1.99`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -83,6 +83,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/seed_catalog.py`**: empty-DB welcome catalog (click `--seed` → input)
 - **`src/demo.py`**: `--demo` YAML player (`src/demos/*.yml`); `loop: true` / `loop: N` (Esc stops)
 - **`src/ingress_analyzer.py`**: `:i` Kubernetes helper
+- **`src/version_bump.py`** (launcher `bump_version.py`): bump `CommandRunner.VERSION` minor and sync every release file in one run (`--set`, `--dry-run`, `--check`); `check()` mirrors `tests/test_release_meta.py`
 - **`src/app.css`**: Textual styling
 - **`settings.yml`**: buffer limits, timeout, DB file, `terminal_mouse`, `screensaver_idle`, `screensaver_stars` (cwd)
 - **`.bashrc_term` / `.bashrc_term_<instance>`**: env vars from `$VAR=val` (cwd; template `src/.bashrc_term.example`)

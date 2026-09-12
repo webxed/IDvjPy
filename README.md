@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.97 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.98 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -87,6 +87,19 @@ python3 -m idvjpy_boot       # то же самое через python -m
 В wheel входят код и ресурсы (`app.css`, `demos/`, примеры конфигов, `.bashrc_term.example`); хранилища пользователя (settings/БД/history) в пакет **не** кладутся — при первом запуске они создаются в системном data-каталоге (`--data-dir` → `$IDVJPY_DATA_DIR` → системный каталог ОС, см. «Запуск»). Так один и тот же пакет можно обновлять (`pip install -U`), не трогая свои теги и историю.
 
 Версия пакета соответствует версии приложения (`CommandRunner.VERSION` → `MAJOR.MINOR.0`).
+
+### Версия = коммит (для контрибьюторов)
+
+Источник правды — `VERSION` в `src/app.py`. Поднять минор и разом обновить все файлы релиза (README, `COMPACT_SUMMARY.md`, `CLAUDE.md`, `AGENTS.md`, `test_cmd.md`, `tests/test_cmd_scenarios.py`, `DEMO.md`):
+
+```bash
+python3 bump_version.py              # v1.97 → v1.98 и правки во всех файлах
+python3 bump_version.py --dry-run    # показать diff, ничего не писать
+python3 bump_version.py --check      # проверить синхронность (exit 1 при расхождении)
+python3 bump_version.py --set v2.0   # явная версия
+```
+
+Скрипт добавляет в `COMPACT_SUMMARY.md` секцию `## <новая версия>` заглушкой — текст изменений впишите сами. Синхронность тех же маркеров проверяет `tests/test_release_meta.py`.
 
 ### Установка в систему (pipx / uv / `--user`)
 
