@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.91
+# План тестирования IDvjPy_term v1.92
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -678,11 +678,13 @@ $ALPHA=from-default
 ```
 :new
 :new stage
+:new stage /srv/app
+:new - /tmp
 :session new stage2
 :new ../oops
 ```
 
-**Ожидание:** `:new` открывает **новое окно терминала** с ещё одним экземпляром приложения: своя сессия (`.bashrc_term_<NAME>` / `history_<NAME>.txt`), общий data-каталог и БД тегов; в журнале `New window (session NAME): Opened: … pid N`. Без имени — свободное `s2`/`s3`. `:session new NAME` — то же. Неверное имя — `Usage: :new`. Секреты (`$$…`) в новое окно не переносятся. Терминал: `$TERMINAL` (напр. `kitty` / `alacritty -e`), иначе из системных; запуск — `$IDVJPY_LAUNCH` (`uv run idvjpy`) или `python3 <запущенный app.py>`. Без доступного терминала — явная ошибка `set $TERMINAL=`.
+**Ожидание:** `:new` открывает **новое окно терминала** с ещё одним экземпляром приложения: своя сессия (`.bashrc_term_<NAME>` / `history_<NAME>.txt`), общий data-каталог и БД тегов; в журнале `New window (session NAME, cwd DIR): Opened: … pid N`. Второй аргумент — рабочий каталог новой сессии (`:new stage /srv/app`, `~` раскрывается; нет каталога → `not a directory`); без него — data-каталог. Без имени / `-` — свободное `s2`/`s3`. `:session new …` — то же. `Ctrl+N` (кнопка `New session` в футере) — `:new` без аргументов. Неверное имя — `Usage: :new`. Секреты (`$$…`) в новое окно не переносятся. Терминал: `$TERMINAL` (напр. `kitty` / `alacritty -e`), иначе из системных; запуск — `$IDVJPY_LAUNCH` (`uv run idvjpy`) или `python3 <запущенный app.py>`. Без доступного терминала — явная ошибка `set $TERMINAL=`.
 
 Автотесты: `tests/test_new_window.py`, `tests/test_gui_open.py` (`build_terminal_exec_argv`).
 
@@ -1026,7 +1028,7 @@ cat history_default.txt
 
 ---
 
-**Версия документа**: v1.38  
-**Версия приложения**: v1.91
+**Версия документа**: v1.39  
+**Версия приложения**: v1.92
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11

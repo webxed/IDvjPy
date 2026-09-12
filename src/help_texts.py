@@ -35,9 +35,10 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :env        - Re-read .bashrc_term* (and ~/.bashrc aliases) into this process
   :session    - Show the current instance (history + .bashrc_term files)
   :session NAME - Switch to that instance or create it (tags DB stays shared)
-  :new [NAME] - Open another app instance in a NEW terminal window: own
+  :new [NAME|-] [DIR] - Open another app instance in a NEW terminal window: own
                 .bashrc_term_<NAME> / history_<NAME>.txt, same data dir and tags DB;
-                secrets are not passed. Also `:session new [NAME]`.
+                DIR — working dir (default: data dir); `-`/no name — auto `sN`.
+                Secrets are not passed. Also `:session new …`. Footer: Ctrl+N.
   :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
   :screensaver  - Starfield; full-width ticker; bottom-left help; bottom-right load/mem (idle: screensaver_idle; 0 = off; screensaver_stars: false hides flying dust)

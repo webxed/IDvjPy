@@ -112,6 +112,7 @@ try:
         open_file_manager,
         open_terminal,
         open_terminal_command,
+        resolve_target_dir,
     )
     from help_texts import CALC_HELP_TEXT, INGRESS_HELP_TEXT, MAIN_HELP_TEXT
     from history_store import (
@@ -1386,6 +1387,7 @@ class CommandRunner(App):
         Binding("pagedown", "journal_page_down", "Next Block", show=False),
         Binding("shift+insert", "paste_clipboard", "Paste", show=False),
         Binding("ctrl+v", "paste_clipboard", "Paste", show=False),
+        Binding("ctrl+n", "new_window", "New session", show=True),
         Binding("ctrl+c", "copy_input_or_block", "Copy", show=False, priority=True),
         Binding("space", "toggle_block_collapse", "Collapse", show=False),
         Binding("left", "collapse_block", "← Collapse", show=False),
@@ -1393,7 +1395,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.91"
+    VERSION = "v1.92"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -4086,7 +4088,7 @@ class CommandRunner(App):
             f"  {os.path.basename(self.FILE_BASHRC)}  {os.path.basename(self.FILE_HISTORY)}\n"
             f"  Tags DB is shared ({os.path.basename(self.db_file)}).\n"
             f"Sessions: {names}\n"
-            "Usage: :session NAME   |   :new [NAME] — окно в отдельном терминале"
+            "Usage: :session NAME   |   :new [NAME|-] [DIR] — окно в отдельном терминале"
         )
 
     def _unload_session_env(self) -> None:
@@ -4106,7 +4108,7 @@ class CommandRunner(App):
             self.add_block(InfoBlock(self._session_status_text()))
             return
         if len(args) > 1:
-            self.add_block(InfoBlock("Usage: :session [NAME]  |  :session new [NAME]"))
+            self.add_block(InfoBlock("Usage: :session [NAME]  |  :session new [NAME|-] [DIR]"))
             return
         self._switch_session(args[0])
 
@@ -4137,28 +4139,39 @@ class CommandRunner(App):
         return [sys.executable or "python3", script, *flags]
 
     def _handle_new_window(self, args: list[str]) -> None:
-        """`:new [NAME]` — запустить новое окно приложения в отдельном терминале.
+        """`:new [NAME|-] [DIR]` — новое окно приложения в отдельном терминале.
 
-        Отдельная сессия (свои `.bashrc_term_<NAME>` / `history_<NAME>.txt`),
-        общий data-каталог и БД тегов. Секреты (`$$`) в новое окно не переносятся.
+        NAME — имя сессии (`-`/пусто — свободное `sN`); DIR — рабочий каталог
+        новой сессии (по умолчанию data-каталог); отдельные
+        `.bashrc_term_<NAME>` / `history_<NAME>.txt`, общий data-каталог и БД
+        тегов. Секреты (`$$`) в новое окно не переносятся.
         """
-        if len(args) > 1:
-            self.add_block(InfoBlock("Usage: :new [NAME]"))
+        if len(args) > 2:
+            self.add_block(InfoBlock("Usage: :new [NAME|-] [DIR]"))
             return
-        raw = args[0] if args else ""
-        name = validate_instance_name(raw) if raw else self._next_session_name()
+        raw_name = args[0] if args else ""
+        raw_dir = args[1] if len(args) > 1 else ""
+        name = self._next_session_name() if raw_name in ("", "-") else validate_instance_name(raw_name)
         if name is None:
             self.add_block(InfoBlock(
-                "Usage: :new [NAME]  NAME: letters, digits, _ - (no path, max 64)"
+                "Usage: :new [NAME|-] [DIR]  NAME: letters, digits, _ - (no path, max 64)"
             ))
             return
+        data_dir = getattr(self, "_data_dir", "") or os.getcwd()
+        if raw_dir:
+            try:
+                target_dir = resolve_target_dir(raw_dir)
+            except GuiOpenError as exc:
+                self.add_block(InfoBlock(str(exc)))
+                return
+        else:
+            target_dir = data_dir
         command = self._self_launch_argv(name)
         env = {**os.environ, **self.local_env}
         for secret in self._secret_names:
             env.pop(secret, None)  # секреты не переносим в новое окно
-        cwd = getattr(self, "_data_dir", "") or os.getcwd()
         try:
-            argv, proc = open_terminal_command(command, cwd=cwd, environ=env)
+            argv, proc = open_terminal_command(command, cwd=target_dir, environ=env)
         except GuiOpenError as exc:
             self.add_block(InfoBlock(str(exc)))
             return
@@ -4166,8 +4179,12 @@ class CommandRunner(App):
             self.add_block(InfoBlock(str(exc)))
             return
         self.add_block(InfoBlock(
-            f"New window (session {name}): {format_opened(argv, proc.pid)}"
+            f"New window (session {name}, cwd {target_dir}): {format_opened(argv, proc.pid)}"
         ))
+
+    def action_new_window(self) -> None:
+        """:new без аргументов — новое окно (кнопка «New session» в футере / Ctrl+N)."""
+        self._handle_new_window([])
 
     def _switch_session(self, raw_name: str) -> None:
         if self._demo_active or self._demo_pressing:
