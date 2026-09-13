@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.107**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.108**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.54 (app v1.107) |
+| `test_cmd.md` | Manual plan v1.53 (app v1.108) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров, `--check`/`--dry-run`/`--set` |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
@@ -171,7 +171,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.107 |
+| `src/app.py` | TUI (`CommandRunner`), v1.108 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
@@ -205,6 +205,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.108
+
+- **Метки буферов (`:name`) и пайп из конкретного блока (`|@label cmd` / `|@N cmd`).** Позволяет пометить блок с дорогим выводом (`cat big.json`, `kubectl get -o json`) и подбирать фильтр (`awk`/`jq`) без повторного запуска источника: `:name buff` → `|@buff awk '{...}'`. Формы: `:name <label>` (пометить сфокусированный/последний завершённый), `:name` (список), `:name <label>-` (снять), `:name -` (все). `|@N` — N блоков назад (0 = последний); чисто цифровые метки запрещены, чтобы `|@3` было однозначно индексом. Метка видна в шапке (`[buff]`), живёт в памяти сессии и чистится вместе с `:c` (иначе ссылка держала бы блок). В `history_*.txt` пайп с явным источником пишется **полным** вызовом `<источник> | <команда>` (воспроизводимо по ↑/`:h`). Нюанс: stdin — это `raw_stdout` блока (без завершающего перевода строки), как и у обычного `|`. Тесты — `tests/test_block_labels.py`.
 
 ## v1.107
 

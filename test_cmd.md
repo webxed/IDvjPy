@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.107
+# План тестирования IDvjPy_term v1.108
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1079,7 +1079,26 @@ seq 1 400
 
 ---
 
-**Версия документа**: v1.54  
-**Версия приложения**: v1.107
+## Секция 36: Метки буферов и пайп из блока (`:name`, `|@label`)
+
+```
+printf 'alpha\nbeta\ngamma\n'
+:name buff
+|@buff grep beta
+:name
+|@1 grep beta
+:name buff-
+:name -
+:c
+```
+
+**Ожидание:** `:name buff` метит последний завершённый блок — в шапке появляется `[buff]`. `|@buff grep beta` берёт stdin из этого блока (источник **не** выполняется заново) и даёт `beta`; в `history_*.txt` записан **полный** вызов `printf '…' | grep beta`, а не `|@buff grep beta`. `:name` — список меток (`buff  <-  <команда>  (N lines)`); `|@1 …` — из одного блока назад (0 = последний); `:name buff-` снимает метку, `:name -` — все. Неизвестная метка — `no labelled block '…'. Labels: …`; `:name 3` — `Usage: :name` (чисто цифровая метка запрещена: `|@3` значит «3-й блок назад»). `:c` чистит метки вместе с блоками. Примеры для подбора `awk` по большому выводу без повторного `cat`/`kubectl`.
+
+Автотест: `tests/test_block_labels.py`.
+
+---
+
+**Версия документа**: v1.53
+**Версия приложения**: v1.108
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11

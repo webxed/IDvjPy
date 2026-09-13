@@ -239,6 +239,9 @@ RE_TAG_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 # `:llm …` / `:cht …` — вопросы и справки: пишутся в history (для ↑/`:h`),
 # но в подсказках не предлагаются (это не команды для повтора).
 RE_HISTORY_ONLY_QUERY = re.compile(r"^:(?:llm|cht)\s+\S")
+# Метка буфера (`:name`): буква/`_` в начале, дальше буквы/цифры/`_`/`-`.
+# Чисто цифровая метка запрещена — `|@N` однозначно значит «N-й блок назад».
+RE_BLOCK_LABEL = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")
 TOKEN_SEPS = frozenset(" \t|&;")
 
 
@@ -634,6 +637,7 @@ class CommandBlock(LineNavigable, Static):
         self.raw_stderr = raw_stderr
         self.return_code = return_code
         self.source_command = source_command or ""
+        self.label = ""  # метка буфера (`:name`), пусто — без метки
         self.collapsed = False
         self._truncated = False  # Флаг: вывод был обрезан
         self.pending = True  # True пока не пришёл результат из потока (run_command)
@@ -704,14 +708,15 @@ class CommandBlock(LineNavigable, Static):
         экранирования для копирования, навигации и `:w`.
         """
         safe = escape_display_markup if display else _identity
+        prefix = self._label_prefix(display)
         if self.collapsed:
             # Свернутый вид — только заголовок
             if self._simple_mode():
-                return f"▶ {safe(self.header)}\n"
+                return f"▶ {prefix}{safe(self.header)}\n"
             indicator = "[dim]▶[/dim]"
-            return f"{indicator} {safe(self.header)}\n"
+            return f"{indicator} {prefix}{safe(self.header)}\n"
 
-        parts = [safe(self.header)]
+        parts = [prefix + safe(self.header)]
 
         # Основной вывод (с обрезкой если нужно)
         if self.raw_stdout:
@@ -734,6 +739,29 @@ class CommandBlock(LineNavigable, Static):
                 parts.append(f"[bold yellow]Exit code: {self.return_code}[/bold yellow]")
 
         return "\n".join(parts) + "\n\n"
+
+    def _label_prefix(self, display: bool) -> str:
+        """Метка буфера (`:name`) перед шапкой блока.
+
+        `display=True` — с Rich-тегом и экранированными скобками (иначе Textual
+        примет `[buff]` за разметку); `display=False` — плоский `[buff] ` для
+        копирования, поиска и `:nav`.
+        """
+        if not self.label:
+            return ""
+        text = f"[{self.label}]"
+        if display:
+            return f"[bold cyan]{escape_display_markup(text)}[/bold cyan] "
+        return text + " "
+
+    def set_label(self, label: str) -> None:
+        """Проставить/снять метку и перерисовать блок с ней в шапке."""
+        self.label = label or ""
+        self.text_content = self._format_output()
+        try:
+            self.update(self._format_output(display=True))
+        except Exception:
+            pass
 
     def _nav_plain_text(self) -> str:
         return self._format_output()
@@ -1594,7 +1622,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.107"
+    VERSION = "v1.108"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1690,6 +1718,7 @@ class CommandRunner(App):
     CMD_ALIAS = "alias"
     CMD_LLM = "llm"
     CMD_CHT = "cht"
+    CMD_NAME = "name"
     CMD_GREP = "g"
     CMD_SEARCH_NEXT = "n"
     CMD_SEARCH_PREV = "N"
@@ -1779,6 +1808,9 @@ class CommandRunner(App):
         self.check_updates: bool = False
         self.db_file = self.FILE_DATABASE
         self.active_pipe_source: CommandBlock | None = None
+        # Метки буферов (`:name`): label -> CommandBlock. Только сессия, в память;
+        # даёт пайп из конкретного блока: `|@label cmd` (не перезапуская источник).
+        self._block_labels: dict[str, CommandBlock] = {}
         self._journal_block_cache: list[Static] | None = None
         self.simple_output_mode: bool = False
         # Line API-блоки журнала (render_line вместо одного большого Static).
@@ -3232,6 +3264,8 @@ class CommandRunner(App):
             for child in list(results_container.children):
                 child.remove()
             self._journal_block_cache = None
+            # Метки ссылаются на блоки — при очистке иначе держали бы их в памяти.
+            self._block_labels.clear()
 
             self.add_block(InfoBlock("All blocks cleared."))
         except Exception as e:
@@ -3736,6 +3770,12 @@ class CommandRunner(App):
         Проверка хвоста файла и append — одна блокировка (несколько экземпляров).
         """
         prefixes = (self.PREFIX_CMD, self.PREFIX_QUERY, self.PREFIX_BANG, self.PREFIX_DOUBLE_BANG, self.PREFIX_TAG, self.PREFIX_VAR)
+        # Явный источник пайпа (`|@label cmd` / `|@N cmd`) пишем полным вызовом
+        # `<источник> | cmd`: иначе строка невоспроизводима без буфера.
+        if command.startswith(self.PREFIX_PIPE):
+            resolved = self._labelled_pipe_history(command)
+            if resolved:
+                command = resolved
         # :llm / :cht <запрос> — вопросы и справки: сохраняем в историю как
         # «комментарий» (для ↑ и :h), но из подсказок они не появляются
         # (см. get_completion_candidates).
@@ -3887,6 +3927,8 @@ class CommandRunner(App):
             self._handle_llm_command(parts[1:])
         elif command == self.CMD_CHT:
             self._handle_cht_command(parts[1:])
+        elif command == self.CMD_NAME:
+            self._handle_name_command(parts[1:])
         elif command == self.CMD_GREP:
             self._journal_search(" ".join(parts[1:]))
         elif command == self.CMD_SEARCH_NEXT:
@@ -6345,24 +6387,163 @@ class CommandRunner(App):
     def handle_pipe_command(self, user_input: str) -> None:
         """
         Обработка пайпинга.
-        Использует активный (выделенный) блок или последний блок.
+
+        Формы:
+          | cmd            — stdin из сфокусированного (иначе последнего) блока
+          |@label cmd      — stdin из блока с меткой `:name label`
+          |@N cmd          — stdin из N-го блока назад (0 = последний)
+
+        Явный источник удобен для подбора awk/jq по большому выводу: команда-
+        источник не запускается заново. В историю пишется полный вызов
+        `<источник> | cmd`, чтобы ↑/`:h` были воспроизводимы без буфера.
         """
-        pipe_command = user_input[1:].strip()
+        raw = user_input[1:].strip()
+        source_token, pipe_command = self._split_pipe_source(raw)
         if not pipe_command:
             self.add_block(InfoBlock("Error: Pipe command cannot be empty."))
             return
 
-        source_block = self.active_pipe_source if self.active_pipe_source else self.query(CommandBlock).last()
+        if source_token is not None:
+            source_block = self._resolve_pipe_block(source_token)
+            if source_block is None:
+                self.add_block(InfoBlock(self._pipe_source_error(source_token)))
+                return
+        else:
+            source_block = self.active_pipe_source or self.query(CommandBlock).last()
 
         if source_block is None or not source_block.raw_stdout:
             self.add_block(InfoBlock("Error: No command output available to pipe from."))
             return
+        if getattr(source_block, "pending", False):
+            self.add_block(InfoBlock("Error: that block is still running; wait for it."))
+            return
 
         input_for_pipe = source_block.raw_stdout
-        if user_input not in self.session_history:
-            self.session_history.append(user_input)
+        history_line = self._labelled_pipe_history(user_input) or user_input
+        if history_line not in self.session_history:
+            self.session_history.append(history_line)
         self.session_history_pos = len(self.session_history)
         self.handle_normal_command(pipe_command, stdin_data=input_for_pipe, record_history=False)
+
+    def _split_pipe_source(self, raw: str) -> tuple[str | None, str]:
+        """Разобрать начало пайпа: `@<label|N> <cmd>` → (источник, команда).
+
+        `None` в источнике — явного не было (обычный `| cmd`).
+        """
+        if raw.startswith("@"):
+            parts = raw[1:].split(None, 1)
+            if parts:
+                return parts[0], (parts[1].strip() if len(parts) > 1 else "")
+            return "", ""
+        return None, raw
+
+    def _resolve_pipe_block(self, source: str) -> CommandBlock | None:
+        """Блок-источник по метке или индексу назад (`0` = последний)."""
+        if source.isdigit():
+            blocks = list(self.query(CommandBlock))
+            idx = len(blocks) - 1 - int(source)
+            return blocks[idx] if 0 <= idx < len(blocks) else None
+        return self._block_labels.get(source)
+
+    def _pipe_source_error(self, source: str) -> str:
+        """Понятная ошибка для несуществующего источника пайпа."""
+        if source.isdigit():
+            return f"Error: no block {source} back to pipe from."
+        labels = ", ".join(sorted(self._block_labels)) or "(none)"
+        return f"Error: no labelled block '{source}'. Labels: {labels}"
+
+    def _labelled_pipe_history(self, user_input: str) -> str | None:
+        """Для `|@<src> cmd` — полный вызов `<источник> | cmd` (иначе None)."""
+        raw = user_input[1:].strip()
+        source_token, pipe_command = self._split_pipe_source(raw)
+        if source_token is None or not pipe_command:
+            return None
+        block = self._resolve_pipe_block(source_token)
+        if block is None:
+            return None
+        origin = (block.source_command or block.header or "").strip()
+        if not origin:
+            return None
+        return f"{self._mask_secrets(origin)} | {pipe_command}"
+
+    def _handle_name_command(self, args: list[str]) -> None:
+        """
+        `:name` — метка буфера, чтобы пайпить из блока без перезапуска источника.
+
+        :name <label>   — пометить сфокусированный (иначе последний) блок
+        :name           — список меток
+        :name <label>-  — снять метку
+        :name -         — снять все метки
+        Использование: `|@<label> <команда>` (см. `:?`).
+        """
+        if not args:
+            self._list_block_labels()
+            return
+        arg = args[0]
+        if arg == "-":
+            count = len(self._block_labels)
+            for block in list(self._block_labels.values()):
+                block.set_label("")
+            self._block_labels.clear()
+            self.sub_title = f"Cleared {count} label(s)."
+            self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+            return
+        if arg.endswith("-"):
+            label = arg[:-1]
+            block = self._block_labels.pop(label, None)
+            if block is None:
+                self.add_block(InfoBlock(self._pipe_source_error(label)))
+                return
+            block.set_label("")
+            self.sub_title = f"Label '{label}' removed."
+            self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+            return
+        if len(args) > 1 or not RE_BLOCK_LABEL.match(arg):
+            self.add_block(InfoBlock(
+                "Usage: :name <label>  |  :name  |  :name <label>-  |  :name -\n"
+                "Label: letter/underscore first, then letters/digits/_/- (max 64).\n"
+                "Then pipe from it without re-running: `|@<label> <command>`."
+            ))
+            return
+        block = self._name_target_block()
+        if block is None:
+            self.add_block(InfoBlock("No finished command block to label."))
+            return
+        previous = self._block_labels.get(arg)
+        if previous is not None and previous is not block:
+            previous.set_label("")
+        block.set_label(arg)
+        self._block_labels[arg] = block
+        origin = (block.source_command or block.header or "").strip()
+        self.sub_title = f"Label '{arg}' -> {origin[:60]}"
+        self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+
+    def _name_target_block(self) -> CommandBlock | None:
+        """Сфокусированный завершённый блок, иначе последний завершённый."""
+        focused = self.focused
+        if isinstance(focused, CommandBlock) and not focused.pending:
+            return focused
+        source = getattr(self, "active_pipe_source", None)
+        if isinstance(source, CommandBlock) and not source.pending:
+            return source
+        blocks = [b for b in self.query(CommandBlock) if not b.pending]
+        return blocks[-1] if blocks else None
+
+    def _list_block_labels(self) -> None:
+        """`:name` без аргумента — список меток буферов."""
+        if not self._block_labels:
+            self.add_block(InfoBlock(
+                "No labels yet. `:name <label>` labels the focused/last block; "
+                "then `|@<label> <command>` pipes from it without re-running."
+            ))
+            return
+        lines = ["Labels (pipe from one with `|@<label> <command>`):"]
+        for label in sorted(self._block_labels):
+            block = self._block_labels[label]
+            origin = (block.source_command or block.header or "").strip()
+            count = block.raw_stdout.count("\n")
+            lines.append(f"  {label}  <-  {origin[:80]}  ({count} lines)")
+        self.add_block(InfoBlock("\n".join(lines)))
 
     def handle_tty_command(self, user_input: str) -> None:
         """

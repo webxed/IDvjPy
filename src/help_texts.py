@@ -162,7 +162,13 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                Then commands show as `<id> tag[tid]  full command`; Tab inserts `!tag[tid]`
                Compose pipes/saves: `#file !file[1] | !file[2]` (preview expands refs)
   !N         - Execute command by ID from last query
-  |<cmd>     - Pipe focused block output to command
+  |<cmd>     - Pipe focused (else last) block output to a command
+  |@<label> <cmd> - Pipe from the block labelled with `:name <label>`
+  |@N <cmd>  - Pipe from N blocks back (0 = last). The source is NOT re-run;
+               history keeps the full call `<source> | <cmd>` for ↑/:h.
+  :name [<label>|-] - Label the focused/last finished block (no arg: list;
+               `<label>-`: drop one; `-`: drop all). Then reuse its buffer
+               cheaply: `:name buff` … `|@buff awk '{...}'` (no re-run of cat/kubectl).
   $OUT       - On demand: last non-empty line of the focused (or last) command block.
                Not stored in .bashrc_term. Type $OUT alone to peek. `$OUT=` is rejected.
   $VAR=val   - Set environment variable
