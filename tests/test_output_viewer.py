@@ -5,6 +5,8 @@
 оптимизированная обрезка журнала по-прежнему оставляет хвост и считает скрытое.
 """
 
+from textual.widgets import Input
+
 from app import CommandRunner
 from output_viewer import OutputView, OutputViewerScreen
 from tests.conftest import last_info, submit, wait_command_done
@@ -139,6 +141,93 @@ async def test_log_masks_secret_hint(isolated_home):
         await submit(pilot, ":log")
         await pilot.pause()
         assert "secrets visible" in (app.screen.sub_title or "")
+
+
+async def test_log_viewer_search_jumps(isolated_home):
+    """`/` — поиск по тексту: Enter прыгает на совпадение, Esc — закрыть поиск."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await submit(pilot, "seq -f 'hit-%03g' 1 200")
+        await wait_command_done(app)
+        await submit(pilot, ":log")
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, OutputViewerScreen)
+        view = screen.query_one(OutputView)
+        search = screen.query_one("#output-search", Input)
+        assert not search.display
+
+        await pilot.press("slash")
+        await pilot.pause()
+        assert search.display and search.has_focus
+
+        search.value = "hit-150"
+        await pilot.press("enter")
+        await pilot.pause()
+        assert view.match_row is not None
+        assert view._lines[view.match_row] == "hit-150"
+        assert "line 150/200" in (screen.sub_title or "")
+
+        # Esc закрывает только поле поиска; экран живёт дальше.
+        await pilot.press("escape")
+        await pilot.pause()
+        assert isinstance(app.screen, OutputViewerScreen)
+        assert not search.display
+
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not isinstance(app.screen, OutputViewerScreen)
+
+
+async def test_log_viewer_search_next_and_prev(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await submit(pilot, "seq -f 'hit-%03g' 1 50")
+        await wait_command_done(app)
+        await submit(pilot, ":log")
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, OutputViewerScreen)
+        view = screen.query_one(OutputView)
+        search = screen.query_one("#output-search", Input)
+
+        await pilot.press("slash")
+        await pilot.pause()
+        search.value = "hit"
+        await pilot.press("enter")
+        await pilot.pause()
+        first = view.match_row
+        assert first is not None
+
+        await pilot.press("n")
+        await pilot.pause()
+        second = view.match_row
+        assert second is not None and second != first
+
+        await pilot.press("shift+n")
+        await pilot.pause()
+        assert view.match_row == first
+
+
+async def test_log_viewer_search_reports_no_match(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await submit(pilot, "seq 1 20")
+        await wait_command_done(app)
+        await submit(pilot, ":log")
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, OutputViewerScreen)
+        view = screen.query_one(OutputView)
+        search = screen.query_one("#output-search", Input)
+
+        await pilot.press("slash")
+        await pilot.pause()
+        search.value = "zzz-not-here"
+        await pilot.press("enter")
+        await pilot.pause()
+        assert view.match_row is None
+        assert "No match" in (screen.sub_title or "")
 
 
 async def test_truncate_keeps_tail_and_counts_hidden(isolated_home):

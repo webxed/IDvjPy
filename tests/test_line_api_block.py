@@ -16,6 +16,19 @@ def _enable_line_api(monkeypatch) -> None:
     monkeypatch.setenv("IDVJPY_LINE_BLOCKS", "1")
 
 
+def _first_text_bg(block: CommandLineBlock) -> str:
+    """Фон текстового сегмента после применения CSS (как в кадре)."""
+    from textual.geometry import Region
+
+    width, height = int(block.size.width), int(block.size.height)
+    for strip in block.render_lines(Region(0, 0, width, height)):
+        for segment in strip:
+            if segment.text.strip():
+                style = segment.style
+                return str(style.bgcolor) if style else ""
+    return ""
+
+
 async def test_line_api_block_used_when_enabled(isolated_home, monkeypatch):
     _enable_line_api(monkeypatch)
     app = CommandRunner()
@@ -115,3 +128,29 @@ async def test_line_api_block_collapse_restores(isolated_home, monkeypatch):
         await pilot.pause()
         assert not block.collapsed
         assert block.size.height == full_height
+
+
+async def test_line_api_block_repaints_on_focus(isolated_home, monkeypatch):
+    """Кэш Strip'ов должен учитывать фон виджета: при фокусе он меняется."""
+    _enable_line_api(monkeypatch)
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "echo focus-bg")
+        block = await wait_command_done(app)
+        assert isinstance(block, CommandLineBlock)
+
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not block.has_focus
+        unfocused_bg = _first_text_bg(block)
+
+        await pilot.press("tab")
+        await pilot.pause()
+        await pilot.pause()
+        assert app.focused is block
+        focused_bg = _first_text_bg(block)
+        assert focused_bg != unfocused_bg
+
+        await pilot.press("escape")
+        await pilot.pause()
+        assert _first_text_bg(block) == unfocused_bg

@@ -799,6 +799,7 @@ class CommandLineBlock(CommandBlock):
         # Кэш заполняется в _rebuild() после CommandBlock.__init__.
         self._src_markup = ""
         self._cache_width = -1
+        self._cache_key: Any = None
         self._strips: list[Strip] = []
         self._line_rows: list[tuple[int, int]] = []
         super().__init__(*args, **kwargs)
@@ -820,6 +821,7 @@ class CommandLineBlock(CommandBlock):
 
     def _invalidate(self) -> None:
         self._cache_width = -1
+        self._cache_key = None
         self._strips = []
         self._line_rows = []
 
@@ -830,14 +832,18 @@ class CommandLineBlock(CommandBlock):
         self.refresh(layout=layout)
 
     # -- Line API ----------------------------------------------------------
-    def _build(self, width: int) -> None:
-        """Разложить разметку на Strip'ы с переносом — один раз на ширину.
+    def _build(self, width: int, style: Any) -> None:
+        """Разложить разметку на Strip'ы с переносом — один раз на ширину/стиль.
 
         Каждая логическая строка рендерится отдельно: жёсткий перевод строки
         завершает абзац, поэтому перенос совпадает с рендером всего текста
         (проверено тестом ``test_line_api_block_height_matches_static``).
+
+        ``style`` (``visual_style`` виджета) входит в ключ кэша: он содержит
+        фон, который меняется при фокусе/теме.
         """
         self._cache_width = width
+        self._cache_key = (width, style.rich_style)
         self._strips = []
         self._line_rows = []
         if width <= 0:
@@ -849,7 +855,6 @@ class CommandLineBlock(CommandBlock):
             lines = Content.from_text(self._src_markup, markup=False).split(
                 "\n", allow_blank=True
             )
-        style = self.visual_style
         for line in lines:
             start = len(self._strips)
             try:
@@ -862,8 +867,13 @@ class CommandLineBlock(CommandBlock):
             self._line_rows.append((start, len(strips)))
 
     def _ensure_strips(self, width: int) -> None:
-        if width != self._cache_width:
-            self._build(width)
+        # Кэш зависит от ширины И от текущего стиля виджета: ``visual_style``
+        # включает фон, который меняется при фокусе/теме. Без этого после фокуса
+        # оставались старые Strip'ы с фоном «без фокуса» — чёрные поля вместо
+        # подсветки блока.
+        style = self.visual_style
+        if (width, style.rich_style) != self._cache_key:
+            self._build(width, style)
 
     def get_content_height(self, container: Any, viewport: Any, width: int) -> int:
         if not width:
@@ -1575,7 +1585,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.104"
+    VERSION = "v1.105"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -2328,6 +2338,10 @@ class CommandRunner(App):
     def on_key(self, event: events.Key) -> None:
         """Перехват клавиш для автофокуса на поле ввода."""
         self._bump_screensaver_idle()
+        # Модальный экран (JSON/Markdown/просмотр вывода) сам обрабатывает
+        # клавиши: не переводить фокус на поле ввода основного экрана.
+        if getattr(self.screen, "_modal", False):
+            return
         # Явная вставка из буфера для терминалов, где Shift+Insert ловится нестабильно.
         if event.key in ("shift+insert", "ctrl+v"):
             self.action_paste_clipboard()

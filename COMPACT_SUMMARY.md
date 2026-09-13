@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.104**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.105**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.51 (app v1.104) |
+| `test_cmd.md` | Manual plan v1.52 (app v1.105) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров, `--check`/`--dry-run`/`--set` |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
@@ -171,7 +171,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.104 |
+| `src/app.py` | TUI (`CommandRunner`), v1.105 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
@@ -205,6 +205,12 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.105
+
+- **Фикс подсветки Line-API-блока.** Кэш `Strip`'ов зависел только от ширины, а фон берётся из `visual_style`: после фокуса оставались старые полосы с фоном «без фокуса», и в начале строк (на пробелах) было чёрное поле. Теперь ключ кэша — `(ширина, visual_style.rich_style)`, фон обновляется при фокусе/теме. Тест — `tests/test_line_api_block.py::test_line_api_block_repaints_on_focus`.
+- **Поиск в просмотрщике вывода (F7 / `:log`).** `/` открывает поле, Enter — поиск вперёд, `n`/`N` — следующее/предыдущее совпадение (с заворотом, регистр не важен), Esc — закрыть поле. Совпадение подсвечивается. Модуль — `src/output_viewer.py`; тесты — `tests/test_output_viewer.py`.
+- **Модальные экраны больше не отдают клавиши фону:** `CommandRunner.on_key` выходит при активном `_modal`-экране, и фокус не улетает на поле ввода за модалкой.
 
 ## v1.104
 

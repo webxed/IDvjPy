@@ -58,8 +58,10 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 included) and copy it to the clipboard; `show` also prints it
                 (secrets become visible). N = blocks back (0 = last).
   :log [N]    - Full output of a block in a scrollable Line-API viewer (no 300-line
-                cap; arrows/PgUp/PgDn scroll, Esc or q closes). N = blocks back
-                (0 = focused/last). Shows the real raw output (like F3). Also F7.
+                cap; arrows/PgUp/PgDn scroll, Esc or q closes). Find with `/`;
+                Enter — search, n/N — next/prev match, Esc — close the find field.
+                N = blocks back (0 = focused/last). Shows the real raw output
+                (like F3). Also F7.
   :kill [all] - Stop the running background command (focused block or the last one;
                 `:kill all` stops every running command). SIGTERM, then SIGKILL.
   :watch <sec> <command> - Rerun <command> every <sec> seconds in one block
