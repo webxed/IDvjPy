@@ -20,9 +20,13 @@ import sys
 import tempfile
 import time
 
+from textual.widgets import Input
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+_SRC = os.path.join(ROOT, "src")
+for _path in (ROOT, _SRC):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
 
 async def measure(line_api: bool, lines: int, iterations: int) -> dict[str, float]:
@@ -42,7 +46,7 @@ async def measure(line_api: bool, lines: int, iterations: int) -> dict[str, floa
         app = CommandRunner()
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
-            inp = app.query_one(f"#{app.ID_INPUT}")
+            inp = app.query_one(f"#{app.ID_INPUT}", Input)
             inp.value = f"cat {path}"
             inp.cursor_position = len(inp.value)
             await pilot.pause()

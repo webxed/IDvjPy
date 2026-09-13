@@ -1,7 +1,8 @@
 {
-  "include": ["src", "tests", "docker"],
+  "include": ["src", "tests", "docker", "experiments"],
   "executionEnvironments": [
     { "root": "tests", "extraPaths": ["src", "."] },
+    { "root": "experiments", "extraPaths": ["src", "."] },
     { "root": "src" },
     { "root": "docker" },
     { "root": ".", "extraPaths": ["src"] }
