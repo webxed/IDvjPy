@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.105**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.106**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.52 (app v1.105) |
+| `test_cmd.md` | Manual plan v1.53 (app v1.106) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров, `--check`/`--dry-run`/`--set` |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
@@ -171,7 +171,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.105 |
+| `src/app.py` | TUI (`CommandRunner`), v1.106 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
@@ -205,6 +205,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.106
+
+- **`:cht <запрос>` — справки cheat.sh (cht.sh).** `:cht tar`, `:cht python read file` (пробелы → `+`), `:cht ~snapshot` (поиск), `:cht go/:learn` / `:list` (спецстраницы); свои опции через `?` (`Q` — без комментариев, `T` — без цветов, по умолчанию `?T`). Запрос уходит в фоновом потоке (urllib, прокси как в `:llm`/`:update`), ответ — обычный блок журнала (`$OUT`, `|`, F3, F7 с поиском). `cht.sh` отдаёт `text/plain` только «curl»-подобному User-Agent — UA задан как `curl`, ANSI-последовательности дополнительно вырезаются. Запросы пишутся в `history_*.txt` (↑, `:h`), но не в подсказки (как `:llm`). Модуль — `src/cheat_sh.py`; настройки `cheat_sh_url` / `cheat_sh_options`; тесты — `tests/test_cheat_sh.py`.
 
 ## v1.105
 

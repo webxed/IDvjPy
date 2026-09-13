@@ -95,6 +95,12 @@ try:
     import calc
     import database_v2 as database
     import ipcalc
+    from cheat_sh import (
+        DEFAULT_BASE_URL,
+        DEFAULT_OPTIONS,
+        CheatShError,
+        fetch_cheat_sheet,
+    )
     from clipboard import (
         copy_text_to_clipboards,
         paste_text_from_clipboards,
@@ -230,6 +236,9 @@ RE_BANG_PARTIAL = re.compile(
 RE_COLON_H_SEARCH = re.compile(r"^:h\s*/(.*)$")
 RE_HELP_KEEP_MARKUP = re.compile(r"(\[/?bold\])")
 RE_TAG_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# `:llm …` / `:cht …` — вопросы и справки: пишутся в history (для ↑/`:h`),
+# но в подсказках не предлагаются (это не команды для повтора).
+RE_HISTORY_ONLY_QUERY = re.compile(r"^:(?:llm|cht)\s+\S")
 TOKEN_SEPS = frozenset(" \t|&;")
 
 
@@ -1585,7 +1594,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.105"
+    VERSION = "v1.106"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1680,6 +1689,7 @@ class CommandRunner(App):
     CMD_KCTX = "kctx"
     CMD_ALIAS = "alias"
     CMD_LLM = "llm"
+    CMD_CHT = "cht"
     CMD_GREP = "g"
     CMD_SEARCH_NEXT = "n"
     CMD_SEARCH_PREV = "N"
@@ -1720,6 +1730,8 @@ class CommandRunner(App):
     KEY_SCREENSAVER_STARS = "screensaver_stars"
     KEY_K8S_COMPLETION = "k8s_completion"
     KEY_LINE_API_BLOCKS = "line_api_blocks"
+    KEY_CHEAT_SH_URL = "cheat_sh_url"
+    KEY_CHEAT_SH_OPTIONS = "cheat_sh_options"
     KEY_CLEAR_CLIP_AFTER_SECRET = "clear_clipboard_after_secret"
     FILE_LLM_PROVIDERS = "llm_providers.yml"
     FILE_KCTX = "kctx.json"  # Кластерный журнал kubectl-стека (:kctx, v1.57)
@@ -1772,6 +1784,9 @@ class CommandRunner(App):
         # Line API-блоки журнала (render_line вместо одного большого Static).
         # Включается line_api_blocks в settings.yml или IDVJPY_LINE_BLOCKS.
         self._line_api_blocks: bool = False
+        # cheat.sh (`:cht`): базовый URL и опции запроса (по умолчанию без цветов).
+        self.cheat_sh_url: str = DEFAULT_BASE_URL
+        self.cheat_sh_options: str = DEFAULT_OPTIONS
         # Словарь локальных переменных окружения (имеют приоритет над os.environ)
         self.local_env: dict[str, str] = {}
         # Имена секретных переменных ($$NAME=…): значения маскируются в UI
@@ -2331,7 +2346,7 @@ class CommandRunner(App):
         # Записи `:llm …` лежат в history_*.txt для ↑/`:h`, но в подсказках
         # не предлагаются (это вопросы, а не команды для повтора).
         for cmd in self.session_history:
-            if cmd.strip().startswith(prefix) and not re.match(r"^:llm\s+\S", cmd.strip()):
+            if cmd.strip().startswith(prefix) and not RE_HISTORY_ONLY_QUERY.match(cmd.strip()):
                 candidates.append(cmd.strip())
         return sorted(set(candidates))[:20]
 
@@ -2582,6 +2597,12 @@ class CommandRunner(App):
                     self.k8s_completion = bool(
                         settings.get(self.KEY_K8S_COMPLETION, False)
                     )
+                    self.cheat_sh_url = str(
+                        settings.get(self.KEY_CHEAT_SH_URL) or DEFAULT_BASE_URL
+                    ).strip() or DEFAULT_BASE_URL
+                    self.cheat_sh_options = str(
+                        settings.get(self.KEY_CHEAT_SH_OPTIONS, DEFAULT_OPTIONS)
+                    ).strip()
                     self._line_api_blocks = bool(
                         settings.get(self.KEY_LINE_API_BLOCKS, False)
                     )
@@ -3715,10 +3736,11 @@ class CommandRunner(App):
         Проверка хвоста файла и append — одна блокировка (несколько экземпляров).
         """
         prefixes = (self.PREFIX_CMD, self.PREFIX_QUERY, self.PREFIX_BANG, self.PREFIX_DOUBLE_BANG, self.PREFIX_TAG, self.PREFIX_VAR)
-        # :llm <сообщение> — запрос к LLM: сохраняем в историю как «комментарий»
-        # (для ↑ и :h), но из подсказок он не появляется (см. get_completion_candidates).
-        is_llm_question = bool(re.match(r"^:llm\s+\S", command or ""))
-        if command.startswith(prefixes) and not self._is_history_comment(command) and not is_llm_question:
+        # :llm / :cht <запрос> — вопросы и справки: сохраняем в историю как
+        # «комментарий» (для ↑ и :h), но из подсказок они не появляются
+        # (см. get_completion_candidates).
+        is_history_only_query = bool(RE_HISTORY_ONLY_QUERY.match(command or ""))
+        if command.startswith(prefixes) and not self._is_history_comment(command) and not is_history_only_query:
             return
         append_history_file_line(
             self.FILE_HISTORY,
@@ -3863,6 +3885,8 @@ class CommandRunner(App):
             self._handle_alias_command(parts[1:])
         elif command == self.CMD_LLM:
             self._handle_llm_command(parts[1:])
+        elif command == self.CMD_CHT:
+            self._handle_cht_command(parts[1:])
         elif command == self.CMD_GREP:
             self._journal_search(" ".join(parts[1:]))
         elif command == self.CMD_SEARCH_NEXT:
@@ -6939,6 +6963,68 @@ class CommandRunner(App):
             self.add_block(InfoBlock(f"Exported {len(rows)} shell function(s) to {path}"))
         except Exception as e:
             self.add_block(InfoBlock(f"Alias export error: {e}"))
+
+    def _handle_cht_command(self, args: list[str]) -> None:
+        """
+        `:cht <запрос>` — справка cheat.sh (cht.sh) в журнале.
+
+        :cht tar                 — шпаргалка по команде
+        :cht python read file    — вопрос по языку (пробелы → +)
+        :cht ~snapshot           — поиск по шпаргалкам (~, /r — рекурсивно)
+        :cht go/:learn           — спецстраницы (:list, :learn, :help)
+        :cht lua/table+keys?Q    — свои опции к запросу (?Q без комментариев)
+
+        URL/опции — `cheat_sh_url` / `cheat_sh_options` в settings.yml.
+        Вывод — обычный блок: работают $OUT, |, F3, F7, поиск.
+        """
+        query = " ".join(args).strip()
+        if not query:
+            self.add_block(
+                InfoBlock(
+                    "Usage: :cht <query>\n"
+                    "  :cht tar                 command cheat sheet\n"
+                    "  :cht python read file    language question (spaces → +)\n"
+                    "  :cht ~snapshot           search cheat sheets\n"
+                    "  :cht go/:learn           special pages (:list, :learn, :help)\n"
+                    f"  Base URL: {self.cheat_sh_url}  ·  options: ?{self.cheat_sh_options or '(none)'}"
+                )
+            )
+            return
+        now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        shown = self._mask_secrets(query)
+        header = f"{now} ({os.getcwd()}) $ :cht {shown}"
+        block = self._make_command_block(
+            header=header,
+            raw_stdout=f"[cht.sh: {shown}…]",
+            raw_stderr="",
+            return_code=0,
+            source_command=f":cht {query}",
+        )
+        block.update(block._format_output(display=True))
+        self.add_block(block)
+        threading.Thread(
+            target=self._cht_worker,
+            args=(block, query),
+            daemon=True,
+            name="cht-sh",
+        ).start()
+
+    def _cht_worker(self, block: CommandBlock, query: str) -> None:
+        """Фоновый поток: запрос к cheat.sh не должен блокировать UI."""
+        env = {**os.environ, **self.local_env}
+        try:
+            answer = fetch_cheat_sheet(
+                query,
+                base_url=self.cheat_sh_url,
+                options=self.cheat_sh_options,
+                env=env,
+            )
+            out, err, code = answer, "", 0
+        except CheatShError as e:
+            out, err, code = "", str(e), 1
+        except Exception as e:  # не ронять поток из-за неожиданного
+            out, err, code = "", f"cheat.sh error: {e}", 1
+        self.call_from_thread(self._on_command_finished, block, out, err, code)
 
     def _handle_llm_command(self, args: list[str]) -> None:
         """

@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.105) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.106) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.105` → `v1.106`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.106` → `v1.107`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -79,6 +79,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/k8s_complete.py`**: live-cluster name completion for `kubectl get …` (gated by `k8s_completion: true`)
 - **`src/llm_client.py`**: `:llm` calls to LLM providers described in `llm_providers.yml` (env-only secrets, urllib, background thread); `expand_file_refs` turns `@file` into inlined text; `history_turns` keeps the last N pairs in memory (`%HISTORY%` in custom bodies)
 - **`src/llm_context.py`**: app context for LLMs — prefix cheat-sheet plus a budgeted digest of the live tag library (`tag`/`tid`/`command`/`comment`, task-relevant tags first). Powers `:llm ask <task>` (always) and the `app_context: true|N` provider key (opt-in for plain `:llm`); `extract_refs` filters answers down to refs that really exist
+- **`src/cheat_sh.py`**: `:cht <query>` — cheat.sh (cht.sh) cheat sheets (query → URL with `+`, ANSI stripping, proxy-aware urllib fetch in a background thread). The service returns `text/plain` only to a curl-like User-Agent; settings `cheat_sh_url` / `cheat_sh_options`
 - **`src/gui_open.py`**: `:fm` / `:term` — detach a file manager or system terminal; `open_terminal_command` / `build_terminal_exec_argv` run a command inside a terminal (used by `:new` to launch another app window; Linux / macOS / Windows; `$FILEMAN` / `$TERMINAL` override)
 - **`src/editor_open.py`**: `:ed` — external editor for a file, `$OUT` or `$BLOCK` (settings `editor:` → `$VISUAL`/`$EDITOR` → system list; runs in a real TTY via `_run_in_tty`; temp copies for block output)
 - **`src/screensaver.py`**: idle starfield (`:screensaver`); flying live clock/date; full-width green library ticker; bottom-left command-help typewriter and bottom-right load/RAM (1s `/proc`; may overlap when the window is narrow); `screensaver_idle` seconds, `0` = off; `screensaver_stars: false` hides flying dust/tokens
@@ -107,7 +108,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no exact tag) = substring search over command text + comments. Click tag in `??` inserts `!tag ` at the cursor (does not replace the line, does not run). |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble refs into the input line |
-| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:fm`, `:term`, `:env`, `:session`, `:new`, `:send`, `:send!`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:cmd`, `:log`, `:/`, `:n`, `:N`, `:export`, `:import`, `:md`, `:playbook`, `:update`, `:kill`, `:watch`, `:mv`, `:stats`, `:diff`, `:o`, `:kctx`, `:alias`, `:llm`, `:ed`, `:theme`) |
+| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:fm`, `:term`, `:env`, `:session`, `:new`, `:send`, `:send!`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:cmd`, `:log`, `:/`, `:n`, `:N`, `:export`, `:import`, `:md`, `:playbook`, `:update`, `:kill`, `:watch`, `:mv`, `:stats`, `:diff`, `:o`, `:kctx`, `:alias`, `:llm`, `:cht`, `:ed`, `:theme`) |
 | `\| cmd` | Pipe stdout from the focused block, add to history |
 | `$OUT` | On demand: last line of focused/last block (not stored in `.bashrc_term`) |
 | `$VAR=val` | Set env in `.bashrc_term_<instance>` and the current session. `:env` re-reads the files. |
@@ -164,5 +165,6 @@ Edit `settings.yml`:
 - `check_updates`: `true` (default) — on start, compare `VERSION` with GitHub main. `:update` always checks. Tests set this to `false`. Proxy 407: `$PROXY_USER` / `$PROXY_PASS` in `.bashrc_term` (and `HTTPS_PROXY`).
 - `k8s_completion`: `false` (default) — for `kubectl get <res> <Tab>` pull live resource names from the cluster (short `kubectl get <resource> -o name` timeout; soft fallback when kubectl/cluster is unavailable)
 - `llm_providers.yml` (cwd): LLM providers for `:llm` — see `src/llm_providers.example.yml`. Keys come from the environment only (`$VAR` refs in headers/body)
+- `cheat_sh_url` (default `https://cht.sh`) / `cheat_sh_options` (default `T` = no ANSI; add `Q` for no comments): base URL and query options for `:cht`
 - `screensaver_idle`: seconds of no keys/clicks/scroll/mouse-move before the DevOps starfield (default 120). `0` disables. Tests set this to `0`. `:screensaver` starts it now; `:screensaver 0` / `:screensaver 120` change idle for this session.
 - `screensaver_stars`: `true` (default) — flying dust/tokens. `false` — black canvas; clock/date, library ticker, and load/mem stay.

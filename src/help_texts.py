@@ -102,6 +102,12 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 default one (`default:` in llm_providers.yml).
                 Same context for a plain `:llm` with provider key app_context:
                 true|N (N = char budget; absent/false = off).
+  :cht <query>  - cheat.sh (cht.sh) cheat sheets in the journal: `:cht tar`,
+                `:cht python read file` (spaces → +), `:cht ~snapshot` (search),
+                `:cht go/:learn` / `:list` (special pages). Options after `?`:
+                `Q` no comments, `T` no colors (default `?T`). Base URL and options —
+                `cheat_sh_url` / `cheat_sh_options` in settings.yml. The output is a
+                normal block ($OUT, |, F3, F7, search).
   :o [N]        - Last N finished command outputs of this session (default 5)
   :o /text      - grep the stored outputs (stdout/stderr); survives :c
   :o clear      - Forget the stored outputs (memory only, not the DB)

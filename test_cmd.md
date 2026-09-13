@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.105
+# План тестирования IDvjPy_term v1.106
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1060,7 +1060,26 @@ seq 1 400
 
 ---
 
-**Версия документа**: v1.52  
-**Версия приложения**: v1.105
+## Секция 35: Справки cheat.sh (`:cht`)
+
+Нужна сеть (или прокси; при 407 — `$PROXY_USER`/`$PROXY_PASS`).
+
+```
+:cht
+:cht tar
+:cht python read file
+:cht go/:learn
+:cht ~snapshot
+:cht tar?Q
+```
+
+**Ожидание:** `:cht` без аргумента — `Usage: :cht <query>` с текущим URL и опциями. `:cht tar` — блок `$ :cht tar` с текстом шпаргалки (без ANSI). `:cht python read file` — вопрос по языку (пробелы → `+`). `:cht go/:learn` — спецстраница. `:cht tar?Q` — без комментариев. Вывод — обычный блок: работают `$OUT`, `|`, F3, F7 (там же поиск `/`), `:/`. Запрос пишется в `history_*.txt` (повтор по ↑, `:h`), но **не** появляется в подсказках. Нет сети — блок с `Network error ...` и код 1; пустой ответ — `Nothing found for '…'`.
+
+Автотест: `tests/test_cheat_sh.py`.
+
+---
+
+**Версия документа**: v1.53  
+**Версия приложения**: v1.106
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11
