@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.103
+# План тестирования IDvjPy_term v1.104
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1060,7 +1060,7 @@ seq 1 400
 
 ---
 
-**Версия документа**: v1.50  
-**Версия приложения**: v1.103
+**Версия документа**: v1.51  
+**Версия приложения**: v1.104
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11

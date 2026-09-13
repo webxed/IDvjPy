@@ -344,28 +344,35 @@ async def test_bundled_all_plays(isolated_home):
     scenario["type_delay"] = 0
     scenario["pause"] = 0
     app = CommandRunner(demo=scenario, demo_speed=25)
+    # Тур делает `:c` (чистка журнала), поэтому опрос DOM терял короткоживущий
+    # блок между двумя `pilot.pause()`. Запоминаем все созданные блоки по
+    # ссылке: их `raw_stdout`/`text_content` к концу прогона актуальны, даже
+    # если блок уже удалён из журнала.
+    created: list = []
+    original_add_block = app.add_block
+
+    def record_add_block(block, **kwargs):
+        created.append(block)
+        return original_add_block(block, **kwargs)
+
+    app.add_block = record_add_block  # type: ignore[method-assign]
     async with app.run_test(size=(120, 40)) as pilot:
         deadline = time.monotonic() + 120
-        seen: list[str] = []
-        seen_info: list[str] = []
-        seen_headers: list[str] = []
         while app._demo_active and time.monotonic() < deadline:
-            seen.extend(b.raw_stdout for b in app.query(CommandBlock))
-            seen_info.extend(b.text_content for b in app.query(InfoBlock))
-            seen_headers.extend(b.header for b in app.query(CommandBlock))
             await pilot.pause()
         # `:llm` отвечает в фоновом потоке — дожидаемся ответа заглушки.
         llm_deadline = time.monotonic() + 8
         while time.monotonic() < llm_deadline and any(
-            b.raw_stdout.startswith("[Consulting") for b in app.query(CommandBlock)
+            b.raw_stdout.startswith("[Consulting")
+            for b in created
+            if isinstance(b, CommandBlock)
         ):
             await pilot.pause()
-        seen.extend(b.raw_stdout for b in app.query(CommandBlock))
-        seen_info.extend(b.text_content for b in app.query(InfoBlock))
-        seen_headers.extend(b.header for b in app.query(CommandBlock))
         assert app._demo_active is False
         assert "Demo error" not in (app.sub_title or "")
-        # `:c` в туре чистит журнал — поэтому снимки stdout собираются по ходу.
+        seen = [b.raw_stdout for b in created if isinstance(b, CommandBlock)]
+        seen_info = [b.text_content for b in created if isinstance(b, InfoBlock)]
+        seen_headers = [b.header for b in created if isinstance(b, CommandBlock)]
         stdout = " ".join(seen)
         assert "= 3072" in stdout          # calc: 1024*3
         assert "0.6Gi" in stdout           # calc: единицы данных
