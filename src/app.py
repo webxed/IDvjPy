@@ -1624,7 +1624,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.110"
+    VERSION = "v1.111"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1760,10 +1760,28 @@ class CommandRunner(App):
     KEY_SCREENSAVER_IDLE = "screensaver_idle"
     KEY_SCREENSAVER_STARS = "screensaver_stars"
     KEY_K8S_COMPLETION = "k8s_completion"
+    KEY_FILE_COMPLETION = "file_completion"
     KEY_LINE_API_BLOCKS = "line_api_blocks"
     KEY_CHEAT_SH_URL = "cheat_sh_url"
     KEY_CHEAT_SH_OPTIONS = "cheat_sh_options"
     KEY_CLEAR_CLIP_AFTER_SECRET = "clear_clipboard_after_secret"
+    # `file_completion` — когда подсказывать файлы/каталоги:
+    #   auto  — явные пути + голое имя файла у команд ниже (иначе `kubectl get po`
+    #           и `docker co` забьют подсказки мусором из cwd);
+    #   paths — только явные пути (`./`, `/`, `~/`) и cd/pushd;
+    #   off   — выключено.
+    FILE_COMPLETION_MODES = ("auto", "paths", "off")
+    # Команды, у которых второй токен с большой вероятностью — имя файла.
+    FILE_ARG_COMMANDS = frozenset((
+        "cat", "bat", "less", "more", "head", "tail",
+        "vim", "vi", "nano", "emacs", "code", "micro", "subl",
+        "grep", "egrep", "fgrep", "rg", "ag",
+        "awk", "sed", "sort", "uniq", "cut", "tr", "tee", "xargs",
+        "find", "ls", "tree", "du", "stat", "file", "wc", "diff", "patch",
+        "cp", "mv", "rm", "mkdir", "rmdir", "ln", "chmod", "chown", "touch",
+        "tar", "gzip", "gunzip", "zip", "unzip", "rsync", "scp",
+        "jq", "yq", "python", "python3", "node", "sh", "bash", "source",
+    ))
     FILE_LLM_PROVIDERS = "llm_providers.yml"
     FILE_KCTX = "kctx.json"  # Кластерный журнал kubectl-стека (:kctx, v1.57)
     DEFAULT_THEME = "textual-dark"
@@ -1843,6 +1861,8 @@ class CommandRunner(App):
         self.screensaver_idle: float = 0
         self.screensaver_stars: bool = True
         self.k8s_completion: bool = False
+        # Файловые подсказки: auto / paths / off (settings.yml: file_completion).
+        self.file_completion: str = "auto"
         # Очищать буфер обмена после вставки значения в `$$NAME=…`
         # (settings.yml: clear_clipboard_after_secret).
         self.clear_clipboard_after_secret: bool = False
@@ -1889,9 +1909,18 @@ class CommandRunner(App):
     def _is_path_context(self, text: str) -> bool:
         """
         Path-контекст: последний токен похож на путь, либо аргумент cd/pushd.
-        Не любое «два слова»: иначе `cat file` + Enter из истории даёт `cat cat file`.
+        Управляется `file_completion` (settings.yml): `auto` (по умолчанию),
+        `paths`, `off`.
+
+        `auto` дополнительно считает путём голое слово после команд, которые
+        работают с файлами (FILE_ARG_COMMANDS) — `cat te`. Для подкомандных CLI
+        (`kubectl get po`, `docker co`, `git ch`) файлы не листятся: иначе
+        подсказки забиваются содержимым cwd.
+        `paths` — только явные пути и cd/pushd (голое слово файлом не считается).
         `:h /…` и `:o /…` — поиск по истории, не листинг `/`.
         """
+        if self.file_completion == "off":
+            return False
         stripped = text.rstrip()
         if not stripped:
             return False
@@ -1908,9 +1937,9 @@ class CommandRunner(App):
 
         if len(parts) >= 2 and parts[0] in ("cd", "pushd"):
             return True
-        # Относительное имя файла после команды: `cat te` → test.json
-        if len(parts) >= 2 and token and not token.startswith("-"):
-            return True
+        # Голое имя файла после команды — только в `auto` и только у FILE_ARG_COMMANDS.
+        if self.file_completion == "auto" and len(parts) >= 2 and token and not token.startswith("-"):
+            return parts[0] in self.FILE_ARG_COMMANDS
         return False
 
     def _get_file_completion_candidates(self, text: str) -> list[str]:
@@ -2632,6 +2661,12 @@ class CommandRunner(App):
                     )
                     self.k8s_completion = bool(
                         settings.get(self.KEY_K8S_COMPLETION, False)
+                    )
+                    mode = str(
+                        settings.get(self.KEY_FILE_COMPLETION, "auto")
+                    ).strip().lower()
+                    self.file_completion = (
+                        mode if mode in self.FILE_COMPLETION_MODES else "auto"
                     )
                     self.cheat_sh_url = str(
                         settings.get(self.KEY_CHEAT_SH_URL) or DEFAULT_BASE_URL

@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.110 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.111 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -40,6 +40,7 @@ IDvjPy — терминальное приложение (TUI) на Python (Text
 - Сравнение выводов: `:diff` — unified diff сфокусированного блока с предыдущим
 - История вывода сессии: `:o [N]`, `:o /текст`, `:o clear` — grep по прошлым выводам после `:c`
 - k8s автодополнение: `kubectl get pod <Tab>` — имена из кластера (`k8s_completion: true`)
+- Файловые подсказки — `file_completion: auto|paths|off`: по умолчанию явные пути (`./`, `/`, `~/`) и имена файлов после `cat`/`vim`/`grep`/…, но без мусора из cwd при наборе `kubectl`/`docker`/`git` (`paths` — только явные пути, `off` — выкл.)
 - UX: `:r N` — команда блока N назад; `:cmd [N] [show]` — команда блока с подставленными значениями (секреты включены) в буфер; `:send <сессия|*> <команда>` — переслать команду в другое окно (вставить во ввод; `:send!` — выполнить сразу); счётчик `N running` в заголовке; `:alias <tag>` — команды в bash-функции
 - LLM из TUI: `:llm [провайдер] сообщение` (без имени — `default:`; `$OUT`/`$BLOCK` вставляют вывод блока; `@файл` вкладывает текст файла (UTF-8, ≤200 KB; можно несколько); контекст беседы — `history_turns: N` у провайдера (`:llm reset [<провайдер>|*]`); запросы пишутся в `history_*.txt`, но не в подсказки)
 - cheat.sh из TUI: `:cht <запрос>` — шпаргалки [cht.sh](https://github.com/chubin/cheat.sh) в журнале (команды, вопросы по языкам, поиск `~`), без ANSI; вывод — обычный блок (`$OUT`, `|`, F3, F7, поиск)
@@ -376,6 +377,7 @@ check_updates: true          # старт: сверка VERSION с GitHub main; 
 screensaver_idle: 120        # простой (клавиши/клик/скролл/мышь) → starfield; 0 = выкл. :screensaver — сразу
 screensaver_stars: true      # летающие звёзды; false — чёрный холст (часы/лента/load остаются)
 k8s_completion: false        # имена k8s-ресурсов из кластера в подсказках (`kubectl get pod <Tab>`)
+file_completion: auto        # файловые подсказки: auto | paths | off (см. ниже)
 line_api_blocks: true        # блоки журнала на Textual Line API (render_line); false — прежний Static
 clear_clipboard_after_secret: false  # вставка значения в `$$NAME=…` очищает CLIPBOARD/PRIMARY
 editor: nano                 # `:ed`; можно с аргументами (code --wait); пусто → $VISUAL/$EDITOR

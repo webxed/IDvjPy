@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.110
+# План тестирования IDvjPy_term v1.111
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1099,7 +1099,23 @@ F8                     # диалог метки: пусто — снять, Esc
 
 ---
 
-**Версия документа**: v1.55
-**Версия приложения**: v1.110
+## Секция 37: Файловые подсказки (`file_completion`)
+
+```
+touch podfile.txt project.log
+cat po
+kubectl get po
+cat ./po
+cd po
+```
+
+**Ожидание:** при `file_completion: auto` (по умолчанию) `cat po` показывает файлы (`podfile.txt`), а `kubectl get po` — **не** листит cwd (нет мусора от `kubectl`/`docker`/`git`). Явные пути (`./po`, `/…`, `~/…`) и `cd`/`pushd` работают во всех режимах. `file_completion: paths` — только явные пути и `cd`/`pushd` (голое `cat po` — без файлов). `file_completion: off` — файловых подсказок нет. Неизвестное значение — как `auto`.
+
+Автотест: `tests/test_file_completion.py`.
+
+---
+
+**Версия документа**: v1.53
+**Версия приложения**: v1.111
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11

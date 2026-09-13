@@ -213,6 +213,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                In line-cursor mode Ctrl+V appends the current line instead
   Ctrl+D     - Clear the entire input line
   (k8s) kubectl get <res> <Tab> - live cluster resource names (k8s_completion: true)
+  (paths) ./ | / | ~/ <Tab> - file/dir hints; bare names only after file-taking
+               commands (cat/vim/grep/…) — file_completion: auto | paths | off
   (JSON) Enter - Insert `jq 'path'` into input; also sets $JSON
 
 [bold]Line-cursor mode[/bold]
