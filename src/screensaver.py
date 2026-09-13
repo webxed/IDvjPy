@@ -86,6 +86,7 @@ COMMAND_HELP_LINES = (
     ":screensaver  — starfield now (idle: screensaver_idle; stars: screensaver_stars)",
     ":r [N]  — block command into the input (N = how far back)",
     ":cmd [N] [show]  — block command with current $VAR/secrets to clipboard",
+    ":log [N]  — full block output in a Line-API viewer (no 300-line cap)",
     ":kill [all]  — stop running background commands (SIGTERM group)",
     ":watch N cmd  — rerun the command every N seconds in one block",
     ":stats  — runs per tag, top commands, never-run",

@@ -1043,6 +1043,23 @@ cat history_default.txt
 
 ---
 
+---
+
+## Секция 34: Полный вывод (`:log`, F7)
+
+```
+seq 1 400
+:log
+:log 1
+:log 999
+```
+
+**Ожидание:** после `seq 1 400` журнал показывает последние 300 строк с пометкой `100 lines truncated ... F7 views full`. `:log` (или `F7`) открывает полноэкранный **Line-API** просмотрщик со **всеми** 400 строками (в подзаголовке `400 lines · … chars`); стрелки/PgUp/PgDn прокручивают, Esc/q закрывают. `:log 1` — предыдущий блок; `:log 999` — `is too far back`. Пустой вывод — `Output is empty.`; нет блоков — `No command block to view.`
+
+Автотест: `tests/test_output_viewer.py`.
+
+---
+
 **Версия документа**: v1.49  
 **Версия приложения**: v1.102
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
