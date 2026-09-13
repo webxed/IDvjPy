@@ -95,6 +95,7 @@ try:
     import calc
     import database_v2 as database
     import ipcalc
+    from block_label import BlockLabelScreen
     from cheat_sh import (
         DEFAULT_BASE_URL,
         DEFAULT_OPTIONS,
@@ -1607,6 +1608,7 @@ class CommandRunner(App):
         ("f5", "open_json_viewer", "JSON Viewer"),
         ("f6", "toggle_simple_output", "Simple output"),
         ("f7", "open_output_viewer", "Full output"),
+        ("f8", "name_block", "Name block"),
         Binding("d", "toggle_dark", "Toggle dark mode", show=False),
         Binding("up", "history_prev", "Previous command", priority=False, show=False),
         Binding("down", "history_next", "Next command", priority=False, show=False),
@@ -1622,7 +1624,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.109"
+    VERSION = "v1.110"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1811,6 +1813,8 @@ class CommandRunner(App):
         # Метки буферов (`:name`): label -> CommandBlock. Только сессия, в память;
         # даёт пайп из конкретного блока: `|@label cmd` (не перезапуская источник).
         self._block_labels: dict[str, CommandBlock] = {}
+        # Блок, выбранный для метки в диалоге F8 (между push_screen и callback).
+        self._label_target: CommandBlock | None = None
         self._journal_block_cache: list[Static] | None = None
         self.simple_output_mode: bool = False
         # Line API-блоки журнала (render_line вместо одного большого Static).
@@ -6481,22 +6485,11 @@ class CommandRunner(App):
             return
         arg = args[0]
         if arg == "-":
-            count = len(self._block_labels)
-            for block in list(self._block_labels.values()):
-                block.set_label("")
-            self._block_labels.clear()
-            self.sub_title = f"Cleared {count} label(s)."
-            self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+            self._clear_block_labels()
             return
         if arg.endswith("-"):
-            label = arg[:-1]
-            block = self._block_labels.pop(label, None)
-            if block is None:
-                self.add_block(InfoBlock(self._pipe_source_error(label)))
-                return
-            block.set_label("")
-            self.sub_title = f"Label '{label}' removed."
-            self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+            if not self._remove_block_label_by_name(arg[:-1]):
+                self.add_block(InfoBlock(self._pipe_source_error(arg[:-1])))
             return
         if len(args) > 1 or not RE_BLOCK_LABEL.match(arg):
             self.add_block(InfoBlock(
@@ -6509,13 +6502,81 @@ class CommandRunner(App):
         if block is None:
             self.add_block(InfoBlock("No finished command block to label."))
             return
-        previous = self._block_labels.get(arg)
+        self._assign_block_label(block, arg)
+
+    def action_name_block(self) -> None:
+        """F8 — диалог ввода метки для сфокусированного/последнего блока."""
+        block = self._name_target_block()
+        if block is None:
+            self.add_block(InfoBlock("No finished command block to label."))
+            self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+            return
+        self._label_target = block
+        origin = (block.source_command or block.header or "").strip()
+        hint = f"Block: {origin[:70]}  ({block.raw_stdout.count(chr(10))} lines)"
+        self.push_screen(
+            BlockLabelScreen(initial=block.label or "", block_hint=hint),
+            self._on_label_result,
+        )
+
+    def _on_label_result(self, value: str | None) -> None:
+        """Callback диалога F8: сохранить/снять метку или отменить."""
+        block = self._label_target
+        self._label_target = None
+        if value is None or block is None:
+            return
+        label = value.strip()
+        if not label:
+            self._remove_block_label(block)
+            return
+        if not RE_BLOCK_LABEL.match(label):
+            self.add_block(InfoBlock(
+                "Invalid label: letter/underscore first, then letters/digits/_/- (max 64)."
+            ))
+            self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+            return
+        self._assign_block_label(block, label)
+
+    def _assign_block_label(self, block: CommandBlock, label: str) -> None:
+        """Пометить блок; одноимённая метка другого блока снимается."""
+        previous = self._block_labels.get(label)
         if previous is not None and previous is not block:
             previous.set_label("")
-        block.set_label(arg)
-        self._block_labels[arg] = block
+        block.set_label(label)
+        self._block_labels[label] = block
         origin = (block.source_command or block.header or "").strip()
-        self.sub_title = f"Label '{arg}' -> {origin[:60]}"
+        self.sub_title = f"Label '{label}' -> {origin[:60]}"
+        self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+
+    def _remove_block_label(self, block: CommandBlock) -> None:
+        """Снять метку с конкретного блока (пустой ввод в диалоге F8)."""
+        label = block.label
+        if not label:
+            self.sub_title = "This block has no label."
+            self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+            return
+        self._block_labels.pop(label, None)
+        block.set_label("")
+        self.sub_title = f"Label '{label}' removed."
+        self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+
+    def _remove_block_label_by_name(self, label: str) -> bool:
+        """Снять метку по имени; False — метки не было."""
+        block = self._block_labels.pop(label, None)
+        if block is None:
+            return False
+        block.set_label("")
+        self.sub_title = f"Label '{label}' removed."
+        self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+        return True
+
+    def _clear_block_labels(self) -> None:
+        """Снять все метки (`:name -`)."""
+        count = len(self._block_labels)
+        for block in list(self._block_labels.values()):
+            block.set_label("")
+        self._block_labels.clear()
+        self.sub_title = f"Cleared {count} label(s)."
         self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
 
     def _name_target_block(self) -> CommandBlock | None:

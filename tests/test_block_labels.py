@@ -5,7 +5,10 @@
 """
 from __future__ import annotations
 
+from textual.widgets import Input
+
 from app import CommandRunner
+from block_label import BlockLabelScreen
 from tests.conftest import last_info, submit, wait_command_done
 
 
@@ -138,3 +141,82 @@ async def test_clear_blocks_drops_labels(isolated_home):
         await submit(pilot, ":c")
         await pilot.pause()
         assert app._block_labels == {}
+
+
+async def test_f8_dialog_sets_label_and_pipe_works(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await submit(pilot, "printf 'alpha\\nbeta\\n'")
+        block = await wait_command_done(app)
+        await pilot.press("f8")
+        await pilot.pause()
+        assert isinstance(app.screen, BlockLabelScreen)
+        field = app.screen.query_one("#label-input", Input)
+        field.value = "buff"
+        await pilot.press("enter")
+        await pilot.pause()
+        assert not isinstance(app.screen, BlockLabelScreen)
+        assert app._block_labels.get("buff") is block
+        assert block.label == "buff"
+
+        # Метка, поставленная диалогом, работает в пайпе.
+        await submit(pilot, "|@buff grep beta")
+        piped = await wait_command_done(app)
+        assert piped.raw_stdout.strip() == "beta"
+
+
+async def test_f8_dialog_escape_cancels(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await submit(pilot, "echo hi")
+        block = await wait_command_done(app)
+        await pilot.press("f8")
+        await pilot.pause()
+        assert isinstance(app.screen, BlockLabelScreen)
+        app.screen.query_one("#label-input", Input).value = "tmp"
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not isinstance(app.screen, BlockLabelScreen)
+        assert block.label == ""
+        assert app._block_labels == {}
+
+
+async def test_f8_dialog_prefills_and_empty_removes(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await submit(pilot, "echo hi")
+        block = await wait_command_done(app)
+        await submit(pilot, ":name buff")
+        await pilot.pause()
+        assert block.label == "buff"
+
+        await pilot.press("f8")
+        await pilot.pause()
+        field = app.screen.query_one("#label-input", Input)
+        assert field.value == "buff"  # предзаполнено текущей меткой
+        field.value = ""
+        await pilot.press("enter")
+        await pilot.pause()
+        assert block.label == ""
+        assert "buff" not in app._block_labels
+
+
+async def test_f8_dialog_invalid_label_reports(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await submit(pilot, "echo hi")
+        await wait_command_done(app)
+        await pilot.press("f8")
+        await pilot.pause()
+        app.screen.query_one("#label-input", Input).value = "3"
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app._block_labels == {}
+        assert "Invalid label" in last_info(app).text_content
+
+
+async def test_f8_dialog_without_block_reports(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.press("f8")
+        assert "No finished command block" in last_info(app).text_content

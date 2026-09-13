@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.109**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.110**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.54 (app v1.109) |
+| `test_cmd.md` | Manual plan v1.55 (app v1.110) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров, `--check`/`--dry-run`/`--set` |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
@@ -171,7 +171,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.109 |
+| `src/app.py` | TUI (`CommandRunner`), v1.110 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
@@ -205,6 +205,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.110
+
+- **F8 — диалог метки блока.** `src/block_label.py` (`BlockLabelScreen`, modal): поле предзаполнено текущей меткой (`select_all`), Enter — сохранить, пустое значение — снять метку, Esc — отмена; невалидная метка — явное сообщение. Метка работает как `:name` (`|@label <command>` без перезапуска источника). Логика меток вынесена в хелперы `_assign_block_label` / `_remove_block_label` / `_remove_block_label_by_name` / `_clear_block_labels` и используется и `:name`, и диалогом. Биндинг `F8 → name_block`; целевой блок без команды — `No finished command block to label.`
 
 ## v1.109
 

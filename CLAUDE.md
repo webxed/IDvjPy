@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.109) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.110) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.109` → `v1.110`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.110` → `v1.111`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -74,6 +74,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/shell_env.py`**: `.bashrc_term` vars, `~/.bashrc` aliases, `$1` substitution
 - **`src/json_viewer.py`**: JSON tree modal
 - **`src/output_viewer.py`**: `:log` / F7 — full block output in a Line-API `ScrollView` (lazy `render_line`, no 300-line cap; arrows/PgUp/PgDn scroll)
+- **`src/block_label.py`**: F8 label dialog for block buffers (`:name`); sets/removes a label used by `|@<label> <command>`
 - **`src/md_viewer.py`**: handbook Markdown modal (`:md`, welcome `.md` clicks)
 - **`src/update_check.py`**: GitHub `VERSION` check (`:update`)
 - **`src/k8s_complete.py`**: live-cluster name completion for `kubectl get …` (gated by `k8s_completion: true`)

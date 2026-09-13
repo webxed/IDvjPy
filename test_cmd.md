@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.109
+# План тестирования IDvjPy_term v1.110
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1084,6 +1084,7 @@ seq 1 400
 ```
 printf 'alpha\nbeta\ngamma\n'
 :name buff
+F8                     # диалог метки: пусто — снять, Esc — отмена
 |@buff grep beta
 :name
 |@1 grep beta
@@ -1092,13 +1093,13 @@ printf 'alpha\nbeta\ngamma\n'
 :c
 ```
 
-**Ожидание:** `:name buff` метит последний завершённый блок — в шапке появляется `[buff]`. `|@buff grep beta` берёт stdin из этого блока (источник **не** выполняется заново) и даёт `beta`; в `history_*.txt` записан **полный** вызов `printf '…' | grep beta`, а не `|@buff grep beta`. `:name` — список меток (`buff  <-  <команда>  (N lines)`); `|@1 …` — из одного блока назад (0 = последний); `:name buff-` снимает метку, `:name -` — все. Неизвестная метка — `no labelled block '…'. Labels: …`; `:name 3` — `Usage: :name` (чисто цифровая метка запрещена: `|@3` значит «3-й блок назад»). `:c` чистит метки вместе с блоками. Примеры для подбора `awk` по большому выводу без повторного `cat`/`kubectl`.
+**Ожидание:** `:name buff` метит последний завершённый блок — в шапке появляется `[buff]`. `F8` открывает диалог с предзаполненной меткой (`Input.select_all`): Enter — сохранить, пусто + Enter — снять метку, Esc — отмена; невалидная метка (напр. `3`) — `Invalid label`. `|@buff grep beta` берёт stdin из этого блока (источник **не** выполняется заново) и даёт `beta`; в `history_*.txt` записан **полный** вызов `printf '…' | grep beta`, а не `|@buff grep beta`. `:name` — список меток (`buff  <-  <команда>  (N lines)`); `|@1 …` — из одного блока назад (0 = последний); `:name buff-` снимает метку, `:name -` — все. Неизвестная метка — `no labelled block '…'. Labels: …`; `:name 3` — `Usage: :name` (чисто цифровая метка запрещена: `|@3` значит «3-й блок назад»). `:c` чистит метки вместе с блоками. Примеры для подбора `awk` по большому выводу без повторного `cat`/`kubectl`.
 
 Автотест: `tests/test_block_labels.py`.
 
 ---
 
-**Версия документа**: v1.54
-**Версия приложения**: v1.109
+**Версия документа**: v1.55
+**Версия приложения**: v1.110
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11

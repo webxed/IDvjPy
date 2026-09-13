@@ -167,8 +167,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   |@N <cmd>  - Pipe from N blocks back (0 = last). The source is NOT re-run;
                history keeps the full call `<source> | <cmd>` for ↑/:h.
   :name [<label>|-] - Label the focused/last finished block (no arg: list;
-               `<label>-`: drop one; `-`: drop all). Then reuse its buffer
-               cheaply: `:name buff` … `|@buff awk '{...}'` (no re-run of cat/kubectl).
+               `<label>-`: drop one; `-`: drop all). F8 opens a dialog for the
+               label. Then reuse its buffer cheaply: `:name buff` …
+               `|@buff awk '{...}'` (no re-run of cat/kubectl).
   $OUT       - On demand: last non-empty line of the focused (or last) command block.
                Not stored in .bashrc_term. Type $OUT alone to peek. `$OUT=` is rejected.
   $VAR=val   - Set environment variable
@@ -205,6 +206,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   Ctrl+C     - Copy the whole input line; if a journal block is focused, copy the block (same as F3)
   F5         - Open focused (or last command) block in JSON viewer
   F6         - Toggle simple (plain) output
+  F8         - Label block dialog (`:name`): type a label, Enter saves, empty removes,
+               Esc cancels. Then `|@<label> <command>` reuses its output without re-running.
   F2         - Toggle line-cursor mode (see below)
   Shift+Insert / Ctrl+V - Paste into input (does not replace existing text)
                In line-cursor mode Ctrl+V appends the current line instead
