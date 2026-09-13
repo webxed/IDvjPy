@@ -83,10 +83,13 @@ try:
 
     import yaml
     from rich.markup import escape
+    from rich.style import Style
     from textual import events
     from textual.app import App, ComposeResult, InvalidThemeError, SuspendNotSupported
     from textual.binding import Binding, BindingType
     from textual.containers import VerticalScroll
+    from textual.content import Content
+    from textual.strip import Strip
     from textual.widgets import Footer, Header, Input, Static
 
     import calc
@@ -158,6 +161,7 @@ try:
         extract_refs,
     )
     from md_viewer import HandbookMarkdownScreen, handbook_md_path
+    from output_viewer import OutputViewerScreen
     from screensaver import DevopsScreensaver
     from seed_catalog import (
         KNOWN_SEED_SCRIPTS,
@@ -235,6 +239,21 @@ def escape_help_markup(text: str) -> str:
     return "".join(part if i % 2 else escape(part) for i, part in enumerate(parts))
 
 
+def escape_display_markup(text: str) -> str:
+    """Сделать пользовательский текст безопасным для Textual-разметки.
+
+    Парсер разметки Textual строже Rich: обычный вывод (`cat` JSON, лог с `[`)
+    может дать `MarkupError` — тег «растягивается» на строки, `update()` падает,
+    и блок навсегда остаётся в `[Executing...]`. Экранируем все `[`; Rich-`escape`
+    этого не гарантирует (его эвристика не видит такие теги).
+    """
+    return (text or "").replace("[", "\\[")
+
+
+def _identity(text: str) -> str:
+    return text
+
+
 # ============================================================================
 # History file store: append/read/compact live in src/history_store.py
 # ============================================================================
@@ -269,11 +288,15 @@ class LineNavigable(Static):
         except Exception:
             return 0
 
+    def _restore_plain_display(self) -> None:
+        """Вернуть обычный вид блока (без подсветки строки курсора)."""
+        self.update(self._nav_plain_text())
+
     def _paint_line_cursor(self) -> None:
         lines = self._nav_lines()
         idx = getattr(self, "line_index", None)
         if idx is None or not (0 <= idx < len(lines)):
-            self.update(self._nav_plain_text())
+            self._restore_plain_display()
             return
         painted = list(lines)
         painted[idx] = f"[reverse]{painted[idx]}[/reverse]"
@@ -343,7 +366,7 @@ class LineNavigable(Static):
         except Exception:
             pass
         try:
-            self.update(self._nav_plain_text())
+            self._restore_plain_display()
         except Exception:
             pass
         app = getattr(self, "app", None)
@@ -612,9 +635,10 @@ class CommandBlock(LineNavigable, Static):
         self._stop_requested: bool = False
         self._watch: bool = False
 
-        # Формируем отображаемый контент
+        # Формируем отображаемый контент: text_content — плоский (для копирования),
+        # супер-класс получает экранированную версию для Textual-разметки.
         self.text_content = self._format_output()
-        super().__init__(self.text_content, **kwargs)
+        super().__init__(self._format_output(display=True), **kwargs)
         self.can_focus = True
 
     def _simple_mode(self) -> bool:
@@ -637,45 +661,61 @@ class CommandBlock(LineNavigable, Static):
                 return text
         return text
 
-    def _truncate_output(self, text: str) -> str:
+    def _truncate_output(
+        self, text: str, safe: "Callable[[str], str] | None" = None
+    ) -> str:
         """
         Обрезает вывод для стабильного рендера UI, сохраняя полный raw_stdout.
-        Показывает последние строки (обычно самые релевантные).
-        """
-        lines = text.split('\n')
-        if len(lines) <= self.MAX_DISPLAY_LINES:
-            self._truncated = False
-            return text
-        self._truncated = True
-        truncated = '\n'.join(lines[-self.MAX_DISPLAY_LINES:])
-        hidden = len(lines) - self.MAX_DISPLAY_LINES
-        if self._simple_mode():
-            return f"(...{hidden} lines truncated for UI stability, F3 copies full output)\n{truncated}"
-        return f"[dim](...{hidden} lines truncated for UI stability, F3 copies full output)[/dim]\n{truncated}"
+        Показывает последние строки (обычно самые релевантные) — полный текст с
+        прокруткой открывает `:log` / F7.
 
-    def _format_output(self) -> str:
-        """Форматирует вывод команды."""
+        Без `split("\\n")` по всему тексту: `rsplit` с лимитом на C-уровне
+        аллоцирует только префикс и хвост, а не список всех строк. `safe` —
+        экранирование пользовательского хвоста для Textual-разметки (None — как есть).
+        """
+        escape_text = safe or _identity
+        parts = text.rsplit("\n", self.MAX_DISPLAY_LINES)
+        if len(parts) <= self.MAX_DISPLAY_LINES:
+            self._truncated = False
+            return escape_text(text)
+        self._truncated = True
+        hidden = parts[0].count("\n") + 1
+        truncated = escape_text("\n".join(parts[1:]))
+        hint = "F3 copies full output, F7 views full"
+        if self._simple_mode():
+            return f"(...{hidden} lines truncated for UI stability, {hint})\n{truncated}"
+        return f"[dim](...{hidden} lines truncated for UI stability, {hint})[/dim]\n{truncated}"
+
+    def _format_output(self, *, display: bool = False) -> str:
+        """Собирает текст блока.
+
+        `display=True` — версия для рендера: пользовательский текст (заголовок с
+        командой, stdout, stderr) экранируется, чтобы `[` из вывода не ломал
+        Textual-разметку. `display=False` (по умолчанию) — плоский текст без
+        экранирования для копирования, навигации и `:w`.
+        """
+        safe = escape_display_markup if display else _identity
         if self.collapsed:
             # Свернутый вид — только заголовок
             if self._simple_mode():
-                return f"▶ {self.header}\n"
+                return f"▶ {safe(self.header)}\n"
             indicator = "[dim]▶[/dim]"
-            return f"{indicator} {self.header}\n"
+            return f"{indicator} {safe(self.header)}\n"
 
-        parts = [self.header]
+        parts = [safe(self.header)]
 
         # Основной вывод (с обрезкой если нужно)
         if self.raw_stdout:
-            stdout_display = self._truncate_output(self.raw_stdout.rstrip())
-            parts.append(self._mask_for_display(stdout_display))
+            masked = self._mask_for_display(self.raw_stdout.rstrip())
+            parts.append(self._truncate_output(masked, safe))
 
         # Stderr внизу с подсветкой ошибки
         if self.raw_stderr and self.raw_stderr.strip():
-            stderr_display = self._mask_for_display(self.raw_stderr.rstrip())
+            masked_err = self._mask_for_display(self.raw_stderr.rstrip())
             if self._simple_mode():
-                parts.append(f"STDERR:\n{stderr_display}")
+                parts.append(f"STDERR:\n{safe(masked_err)}")
             else:
-                parts.append(f"[bold red]STDERR:[/bold red]\n{stderr_display}")
+                parts.append(f"[bold red]STDERR:[/bold red]\n{safe(masked_err)}")
 
         # Return code если != 0
         if self.return_code != 0:
@@ -694,16 +734,17 @@ class CommandBlock(LineNavigable, Static):
         self.collapsed = not self.collapsed
         self.exit_line_nav()
         try:
-            self.update(self._format_output())
+            self.update(self._format_output(display=True))
         except Exception:
-            # При очень большом выводе может быть ошибка рендеринга
-            # В этом случае оставляем блок свернутым
+            # Никогда не оставлять блок в [Executing...] из-за разметки:
+            # последний шанс — полностью экранированный текст.
             if not self.collapsed:
                 self.collapsed = True
+                header = escape_display_markup(self.header)
                 if self._simple_mode():
-                    self.update(f"▶ {self.header}\n(Output too large to display)\n")
+                    self.update(f"▶ {header}\n(Output too large to display)\n")
                 else:
-                    self.update(f"[dim]▶[/dim] {self.header}\n[yellow](Output too large to display)[/yellow]\n")
+                    self.update(f"[dim]▶[/dim] {header}\n[yellow](Output too large to display)[/yellow]\n")
 
     def update_content(self, raw_stdout: str, raw_stderr: str, return_code: int) -> None:
         """
@@ -719,7 +760,12 @@ class CommandBlock(LineNavigable, Static):
         app = getattr(self, "app", None)
         if app is not None and hasattr(app, "_should_follow_journal_end"):
             follow = app._should_follow_journal_end()
-        self.update(self._format_output())
+        self.text_content = self._format_output()
+        try:
+            self.update(self._format_output(display=True))
+        except Exception:
+            # Никогда не оставлять журнал в [Executing...] из-за разметки.
+            self.update(escape_display_markup(self._format_output()))
         if follow and app is not None and hasattr(app, "_schedule_journal_follow_end"):
             app._schedule_journal_follow_end()
         if getattr(self, "line_nav_active", False):
@@ -736,6 +782,121 @@ class CommandBlock(LineNavigable, Static):
         """
         if hasattr(self.app, 'active_pipe_source'):
             self.app.active_pipe_source = self
+
+
+class CommandLineBlock(CommandBlock):
+    """CommandBlock на Line API: ``render_line`` вместо одного большого ``Static``.
+
+    Зачем: обычный блок на каждое обновление и каждое движение построчного
+    курсора вызывает ``Static.update()`` и заново парсит разметку всего вывода.
+    Здесь разметка парсится один раз в кэш Strip'ов на текущую ширину, а
+    ``render_line`` отдаёт готовую визуальную строку — цена перерисовки зависит
+    от числа видимых строк, а не от размера вывода. Включается ключом
+    ``line_api_blocks`` (settings.yml) или ``IDVJPY_LINE_BLOCKS`` в окружении.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        # Кэш заполняется в _rebuild() после CommandBlock.__init__.
+        self._src_markup = ""
+        self._cache_width = -1
+        self._strips: list[Strip] = []
+        self._line_rows: list[tuple[int, int]] = []
+        super().__init__(*args, **kwargs)
+        self._rebuild(layout=False)
+
+    # -- источник текста ---------------------------------------------------
+    def update(self, content: Any = "", *, layout: bool = True) -> None:
+        """Запомнить разметку и перерисовать (в Static текст не отдаём).
+
+        База вызывает ``update`` как с display-разметкой (экранированной), так и,
+        из ``LineNavigable``, с плоским текстом. Для построчного рендера нужна
+        разметка, поэтому точки с плоским текстом переопределены
+        (``_restore_plain_display`` и ``_paint_line_cursor``).
+        """
+        if isinstance(content, str):
+            self._src_markup = content
+        self._invalidate()
+        self.refresh(layout=layout)
+
+    def _invalidate(self) -> None:
+        self._cache_width = -1
+        self._strips = []
+        self._line_rows = []
+
+    def _rebuild(self, *, layout: bool = True) -> None:
+        """Собрать разметку из текущего состояния блока (свёрнут / раскрыт)."""
+        self._src_markup = self._format_output(display=True)
+        self._invalidate()
+        self.refresh(layout=layout)
+
+    # -- Line API ----------------------------------------------------------
+    def _build(self, width: int) -> None:
+        """Разложить разметку на Strip'ы с переносом — один раз на ширину.
+
+        Каждая логическая строка рендерится отдельно: жёсткий перевод строки
+        завершает абзац, поэтому перенос совпадает с рендером всего текста
+        (проверено тестом ``test_line_api_block_height_matches_static``).
+        """
+        self._cache_width = width
+        self._strips = []
+        self._line_rows = []
+        if width <= 0:
+            return
+        try:
+            lines = Content.from_markup(self._src_markup).split("\n", allow_blank=True)
+        except Exception:
+            # Чужой вывод не распарсился как разметка — рисуем как литерал.
+            lines = Content.from_text(self._src_markup, markup=False).split(
+                "\n", allow_blank=True
+            )
+        style = self.visual_style
+        for line in lines:
+            start = len(self._strips)
+            try:
+                strips = Content.to_strips(self, line, width, None, style)
+            except Exception:
+                strips = []
+            if not strips:
+                strips = [Strip.blank(width)]
+            self._strips.extend(strips)
+            self._line_rows.append((start, len(strips)))
+
+    def _ensure_strips(self, width: int) -> None:
+        if width != self._cache_width:
+            self._build(width)
+
+    def get_content_height(self, container: Any, viewport: Any, width: int) -> int:
+        if not width:
+            return 0
+        self._ensure_strips(int(width))
+        return len(self._strips)
+
+    def render_line(self, y: int) -> Strip:
+        width = int(self.size.width)
+        if width <= 0:
+            # До первого layout ширина может быть 0 — берём ширину из кэша.
+            width = max(0, self._cache_width)
+        if width <= 0:
+            return Strip.blank(0)
+        self._ensure_strips(width)
+        if y < 0 or y >= len(self._strips):
+            return Strip.blank(width)
+        strip = self._strips[y]
+        if getattr(self, "line_nav_active", False):
+            idx = getattr(self, "line_index", None)
+            if idx is not None and 0 <= idx < len(self._line_rows):
+                start, count = self._line_rows[idx]
+                if start <= y < start + count:
+                    strip = strip.apply_style(Style(reverse=True))
+        return strip
+
+    # -- курсор рисуется в render_line, а не перезаписью текста ----------------
+    def _paint_line_cursor(self) -> None:
+        self.refresh()
+
+    def _restore_plain_display(self) -> None:
+        self.refresh()
+
 
 class ClickableCommand(Static):
     """Кликабельный виджет для отображения команды с возможностью клика."""
@@ -1398,6 +1559,7 @@ class CommandRunner(App):
         ("f4", "stop_command", "Stop"),
         ("f5", "open_json_viewer", "JSON Viewer"),
         ("f6", "toggle_simple_output", "Simple output"),
+        ("f7", "open_output_viewer", "Full output"),
         Binding("d", "toggle_dark", "Toggle dark mode", show=False),
         Binding("up", "history_prev", "Previous command", priority=False, show=False),
         Binding("down", "history_next", "Next command", priority=False, show=False),
@@ -1413,7 +1575,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.102"
+    VERSION = "v1.103"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1526,6 +1688,7 @@ class CommandRunner(App):
     CMD_TERM = "term"
     CMD_EDITOR = "ed"
     CMD_ENV = "env"
+    CMD_LOG = "log"  # полный вывод блока в Line-API просмотрщике
     CMD_SEND = "send"  # переслать команду в другую сессию (вставить во ввод)
     CMD_SEND_RUN = "send!"  # то же, но сразу выполнить в целевой сессии
     # Colon-команды, у которых аргументы — не пути: числа и поисковые шаблоны.
@@ -1537,6 +1700,7 @@ class CommandRunner(App):
             PREFIX_CMD + CMD_GREP,
             PREFIX_CMD + CMD_SEND,
             PREFIX_CMD + CMD_SEND_RUN,
+            PREFIX_CMD + CMD_LOG,
         )
     )
     KEY_CHECK_UPDATES = "check_updates"
@@ -1545,6 +1709,7 @@ class CommandRunner(App):
     KEY_SCREENSAVER_IDLE = "screensaver_idle"
     KEY_SCREENSAVER_STARS = "screensaver_stars"
     KEY_K8S_COMPLETION = "k8s_completion"
+    KEY_LINE_API_BLOCKS = "line_api_blocks"
     KEY_CLEAR_CLIP_AFTER_SECRET = "clear_clipboard_after_secret"
     FILE_LLM_PROVIDERS = "llm_providers.yml"
     FILE_KCTX = "kctx.json"  # Кластерный журнал kubectl-стека (:kctx, v1.57)
@@ -1594,6 +1759,9 @@ class CommandRunner(App):
         self.active_pipe_source: CommandBlock | None = None
         self._journal_block_cache: list[Static] | None = None
         self.simple_output_mode: bool = False
+        # Line API-блоки журнала (render_line вместо одного большого Static).
+        # Включается line_api_blocks в settings.yml или IDVJPY_LINE_BLOCKS.
+        self._line_api_blocks: bool = False
         # Словарь локальных переменных окружения (имеют приоритет над os.environ)
         self.local_env: dict[str, str] = {}
         # Имена секретных переменных ($$NAME=…): значения маскируются в UI
@@ -2400,12 +2568,21 @@ class CommandRunner(App):
                     self.k8s_completion = bool(
                         settings.get(self.KEY_K8S_COMPLETION, False)
                     )
+                    self._line_api_blocks = bool(
+                        settings.get(self.KEY_LINE_API_BLOCKS, False)
+                    )
                     self.clear_clipboard_after_secret = bool(
                         settings.get(self.KEY_CLEAR_CLIP_AFTER_SECRET, False)
                     )
                     self.editor = str(settings.get(self.KEY_EDITOR) or "").strip()
         except (FileNotFoundError, KeyError, yaml.YAMLError):
             pass
+
+        # Быстрый переключатель Line-API-блоков без правки settings.yml.
+        # IDVJPY_LINE_BLOCKS=1 — включить, =0 — выключить (пусто — как в настройках).
+        env_line_api = os.environ.get("IDVJPY_LINE_BLOCKS", "").strip().lower()
+        if env_line_api:
+            self._line_api_blocks = env_line_api not in ("0", "false", "no", "off")
 
         # Tags DB is the library, not the shell cwd. Pin before init/connect.
         self.db_file = self._data_path(self.db_file or self.FILE_DATABASE)
@@ -3109,6 +3286,18 @@ class CommandRunner(App):
         if follow_end:
             self._schedule_journal_follow_end()
 
+    def _make_command_block(self, *args: Any, **kwargs: Any) -> CommandBlock:
+        """Создать блок журнала: Line API (render_line) или обычный Static.
+
+        Переключатель — ``line_api_blocks`` в settings.yml / ``IDVJPY_LINE_BLOCKS``.
+        Единая точка создания, чтобы блоки всех путей (shell, calc, :llm, :watch)
+        были одинаковыми.
+        """
+        cls: type[CommandBlock] = (
+            CommandLineBlock if self._line_api_blocks else CommandBlock
+        )
+        return cls(*args, **kwargs)
+
     def clear_subtitle(self) -> None:
         """Очищает подзаголовок (статус-бар)."""
         if self._demo_active:
@@ -3133,9 +3322,10 @@ class CommandRunner(App):
 
     def _pending_block_display(self, block: "CommandBlock") -> str:
         """Текст «команда выполняется» до прихода update_content из потока."""
+        header = escape_display_markup(block.header)
         if self.simple_output_mode:
-            return f"{block.header}\nExecuting...\n(Waiting for output or timeout...)\n"
-        return f"{block.header}\n[Executing...]\n(Waiting for output or timeout...)"
+            return f"{header}\nExecuting...\n(Waiting for output or timeout...)\n"
+        return f"{header}\n[Executing...]\n(Waiting for output or timeout...)"
 
     def action_toggle_simple_output(self) -> None:
         """Переключает плоский вид журнала (без разметки) — проще копировать строки мышью."""
@@ -3145,7 +3335,7 @@ class CommandRunner(App):
                 if getattr(block, "pending", False):
                     block.update(self._pending_block_display(block))
                 else:
-                    block.update(block._format_output())
+                    block.update(block._format_output(display=True))
         except Exception:
             pass
         self.sub_title = (
@@ -3381,6 +3571,7 @@ class CommandRunner(App):
                 self.CMD_PLAYBOOK, self.CMD_QUIT, self.CMD_UPDATE, self.CMD_SESSION,
                 self.CMD_SCREENSAVER, self.CMD_WELCOME,
                 self.CMD_SEND, self.CMD_SEND_RUN,
+                self.CMD_LOG,
             }:
                 if not user_input.startswith(self.PREFIX_SECRET):
                     self._playbook_log.append(user_input)
@@ -3544,7 +3735,7 @@ class CommandRunner(App):
         """
         timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         header = f"{timestamp} ({os.getcwd()}) calc: {expression}"
-        block = CommandBlock(
+        block = self._make_command_block(
             header=header,
             raw_stdout=output,
             raw_stderr="",
@@ -3652,6 +3843,8 @@ class CommandRunner(App):
             self._handle_replay_command(parts[1:])
         elif command == self.CMD_EXPAND:
             self._handle_expand_command(parts[1:])
+        elif command == self.CMD_LOG:
+            self._handle_log_command(parts[1:])
         elif command == self.CMD_ALIAS:
             self._handle_alias_command(parts[1:])
         elif command == self.CMD_LLM:
@@ -4093,6 +4286,51 @@ class CommandRunner(App):
             f"[dim]{escape(self._mask_secrets(expanded))}[/dim]"
         ))
 
+    def action_open_output_viewer(self) -> None:
+        """F7 — полный вывод блока в Line-API просмотрщике."""
+        self._handle_log_command([])
+
+    def _handle_log_command(self, args: list[str]) -> None:
+        """`:log [N]` — полный вывод блока (Line API), без обрезки в 300 строк.
+
+        N — сколько командных блоков назад (0 = сфокусированный/последний).
+        Видны настоящие строки `raw_stdout` (как F3), плюс STDERR, если был.
+        """
+        nums = [arg for arg in args if arg.isdigit()]
+        if args and not nums:
+            self.add_block(InfoBlock("Usage: :log [N]"))
+            return
+        back = int(nums[0]) if nums else 0
+        focused = self.focused
+        if back == 0 and isinstance(focused, CommandBlock):
+            block = focused
+        else:
+            blocks = list(self.query(CommandBlock))
+            if not blocks:
+                self.add_block(InfoBlock("No command block to view."))
+                return
+            idx = len(blocks) - 1 - back
+            if idx < 0:
+                self.add_block(InfoBlock(
+                    f"Error: only {len(blocks)} command block(s); :log {back} is too far back."
+                ))
+                return
+            block = blocks[idx]
+        stdout = block.raw_stdout or ""
+        lines = stdout.splitlines()
+        stderr = (block.raw_stderr or "").rstrip("\n")
+        if stderr.strip():
+            lines = [*lines, "", "STDERR:", *stderr.splitlines()]
+        if not lines:
+            self.add_block(InfoBlock("Output is empty."))
+            return
+        title = f"Output — {block.source_command or block.header}"
+        secret = " · secrets visible" if self._secret_names else ""
+        sub_title = f"{len(lines)} lines · {len(stdout)} chars{secret} · Esc closes"
+        self.push_screen(OutputViewerScreen(lines, title=title, subtitle=sub_title))
+        self.sub_title = "Full output opened. Esc closes."
+        self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+
     def _collect_line_hits(self, lowered: str) -> list[tuple[Static, int]]:
         """Совпадения (блок, индекс строки) по видимым строкам журнала."""
         hits: list[tuple[Static, int]] = []
@@ -4105,7 +4343,7 @@ class CommandRunner(App):
                     continue
                 block.collapsed = False
                 try:
-                    block.update(block._format_output())
+                    block.update(block._format_output(display=True))
                 except Exception:
                     pass
             for i, line in enumerate(block._nav_lines()):
@@ -6854,14 +7092,14 @@ class CommandRunner(App):
             source_command = f"{ask_prefix} {request_text}"
         else:
             source_command = f":llm {provider_name} {request_text}"
-        block = CommandBlock(
+        block = self._make_command_block(
             header=header,
             raw_stdout=f"[Consulting {provider_name}…]",
             raw_stderr="",
             return_code=0,
             source_command=source_command,
         )
-        block.update(block.text_content)
+        block.update(block._format_output(display=True))
         self.add_block(block)
         threading.Thread(
             target=self._llm_worker,
@@ -7243,7 +7481,7 @@ class CommandRunner(App):
         final_command = self._expand_aliases(self._substitute_variables(command))
         now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         header = f"{now} ({os.getcwd()}) $ watch: {self._mask_secrets(final_command)}"
-        block = CommandBlock(
+        block = self._make_command_block(
             header=header,
             raw_stdout="",
             raw_stderr="",
@@ -7262,7 +7500,7 @@ class CommandRunner(App):
         }
         self._refresh_running_title()
         text = (
-            f"[dim]watch: {escape(final_command)} · every {interval:g}s · "
+            f"[dim]watch: {escape_display_markup(final_command)} · every {interval:g}s · "
             "F4 / :kill / :watch stop — остановить[/dim]\n"
         )
         block.text_content = text
@@ -7350,13 +7588,13 @@ class CommandRunner(App):
             ts = datetime.datetime.now().strftime("%H:%M:%S")
             interval = state["interval"]
             parts = [
-                f"[bold]{ts} ({os.getcwd()}) $ {escape(state['command'])}[/bold]",
+                f"[bold]{ts} ({os.getcwd()}) $ {escape_display_markup(state['command'])}[/bold]",
                 f"[dim]watch #{tick} · every {interval:g}s · F4/:kill stop[/dim]",
             ]
             if stdout:
-                parts.append(block._truncate_output(stdout))
+                parts.append(block._truncate_output(stdout, escape_display_markup))
             if stderr and stderr.strip():
-                parts.append(f"[bold red]STDERR:[/bold red]\n{stderr}")
+                parts.append(f"[bold red]STDERR:[/bold red]\n{escape_display_markup(stderr)}")
             if rc:
                 parts.append(f"[bold yellow]Exit code: {rc}[/bold yellow]")
             text = "\n".join(parts) + "\n\n"
@@ -7425,7 +7663,7 @@ class CommandRunner(App):
         
         header = f"{timestamp} ({cwd}) $ {self._mask_secrets(final_command)}"
 
-        block = CommandBlock(
+        block = self._make_command_block(
             header=header,
             raw_stdout="[Executing...]",
             raw_stderr="",

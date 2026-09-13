@@ -38,6 +38,8 @@ inbox_*.jsonl
 !/requirements-dev.txt
 /test*.*
 !/test_cmd.md
+# Временное сообщение коммита: шёлк без backticks, пишем в файл и commit -F
+.commit_msg.tmp
 
 # --- Виртуальные окружения (в том числе созданные прямо в корне: bin/lib/include) ---
 .venv/

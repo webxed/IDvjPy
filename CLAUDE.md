@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.102) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.103) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.102` → `v1.103`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.103` → `v1.104`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -59,6 +59,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`CommandRunner`** (App): command routing and UI orchestration
 - **`JournalScroll`** (`VerticalScroll`): journal container; keyboard scroll activates the visible block
 - **`CommandBlock`** / **`InfoBlock`** / **`QueryResultsBlock`**: journal widgets (`LineNavigable` for line-cursor)
+- **`CommandLineBlock`**: opt-in Line-API variant of `CommandBlock` (`render_line` + cached `Strip`s; wrapping matches `Static`). Enabled by `line_api_blocks: true` (settings) or `IDVJPY_LINE_BLOCKS=1`; created via `CommandRunner._make_command_block`
 - **`CommandInput`**: top input with completion and mouse-wheel → journal scroll
 
 ### Supporting Modules
@@ -72,6 +73,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/clipboard.py`**: CLIPBOARD / PRIMARY / OSC 52
 - **`src/shell_env.py`**: `.bashrc_term` vars, `~/.bashrc` aliases, `$1` substitution
 - **`src/json_viewer.py`**: JSON tree modal
+- **`src/output_viewer.py`**: `:log` / F7 — full block output in a Line-API `ScrollView` (lazy `render_line`, no 300-line cap; arrows/PgUp/PgDn scroll)
 - **`src/md_viewer.py`**: handbook Markdown modal (`:md`, welcome `.md` clicks)
 - **`src/update_check.py`**: GitHub `VERSION` check (`:update`)
 - **`src/k8s_complete.py`**: live-cluster name completion for `kubectl get …` (gated by `k8s_completion: true`)
@@ -105,7 +107,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no exact tag) = substring search over command text + comments. Click tag in `??` inserts `!tag ` at the cursor (does not replace the line, does not run). |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble refs into the input line |
-| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:fm`, `:term`, `:env`, `:session`, `:new`, `:send`, `:send!`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:cmd`, `:/`, `:n`, `:N`, `:export`, `:import`, `:md`, `:playbook`, `:update`, `:kill`, `:watch`, `:mv`, `:stats`, `:diff`, `:o`, `:kctx`, `:alias`, `:llm`, `:ed`, `:theme`) |
+| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:fm`, `:term`, `:env`, `:session`, `:new`, `:send`, `:send!`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:cmd`, `:log`, `:/`, `:n`, `:N`, `:export`, `:import`, `:md`, `:playbook`, `:update`, `:kill`, `:watch`, `:mv`, `:stats`, `:diff`, `:o`, `:kctx`, `:alias`, `:llm`, `:ed`, `:theme`) |
 | `\| cmd` | Pipe stdout from the focused block, add to history |
 | `$OUT` | On demand: last line of focused/last block (not stored in `.bashrc_term`) |
 | `$VAR=val` | Set env in `.bashrc_term_<instance>` and the current session. `:env` re-reads the files. |
