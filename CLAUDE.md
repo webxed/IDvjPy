@@ -59,6 +59,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`CommandRunner`** (App): command routing and UI orchestration
 - **`JournalScroll`** (`VerticalScroll`): journal container; keyboard scroll activates the visible block
 - **`CommandBlock`** / **`InfoBlock`** / **`QueryResultsBlock`**: journal widgets (`LineNavigable` for line-cursor)
+- **`CommandLineBlock`**: opt-in Line-API variant of `CommandBlock` (`render_line` + cached `Strip`s; wrapping matches `Static`). Enabled by `line_api_blocks: true` (settings) or `IDVJPY_LINE_BLOCKS=1`; created via `CommandRunner._make_command_block`
 - **`CommandInput`**: top input with completion and mouse-wheel → journal scroll
 
 ### Supporting Modules

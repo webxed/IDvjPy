@@ -370,6 +370,7 @@ check_updates: true          # старт: сверка VERSION с GitHub main; 
 screensaver_idle: 120        # простой (клавиши/клик/скролл/мышь) → starfield; 0 = выкл. :screensaver — сразу
 screensaver_stars: true      # летающие звёзды; false — чёрный холст (часы/лента/load остаются)
 k8s_completion: false        # имена k8s-ресурсов из кластера в подсказках (`kubectl get pod <Tab>`)
+line_api_blocks: true        # блоки журнала на Textual Line API (render_line); false — прежний Static
 clear_clipboard_after_secret: false  # вставка значения в `$$NAME=…` очищает CLIPBOARD/PRIMARY
 editor: nano                 # `:ed`; можно с аргументами (code --wait); пусто → $VISUAL/$EDITOR
 ```
