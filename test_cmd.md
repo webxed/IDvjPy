@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.112
+# План тестирования IDvjPy_term v1.113
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1097,8 +1097,11 @@ F8                     # диалог метки: пусто — снять, Esc
 
 Автотест: `tests/test_block_labels.py`.
 
+`:send <сессия> |@buff grep beta` — метка раскрывается в `<источник> | grep beta` до отправки (в другой сессии своих меток нет, поэтому источник там выполнится заново); если метки нет у отправителя — команда не уйдёт.
+
 ---
 
+**Версия документа**: v1.53
 ## Секция 37: Файловые подсказки (`file_completion`)
 
 ```
@@ -1133,6 +1136,6 @@ kub ec            # ↺ kubectl get pods (Tab/Enter — вставить, вто
 ---
 
 **Версия документа**: v1.53
-**Версия приложения**: v1.112
+**Версия приложения**: v1.113
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11

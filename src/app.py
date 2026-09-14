@@ -1632,7 +1632,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.112"
+    VERSION = "v1.113"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -4726,6 +4726,20 @@ class CommandRunner(App):
             self.add_block(InfoBlock("Usage: :send[!] <session|*> <command…>"))
             return
 
+        # `|@label cmd` → `<источник> | cmd`: в другой сессии меток нет, а буфер
+        # не передать. Если здесь метки тоже нет — не шлём заведомо битую команду.
+        payload, pipe_resolved = self._materialize_pipe_source(payload)
+        if payload.startswith(self.PREFIX_PIPE + "@") and not pipe_resolved:
+            source_token, _ = self._split_pipe_source(
+                payload.lstrip()[len(self.PREFIX_PIPE):]
+            )
+            self.add_block(InfoBlock(
+                self._pipe_source_error(source_token or "")
+                + "\nNothing was sent: labels live per session "
+                "(the target has no such buffer)."
+            ))
+            return
+
         expanded = self._expand_aliases(self._substitute_variables(payload))
         masked = self._mask_secrets(expanded)
         secret_hidden = masked != expanded
@@ -6552,6 +6566,31 @@ class CommandRunner(App):
         if not origin:
             return None
         return f"{self._mask_secrets(origin)} | {pipe_command}"
+
+    def _materialize_pipe_source(self, payload: str) -> tuple[str, bool]:
+        """Раскрыть ведущий `|@<label> cmd` / `|@N cmd` в `<источник> | cmd`.
+
+        Нужно перед `:send`: метки живут только в текущей сессии, а буфер другому
+        процессу не передать — поэтому в целевой сессии команда-источник
+        выполнится заново. Возвращает `(текст, раскрыто)`; метки нет — текст без
+        изменений и `False`.
+        """
+        stripped = payload.lstrip()
+        leading = payload[: len(payload) - len(stripped)]
+        if not stripped.startswith(self.PREFIX_PIPE + "@"):
+            return payload, False
+        source_token, pipe_command = self._split_pipe_source(
+            stripped[len(self.PREFIX_PIPE):]
+        )
+        if source_token is None or not pipe_command:
+            return payload, False
+        block = self._resolve_pipe_block(source_token)
+        if block is None:
+            return payload, False
+        origin = (block.source_command or block.header or "").strip()
+        if not origin:
+            return payload, False
+        return f"{leading}{origin} | {pipe_command}", True
 
     def _handle_name_command(self, args: list[str]) -> None:
         """

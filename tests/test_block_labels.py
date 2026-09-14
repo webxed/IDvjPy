@@ -5,10 +5,13 @@
 """
 from __future__ import annotations
 
+import os
+
 from textual.widgets import Input
 
 from app import CommandRunner
 from block_label import BlockLabelScreen
+from session_mailbox import drain_inbox, inbox_path
 from tests.conftest import last_info, submit, wait_command_done
 
 
@@ -220,3 +223,33 @@ async def test_f8_dialog_without_block_reports(isolated_home):
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.press("f8")
         assert "No finished command block" in last_info(app).text_content
+
+
+async def test_send_materializes_pipe_label(isolated_home):
+    """`:send` раскрывает `|@label` в полный вызов — в чужой сессии метки нет."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await submit(pilot, "printf 'alpha\\nbeta\\n'")
+        await wait_command_done(app)
+        await submit(pilot, ":name buff")
+        await pilot.pause()
+
+        await submit(pilot, ":send beta |@buff grep beta")
+        await pilot.pause()
+        messages = drain_inbox(inbox_path(str(isolated_home), "beta"))
+        assert len(messages) == 1
+        command = messages[0]["command"]
+        assert command.startswith("printf")
+        assert command.endswith("| grep beta")
+        assert "|@buff" not in command
+
+
+async def test_send_unknown_pipe_label_aborts(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await submit(pilot, "echo hi")
+        await wait_command_done(app)
+        await submit(pilot, ":send beta |@nope grep x")
+        await pilot.pause()
+        assert not os.path.exists(inbox_path(str(isolated_home), "beta"))
+        assert "no labelled block 'nope'" in last_info(app).text_content
