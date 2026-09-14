@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.114) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.115) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.114` → `v1.115`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.115` → `v1.116`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -126,12 +126,13 @@ Aliases load from `~/.bashrc`. If the body contains `$1` / `$2` / `$@` / `$*`, a
 
 1. **Shell history**: Up/Down in the input walk `history_<instance>.txt` (plus this session). Typed text filters matches; empty input walks all lines (newest at the end). `:h /text` lists unique matching lines in the completion dropdown (newest first). Legacy `history.txt` is copied once if the instance file is missing. `:h compact` uniques the old prefix; the last `history_keep` lines stay a sequence. Startup compact only if the file is longer than `2 × history_keep`. `:session NAME` switches or creates an instance (history + `.bashrc_term_*`); the tags DB stays shared. The header title and the terminal window/tab title (OSC 0) show `IDvjPy_term · <session>` — plus `— N running` while background commands run (`_refresh_running_title` / `_base_title` / `_set_terminal_title`).
 2. **Journal**: PgUp/PgDn / arrows (when a block is focused) scroll the journal; the **visible** block becomes active (no jump to its first line). Click a block to focus it (`terminal_mouse: true`)
-3. **Tab** from the input focuses the last journal block (`:h` / `:?` included)
-4. **Focused block as pipe source**: `|` uses the focused block's stdout. `$OUT` is that block's last non-empty line, computed only when the command contains `$OUT` / `${OUT}`
-5. **Bash aliases**: loaded at startup; `$1` positional substitution supported
-6. **Background execution**: shell commands run in threads so the UI stays responsive
-7. **Line-cursor (F2 / Enter on a focused block)**: copy or append individual output lines. **Ctrl+C** copies the whole input draft, or the focused journal block (same as F3).
-8. **Bang-ref completion**: type `!` to list tags, then commands as `<id> tag[tid]`; Tab inserts `!tag[tid]`
+3. **Reading mode (no yank)**: once the view is scrolled up (`_follow_paused`) or a journal block holds focus, `add_block` only mounts the block: no scroll to the end, no focus stealing. Unpaused by scrolling back to the end (`_note_journal_scroll`) or by submitting a line (`_resume_journal_follow` in `on_input_submitted`). `_journal_reading()` / `_should_follow_journal_end()` / `_journal_at_end()` are the predicates; `_scroll_journal_wheel()` is the input-focused wheel path.
+4. **Tab** from the input focuses the last journal block (`:h` / `:?` included)
+5. **Focused block as pipe source**: `|` uses the focused block's stdout. `$OUT` is that block's last non-empty line, computed only when the command contains `$OUT` / `${OUT}`
+6. **Bash aliases**: loaded at startup; `$1` positional substitution supported
+7. **Background execution**: shell commands run in threads so the UI stays responsive
+8. **Line-cursor (F2 / Enter on a focused block)**: copy or append individual output lines. **Ctrl+C** copies the whole input draft, or the focused journal block (same as F3).
+9. **Bang-ref completion**: type `!` to list tags, then commands as `<id> tag[tid]`; Tab inserts `!tag[tid]`
 
 ### Database Schema
 
@@ -169,8 +170,9 @@ Edit `settings.yml`:
 - `k8s_completion`: `false` (default) — for `kubectl get <res> <Tab>` pull live resource names from the cluster (short `kubectl get <resource> -o name` timeout; soft fallback when kubectl/cluster is unavailable)
 - `file_completion`: `auto` (default) | `paths` | `off` — when file/dir hints appear. `auto`: explicit paths (`./`, `/`, `~/`) plus a bare filename only after file-taking commands (`cat`, `vim`, `grep`, …; see `FILE_ARG_COMMANDS`), so subcommand CLIs (`kubectl get po`, `docker co`, `git ch`) do not flood hints with cwd entries. `paths`: only explicit paths and `cd`/`pushd`. `off`: no file hints.
 - `history_completion`: `true` (default) — while typing a plain command, also offer matching lines from `history_*.txt` (newest first, `↺` marker; includes `@`/`>` commands, which are not in `session_history`). Tab/Enter inserts the full line; `false` leaves only Up/Down and `:h /text`.
-- `md_dir`: base directory for `:rg` markdown search (e.g. an Obsidian vault); empty = cwd; `~` expands. `:rg <pattern> <dir>` overrides it for one query. Results are clickable `path:line` links opening in the md viewer; `:rg <N>` opens result N (1-based).
+- `md_dir`: base directory for `:rg` markdown search (e.g. an Obsidian vault); empty = cwd; `~` expands. `:rg <pattern> <dir>` overrides it for one query. Results are clickable `path:line` links opening in the md viewer at that line; `:rg <N>` opens result N (1-based). `:md <path>[#L<n>]` opens an explicit path at source line n (`md_viewer.resolve_md_path`); `:rg` / `:md` / `:send[!]` are recorded in `history_*.txt` (↑ / `:h`) via `RE_HISTORY_ONLY_QUERY` (with `:llm` / `:cht`), but never suggested.
+- `md_render_lines` (default 1000): `:md` renders formatted markdown only below this many lines. Above it the file opens as raw source in the Line-API `OutputViewerScreen` (lazy `render_line`, instant) — the Textual `Markdown` widget mounts a widget per block, so 550 lines ≈ 1.3 s, 2200 ≈ 6 s, 13k ≈ 40 s. `start_line` keeps `#L<n>` working in the raw view. `y` copies the source path in **both** views (`HandbookMarkdownScreen` shows the clickable name via `[@click=screen.copy_path]`; `OutputViewerScreen` takes `source_path` and reports `No file path` for plain `:log`).
 - `llm_providers.yml` (cwd): LLM providers for `:llm` — see `src/llm_providers.example.yml`. Keys come from the environment only (`$VAR` refs in headers/body)
 - `cheat_sh_url` (default `https://cht.sh`) / `cheat_sh_options` (default `T` = no ANSI; add `Q` for no comments): base URL and query options for `:cht`
-- `screensaver_idle`: seconds of no keys/clicks/scroll/mouse-move before the DevOps starfield (default 120). `0` disables. Tests set this to `0`. `:screensaver` starts it now; `:screensaver 0` / `:screensaver 120` change idle for this session.
+- `screensaver_idle`: seconds of no keys/clicks/scroll/mouse-move before the DevOps starfield (default 120). `0` disables. Tests set this to `0`. `:screensaver` starts it now; `:screensaver 0` / `:screensaver 120` change idle for this session. A forwarded `:send` command also wakes it (`_wake_screensaver()` from `_deliver_forwarded`) — external events do not touch its own key handlers.
 - `screensaver_stars`: `true` (default) — flying dust/tokens. `false` — black canvas; clock/date, library ticker, and load/mem stay.

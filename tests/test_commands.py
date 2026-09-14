@@ -1091,6 +1091,36 @@ async def test_journal_search_next_and_prev_line(isolated_home):
         assert app.focused.line_index == first
 
 
+async def test_journal_search_next_prev_by_key(isolated_home):
+    """Shift+N реальный терминал шлёт как заглавную `N` (а не `shift+n`)."""
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, "printf 'aaa-hit\\nbbb\\naaa-hit\\n'")
+        await wait_command_done(app)
+        await submit(pilot, ":/aaa-hit")
+        assert isinstance(app.focused, CommandBlock)
+        assert app.focused.line_nav_active
+        first = app.focused.line_index
+        assert first is not None
+
+        # `n` — следующее совпадение, `N` (Shift+N) — предыдущее.
+        await pilot.press("n")
+        await pilot.pause()
+        second = app.focused.line_index
+        assert second is not None and second > first
+
+        await pilot.press("N")
+        await pilot.pause()
+        assert app.focused.line_index == first
+
+        await pilot.press("n")
+        await pilot.pause()
+        assert app.focused.line_index == second
+        await pilot.press("shift+n")
+        await pilot.pause()
+        assert app.focused.line_index == first
+
+
 async def test_theme_loaded_from_settings(isolated_home):
     settings = isolated_home / "settings.yml"
     settings.write_text(settings.read_text(encoding="utf-8") + "theme: textual-light\n", encoding="utf-8")

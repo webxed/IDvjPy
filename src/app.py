@@ -245,9 +245,11 @@ RE_BANG_PARTIAL = re.compile(
 RE_COLON_H_SEARCH = re.compile(r"^:h\s*/(.*)$")
 RE_HELP_KEEP_MARKUP = re.compile(r"(\[/?bold\])")
 RE_TAG_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-# `:llm …` / `:cht …` — вопросы и справки: пишутся в history (для ↑/`:h`),
-# но в подсказках не предлагаются (это не команды для повтора).
-RE_HISTORY_ONLY_QUERY = re.compile(r"^:(?:llm|cht)\s+\S")
+# `:`-команды, которые пишутся в history_*.txt для ↑/`:h` (но не в подсказки):
+# запросы/навигация, которые полезно повторить — `:llm`, `:cht`, `:rg`, `:md`, `:send[!]`.
+RE_HISTORY_ONLY_QUERY = re.compile(r"^:(?:llm|cht|rg|md|send!?)\s+\S")
+# `:md <путь>#L<строка>` — открыть markdown на нужной строке (как в GitHub).
+RE_MD_LINE = re.compile(r"^(?P<path>.+?)#L(?P<line>\d+)$")
 # Метка буфера (`:name`): буква/`_` в начале, дальше буквы/цифры/`_`/`-`.
 # Чисто цифровая метка запрещена — `|@N` однозначно значит «N-й блок назад».
 RE_BLOCK_LABEL = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")
@@ -281,6 +283,11 @@ def _identity(text: str) -> str:
 
 
 DEFAULT_SCREENSAVER_IDLE = 120
+
+# Порог форматированного рендера markdown в `:md`. Textual-виджет `Markdown`
+# создаёт виджет на каждый блок: 550 строк ≈ 1.3 с, 2200 ≈ 6 с, 13k ≈ 40 с.
+# Выше порога файл открывается как исходник в Line-API просмотрщике.
+DEFAULT_MD_RENDER_LINES = 1000
 
 
 class LineNavigable(Static):
@@ -622,6 +629,8 @@ _LINE_NAV_APPEND_BINDINGS: list[BindingType] = [
     Binding("pagedown", "journal_page_down", show=False, priority=True),
     Binding("slash", "journal_search", show=False, priority=True),
     Binding("n", "search_next", show=False, priority=True),
+    # Shift+N: реальный терминал шлёт заглавную `N`, а не `shift+n` (см. json_viewer).
+    Binding("N", "search_prev", show=False, priority=True),
     Binding("shift+n", "search_prev", show=False, priority=True),
 ]
 
@@ -1540,8 +1549,7 @@ class CommandInput(Input):
             return
         inp = app.query_one(f"#{app.ID_INPUT}", Input)
         if inp.has_focus:
-            container = app.query_one(f"#{app.ID_RESULTS_CONTAINER}", VerticalScroll)
-            container.scroll_relative(y=1, animate=False, immediate=True)
+            app._scroll_journal_wheel(1)
         else:
             app._scroll_journal_and_focus(1)
         event.stop()
@@ -1554,8 +1562,7 @@ class CommandInput(Input):
             return
         inp = app.query_one(f"#{app.ID_INPUT}", Input)
         if inp.has_focus:
-            container = app.query_one(f"#{app.ID_RESULTS_CONTAINER}", VerticalScroll)
-            container.scroll_relative(y=-1, animate=False, immediate=True)
+            app._scroll_journal_wheel(-1)
         else:
             app._scroll_journal_and_focus(-1)
         event.stop()
@@ -1640,7 +1647,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.114"
+    VERSION = "v1.115"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1692,6 +1699,7 @@ class CommandRunner(App):
     KEY_HISTORY_KEEP = "history_keep"
     KEY_HISTORY_COMPLETION = "history_completion"
     KEY_MD_DIR = "md_dir"
+    KEY_MD_RENDER_LINES = "md_render_lines"
     HISTORY_SEARCH_LIMIT = 50
     # Сколько строк истории показывать в выпадающих подсказках при наборе.
     HISTORY_COMPLETION_LIMIT = 20
@@ -1858,8 +1866,13 @@ class CommandRunner(App):
         self._label_target: CommandBlock | None = None
         # Поиск по markdown (`:rg`): базовый каталог документов и результаты.
         self.md_dir: str = ""
+        # Порог форматированного `:md` (строк); больше — raw-вид в Line API.
+        self.md_render_lines: int = DEFAULT_MD_RENDER_LINES
         self._md_results: list[MdMatch] = []
         self._journal_block_cache: list[Static] | None = None
+        # Пользователь увёл вид журнала вверх и читает: новый вывод не двигает
+        # viewport и не крадёт фокус (см. add_block / _journal_reading).
+        self._follow_paused: bool = False
         self.simple_output_mode: bool = False
         # Line API-блоки журнала (render_line вместо одного большого Static).
         # Включается line_api_blocks в settings.yml или IDVJPY_LINE_BLOCKS.
@@ -2605,8 +2618,7 @@ class CommandRunner(App):
             return
         inp = self.query_one(f"#{self.ID_INPUT}", Input)
         if inp.has_focus:
-            container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
-            container.scroll_relative(y=1, animate=False, immediate=True)
+            self._scroll_journal_wheel(1)
         else:
             self._scroll_journal_and_focus(1)
         event.stop()
@@ -2618,8 +2630,7 @@ class CommandRunner(App):
             return
         inp = self.query_one(f"#{self.ID_INPUT}", Input)
         if inp.has_focus:
-            container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
-            container.scroll_relative(y=-1, animate=False, immediate=True)
+            self._scroll_journal_wheel(-1)
         else:
             self._scroll_journal_and_focus(-1)
         event.stop()
@@ -2702,6 +2713,12 @@ class CommandRunner(App):
                         settings.get(self.KEY_HISTORY_COMPLETION, True)
                     )
                     self.md_dir = str(settings.get(self.KEY_MD_DIR) or "").strip()
+                    try:
+                        self.md_render_lines = int(
+                            settings.get(self.KEY_MD_RENDER_LINES, DEFAULT_MD_RENDER_LINES)
+                        )
+                    except (TypeError, ValueError):
+                        self.md_render_lines = DEFAULT_MD_RENDER_LINES
                     try:
                         self.history_keep = int(
                             settings.get(self.KEY_HISTORY_KEEP, DEFAULT_HISTORY_KEEP)
@@ -3295,6 +3312,7 @@ class CommandRunner(App):
             return
         y0 = float(container.scroll_y)
         container.scroll_relative(y=delta, animate=False, immediate=True)
+        self._note_journal_scroll()
         y1 = float(container.scroll_y)
         direction = 1 if delta > 0 else -1
         if abs(y1 - y0) > 0.25:
@@ -3424,31 +3442,69 @@ class CommandRunner(App):
 
         self.call_after_refresh(scroll_then_repeat)
 
-    def _should_follow_journal_end(self) -> bool:
-        """Следовать за новым выводом: фокус во вводе или уже у нижнего края."""
+    def _journal_at_end(self) -> bool:
+        """Журнал у нижнего края (или настолько короткий, что прокрутки нет)."""
         try:
             container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
-            inp = self.query_one(f"#{self.ID_INPUT}", Input)
         except Exception:
-            return True
-        if inp.has_focus:
-            return True
-        if container.is_anchored and not getattr(container, "_anchor_released", False):
             return True
         max_y = float(getattr(container, "max_scroll_y", 0) or 0)
         if max_y <= 0.5:
             return True
         return float(container.scroll_y) >= max_y - 2
 
+    def _note_journal_scroll(self) -> None:
+        """Пользователь прокрутил журнал: у нижнего края следим, выше — нет.
+
+        Пока вид уведён вверх, новый вывод дописывается вниз, но viewport и
+        фокус не двигаются (см. `add_block`) — можно спокойно читать.
+        """
+        self._follow_paused = not self._journal_at_end()
+
+    def _resume_journal_follow(self) -> None:
+        """Снова следовать за новым выводом (пользователь запустил команду)."""
+        self._follow_paused = False
+
+    def _journal_reading(self) -> bool:
+        """Пользователь читает: вид уведён выше или фокус на блоке журнала."""
+        if self._follow_paused:
+            return True
+        return isinstance(self.focused, LineNavigable)
+
+    def _scroll_journal_wheel(self, delta: int) -> None:
+        """Колесо при фокусе во вводе: крутим журнал и помечаем позицию чтения."""
+        try:
+            container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+        except Exception:
+            return
+        container.scroll_relative(y=delta, animate=False, immediate=True)
+        self._note_journal_scroll()
+
+    def _should_follow_journal_end(self) -> bool:
+        """Следовать за новым выводом: да, если пользователь не читает выше.
+
+        Фокус на блоке журнала или отскролленный вверх вид — не повод уводить
+        viewport: докрутил до низа или запустил команду — слежение возвращается.
+        """
+        if self._journal_reading():
+            return self._journal_at_end()
+        return True
+
     def add_block(self, block: Static, *, follow_end: bool = True) -> None:
         """
         Добавляет блок в UI и возвращает фокус во ввод.
+
         По умолчанию прокручивает вниз; follow_end=False — для сплэша, который
-        потом явно ставит журнал на верх.
+        потом явно ставит журнал на верх. Если пользователь читает выше
+        (`_journal_reading`), блок просто дописывается вниз: viewport и фокус
+        остаются там, где были.
         """
         container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
+        reading = follow_end and self._journal_reading()
         container.mount(block)
         self._journal_block_cache = None
+        if reading:
+            return
         # Не скроллить весь блок в кадр: длинный :? / ?? с height:auto иначе
         # подвисает на layout. Фокус нужен, чтобы on_focus выставил pipe-source.
         block.focus(scroll_visible=False)
@@ -3735,6 +3791,9 @@ class CommandRunner(App):
         if not user_input:
             return
 
+        # Пользователь запускает команду — снова следим за выводом (`_follow_paused`).
+        self._resume_journal_follow()
+
         if not (self._demo_active or self._demo_pressing):
             colon = user_input[1:].split()[:1] if user_input.startswith(":") else []
             if not colon or colon[0] not in {
@@ -3877,8 +3936,8 @@ class CommandRunner(App):
             resolved = self._labelled_pipe_history(command)
             if resolved:
                 command = resolved
-        # :llm / :cht <запрос> — вопросы и справки: сохраняем в историю как
-        # «комментарий» (для ↑ и :h), но из подсказок они не появляются
+        # :llm / :cht / :rg / :md / :send <аргументы> — запросы, навигация и пересылка:
+        # сохраняем в историю (для ↑ и :h), но из подсказок они не появляются
         # (см. get_completion_candidates).
         is_history_only_query = bool(RE_HISTORY_ONLY_QUERY.match(command or ""))
         if command.startswith(prefixes) and not self._is_history_comment(command) and not is_history_only_query:
@@ -4359,27 +4418,57 @@ class CommandRunner(App):
         Basename lookups stay inside the repo (`handbook_md_path`); an explicit
         path (absolute, or relative to `md_dir`/cwd) is resolved by
         `resolve_md_path` — so `:rg` results and Obsidian-vault files open too.
+        `#L<line>` at the end (`note.md#L42`) jumps to that source line.
         """
         name = (filename or "").strip()
         if not name:
-            self.add_block(InfoBlock("Usage: :md <file|path>"))
+            self.add_block(InfoBlock("Usage: :md <file|path>[#L<line>]"))
             return
+        line: int | None = None
+        matched = RE_MD_LINE.match(name)
+        if matched:
+            line = int(matched.group("line"))
+            name = matched.group("path").strip()
         path = handbook_md_path(name)
         if path is None:
             path = resolve_md_path(name, extra_dirs=(self.md_dir,) if self.md_dir else ())
         if path is None:
             self.add_block(InfoBlock(f"[yellow]Markdown not found:[/] {name}"))
             return
-        self._open_md_file(path)
+        self._open_md_file(path, line=line)
 
-    def _open_md_file(self, path: Path) -> None:
-        """Открыть markdown-файл встроенным просмотрщиком."""
+    def _open_md_file(self, path: Path, line: int | None = None) -> None:
+        """Открыть markdown-файл встроенным просмотрщиком (опц. на строке `line`).
+
+        Форматированный Textual-`Markdown` держит виджет на каждый блок, т.е. на
+        больших файлах монтирование занимает десятки секунд (13k строк ≈ 40 с).
+        Файлы длиннее `md_render_lines` открываем исходником в ленивом Line-API
+        просмотрщике (поиск `/`, `n`/`N`, переход к строке) — мгновенно.
+        """
         try:
             text = path.read_text(encoding=self.ENCODING)
         except OSError as e:
             self.add_block(InfoBlock(f"Error reading {path}: {e}"))
             return
-        self.push_screen(HandbookMarkdownScreen(path, text))
+        lines = text.splitlines()
+        if len(lines) > self.md_render_lines:
+            subtitle = (
+                f"{len(lines)} lines · raw view"
+                f" (over md_render_lines={self.md_render_lines})"
+            )
+            if line:
+                subtitle += f" · line {line}"
+            self.push_screen(
+                OutputViewerScreen(
+                    lines,
+                    title=f"Markdown — {path.name}",
+                    subtitle=subtitle + " · y copies path · Esc closes",
+                    start_line=line,
+                    source_path=str(path),
+                )
+            )
+            return
+        self.push_screen(HandbookMarkdownScreen(path, text, line=line))
 
     # --- Поиск по markdown (`:rg`) -------------------------------------
 
@@ -4491,7 +4580,8 @@ class CommandRunner(App):
         if not 1 <= number <= len(self._md_results):
             self.add_block(InfoBlock(f"No result {number} (have {len(self._md_results)})."))
             return
-        self._open_md_file(Path(self._md_results[number - 1].abs_path))
+        match = self._md_results[number - 1]
+        self._open_md_file(Path(match.abs_path), line=match.line)
 
     def action_open_md_result(self, index: int = 0) -> None:
         """Клик по результату `:rg` — открыть его в md-просмотрщике (0-based)."""
@@ -4500,7 +4590,7 @@ class CommandRunner(App):
         except (IndexError, TypeError, ValueError):
             self.add_block(InfoBlock("Search result is gone; run :rg again."))
             return
-        self._open_md_file(Path(match.abs_path))
+        self._open_md_file(Path(match.abs_path), line=match.line)
 
     def _change_cwd(self, path: str) -> None:
         """Меняет cwd процесса для shell-команд. Библиотека тегов остаётся в каталоге запуска."""
@@ -4980,6 +5070,8 @@ class CommandRunner(App):
         command = str(message.get("command") or "").strip()
         if not command:
             return
+        # Команда пришла из другой сессии — показываем её сразу: снять скринсейвер.
+        self._wake_screensaver()
         sender = str(message.get("from") or "?")
         mode = message.get("mode")
         if mode == MODE_RUN:
@@ -5102,6 +5194,23 @@ class CommandRunner(App):
         if isinstance(current, DevopsScreensaver):
             return
         self.push_screen(DevopsScreensaver(stars=self.screensaver_stars))
+
+    def _wake_screensaver(self) -> None:
+        """Снять активный скринсейвер по внешнему событию (напр. команда по `:send`).
+
+        Свои клавиши/клики скринсейвер ловит сам (`_wake`), но переслать команду
+        может другая сессия — тогда заслонка осталась бы поверх журнала.
+        """
+        try:
+            current = self.screen
+        except Exception:
+            return
+        if isinstance(current, DevopsScreensaver):
+            try:
+                self.pop_screen()
+            except Exception:
+                pass
+        self._bump_screensaver_idle()
 
     def _handle_screensaver_command(self, args: list[str]) -> None:
         """`:screensaver` preview; `:screensaver 0` / `:screensaver 120` set idle seconds."""

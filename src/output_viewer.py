@@ -8,6 +8,7 @@
 Поиск по тексту: `/` открывает поле ввода, Enter — искать вперёд от текущей
 позиции, `n` / `N` — следующее / предыдущее совпадение (с заворотом), Esc в поле
 закрывает поиск. Найденная строка подсвечивается. `q` / Esc — закрыть экран.
+`y` копирует путь исходного файла (`source_path`, raw-вид `:md`) в буфер.
 
 Строки берутся из `raw_stdout` (настоящие, как F3), секреты не маскируются —
 приложение предупреждает об этом в заголовке.
@@ -15,6 +16,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 from rich.segment import Segment
 from textual.app import ComposeResult
@@ -135,7 +137,11 @@ class OutputViewerScreen(ModalScreen[None]):
         Binding("q", "close_screen", "Close"),
         Binding("slash", "find_prompt", "Find"),
         Binding("n", "find_next", "Next"),
-        Binding("shift+n", "find_prev", "Prev"),
+        # Shift+N терминал присылает как заглавную `N` (см. json_viewer);
+        # `shift+n` — для терминалов с modifyOtherKeys, где модификатор явный.
+        Binding("N", "find_prev", "Prev"),
+        Binding("shift+n", "find_prev", "Prev", show=False),
+        Binding("y", "copy_path", "Copy path", show=False),
     ]
 
     DEFAULT_CSS = """
@@ -153,17 +159,23 @@ class OutputViewerScreen(ModalScreen[None]):
         *,
         title: str = "Output",
         subtitle: str = "",
+        start_line: int | None = None,
+        source_path: str | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self._lines = list(lines)
         self._title = title
         self._subtitle = subtitle
+        # 1-based строка, к которой прыгнуть при открытии (большие md в raw-виде).
+        self._start_line = int(start_line) if start_line and int(start_line) > 0 else None
+        # Файл-источник: `y` копирует его полный путь (для `:log` не задан).
+        self._source_path = str(source_path) if source_path else None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
         yield Input(
-            placeholder="/text  ·  Enter — search, n/N — next/prev, Esc — close field",
+            placeholder="text  ·  Enter — search · n / N — next / prev · Esc — close field",
             id="output-search",
         )
         yield OutputView(self._lines, id="output-view")
@@ -174,6 +186,21 @@ class OutputViewerScreen(ModalScreen[None]):
         self.sub_title = self._subtitle
         self._search_input().display = False
         self._view().focus()
+        if self._start_line is not None:
+            self.call_after_refresh(self._jump_to_start)
+
+    def _jump_to_start(self) -> None:
+        """Прокрутить и подсветить стартовую строку (после первого layout)."""
+        start = self._start_line
+        if start is None:
+            return
+        view = self._view()
+        if view.line_count == 0:
+            return
+        row = min(start - 1, view.line_count - 1)
+        view.set_match(row)
+        height = max(1, int(view.size.height))
+        view.scroll_to(y=max(0, row - height // 3), animate=False)
 
     def _view(self) -> OutputView:
         return self.query_one(OutputView)
@@ -240,6 +267,22 @@ class OutputViewerScreen(ModalScreen[None]):
             self._hide_search()
             return
         self.dismiss(None)
+
+    def action_copy_path(self) -> None:
+        """`y` — полный путь исходного файла (raw-вид `:md`) в буфер обмена."""
+        if not self._source_path:
+            self.sub_title = "No file path to copy (this is block output)."
+            return
+        runner: Any = self.app
+        copy = getattr(runner, "copy_text", None)
+        try:
+            if copy is None:
+                raise RuntimeError("no clipboard helper")
+            copy(self._source_path)
+        except Exception:
+            self.sub_title = "Error copying the file path to clipboard."
+            return
+        self.sub_title = f"Path copied: {self._source_path}"
 
     def action_close_screen(self) -> None:
         self.dismiss(None)

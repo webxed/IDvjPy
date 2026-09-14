@@ -24,7 +24,7 @@ from screensaver import (
     render_host_line,
     ticker_items_from_commands,
 )
-from tests.conftest import input_widget, last_info, submit
+from tests.conftest import input_widget, last_info, submit, wait_command_done
 
 
 def test_flatten_command_collapses_whitespace():
@@ -398,6 +398,46 @@ async def test_screensaver_stars_off_from_settings(isolated_home):
         assert app.screensaver_stars is False
         assert app.screen._field.stars_enabled is False
         assert all(star.kind == "clock" for star in app.screen._field.stars)
+
+
+async def test_forwarded_command_wakes_screensaver(isolated_home):
+    """`:send` из другой сессии снимает активный скринсейвер — видно журнал."""
+    from session_mailbox import send_message
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, ":screensaver")
+        await pilot.pause()
+        assert isinstance(app.screen, DevopsScreensaver)
+
+        # Команда ждала в ящике, пока приложение показывало скринсейвер.
+        send_message(str(isolated_home), "default", "echo forwarded", sender="s2")
+        app._poll_session_inbox()
+        await pilot.pause()
+
+        assert not isinstance(app.screen, DevopsScreensaver)
+        assert "Forwarded" in last_info(app).text_content
+        assert input_widget(app).value == "echo forwarded"
+
+
+async def test_forwarded_run_wakes_screensaver_and_executes(isolated_home):
+    """Тот же путь для режима `run` (`:send!`): снять и выполнить."""
+    from session_mailbox import MODE_RUN, send_message
+
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, ":screensaver")
+        await pilot.pause()
+        assert isinstance(app.screen, DevopsScreensaver)
+
+        send_message(
+            str(isolated_home), "default", "seq 2", sender="s2", mode=MODE_RUN
+        )
+        app._poll_session_inbox()
+        block = await wait_command_done(app)
+
+        assert not isinstance(app.screen, DevopsScreensaver)
+        assert "2" in block.raw_stdout
 
 
 async def test_colon_screensaver_off(isolated_home):

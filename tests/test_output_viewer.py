@@ -182,7 +182,7 @@ async def test_log_viewer_search_jumps(isolated_home):
 async def test_log_viewer_search_next_and_prev(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 20)) as pilot:
-        await submit(pilot, "seq -f 'hit-%03g' 1 50")
+        await submit(pilot, "printf 'hit-one\\nhit-two\\nhit-three\\n'")
         await wait_command_done(app)
         await submit(pilot, ":log")
         await pilot.pause()
@@ -204,9 +204,16 @@ async def test_log_viewer_search_next_and_prev(isolated_home):
         second = view.match_row
         assert second is not None and second != first
 
-        await pilot.press("shift+n")
+        # Shift+N в реальном терминале приходит как заглавная `N`.
+        await pilot.press("N")
         await pilot.pause()
         assert view.match_row == first
+
+        # ... а `shift+n` — для терминалов с modifyOtherKeys: та же команда prev,
+        # от первой строки уходит по кругу на последнюю.
+        await pilot.press("shift+n")
+        await pilot.pause()
+        assert view.match_row == 2
 
 
 async def test_log_viewer_search_reports_no_match(isolated_home):
@@ -228,6 +235,21 @@ async def test_log_viewer_search_reports_no_match(isolated_home):
         await pilot.pause()
         assert view.match_row is None
         assert "No match" in (screen.sub_title or "")
+
+
+async def test_log_viewer_y_without_path_reports(isolated_home):
+    """`y` в `:log` (вывод блока, не файл) — явная ошибка, а не тишина."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await submit(pilot, "seq 3")
+        await wait_command_done(app)
+        await submit(pilot, ":log")
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, OutputViewerScreen)
+        await pilot.press("y")
+        await pilot.pause()
+        assert "No file path" in (screen.sub_title or "")
 
 
 async def test_truncate_keeps_tail_and_counts_hidden(isolated_home):

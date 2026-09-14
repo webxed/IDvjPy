@@ -16,12 +16,18 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :c          - Clear all output blocks
   :json       - Open JSON viewer (from last block)
   :json <file>- Open JSON file in viewer
-  :md <file|path> - Open markdown with formatting: repo handbook name, or an explicit
-                path (e.g. an Obsidian-vault file); Esc closes
+  :md <file|path>[#L<n>] - Open markdown with formatting: repo handbook name, or
+                an explicit path (e.g. an Obsidian-vault file); `#L<n>` opens at
+                source line n (like GitHub). Esc closes. Recorded in history (↑ / `:h`)
+                `y` copies the full path (in the formatted view also a click on
+                the name in the header). Files over `md_render_lines` (default
+                1000) open as raw source in the Line-API viewer (fast; `/` search,
+                `n`/`N`) — the formatted widget takes tens of seconds on big files
   :rg <pat> [dir] - Search markdown files for a regex (ripgrep, or the built-in
                 scanner with an install hint). Smart case; results are clickable
-                `path:line` fragments — open them in the md viewer; `:rg <N>`
-                opens result N (1-based). Base: [dir] → settings `md_dir` → cwd
+                `path:line` fragments — open them in the md viewer at that line;
+                `:rg <N>` opens result N (1-based). Base: [dir] → settings `md_dir`
+                → cwd. `:rg` / `:md` are recorded in history (↑ / `:h`)
   :i          - Kubernetes Ingress Analyzer (see :i for details)
   :cd [path]  - Show or change the shell cwd (tags DB / history stay at launch dir)
   :fm [path]  - Open the OS file manager in a new window (cwd or path)
@@ -53,10 +59,10 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 secrets are masked (****) and never written to disk. The inbox is
                 inbox_<session>.jsonl (0600) in the data dir; a message for a
                 stopped session waits for its start. Tab completes session names
-                after `:send `.
+                after `:send `. Recorded in history (↑ / `:h`), never suggested
   :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
-  :screensaver  - Starfield; full-width ticker; bottom-left help; bottom-right load/mem (idle: screensaver_idle; keys/clicks/scroll/mouse move reset it; 0 = off; screensaver_stars: false hides flying dust)
+  :screensaver  - Starfield; full-width ticker; bottom-left help; bottom-right load/mem (idle: screensaver_idle; keys/clicks/scroll/mouse move reset it; a forwarded :send command wakes it too; 0 = off; screensaver_stars: false hides flying dust)
   :r          - Put the focused (or last) block command into the input
   :r N        - Put the command N blocks back into the input (0 = last)
   :cmd [N] [show] - Materialize the block command with current $VAR values (secrets
@@ -66,7 +72,7 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 cap; arrows/PgUp/PgDn scroll, Esc or q closes). Find with `/`;
                 Enter — search, n/N — next/prev match, Esc — close the find field.
                 N = blocks back (0 = focused/last). Shows the real raw output
-                (like F3). Also F7.
+                (like F3). Also F7. `y` copies the source file path (raw `:md` view)
   :kill [all] - Stop the running background command (focused block or the last one;
                 `:kill all` stops every running command). SIGTERM, then SIGKILL.
   :watch <sec> <command> - Rerun <command> every <sec> seconds in one block
@@ -203,6 +209,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                (needs terminal_mouse: true in settings.yml)
   PgUp/PgDn  - Scroll the journal a page; the visible block becomes active
                (does not jump to the start of the block). From input: enter viewing.
+  Reading    - Once you scrolled up (or a journal block has focus), new output
+               is appended below WITHOUT moving the view or stealing focus.
+               Follow resumes when you scroll back to the end or run a command
   Esc        - Return to input (see also line-cursor mode)
   Space      - Toggle block collapse
   ← / →      - Collapse / expand focused block

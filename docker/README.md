@@ -42,6 +42,7 @@ docker compose run --rm idvjpy        # образ соберётся при п�
 | `:new demo ~` | второе окно приложения в отдельном терминале (своя сессия, общая БД) |
 | `:kctx` | список кластеров kubectl-журнала (нужен `kubectl`/`tsh`) |
 | `:md SEED_LINUX_COMMANDS.md` | справочник с форматированием |
+| `:rg <текст>` | поиск по markdown (`md_dir`/cwd); клик по `путь:строка` открывает на строке |
 | `:stats` / `:export * catalog.md` | метрики библиотеки / каталог в Markdown |
 | `:screensaver` | starfield |
 | `:q` | выход |

@@ -233,6 +233,29 @@ async def test_poll_offline_queue_from_previous_send(isolated_home):
 # --- Автодополнение имён сессий после `:send ` ------------------------------ 
 
 
+async def test_send_recorded_in_history(isolated_home):
+    """`:send` / `:send!` пишутся в history_*.txt (↑, `:h`), но не в подсказки."""
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":send beta echo hello")
+        await submit(pilot, ":send! beta date")
+        await pilot.pause()
+        history = app._read_file_history()
+        assert ":send beta echo hello" in history
+        assert ":send! beta date" in history
+        # Как `:llm`/`:rg`/`:md` — в выпадающих подсказках не предлагаются.
+        assert ":send beta echo hello" not in app.get_completion_candidates(":send")
+
+
+async def test_send_without_args_not_in_history(isolated_home):
+    """Голый `:send` — справка, в историю не пишется (как `:rg` / `:llm`)."""
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":send")
+        await pilot.pause()
+        assert ":send" not in app._read_file_history()
+
+
 def test_send_completion_items_and_prefix(isolated_home):
     (isolated_home / "history_alpha.txt").write_text("echo a\n", encoding="utf-8")
     (isolated_home / "history_beta.txt").write_text("echo b\n", encoding="utf-8")

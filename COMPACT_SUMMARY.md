@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.114**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.115**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,17 +145,18 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.54 (app v1.114) |
+| `test_cmd.md` | Manual plan v1.55 (app v1.115) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров, `--check`/`--dry-run`/`--set` |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
 | `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
+| `tests/test_journal_follow.py` | Режим чтения: колесо вверх/фокус на блоке не уводит вид и фокус; возобновление при докрутке до низа и по Enter; `:send!` во время чтения |
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
 | `tests/test_demo.py` | YAML `--demo` (short/full/ip/features/all, guardrails тура `all`), `:playbook`, `loop: N` / `loop: true` |
 | `tests/test_gui_open.py` | `:fm` / `:term` argv by OS, `$FILEMAN` / `$TERMINAL`, detached spawn |
-| `tests/test_screensaver.py` | starfield, `:screensaver`, idle timer, key swallowed |
+| `tests/test_screensaver.py` | starfield, `:screensaver`, idle timer, key swallowed, `:send` снимает заставку |
 | `tests/test_docker_stand.py` | Файлы docker-стенда: seed-скрипты в entrypoint, compose-том/TTY, Dockerfile, `.dockerignore`, job CI |
 
 Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then Enter.
@@ -171,7 +172,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.114 |
+| `src/app.py` | TUI (`CommandRunner`), v1.115 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
@@ -205,6 +206,18 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.115
+
+- **`:rg` / `:md` — в истории, переход к строке.** `:rg …` и `:md …` теперь пишутся в `history_*.txt` (повтор по ↑ / поиск через `:h /`), но в подсказках не предлагаются (`RE_HISTORY_ONLY_QUERY` расширен на `rg|md`). `:md <путь>#L<n>` открывает markdown сразу на строке n (как в GitHub); результат `:rg` и клик по `путь:строка` тоже открываются на строке совпадения. В `md_viewer` — `_scroll_to_line` (по `MarkdownBlock.source_range`, с ожиданием рендера), заголовок `· line N`; в `app` — `RE_MD_LINE`. Тесты: `test_md_search.py` (+4: история, `#L`, `:rg N` на строке).
+- **Shift+N в просмотрщиках вывода и в поиске по журналу.** Биндинг `shift+n` не срабатывал в реальном терминале: Shift+буква приходит как заглавная `N` (как `"N"` в `json_viewer`), поэтому «предыдущее совпадение» работало только в Pilot-тестах. Теперь добавлен `Binding("N", …)` (и сохранён `shift+n` для терминалов с modifyOtherKeys) в `output_viewer` и в `_LINE_NAV_APPEND_BINDINGS`; плейсхолдер поиска больше не показывает `«/text»` (слэш — только клавиша открытия). Тесты: `N` и `shift+n` в F7-просмотрщике и в журнале.
+- **Большие markdown без тормозов.** Textual-виджет `Markdown` создаёт виджет на каждый блок: 550 строк ≈ 1.3 с, 2200 ≈ 6 с, 8800 ≈ 27 с, 13k ≈ 40 с (фактически зависание). Добавлена настройка `md_render_lines` (по умолчанию 1000): `:md` форматирует только файлы до порога; длиннее — исходник в ленивом Line-API `OutputViewerScreen` (общий экран с `:log`/F7): 14k строк ≈ 0.5 с, поиск `/` + `n`/`N`, `#L<n>` точно совпадает со строкой источника (новый параметр `start_line`). Тесты: `test_md_search.py` (+3). Настройка в `settings.example.yml`.
+- **`:send` / `:send!` — в истории.** Пересылка в другую сессию теперь пишется в `history_*.txt` (повтор по ↑, поиск `:h /`), но, как `:llm`/`:cht`/`:rg`/`:md`, не предлагается в подсказках: `RE_HISTORY_ONLY_QUERY` расширен на `send!?`. Голый `:send` (справка) не пишется. Тесты: `test_session_mailbox.py` (+2).
+- **Пришедшая `:send`-команда снимает скринсейвер.** Заставка реагировала только на свои клавиши/клики/скролл, поэтому пересланная из другой сессии команда оставалась за ней. Новый `_wake_screensaver()` (pop, если на экране `DevopsScreensaver`, + сброс простоя) вызывается в `_deliver_forwarded` — до вставки во ввод / выполнения. Тесты: `test_screensaver.py` (+2).
+- **Копирование пути файла из `:md`.** `y` копирует полный путь открытого markdown в буфер (в обоих видах); в форматированном просмотрщике имя файла в шапке кликабельно (`[@click=screen.copy_path]`) и после копирования показывает `copied: /путь`. `OutputViewerScreen` получил `source_path`; для обычного `:log` (вывод блока, не файл) — явное `No file path to copy`. Тесты: `test_md_search.py` (+2), `test_output_viewer.py` (+1).
+- **Режим чтения журнала (новый вывод не уводит вид).** Раньше `add_block` безусловно уводил журнал вниз и забирал фокус (в `_should_follow_journal_end` была оговорка «фокус в вводе → следим», но `add_block` его же и ставил), так что фоновой вывод — `:watch`, ответ `:llm`, пришедший `:send`, долгая команда — сбивал чтение. Теперь: если вид отскроллен вверх (`_follow_paused`, ставится из `_scroll_journal_wheel`/`_scroll_journal_and_focus`) или фокус на блоке журнала (`_journal_reading`), блок только монтируется — без scroll-to-end и без перевода фокуса. Слежение возвращается сам при докрутке до низа (`_journal_at_end`) и при отправке строки (`_resume_journal_follow`). Тесты: `tests/test_journal_follow.py` (5).
+- **Актуализация документов.** Синхронизированы `DATABASE.md` / `backup_db.md` (маркер состояния `v1.93` → `v1.115` — в `version_bump.TARGETS` их нет, обновляются вручную), вычищена нумерация секций `test_cmd.md` (14b/14c/14d и 30–33 по порядку следования), убраны дубли пунктов в `CLAUDE.md` (Key Behaviors) и уточнены формулировки про `y`/клик в `:md` (`README.md`, `help_texts.py`).
+- **Чистка `test_cmd.md`.** Убран случайный дубль `**Версия документа**` в середине документа — маркер остался один, в подвале (`bump_version` теперь инкрементит именно его).
 
 ## v1.114
 

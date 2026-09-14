@@ -2,14 +2,21 @@
 import os
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
+from textual.widget import Widget
 from textual.widgets import Markdown, Static
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _escape_markup(text: str) -> str:
+    """`[` → `\\[`: имя/путь пользовательского файла не должны ломать разметку Textual."""
+    return (text or "").replace("[", "\\[")
 
 
 def handbook_md_path(name: str) -> Path | None:
@@ -63,12 +70,14 @@ class HandbookMarkdownScreen(ModalScreen[None]):
     """Full-screen formatted Markdown; Esc / q closes.
 
     Scroll stays inside this screen: the app journal also listens to the
-    mouse wheel, so we stop those events here.
+    mouse wheel, so we stop those events here. The file name in the header is
+    clickable and `y` copies the full path (`[@click=screen.copy_path]`).
     """
 
     BINDINGS = [
         Binding("escape", "close_screen", "Close", show=True),
         Binding("q", "close_screen", "Close", show=False),
+        Binding("y", "copy_path", "Copy path", show=False),
         Binding("up", "md_up", show=False),
         Binding("down", "md_down", show=False),
         Binding("pageup", "md_page_up", show=False),
@@ -77,17 +86,33 @@ class HandbookMarkdownScreen(ModalScreen[None]):
         Binding("end", "md_end", show=False),
     ]
 
-    def __init__(self, path: Path, markdown: str, **kwargs) -> None:
+    def __init__(
+        self,
+        path: Path,
+        markdown: str,
+        line: int | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self._path = path
         self._markdown = markdown
+        self._line = int(line) if line and int(line) > 0 else None
+        self._jump_done = False
+
+    def _title_text(self, tail: str | None = None) -> str:
+        """Шапка: имя файла (клик — копия пути) + подсказка или результат копирования."""
+        name = _escape_markup(self._path.name)
+        line = f"[bold #b794f4] · line {self._line}[/]" if self._line else ""
+        if tail is None:
+            tail = (
+                "[dim]y / click — copy full path · Esc / q — close · "
+                "wheel / arrows scroll[/]"
+            )
+        return f"[@click=screen.copy_path][bold #b794f4]{name}[/][/]{line}  {tail}"
 
     def compose(self) -> ComposeResult:
         with Vertical(id="md-frame"):
-            yield Static(
-                f"[bold #b794f4]{self._path.name}[/]  [dim]Esc / q — close · wheel / arrows scroll[/]",
-                id="md-title",
-            )
+            yield Static(self._title_text(), id="md-title")
             with VerticalScroll(id="md-scroll"):
                 yield Markdown(self._markdown, open_links=False, id="md-body")
 
@@ -95,6 +120,50 @@ class HandbookMarkdownScreen(ModalScreen[None]):
         body = self.query_one("#md-scroll", VerticalScroll)
         body.can_focus = True
         body.focus()
+        if self._line is not None:
+            self.call_after_refresh(self._scroll_to_line)
+
+    def on_markdown_table_of_contents_updated(
+        self, event: Markdown.TableOfContentsUpdated
+    ) -> None:
+        """Как только документ отрисован — прыгнуть к нужной строке (однократно)."""
+        if self._line is not None and not self._jump_done:
+            self._scroll_to_line()
+
+    def _scroll_to_line(self, attempt: int = 0) -> None:
+        """Прокрутить к блоку, содержащему строку исходника (1-based).
+
+        `MarkdownBlock.source_range` — 0-based полуинтервал [start, end) в строках
+        документа; если точного блока ещё нет (рендер асинхронный), пробуем ещё раз.
+        """
+        if self._line is None or self._jump_done:
+            return
+        target = self._line - 1
+        blocks: list[tuple[int, int, Widget]] = []
+        for block in self.query_one(Markdown).query("*"):
+            rng = getattr(block, "source_range", None)
+            if not rng:
+                continue
+            start, end = rng
+            blocks.append((int(start), int(end), block))
+        chosen: Widget | None = next(
+            (b for s, e, b in blocks if s <= target < e), None
+        )
+        if chosen is None:
+            before = [(s, b) for s, _end, b in blocks if s <= target]
+            if before:
+                chosen = max(before, key=lambda item: item[0])[1]
+            elif blocks:
+                chosen = blocks[0][2]
+        if chosen is None:
+            if attempt < 12:
+                self.set_timer(0.05, lambda: self._scroll_to_line(attempt + 1))
+            return
+        self._jump_done = True
+        try:
+            self._body().scroll_to_widget(chosen, top=True)
+        except Exception:
+            pass
 
     def _body(self) -> VerticalScroll:
         return self.query_one("#md-scroll", VerticalScroll)
@@ -102,6 +171,30 @@ class HandbookMarkdownScreen(ModalScreen[None]):
     def action_close_screen(self) -> None:
         if self.app.screen is self:
             self.app.pop_screen()
+
+    def _copy_to_clipboard(self, text: str) -> bool:
+        """Скопировать через приложение (как F3/:cmd); при ошибке — False."""
+        runner: Any = self.app
+        copy = getattr(runner, "copy_text", None)
+        if copy is None:
+            return False
+        try:
+            copy(text)
+        except Exception:
+            return False
+        return True
+
+    def action_copy_path(self) -> None:
+        """`y` / клик по имени файла — полный путь в буфер обмена."""
+        path = str(self._path)
+        if self._copy_to_clipboard(path):
+            tail = f"[green]copied:[/] [dim]{_escape_markup(path)}[/]"
+        else:
+            tail = "[red]could not copy the path[/]"
+        try:
+            self.query_one("#md-title", Static).update(self._title_text(tail))
+        except Exception:
+            pass
 
     def action_md_up(self) -> None:
         self._body().scroll_relative(y=-1, animate=False, immediate=True)
