@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.111**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.112**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.53 (app v1.111) |
+| `test_cmd.md` | Manual plan v1.53 (app v1.112) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров, `--check`/`--dry-run`/`--set` |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
@@ -171,7 +171,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.111 |
+| `src/app.py` | TUI (`CommandRunner`), v1.112 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
@@ -205,6 +205,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.112
+
+- **Подсказки из истории при наборе (`history_completion`).** В выпадающем списке теперь есть не только БД и `session_history`, но и строки `history_*.txt` по подстроке (свежие сверху, маркер `↺`, лимит 20, дедуп с командами). Важно: появляются и строки, начинающиеся с `@` и `>` — их не было в `session_history` (для `@` команда запускается уже без префикса), из-за чего казалось, что история их «не подхватывает». `Tab`/`Enter` вставляют полную строку, следующий `Enter` — запуск. `history_completion: false` оставляет только `↑`/`↓` и `:h /text`; короткий ввод (<2) и `:`/`!`/`?`/`#`/`$` — без истории. Метод `get_history_completions`; тесты — `tests/test_history_completion.py`.
 
 ## v1.111
 

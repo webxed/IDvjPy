@@ -215,6 +215,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   (k8s) kubectl get <res> <Tab> - live cluster resource names (k8s_completion: true)
   (paths) ./ | / | ~/ <Tab> - file/dir hints; bare names only after file-taking
                commands (cat/vim/grep/…) — file_completion: auto | paths | off
+  (hist) ↺ history <Tab> - history lines matching what you typed, incl. `@`/`>`
+               commands (history_completion: true; :h /text filters too)
   (JSON) Enter - Insert `jq 'path'` into input; also sets $JSON
 
 [bold]Line-cursor mode[/bold]

@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.111 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.112 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -26,7 +26,7 @@ IDvjPy — терминальное приложение (TUI) на Python (Text
 - Персистентные теги и сборка команд (`!tag[tid]`, `!!`)
 - Справочники команд (seed): Linux, [цепочки для расследования k8s](K8S_CHAINS.md), git, docker, helm, ansible, systemd, lsof/strace, sysstat, sort/jq, ip/ethtool, tcpdump/mtr/TLS, apt/rpm и другие ops
 - Журнал по блокам: фокус, сворачивание, пайп `|` из сфокусированного блока; метки буферов (`:name`) — пайп из старого блока без повторного запуска источника (`|@label awk …`, `|@N …`)
-- Автодополнение путей и команд из истории/БД
+- Автодополнение путей, команд из БД и строк `history_*.txt` (в т.ч. `@`/`>`; вкл./выкл. — `history_completion`), команд этой сессии
 - Построчный режим в выводе блока (копирование и дописывание во ввод)
 - JSON viewer (F5) с черновиком `jq` и `$JSON`
 - Переменные `$VAR` (файлы `.bashrc_term` / `.bashrc_term_<instance>`); `$OUT` — последняя строка блока, только в момент команды
@@ -368,6 +368,7 @@ curl -H "Bearer $TOKEN" https://api.example   # обычная подстано�
 max_lines: 100000
 history_lines: 20
 history_keep: 500            # хвост истории как лента; старше — без повторов. 0 = не сжимать. :h compact
+history_completion: true     # подсказки из history_*.txt при наборе (в т.ч. строки `@`/`>`); false — только ↑ и :h /
 database_tags_file: mytags.db
 backup_dir: backups          # снимки БД (:backup, --seed)
 command_timeout: 10          # 0 = без таймаута

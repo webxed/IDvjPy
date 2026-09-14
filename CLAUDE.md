@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.111) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.112) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.111` → `v1.112`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.112` → `v1.113`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -167,6 +167,7 @@ Edit `settings.yml`:
 - `check_updates`: `true` (default) — on start, compare `VERSION` with GitHub main. `:update` always checks. Tests set this to `false`. Proxy 407: `$PROXY_USER` / `$PROXY_PASS` in `.bashrc_term` (and `HTTPS_PROXY`).
 - `k8s_completion`: `false` (default) — for `kubectl get <res> <Tab>` pull live resource names from the cluster (short `kubectl get <resource> -o name` timeout; soft fallback when kubectl/cluster is unavailable)
 - `file_completion`: `auto` (default) | `paths` | `off` — when file/dir hints appear. `auto`: explicit paths (`./`, `/`, `~/`) plus a bare filename only after file-taking commands (`cat`, `vim`, `grep`, …; see `FILE_ARG_COMMANDS`), so subcommand CLIs (`kubectl get po`, `docker co`, `git ch`) do not flood hints with cwd entries. `paths`: only explicit paths and `cd`/`pushd`. `off`: no file hints.
+- `history_completion`: `true` (default) — while typing a plain command, also offer matching lines from `history_*.txt` (newest first, `↺` marker; includes `@`/`>` commands, which are not in `session_history`). Tab/Enter inserts the full line; `false` leaves only Up/Down and `:h /text`.
 - `llm_providers.yml` (cwd): LLM providers for `:llm` — see `src/llm_providers.example.yml`. Keys come from the environment only (`$VAR` refs in headers/body)
 - `cheat_sh_url` (default `https://cht.sh`) / `cheat_sh_options` (default `T` = no ANSI; add `Q` for no comments): base URL and query options for `:cht`
 - `screensaver_idle`: seconds of no keys/clicks/scroll/mouse-move before the DevOps starfield (default 120). `0` disables. Tests set this to `0`. `:screensaver` starts it now; `:screensaver 0` / `:screensaver 120` change idle for this session.

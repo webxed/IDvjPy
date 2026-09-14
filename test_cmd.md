@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.111
+# План тестирования IDvjPy_term v1.112
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1115,7 +1115,24 @@ cd po
 
 ---
 
+## Секция 38: Подсказки из истории (`history_completion`)
+
+```
+@ echo no-timeout-abc
+> echo tty-abc
+kubectl get pods
+@ ec              # в списке: ↺ @ echo no-timeout-abc
+> ec              # в списке: ↺ > echo tty-abc
+kub ec            # ↺ kubectl get pods (Tab/Enter — вставить, второй Enter — запуск)
+```
+
+**Ожидание:** при наборе обычной команды в выпадающем списке появляются (под маркером `↺`, свежие сверху) подходящие строки из `history_*.txt`, в том числе начинающиеся с `@` и `>` — их нет в `session_history` (для `@` команда запускается уже без префикса). `Tab`/`Enter` вставляют полную команду в строку (не запускают); следующий `Enter` — запуск. Дедупликация с кандидатами из БД/сессии. `history_completion: false` — только `↑` и `:h /text`; короткий ввод (<2) и `:`/`!`/`?`/`#`/`$` — без истории.
+
+Автотест: `tests/test_history_completion.py`.
+
+---
+
 **Версия документа**: v1.53
-**Версия приложения**: v1.111
+**Версия приложения**: v1.112
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11

@@ -1502,16 +1502,24 @@ class CommandInput(Input):
             return
 
         candidates = app.get_completion_candidates(raw_value)
-        if candidates:
+        history_items: list[CompletionItem] = []
+        if hasattr(app, "get_history_completions"):
+            history_items = app.get_history_completions(raw_value, exclude=candidates)
+        if candidates or history_items:
             # Точная команда уже набрана — не перехватывать Enter повторным apply.
             # Для каталога с / список оставляем, чтобы можно было углубиться.
             if (
-                candidates[0] == prefix
+                candidates
+                and candidates[0] == prefix
                 and not prefix.endswith(("/", "\\"))
             ):
                 self._completion_list.hide()
                 return
-            self._completion_list.update_candidates(candidates)
+            items: list[CompletionItem] = [
+                CompletionItem(insert=cand, display=cand) for cand in candidates
+            ]
+            items.extend(history_items)
+            self._completion_list.update_candidates(items)
         else:
             self._completion_list.hide()
 
@@ -1624,7 +1632,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.111"
+    VERSION = "v1.112"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1674,7 +1682,10 @@ class CommandRunner(App):
     ID_RESULTS_CONTAINER = "results-container"
     KEY_HISTORY_LINES = "history_lines"
     KEY_HISTORY_KEEP = "history_keep"
+    KEY_HISTORY_COMPLETION = "history_completion"
     HISTORY_SEARCH_LIMIT = 50
+    # Сколько строк истории показывать в выпадающих подсказках при наборе.
+    HISTORY_COMPLETION_LIMIT = 20
     ENCODING = "utf-8"
     TIMER_DELAY = 2
     COMMAND_TIMEOUT = 10
@@ -1825,6 +1836,8 @@ class CommandRunner(App):
         self._db_stat: tuple[int, int] | None = None
         self.history_lines: int = 20
         self.history_keep: int = DEFAULT_HISTORY_KEEP
+        # Подсказки из history_*.txt при наборе (в т.ч. `@`/`>`): см. get_history_completions.
+        self.history_completion: bool = True
         self.check_updates: bool = False
         self.db_file = self.FILE_DATABASE
         self.active_pipe_source: CommandBlock | None = None
@@ -2350,6 +2363,38 @@ class CommandRunner(App):
             unique.append(cmd)
         return unique
 
+    def get_history_completions(
+        self, text: str, exclude: Sequence[str] = ()
+    ) -> list[CompletionItem]:
+        """Подсказки из `history_*.txt` (+ сессия) по подстроке, свежие сверху.
+
+        Нужны, чтобы вставить произвольную старую команду прямо при наборе — в т.ч.
+        строки, начинающиеся с `>` (TTY) и `@` (без таймаута): они лежат в файле
+        истории, но в `session_history` их нет (для `@` команда запускается уже
+        без префикса). Полная команда подменяет строку целиком (`replace_token`
+        не выставлен). Управляется `history_completion` в settings.yml.
+        """
+        if not self.history_completion:
+            return []
+        stripped = (text or "").strip()
+        # Спец-префиксы со своими подсказками + короткий ввод (чтобы не шуметь).
+        if len(stripped) < 2 or stripped[0] in (":", "!", "?", "#", "$"):
+            return []
+        if self._is_path_context(text):
+            return []
+        needle = stripped.casefold()
+        skip = {cmd.strip() for cmd in exclude}
+        items: list[CompletionItem] = []
+        seen: set[str] = set()
+        for cmd, folded in reversed(self._history_pool_pairs()):
+            if cmd in skip or cmd in seen or needle not in folded:
+                continue
+            seen.add(cmd)
+            items.append(CompletionItem(insert=cmd, display=f"↺ {cmd}"))
+            if len(items) >= self.HISTORY_COMPLETION_LIMIT:
+                break
+        return items
+
     def get_history_search_completions(self, text: str) -> tuple[list[str], str]:
         """Подсказки для `:h /text`: уникальные строки history, свежие сверху."""
         matched = RE_COLON_H_SEARCH.match((text or "").rstrip())
@@ -2640,6 +2685,9 @@ class CommandRunner(App):
                 settings = yaml.safe_load(f)
                 if settings:
                     self.history_lines = settings.get(self.KEY_HISTORY_LINES, 20)
+                    self.history_completion = bool(
+                        settings.get(self.KEY_HISTORY_COMPLETION, True)
+                    )
                     try:
                         self.history_keep = int(
                             settings.get(self.KEY_HISTORY_KEEP, DEFAULT_HISTORY_KEEP)
