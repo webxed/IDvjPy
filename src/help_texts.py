@@ -16,7 +16,12 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :c          - Clear all output blocks
   :json       - Open JSON viewer (from last block)
   :json <file>- Open JSON file in viewer
-  :md <file>  - Open a handbook .md with formatting (Esc closes)
+  :md <file|path> - Open markdown with formatting: repo handbook name, or an explicit
+                path (e.g. an Obsidian-vault file); Esc closes
+  :rg <pat> [dir] - Search markdown files for a regex (ripgrep, or the built-in
+                scanner with an install hint). Smart case; results are clickable
+                `path:line` fragments — open them in the md viewer; `:rg <N>`
+                opens result N (1-based). Base: [dir] → settings `md_dir` → cwd
   :i          - Kubernetes Ingress Analyzer (see :i for details)
   :cd [path]  - Show or change the shell cwd (tags DB / history stay at launch dir)
   :fm [path]  - Open the OS file manager in a new window (cwd or path)

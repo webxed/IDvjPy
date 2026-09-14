@@ -20,6 +20,10 @@ history_keep: 500
 # false — только ↑ и :h /text.
 history_completion: true
 
+# Каталог документов для `:rg` — поиска по markdown (напр. Obsidian-vault).
+# Пусто — текущий каталог; `~` раскрывается. Разово: `:rg текст ~/vault`.
+md_dir: ""
+
 # Файл БД с тегами (относительно data-каталога).
 database_tags_file: mytags.db
 # Каталог снимков БД (:backup, --seed).

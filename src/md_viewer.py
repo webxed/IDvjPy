@@ -1,4 +1,6 @@
 """Modal Markdown viewer for handbook .md files in the repo."""
+import os
+from collections.abc import Sequence
 from pathlib import Path
 
 from textual.app import ComposeResult
@@ -30,6 +32,30 @@ def handbook_md_path(name: str) -> Path | None:
                 continue
             if candidate.is_file():
                 return candidate.resolve()
+    return None
+
+
+def resolve_md_path(name: str, extra_dirs: Sequence[str] = ()) -> Path | None:
+    """Resolve a markdown file by path (absolute, or relative to extra_dirs/cwd/repo).
+
+    Used by `:rg` results and `:md <path>`: unlike ``handbook_md_path`` (basename
+    only) this accepts a path anywhere, e.g. inside an Obsidian vault.
+    """
+    raw = (name or "").strip()
+    if not raw:
+        return None
+    candidate = Path(os.path.expanduser(raw))
+    tries: list[Path] = []
+    if candidate.is_absolute():
+        tries.append(candidate)
+    else:
+        for folder in (*extra_dirs, str(Path.cwd())):
+            if folder:
+                tries.append(Path(os.path.expanduser(folder)) / raw)
+        tries.append(REPO_ROOT / raw)
+    for path in tries:
+        if path.is_file():
+            return path.resolve()
     return None
 
 

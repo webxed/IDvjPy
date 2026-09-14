@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.113
+# План тестирования IDvjPy_term v1.114
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1101,7 +1101,7 @@ F8                     # диалог метки: пусто — снять, Esc
 
 ---
 
-**Версия документа**: v1.53
+**Версия документа**: v1.54
 ## Секция 37: Файловые подсказки (`file_completion`)
 
 ```
@@ -1135,7 +1135,24 @@ kub ec            # ↺ kubectl get pods (Tab/Enter — вставить, вто
 
 ---
 
-**Версия документа**: v1.53
-**Версия приложения**: v1.113
+## Секция 39: Поиск по markdown (`:rg`, Obsidian-vault)
+
+```
+mkdir -p /tmp/vault && printf '# note\nneedle here\n' > /tmp/vault/note.md
+:rg
+:rg needle /tmp/vault
+:rg 1
+:rg 9
+:md /tmp/vault/note.md
+```
+
+**Ожидание:** `:rg` без аргумента — `Usage: :rg <pattern> [dir]`, текущая база (`md_dir` / cwd), бэкенд (`ripgrep` или `built-in python`) и подсказка установки rg, если его нет. `:rg needle /tmp/vault` — заголовок с числом совпадений/файлов и фрагменты вида `note.md:2  needle here`: клик по `путь:строка` открывает файл встроенным md-просмотрщиком. `:rg 1` открывает первый результат (1-based), `:rg 9` — `No result 9`. `:md /tmp/vault/note.md` открывает файл по пути (абсолютному или относительно `md_dir`/cwd). Паттерн — регулярное выражение, «умный регистр»; скрытые/служебные каталоги (`.git`, `.obsidian`, `node_modules`) пропускаются.
+
+Автотест: `tests/test_md_search.py`.
+
+---
+
+**Версия документа**: v1.52
+**Версия приложения**: v1.114
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`  
 **Дата**: 2026-09-11

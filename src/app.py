@@ -79,6 +79,7 @@ try:
     import threading
     import time
     from collections.abc import Callable, Mapping, Sequence
+    from pathlib import Path
     from typing import Any, Optional, cast
 
     import yaml
@@ -167,7 +168,14 @@ try:
         build_app_context,
         extract_refs,
     )
-    from md_viewer import HandbookMarkdownScreen, handbook_md_path
+    from md_search import (
+        MdMatch,
+        MdSearchResult,
+        install_hint,
+        rg_available,
+    )
+    from md_search import search as search_markdown
+    from md_viewer import HandbookMarkdownScreen, handbook_md_path, resolve_md_path
     from output_viewer import OutputViewerScreen
     from screensaver import DevopsScreensaver
     from seed_catalog import (
@@ -1632,7 +1640,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.113"
+    VERSION = "v1.114"
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1683,6 +1691,7 @@ class CommandRunner(App):
     KEY_HISTORY_LINES = "history_lines"
     KEY_HISTORY_KEEP = "history_keep"
     KEY_HISTORY_COMPLETION = "history_completion"
+    KEY_MD_DIR = "md_dir"
     HISTORY_SEARCH_LIMIT = 50
     # Сколько строк истории показывать в выпадающих подсказках при наборе.
     HISTORY_COMPLETION_LIMIT = 20
@@ -1732,6 +1741,7 @@ class CommandRunner(App):
     CMD_LLM = "llm"
     CMD_CHT = "cht"
     CMD_NAME = "name"
+    CMD_RG = "rg"
     CMD_GREP = "g"
     CMD_SEARCH_NEXT = "n"
     CMD_SEARCH_PREV = "N"
@@ -1846,6 +1856,9 @@ class CommandRunner(App):
         self._block_labels: dict[str, CommandBlock] = {}
         # Блок, выбранный для метки в диалоге F8 (между push_screen и callback).
         self._label_target: CommandBlock | None = None
+        # Поиск по markdown (`:rg`): базовый каталог документов и результаты.
+        self.md_dir: str = ""
+        self._md_results: list[MdMatch] = []
         self._journal_block_cache: list[Static] | None = None
         self.simple_output_mode: bool = False
         # Line API-блоки журнала (render_line вместо одного большого Static).
@@ -2688,6 +2701,7 @@ class CommandRunner(App):
                     self.history_completion = bool(
                         settings.get(self.KEY_HISTORY_COMPLETION, True)
                     )
+                    self.md_dir = str(settings.get(self.KEY_MD_DIR) or "").strip()
                     try:
                         self.history_keep = int(
                             settings.get(self.KEY_HISTORY_KEEP, DEFAULT_HISTORY_KEEP)
@@ -4016,6 +4030,8 @@ class CommandRunner(App):
             self._handle_cht_command(parts[1:])
         elif command == self.CMD_NAME:
             self._handle_name_command(parts[1:])
+        elif command == self.CMD_RG:
+            self._handle_rg_command(parts[1:])
         elif command == self.CMD_GREP:
             self._journal_search(" ".join(parts[1:]))
         elif command == self.CMD_SEARCH_NEXT:
@@ -4338,21 +4354,153 @@ class CommandRunner(App):
         self.insert_input_at_cursor(draft)
 
     def action_open_handbook_md(self, filename: str = "") -> None:
-        """Open a repo handbook .md in a formatted modal (click from welcome or :md)."""
+        """Open markdown: repo handbook basename or an explicit path (vault).
+
+        Basename lookups stay inside the repo (`handbook_md_path`); an explicit
+        path (absolute, or relative to `md_dir`/cwd) is resolved by
+        `resolve_md_path` — so `:rg` results and Obsidian-vault files open too.
+        """
         name = (filename or "").strip()
         if not name:
-            self.add_block(InfoBlock("Usage: :md SEED_LINUX_COMMANDS.md"))
+            self.add_block(InfoBlock("Usage: :md <file|path>"))
             return
         path = handbook_md_path(name)
         if path is None:
+            path = resolve_md_path(name, extra_dirs=(self.md_dir,) if self.md_dir else ())
+        if path is None:
             self.add_block(InfoBlock(f"[yellow]Markdown not found:[/] {name}"))
             return
+        self._open_md_file(path)
+
+    def _open_md_file(self, path: Path) -> None:
+        """Открыть markdown-файл встроенным просмотрщиком."""
         try:
             text = path.read_text(encoding=self.ENCODING)
         except OSError as e:
             self.add_block(InfoBlock(f"Error reading {path}: {e}"))
             return
         self.push_screen(HandbookMarkdownScreen(path, text))
+
+    # --- Поиск по markdown (`:rg`) -------------------------------------
+
+    def _md_base(self, dir_arg: str | None) -> str:
+        """База для `:rg`: аргумент → `md_dir` (settings) → cwd."""
+        raw = dir_arg if dir_arg else (self.md_dir or os.getcwd())
+        return os.path.abspath(os.path.expanduser(str(raw)))
+
+    def _handle_rg_command(self, args: list[str]) -> None:
+        """
+        `:rg <pattern> [dir]` — поиск по markdown (Obsidian-vault и любой каталог).
+
+        Бэкенд — ripgrep, если установлен (иначе встроенный сканер + подсказка
+        по установке). Паттерн — регулярное выражение, «умный регистр»: нет
+        заглавных — регистр не важен. База — `dir`, иначе `md_dir` в settings,
+        иначе cwd. Результаты — кликабельные `path:line`; `:rg <N>` открывает
+        N-й результат (1-based).
+        """
+        if not args:
+            lines = [
+                "Usage: :rg <pattern> [dir]",
+                f"  Base dir: {self._md_base(None)}   (settings: md_dir)",
+                "  :rg <N> — open result N of the last search (1-based)",
+                f"  Backend: {'ripgrep' if rg_available() else 'built-in python'}",
+            ]
+            if not rg_available():
+                lines.append(install_hint())
+            self.add_block(InfoBlock("\n".join(lines)))
+            return
+        if len(args) == 1 and args[0].isdigit():
+            self._open_md_result(int(args[0]))
+            return
+        if len(args) >= 2 and os.path.isdir(os.path.expanduser(args[-1])):
+            base = self._md_base(args[-1])
+            pattern = " ".join(args[:-1])
+        else:
+            base = self._md_base(None)
+            pattern = " ".join(args)
+        if not os.path.isdir(base):
+            self.add_block(InfoBlock(f"[yellow]Directory not found:[/] {base}"))
+            return
+        placeholder = InfoBlock(
+            f"[dim]Searching markdown in {escape_display_markup(base)}…[/dim]"
+        )
+        self.add_block(placeholder)
+        threading.Thread(
+            target=self._rg_worker,
+            args=(placeholder, pattern, base),
+            daemon=True,
+            name="md-search",
+        ).start()
+
+    def _rg_worker(self, placeholder: InfoBlock, pattern: str, base: str) -> None:
+        """Фоновый поиск: каталог с тысячами .md не должен блокировать UI."""
+        try:
+            result = search_markdown(pattern, base)
+        except ValueError as e:
+            self.call_from_thread(self._md_results_error, placeholder, str(e))
+            return
+        except Exception as e:  # не ронять поток из-за неожиданного
+            self.call_from_thread(
+                self._md_results_error, placeholder, f"search error: {e}"
+            )
+            return
+        self.call_from_thread(self._show_md_results, placeholder, result, pattern)
+
+    def _md_results_error(self, placeholder: InfoBlock, message: str) -> None:
+        text = f"[red]{escape_display_markup(message)}[/red]"
+        placeholder.text_content = text
+        placeholder.update(text)
+
+    def _show_md_results(
+        self, placeholder: InfoBlock, result: MdSearchResult, pattern: str
+    ) -> None:
+        """Отрисовать результаты `:rg` кликабельными строками."""
+        self._md_results = list(result.matches)
+        if not result.matches:
+            text = (
+                f"[dim]No matches for[/dim] {escape_display_markup(pattern)} "
+                f"[dim]in[/dim] {escape_display_markup(result.base)}"
+            )
+            placeholder.text_content = text
+            placeholder.update(text)
+            return
+        lines = [
+            f"[bold]rg:[/bold] {escape_display_markup(pattern)}  "
+            f"[dim]in {escape_display_markup(result.base)} · "
+            f"{len(result.matches)} matches / {result.files} files · "
+            f"{result.backend}[/dim]"
+        ]
+        if result.backend == "python":
+            lines.append(f"[dim]{escape_display_markup(install_hint())}[/dim]")
+        for index, match in enumerate(result.matches):
+            label = escape_display_markup(f"{match.path}:{match.line}")
+            link = f"[@click=app.open_md_result({index})][underline #8a6bb5]{label}[/][/]"
+            lines.append(f"  {link}  {escape_display_markup(match.text)}")
+        if result.truncated:
+            lines.append(f"[dim]… truncated at {len(result.matches)} matches[/dim]")
+        lines.append("[dim]Click a path to open it · :rg <N> opens result N[/dim]")
+        text = "\n".join(lines)
+        placeholder.text_content = text
+        placeholder.update(text)
+
+    def _open_md_result(self, number: int) -> None:
+        """`:rg <N>` — открыть N-й результат последнего поиска (1-based)."""
+        if not self._md_results:
+            self.add_block(InfoBlock("No search results yet. Run :rg <pattern> first."))
+            return
+        if not 1 <= number <= len(self._md_results):
+            self.add_block(InfoBlock(f"No result {number} (have {len(self._md_results)})."))
+            return
+        self._open_md_file(Path(self._md_results[number - 1].abs_path))
+
+    def action_open_md_result(self, index: int = 0) -> None:
+        """Клик по результату `:rg` — открыть его в md-просмотрщике (0-based)."""
+        try:
+            match = self._md_results[int(index)]
+        except (IndexError, TypeError, ValueError):
+            self.add_block(InfoBlock("Search result is gone; run :rg again."))
+            return
+        self._open_md_file(Path(match.abs_path))
 
     def _change_cwd(self, path: str) -> None:
         """Меняет cwd процесса для shell-команд. Библиотека тегов остаётся в каталоге запуска."""

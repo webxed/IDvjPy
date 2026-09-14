@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.113) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.114) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.113` → `v1.114`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.114` → `v1.115`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -75,7 +75,8 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/json_viewer.py`**: JSON tree modal
 - **`src/output_viewer.py`**: `:log` / F7 — full block output in a Line-API `ScrollView` (lazy `render_line`, no 300-line cap; arrows/PgUp/PgDn scroll)
 - **`src/block_label.py`**: F8 label dialog for block buffers (`:name`); sets/removes a label used by `|@<label> <command>`
-- **`src/md_viewer.py`**: handbook Markdown modal (`:md`, welcome `.md` clicks)
+- **`src/md_viewer.py`**: handbook Markdown modal (`:md`, welcome `.md` clicks); `resolve_md_path` also opens explicit paths (vault files from `:rg`)
+- **`src/md_search.py`**: `:rg` markdown search — ripgrep backend (`--json`) when `rg` is in PATH, built-in walk otherwise (skips `.git`/`.obsidian`/`node_modules`); smart case; `rg_available` / `install_hint`
 - **`src/update_check.py`**: GitHub `VERSION` check (`:update`)
 - **`src/k8s_complete.py`**: live-cluster name completion for `kubectl get …` (gated by `k8s_completion: true`)
 - **`src/llm_client.py`**: `:llm` calls to LLM providers described in `llm_providers.yml` (env-only secrets, urllib, background thread); `expand_file_refs` turns `@file` into inlined text; `history_turns` keeps the last N pairs in memory (`%HISTORY%` in custom bodies)
@@ -109,7 +110,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no exact tag) = substring search over command text + comments. Click tag in `??` inserts `!tag ` at the cursor (does not replace the line, does not run). |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble refs into the input line |
-| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:fm`, `:term`, `:env`, `:session`, `:new`, `:send`, `:send!`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:cmd`, `:log`, `:name`, `:/`, `:n`, `:N`, `:export`, `:import`, `:md`, `:playbook`, `:update`, `:kill`, `:watch`, `:mv`, `:stats`, `:diff`, `:o`, `:kctx`, `:alias`, `:llm`, `:cht`, `:ed`, `:theme`) |
+| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:cd`, `:fm`, `:term`, `:env`, `:session`, `:new`, `:send`, `:send!`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:cmd`, `:log`, `:name`, `:rg`, `:/`, `:n`, `:N`, `:export`, `:import`, `:md`, `:playbook`, `:update`, `:kill`, `:watch`, `:mv`, `:stats`, `:diff`, `:o`, `:kctx`, `:alias`, `:llm`, `:cht`, `:ed`, `:theme`) |
 | `\| cmd` | Pipe stdout from the focused (else last) block, add to history |
 | `\|@<label> cmd` / `\|@N cmd` | Pipe from the block labelled by `:name <label>`, or from N blocks back (0 = last). The source is not re-run; history stores the full `<source> \| <cmd>` |
 | `$OUT` | On demand: last line of focused/last block (not stored in `.bashrc_term`) |
@@ -168,6 +169,7 @@ Edit `settings.yml`:
 - `k8s_completion`: `false` (default) — for `kubectl get <res> <Tab>` pull live resource names from the cluster (short `kubectl get <resource> -o name` timeout; soft fallback when kubectl/cluster is unavailable)
 - `file_completion`: `auto` (default) | `paths` | `off` — when file/dir hints appear. `auto`: explicit paths (`./`, `/`, `~/`) plus a bare filename only after file-taking commands (`cat`, `vim`, `grep`, …; see `FILE_ARG_COMMANDS`), so subcommand CLIs (`kubectl get po`, `docker co`, `git ch`) do not flood hints with cwd entries. `paths`: only explicit paths and `cd`/`pushd`. `off`: no file hints.
 - `history_completion`: `true` (default) — while typing a plain command, also offer matching lines from `history_*.txt` (newest first, `↺` marker; includes `@`/`>` commands, which are not in `session_history`). Tab/Enter inserts the full line; `false` leaves only Up/Down and `:h /text`.
+- `md_dir`: base directory for `:rg` markdown search (e.g. an Obsidian vault); empty = cwd; `~` expands. `:rg <pattern> <dir>` overrides it for one query. Results are clickable `path:line` links opening in the md viewer; `:rg <N>` opens result N (1-based).
 - `llm_providers.yml` (cwd): LLM providers for `:llm` — see `src/llm_providers.example.yml`. Keys come from the environment only (`$VAR` refs in headers/body)
 - `cheat_sh_url` (default `https://cht.sh`) / `cheat_sh_options` (default `T` = no ANSI; add `Q` for no comments): base URL and query options for `:cht`
 - `screensaver_idle`: seconds of no keys/clicks/scroll/mouse-move before the DevOps starfield (default 120). `0` disables. Tests set this to `0`. `:screensaver` starts it now; `:screensaver 0` / `:screensaver 120` change idle for this session.
