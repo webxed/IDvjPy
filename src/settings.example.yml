@@ -44,7 +44,9 @@ command_timeout: 10
 terminal_mouse: true
 
 # Цветовая тема TUI. `d` переключает textual-dark / textual-light и сохраняет сюда.
-# Другие имена: :theme  (nord, dracula, gruvbox, catppuccin-mocha, …)
+# Другие имена: :theme  (nord, dracula, gruvbox, catppuccin-mocha, …).
+# matrix — своя тема приложения: зелёный фосфор на почти чёрном (как в скринсейвере),
+# вместе с ней рамки ввода/подсказок/справки становятся зелёными.
 theme: textual-dark
 
 # Сверять VERSION с GitHub main при старте. :update проверяет всегда.
@@ -77,6 +79,12 @@ line_api_blocks: true
 # T — без ANSI-цветов; можно добавить Q — без комментариев, например "QT").
 cheat_sh_url: https://cht.sh
 cheat_sh_options: T
+
+# Ответ `:llm` рисовать форматированным markdown (Rich Markdown) вместо плоского
+# текста. true (по умолчанию) — заголовки/списки/код/таблицы; false — моноширинный
+# текст, как у обычной команды. F6 (простой режим) отключает markdown разово.
+# Плоская копия (`:w`, F3, `|`, `$OUT`/`$BLOCK`, поиск) не зависит от этого ключа.
+llm_render_markdown: true
 
 # Очищать буфер обмена, если в него извлекли значение секрета в строку `$$NAME=…`.
 # true — после такой вставки CLIPBOARD/PRIMARY очищаются (секрет не остаётся в буфере);

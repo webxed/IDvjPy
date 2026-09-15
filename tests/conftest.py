@@ -32,7 +32,7 @@ def isolated_home(tmp_path, monkeypatch):
     """Изолирует cwd, БД, history и .bashrc_term от рабочей копии проекта."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "settings.yml").write_text(TEST_SETTINGS, encoding="utf-8")
-    monkeypatch.setattr(CommandRunner, "CSS_PATH", str(PROJECT_ROOT / "src" / "app.css"))
+    monkeypatch.setattr(CommandRunner, "CSS_PATH", str(PROJECT_ROOT / "src" / "app.tcss"))
 
     clip = {"text": ""}
     monkeypatch.setattr("pyperclip.copy", lambda text: clip.update(text=text or ""))
@@ -109,6 +109,27 @@ def last_info(app: CommandRunner) -> InfoBlock:
 
 def info_texts(app: CommandRunner) -> list[str]:
     return [block.text_content for block in app.query(InfoBlock)]
+
+
+def completion_click_spans(clist) -> dict[int, str]:
+    """{строка списка подсказок: текст, накрытый `@click`} по отрисованным strip'ам.
+
+    Показывает, что именно в кадре стало ссылкой (и подсвечено): только команда
+    или вся строка со счётчиком/описанием.
+    """
+    spans: dict[int, str] = {}
+    for row in range(int(clist.size.height)):
+        parts = [
+            segment.text
+            for segment in clist.render_line(row)
+            if segment.style is not None
+            and segment.style.meta
+            and "@click" in segment.style.meta
+        ]
+        text = "".join(parts).strip()
+        if text:
+            spans[row] = text
+    return spans
 
 
 async def confirm_input(pilot, app: CommandRunner, timeout: float = 8.0) -> CommandBlock:

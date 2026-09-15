@@ -7,6 +7,9 @@
 MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
 
 [bold]Application Commands (prefix :)[/bold]
+  Type `:` to list every command with a one-line hint (letters filter the list,
+  Tab/Enter insert the command; Enter again runs it). Click a name below to
+  insert its call into the input — nothing runs. `:/text` is journal search.
   :? [calc]   - Show this help; `:? calc` — full calculator reference
   :q          - Quit application
   :w <file>   - Write output to file
@@ -50,7 +53,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 terminal window/tab title (IDvjPy_term · NAME).
   :new [NAME|-] [DIR] - Open another app instance in a NEW terminal window: own
                 .bashrc_term_<NAME> / history_<NAME>.txt, same data dir and tags DB;
-                DIR — working dir (default: data dir); `-`/no name — auto `sN`.
+                DIR — working dir (default: data dir); `-`/no name — auto `sN`,
+                the lowest one free among RUNNING windows (session_<NAME>.pid
+                registry): files of closed sessions do not occupy a name.
                 Secrets are not passed. Also `:session new …`. Footer: Ctrl+N.
   :send <session|*> <cmd> - Forward a command to another app session (its own
                 window): it is inserted into that session's input (Enter there
@@ -91,6 +96,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :alias <tag> [file.sh] / :alias * [library.sh] - export commands as
                 bash functions tag_tid() { ...; }
   :llm          - List LLM providers from llm_providers.yml (see example in src/)
+               While the answer is on its way the block spins `⠋ thinking… 3s / 60s`
+               (second number = provider timeout), so a slow call is not a hang
   :llm offline <message> - Built-in offline stub (mock: no network, no key);
                 present in every config unless you define your own `offline:`
   :llm <provider> <message> - Ask the given LLM via its API (headers/body from config;
@@ -105,6 +112,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 Placeholders: %MSG% (JSON-safe), %MSG_RAW%, %SYSTEM%, %MODEL%, %HISTORY%
                 Tab completes provider names and `ask` after `:llm `
                 Proxy 407: set $PROXY_USER / $PROXY_PASS (as with :update)
+                Answers are markdown and are rendered formatted (`llm_render_markdown:
+                true`; plain text still is what F3/|/$BLOCK/:w copy).
   :llm ask <task> - Task + app cheat-sheet + the saved tag library go to the
                 provider, so the answer can be ready refs like `!kpod[1]`
                 or `!! kpod[1] && klog[1]`. Only existing tag[tid] are offered
@@ -131,6 +140,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :kctx N       - Apply set N from the last shown list (:kctx N sets vars only)
   :import file       - Insert commands from that JSON (new tids)
   :theme [name] - Show or set TUI theme (saved in settings.yml)
+               `matrix` is the app's own theme: green phosphor on near-black
+               (like the screensaver); its borders go green too.
   :playbook [file] - Write this session's commands as a --demo YAML (default playbook.yml)
   :playbook - / clear - Preview YAML in the journal / forget recorded lines
   :update     - Compare this VERSION with GitHub main (webxed/IDvjPy)
@@ -165,10 +176,16 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   #tag! / #tag!tid - Restore soft-deleted tag / command
   #name-- / #name!! - Hide / restore a handbook's tags (ansible, linux, k8s, …)
   ?          - Query database (? tags, ?<tag>, ?? grouped; ?? lists hidden tags)
+               Typing `?` lists tags with a hint (commands count + tag comment):
+               letters filter, Tab/Enter insert `?tag` (Enter again runs it),
+               a click on the row runs the query at once. `??` is left as is.
                ?text (2+ chars, no such tag) = search commands/comments across all tags;
                rows: <id> tag[tid]; Esc → input, then Enter runs via !ID
                In ?? click a tag → insert `!tag ` / `!tag[tid] ` at the cursor
-               (does not replace the line; terminal_mouse). Esc → input, then Enter.
+               (does not replace the line; terminal_mouse). Ctrl+click or
+               double-click on `!tag[tid]` inserts it AND runs it right away
+               (exactly as typing the ref and pressing Enter twice; a
+               tid-less `!tag ` is only inserted). Esc → input, then Enter.
   !tag / !tag[tid] - Type ! to list tags [file, kube, log]; Tab picks a tag
                Then commands show as `<id> tag[tid]  full command`; Tab inserts `!tag[tid]`
                Compose pipes/saves: `#file !file[1] | !file[2]` (preview expands refs)
@@ -223,6 +240,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   F8         - Label block dialog (`:name`): type a label, Enter saves, empty removes,
                Esc cancels. Then `|@<label> <command>` reuses its output without re-running.
   F2         - Toggle line-cursor mode (see below)
+  Ctrl+O     - Show the console under the TUI (like Midnight Commander): the app
+               steps aside so you can read the real terminal — the output of `> cmd`
+               (htop/vim/less) lives there, in the scrollback. Any key returns.
   Shift+Insert / Ctrl+V - Paste into input (does not replace existing text)
                In line-cursor mode Ctrl+V appends the current line instead
   Ctrl+D     - Clear the entire input line

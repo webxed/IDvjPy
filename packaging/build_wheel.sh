@@ -4,7 +4,7 @@
 # The wheel embeds a private copy of ../src inside the boot package
 # (idvjpy_boot/src). At runtime the bootstrapper puts that directory on
 # sys.path, so top-level imports (app, database_v2, ...) and resources
-# (app.css, demos/, *.example.yml, .bashrc_term.example) resolve from the
+# (app.tcss, demos/, *.example.yml, .bashrc_term.example) resolve from the
 # installed package, not from a source checkout.
 #
 # Usage:

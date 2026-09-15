@@ -7,7 +7,9 @@
     src/app.py, README.md, COMPACT_SUMMARY.md, CLAUDE.md, AGENTS.md,
     test_cmd.md, tests/test_cmd_scenarios.py, DEMO.md
 
-Плюс номер версии документа в ``test_cmd.md`` (+1) и строка плана
+Плюс файлы-справочники ``DATABASE.md`` / ``backup_db.md``: у них версия —
+единственный маркер состояния ``**vX.YY**``, он заменяется на текущую. Кроме
+того обновляются номер версии документа в ``test_cmd.md`` (+1) и строка плана
 (``Manual plan vNN (app vX.YY)``) в ``COMPACT_SUMMARY.md``. Секция changelog
 для новой версии добавляется заглушкой — текст изменений вписывает автор.
 
@@ -27,6 +29,9 @@ from pathlib import Path
 VERSION_RE = re.compile(r"^v(\d+)\.(\d+)$")
 APP_VERSION_RE = re.compile(r'^(\s*VERSION = ")(v\d+\.\d+)(")', re.M)
 
+# Справочники, где версия — единственный маркер состояния «состояние на **vX.YY**».
+BOLD_VERSION_DOCS = ("DATABASE.md", "backup_db.md")
+
 # Файлы релиза в порядке обхода (docs рядом с кодом).
 TARGETS = (
     "src/app.py",
@@ -37,6 +42,7 @@ TARGETS = (
     "test_cmd.md",
     "tests/test_cmd_scenarios.py",
     "DEMO.md",
+    *BOLD_VERSION_DOCS,
 )
 
 
@@ -241,6 +247,15 @@ def plan_changes(root: Path, new: str, *, bump_doc: bool = True) -> dict[str, st
         ),
     )
 
+    # Справочники: единственный маркер состояния `**vX.YY**` — текущая версия.
+    for rel in BOLD_VERSION_DOCS:
+        text = load(rel)
+        note(
+            rel,
+            text,
+            re.sub(r"\*\*v\d+\.\d+\*\*", lambda _m: f"**{new}**", text, count=1),
+        )
+
     return changes
 
 
@@ -275,7 +290,7 @@ def check(root: Path) -> list[tuple[str, str]]:
         ("test_cmd.md", f"**Версия приложения**: {current}"),
         ("tests/test_cmd_scenarios.py", f"(IDvjPy_term {current})"),
         ("DEMO.md", f"Версия приложения: **{current}**"),
-    ]
+    ] + [(rel, f"**{current}**") for rel in BOLD_VERSION_DOCS]
     missing: list[tuple[str, str]] = []
     for rel, needle in required:
         try:

@@ -79,18 +79,25 @@ try:
     import threading
     import time
     from collections.abc import Callable, Mapping, Sequence
+    from dataclasses import replace
     from pathlib import Path
     from typing import Any, Optional, cast
 
     import yaml
+    from rich.markdown import Markdown
     from rich.markup import escape
-    from rich.style import Style
+    from rich.segment import Segment
+    from rich.style import Style as RichStyle
     from textual import events
     from textual.app import App, ComposeResult, InvalidThemeError, SuspendNotSupported
     from textual.binding import Binding, BindingType
     from textual.containers import VerticalScroll
     from textual.content import Content
+    from textual.selection import Selection
     from textual.strip import Strip
+    from textual.style import Style as VisualStyle
+    from textual.theme import Theme
+    from textual.timer import Timer
     from textual.widgets import Footer, Header, Input, Static
 
     import calc
@@ -107,6 +114,7 @@ try:
         copy_text_to_clipboards,
         paste_text_from_clipboards,
     )
+    from colon_commands import COLON_COMMANDS, command_names, linkify_colon_commands
     from command_parser_v2 import CommandParser
     from data_dirs import ensure_data_dir, resolve_data_dir
     from demo import dump_playbook_yaml, load_demo_for_cli, play_demo, session_to_playbook
@@ -194,6 +202,9 @@ try:
         pending_sessions,
         send_message,
     )
+    from session_registry import free_session_name
+    from session_registry import register as register_session
+    from session_registry import unregister as unregister_session
     from shell_env import (
         LAZY_PLACEHOLDERS,
         RE_VAR_NAME,
@@ -242,6 +253,9 @@ RE_GID_FIND = re.compile(r'(?<!!)!(\d+)')
 RE_BANG_PARTIAL = re.compile(
     r'^!([A-Za-z_][A-Za-z0-9_]*)(\[(\d*)(\]?))?$'
 )
+# `?` + имя тега без пробела — контекст подсказок по тегам (`?vault`). `??`
+# (все команды) и `?tag[tid]` намеренно не трогаем.
+RE_TAG_QUERY_PREFIX = re.compile(r"^\?(?!\?)(?P<prefix>[A-Za-z0-9_-]*)$")
 RE_COLON_H_SEARCH = re.compile(r"^:h\s*/(.*)$")
 RE_HELP_KEEP_MARKUP = re.compile(r"(\[/?bold\])")
 RE_TAG_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -284,6 +298,36 @@ def _identity(text: str) -> str:
 
 DEFAULT_SCREENSAVER_IDLE = 120
 
+# Сколько строк журнала проматывает один щелчок колеса. Столько же — в Line-API
+# просмотрщике (`:log`/F7) и md-вьювере: иначе большой блок (`:?` на ~300 строк)
+# приходится листать сотнями щелчков.
+WHEEL_SCROLL_LINES = 3
+
+# Кадры анимации ожидания ответа LLM (`:llm`, «thinking mode»). Braille-спиннер:
+# без него `[Consulting ds…]` неотличимо от зависшего приложения.
+THINKING_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+
+# Тема `matrix` — зелёный фосфор на почти чёрном, в тон скринсейверу (там тот же
+# `#00ff5f`). Регистрируется в `on_mount` до применения темы из settings.yml;
+# `MATRIX_CLASS` вешается на Screen, пока тема активна, — по нему app.tcss меняет
+# рамки, которые в остальных темах свои (см. `watch_theme`).
+MATRIX_THEME_NAME = "matrix"
+MATRIX_CLASS = "matrix-mode"
+MATRIX_THEME = Theme(
+    name=MATRIX_THEME_NAME,
+    primary="#00ff5f",
+    secondary="#00a03c",
+    accent="#00ff5f",
+    success="#00cb4b",
+    warning="#d7ff00",
+    error="#ff5f5f",
+    foreground="#b8ffca",
+    background="#000700",
+    surface="#04120a",
+    panel="#062012",
+    dark=True,
+)
+
 # Порог форматированного рендера markdown в `:md`. Textual-виджет `Markdown`
 # создаёт виджет на каждый блок: 550 строк ≈ 1.3 с, 2200 ≈ 6 с, 13k ≈ 40 с.
 # Выше порога файл открывается как исходник в Line-API просмотрщике.
@@ -300,6 +344,17 @@ class LineNavigable(Static):
 
     def _nav_plain_text(self) -> str:
         return ""
+
+    def _logical_line(self, y: int) -> int | None:
+        """Номер логической строки для визуальной ``y`` (Line API) или ``None``.
+
+        Визуальная строка = строка блока после переноса; выделение мыши и
+        построчный курсор живут в логических (до переноса) строках.
+        """
+        rows = getattr(self, "_row_logical", None)
+        if not rows or y < 0 or y >= len(rows):
+            return None
+        return rows[y]
 
     def _nav_lines(self) -> list[str]:
         text = self._nav_plain_text()
@@ -508,10 +563,22 @@ class LineNavigable(Static):
         return True
 
     def on_click(self, event: events.Click) -> None:
-        """Клик по блоку в журнале — выделить его, не прокручивая к началу."""
+        """Клик по блоку в журнале — выделить его, не прокручивая к началу.
+
+        Клик по ссылке (`@click` в мете) обрабатывает Textual (брокер действий),
+        но модификаторов и серии кликов он не видит (`@click.ctrl` разметка вообще
+        не парсит — в ключе меты нет точек), поэтому «с запуском ли клик» решаем
+        здесь: этот обработчик вызывается **до** брокера, в том же сообщении.
+        """
         style = getattr(event, "style", None)
         meta = getattr(style, "meta", None) if style is not None else None
-        if meta and meta.get("@click"):
+        action = meta.get("@click") if meta else None
+        if action:
+            self.app.note_block_link_click(
+                str(action),
+                ctrl=bool(getattr(event, "ctrl", False)),
+                chain=int(getattr(event, "chain", 1) or 1),
+            )
             return
         prev = getattr(self.app, "focused", None)
         if (
@@ -777,19 +844,29 @@ class CommandBlock(LineNavigable, Static):
         self.label = label or ""
         self.text_content = self._format_output()
         try:
-            self.update(self._format_output(display=True))
+            self.update(self._display_payload())
         except Exception:
             pass
 
     def _nav_plain_text(self) -> str:
         return self._format_output()
 
+    def _display_payload(self) -> Any:
+        """Что отдать в ``update()`` для отрисовки блока.
+
+        По умолчанию — display-разметка (экранированная строка). Подкласс
+        (`MarkdownCommandBlock`) может вернуть rich-renderable: тогда содержимое
+        рисуется форматированным, а ``text_content`` / `_nav_plain_text`
+        остаются плоским текстом для копирования, пайпа и построчного курсора.
+        """
+        return self._format_output(display=True)
+
     def toggle_collapse(self) -> None:
         """Переключает состояние сворачивания."""
         self.collapsed = not self.collapsed
         self.exit_line_nav()
         try:
-            self.update(self._format_output(display=True))
+            self.update(self._display_payload())
         except Exception:
             # Никогда не оставлять блок в [Executing...] из-за разметки:
             # последний шанс — полностью экранированный текст.
@@ -817,7 +894,7 @@ class CommandBlock(LineNavigable, Static):
             follow = app._should_follow_journal_end()
         self.text_content = self._format_output()
         try:
-            self.update(self._format_output(display=True))
+            self.update(self._display_payload())
         except Exception:
             # Никогда не оставлять журнал в [Executing...] из-за разметки.
             self.update(escape_display_markup(self._format_output()))
@@ -839,6 +916,195 @@ class CommandBlock(LineNavigable, Static):
             self.app.active_pipe_source = self
 
 
+def line_api_text_strips(
+    widget: Static, markup: str, width: int, style: VisualStyle
+) -> tuple[list[Strip], list[tuple[int, int]]]:
+    """Разложить разметку на Strip'ы (Line API) с переносом по ``width``.
+
+    Общее для Line-API блоков (`CommandLineBlock`, `InfoBlock`): каждая
+    логическая строка рендерится отдельно, поэтому перенос совпадает с рендером
+    всего текста. Возвращает ``(strips, line_rows)``, где ``line_rows[i]`` —
+    диапазон Strip'ов i-й логической строки (для построчного курсора).
+
+    ``style`` — именно Textual-стиль (`Widget.visual_style`), а не
+    ``rich_style``: ``Content.to_strips`` ждёт ``textual.style.Style`` и при
+    чужом типе молча отдаёт пустые Strip'ы (исключения нет).
+
+    Выделение мышью здесь НЕ рисуется (`apply_selection=False`): Textual
+    применил бы span нулевой логической строки к каждой строке блока. Реальную
+    подсветку накладывает `highlight_selection` в ``render_line`` по номеру
+    логической строки.
+    """
+    strips: list[Strip] = []
+    rows: list[tuple[int, int]] = []
+    if width <= 0:
+        return strips, rows
+    try:
+        lines = Content.from_markup(markup).split("\n", allow_blank=True)
+    except Exception:
+        # Чужой вывод не распарсился как разметка — рисуем как литерал.
+        lines = Content.from_text(markup, markup=False).split("\n", allow_blank=True)
+    for logical_y, line in enumerate(lines):
+        start = len(strips)
+        try:
+            built = Content.to_strips(
+                widget, line, width, None, style, apply_selection=False
+            )
+        except Exception:
+            built = []
+        if not built:
+            built = [Strip.blank(width)]
+        strips.extend(_retag_offsets(built, logical_y))
+        rows.append((start, len(built)))
+    return strips, rows
+
+
+def _retag_offsets(strips: list[Strip], logical_y: int) -> list[Strip]:
+    """Проставить в ``meta['offset']`` настоящий номер логической строки.
+
+    Textual кладёт в каждый сегмент ``meta['offset'] = (x, y)``, по которому
+    компоситор сопоставляет клетку экрана с символом текста — именно это читает
+    ``Screen.get_widget_and_offset_at`` при протяжке мышью. Мы рендерим по одной
+    логической строке за вызов, поэтому Textual всегда пишет ``y = 0``, и
+    выделение схлопывалось в первую строку блока (`Selection` живёт в
+    координатах «символ, логическая строка»).
+    """
+    retagged: list[Strip] = []
+    for strip in strips:
+        segments = list(strip)
+        changed = False
+        for index, segment in enumerate(segments):
+            segment_style = segment.style
+            if segment_style is None or not segment_style.meta:
+                continue
+            offset = segment_style.meta.get("offset")
+            if offset is None:
+                continue
+            segments[index] = Segment(
+                segment.text, _with_offset(segment_style, offset[0], logical_y)
+            )
+            changed = True
+        retagged.append(Strip(segments, strip.cell_length) if changed else strip)
+    return retagged
+
+
+def _with_offset(style: RichStyle, x: int, y: int) -> RichStyle:
+    """Тот же стиль, но с исправленным ``meta['offset']``.
+
+    Компоситор (`Screen.get_widget_and_offset_at`) читает ``meta['offset']`` из
+    сегментов, чтобы превратить клетку экрана в символ текста. После разреза
+    сегмента на части старая мета врёт (у хвоста всё ещё «начало сегмента»),
+    и выделение начинало «плыть»: каждая протяжка ломала разметку координат.
+    """
+    return style + RichStyle(meta={"offset": (x, y)})
+
+
+def highlight_selection(
+    strip: Strip, span: tuple[int, int], style: RichStyle
+) -> Strip:
+    """Подсветить выделенную мышью часть Strip'а (Line API сам её не рисует).
+
+    ``span`` — диапазон в **символах** логической строки (как у
+    `Selection.get_span`; ``end == -1`` — до конца строки). Границы внутри
+    Strip'а берём из ``meta['offset']`` сегментов, которые проставил Textual,
+    и **переписываем** их у разрезанных частей — иначе выделение ломает
+    координаты, по которым компоситор ищет символ под курсором.
+    """
+    start, end = span
+    if end == -1:
+        end = None
+    segments: list[Segment] = []
+    changed = False
+    for segment in strip:
+        segment_style = segment.style
+        text = segment.text
+        if segment_style is None or not text:
+            segments.append(segment)
+            continue
+        meta = segment_style.meta
+        offset = meta.get("offset") if meta else None
+        if offset is None:
+            segments.append(segment)
+            continue
+        x = offset[0]
+        offset_y = offset[1]
+        length = len(text)
+        cut_start = max(start - x, 0)
+        cut_end = length if end is None else max(min(end - x, length), 0)
+        if cut_start >= length or cut_end <= cut_start:
+            segments.append(segment)
+            continue
+        changed = True
+        if cut_start:
+            segments.append(Segment(text[:cut_start], segment_style))
+        segments.append(
+            Segment(
+                text[cut_start:cut_end],
+                _with_offset(segment_style + style, x + cut_start, offset_y),
+            )
+        )
+        if cut_end < length:
+            segments.append(
+                Segment(
+                    text[cut_end:],
+                    _with_offset(segment_style, x + cut_end, offset_y),
+                )
+            )
+    return Strip(segments, strip.cell_length) if changed else strip
+
+
+def selection_style_for(widget: Static) -> RichStyle | None:
+    """Rich-стиль подсветки выделения (``.screen--selection``) или ``None``."""
+    try:
+        return widget.screen.get_component_rich_style("screen--selection")
+    except Exception:
+        return None
+
+
+def apply_block_selection(
+    widget: Static, strip: Strip, logical_y: int | None
+) -> Strip:
+    """Наложить выделение мыши на строку блока (общее для Line-API блоков)."""
+    if logical_y is None:
+        return strip
+    selection = getattr(widget, "text_selection", None)
+    if selection is None:
+        return strip
+    span = selection.get_span(logical_y)
+    if span is None:
+        return strip
+    style = selection_style_for(widget)
+    if style is None:
+        return strip
+    return highlight_selection(strip, span, style)
+
+
+def row_logical_lines(rows: list[tuple[int, int]]) -> list[int]:
+    """Развернуть ``line_rows`` в отображение «визуальная строка → логическая».
+
+    Нужно для выделения мышью и построчного курсора: `Selection` живёт в
+    координатах логических строк, а ``render_line`` получает визуальную.
+    """
+    return [
+        logical_y
+        for logical_y, (_start, count) in enumerate(rows)
+        for _ in range(count)
+    ]
+
+
+def _style_without_bg(style: VisualStyle) -> VisualStyle:
+    """Копия Textual-стиля без фона: фон накладывается в `render_line`.
+
+    При фокусе Textual меняет только `background` (`:focus` в app.tcss). Если фон
+    запечён в strip'ы, то любой клик по блоку сбрасывает кэш всего блока — для
+    справки `:?` (~290 строк) это ~130 ms задержки подсветки. С отделённым фоном
+    кэш зависит только от ширины и «остального» стиля.
+    """
+    if style.background is None:
+        return style
+    return replace(style, background=None)
+
+
 class CommandLineBlock(CommandBlock):
     """CommandBlock на Line API: ``render_line`` вместо одного большого ``Static``.
 
@@ -857,6 +1123,7 @@ class CommandLineBlock(CommandBlock):
         self._cache_key: Any = None
         self._strips: list[Strip] = []
         self._line_rows: list[tuple[int, int]] = []
+        self._row_logical: list[int] = []
         super().__init__(*args, **kwargs)
         self._rebuild(layout=False)
 
@@ -879,6 +1146,7 @@ class CommandLineBlock(CommandBlock):
         self._cache_key = None
         self._strips = []
         self._line_rows = []
+        self._row_logical = []
 
     def _rebuild(self, *, layout: bool = True) -> None:
         """Собрать разметку из текущего состояния блока (свёрнут / раскрыт)."""
@@ -899,27 +1167,10 @@ class CommandLineBlock(CommandBlock):
         """
         self._cache_width = width
         self._cache_key = (width, style.rich_style)
-        self._strips = []
-        self._line_rows = []
-        if width <= 0:
-            return
-        try:
-            lines = Content.from_markup(self._src_markup).split("\n", allow_blank=True)
-        except Exception:
-            # Чужой вывод не распарсился как разметка — рисуем как литерал.
-            lines = Content.from_text(self._src_markup, markup=False).split(
-                "\n", allow_blank=True
-            )
-        for line in lines:
-            start = len(self._strips)
-            try:
-                strips = Content.to_strips(self, line, width, None, style)
-            except Exception:
-                strips = []
-            if not strips:
-                strips = [Strip.blank(width)]
-            self._strips.extend(strips)
-            self._line_rows.append((start, len(strips)))
+        self._strips, self._line_rows = line_api_text_strips(
+            self, self._src_markup, width, style
+        )
+        self._row_logical = row_logical_lines(self._line_rows)
 
     def _ensure_strips(self, width: int) -> None:
         # Кэш зависит от ширины И от текущего стиля виджета: ``visual_style``
@@ -952,8 +1203,19 @@ class CommandLineBlock(CommandBlock):
             if idx is not None and 0 <= idx < len(self._line_rows):
                 start, count = self._line_rows[idx]
                 if start <= y < start + count:
-                    strip = strip.apply_style(Style(reverse=True))
-        return strip
+                    strip = strip.apply_style(RichStyle(reverse=True))
+        return apply_block_selection(self, strip, self._logical_line(y))
+
+    # -- выделение мышью ---------------------------------------------------
+    def get_selection(self, selection: Selection) -> tuple[str, str] | None:
+        """Текст выделения — из плоского текста блока.
+
+        У этого класса не обновляется ``Static``-визуал (разметка живёт в
+        ``_src_markup``), поэтому стандартный ``Widget.get_selection`` вытаскивал
+        бы выделение из устаревшего содержимого — того, что было в момент
+        создания блока (``[Executing...]``).
+        """
+        return selection.extract(self._nav_plain_text()), "\n"
 
     # -- курсор рисуется в render_line, а не перезаписью текста ----------------
     def _paint_line_cursor(self) -> None:
@@ -961,6 +1223,44 @@ class CommandLineBlock(CommandBlock):
 
     def _restore_plain_display(self) -> None:
         self.refresh()
+
+
+class MarkdownCommandBlock(CommandBlock):
+    """Блок с форматированным markdown-ответом (используется для `:llm`).
+
+    Модели отвечают в markdown, а моноширинная простыня читается плохо:
+    заголовки, списки, код и таблицы теряют структуру. Здесь в ``update()``
+    уходит rich-renderable `Markdown`, и журнал рисует форматированный текст.
+
+    Плоская копия при этом не меняется: ``text_content`` / `_nav_plain_text` —
+    тот же текст без разметки, поэтому `:w`, F3, пайп `|`, ``$OUT``/``$BLOCK``,
+    поиск по журналу и построчный курсор (F2) работают как обычно.
+
+    Line API (`line_api_blocks`) к таким блокам не применяется: там рендер идёт
+    по строкам разметки, а у markdown-документа строки визуальные. Ответы
+    модели небольшие — цена `Static` здесь незаметна.
+    """
+
+    def _display_payload(self) -> Any:
+        """Форматированный markdown; в простом режиме/построчном курсоре — текст."""
+        if (
+            self._simple_mode()
+            or self.collapsed
+            or getattr(self, "line_nav_active", False)
+        ):
+            return self._format_output(display=True)
+        return Markdown(self._format_output())
+
+    def get_selection(self, selection: Selection) -> tuple[str, str] | None:
+        """Выделение — из плоского текста: `Markdown` не отдаёт Content."""
+        return selection.extract(self._nav_plain_text()), "\n"
+
+    def _restore_plain_display(self) -> None:
+        """Выход из построчного режима — снова форматированный markdown."""
+        if getattr(self, "line_nav_active", False):
+            super()._restore_plain_display()
+            return
+        self.update(self._display_payload())
 
 
 class ClickableCommand(Static):
@@ -992,7 +1292,14 @@ class ClickableCommand(Static):
             input_widget.focus()
 
 class InfoBlock(LineNavigable, Static):
-    """Виджет для отображения информационных сообщений (не от команд)."""
+    """Виджет для отображения информационных сообщений (не от команд).
+
+    Рендер — Line API (как `CommandLineBlock`): strip'ы строятся по видимым
+    строкам с кэшем (ширина, стиль). Без этого большой блок (справка `:?` —
+    ~290 строк) пересобирался бы целиком на каждую смену фокуса (клик по блоку
+    или возврат во ввод): замерено ~200 ms на клик против ~26 ms у Line-API.
+    Выключается общим ключом `line_api_blocks: false` / `IDVJPY_LINE_BLOCKS=0`.
+    """
 
     BINDINGS = _LINE_NAV_APPEND_BINDINGS
 
@@ -1006,8 +1313,96 @@ class InfoBlock(LineNavigable, Static):
         self.text_content = text_content.rstrip() + "\n\n"
         self.line_index: int | None = None
         self.line_nav_active: bool = False
+        # Line API: разметка и кэш strip'ов (ширина + стиль виджета).
+        self._src_markup = self.text_content
+        self._cache_key: Any = None
+        self._strips: list[Strip] = []
+        self._line_rows: list[tuple[int, int]] = []
+        self._row_logical: list[int] = []
         super().__init__(self.text_content, **kwargs)
         self.can_focus = True
+
+    # -- Line API ----------------------------------------------------------
+    def _line_api_enabled(self) -> bool:
+        """Ключ `line_api_blocks` живёт в приложении (в виджете его нет)."""
+        app = getattr(self, "app", None)
+        return bool(getattr(app, "_line_api_blocks", True))
+
+    def _invalidate_strips(self) -> None:
+        self._cache_key = None
+        self._strips = []
+        self._line_rows = []
+        self._row_logical = []
+
+    def update(self, content: Any = "", *, layout: bool = True) -> None:
+        """Запомнить разметку и сбросить кэш strip'ов (Line API)."""
+        if isinstance(content, str):
+            self._src_markup = content
+        self._invalidate_strips()
+        super().update(content, layout=layout)
+
+    def _ensure_strips(self, width: int) -> None:
+        # Ключ кэша — ширина и стиль БЕЗ фона: подсветку фокуса накладываем на
+        # видимую строку в render_line, поэтому клик по блоку не пересобирает
+        # всё содержимое (большой блок `:?` — сотни строк).
+        style = _style_without_bg(self.visual_style)
+        if (width, style) != self._cache_key:
+            self._cache_key = (width, style)
+            self._strips, self._line_rows = line_api_text_strips(
+                self, self._src_markup, width, style
+            )
+            self._row_logical = row_logical_lines(self._line_rows)
+
+    def get_content_height(self, container: Any, viewport: Any, width: int) -> int:
+        if not self._line_api_enabled():
+            return super().get_content_height(container, viewport, width)
+        if not width:
+            return 0
+        self._ensure_strips(int(width))
+        return len(self._strips)
+
+    def render_line(self, y: int) -> Strip:
+        if not self._line_api_enabled():
+            return super().render_line(y)
+        width = int(self.size.width)
+        if width <= 0:
+            # До первого layout ширина бывает 0 — берём её из кэша.
+            key = self._cache_key
+            width = int(key[0]) if key else 0
+        if width <= 0:
+            return Strip.blank(0)
+        self._ensure_strips(width)
+        if y < 0 or y >= len(self._strips):
+            return Strip.blank(width)
+        strip = self._strips[y]
+        bg = self.visual_style.background
+        if bg is not None:
+            strip = strip.apply_style(RichStyle(bgcolor=bg.rich_color))
+        if getattr(self, "line_nav_active", False):
+            idx = getattr(self, "line_index", None)
+            if idx is not None and 0 <= idx < len(self._line_rows):
+                start, count = self._line_rows[idx]
+                if start <= y < start + count:
+                    strip = strip.apply_style(RichStyle(reverse=True))
+        return apply_block_selection(self, strip, self._logical_line(y))
+
+    # -- построчный курсор рисуется в render_line, а не переписью текста -------
+    def _paint_line_cursor(self) -> None:
+        """Line API: курсор — в `render_line`, содержимое не трогаем.
+
+        Базовая версия (`LineNavigable`) переписывает текст плоской копией: для
+        `InfoBlock` это еще и теряло разметку (ссылки, bold) после фокуса.
+        """
+        if self._line_api_enabled():
+            self.refresh()
+            return
+        super()._paint_line_cursor()
+
+    def _restore_plain_display(self) -> None:
+        if self._line_api_enabled():
+            self.refresh()
+            return
+        super()._restore_plain_display()
 
     def _nav_plain_text(self) -> str:
         return self.text_content
@@ -1023,12 +1418,21 @@ class CompletionItem:
         replace_token: bool = False,
         add_space: bool = False,
         reopen: bool = False,
+        run: bool = False,
+        click: str = "",
     ) -> None:
         self.insert = insert
         self.display = insert if display is None else display
         self.replace_token = replace_token
         self.add_space = add_space
         self.reopen = reopen
+        # `run` — клик по пункту не только вставляет строку, но и сразу её
+        # выполняет (запросы `?tag`: их всегда запускают, чтобы что-то увидеть).
+        self.run = run
+        # `click` — какая часть `display` считается командой (только она становится
+        # ссылкой; счётчик/комментарий/описание остаются обычным текстом).
+        # Пусто — берём `insert`, если он виден в показе (см. `_link_span`).
+        self.click = click
 
 
 class CompletionList(Static):
@@ -1132,6 +1536,35 @@ class CompletionList(Static):
         else:
             self.styles.display = "none"
 
+    def _link_span(self, item: CompletionItem) -> tuple[int, int]:
+        """Диапазон в ``display``, который считается командой (только он — ссылка).
+
+        Ссылка на всю строку выглядела как «всё кликабельно»: подсвечивались и
+        счётчик, и комментарий. Поэтому ссылкой делаем саму команду — `?vault`
+        в `?vault  (2)  HashiCorp Vault`, — а остальное остаётся текстом.
+        Что именно искать, задаёт `CompletionItem.click`, иначе — `insert`;
+        если ни того, ни другого в показе нет (напр. `!file` показывается как
+        `file  (2)`), ссылкой становится вся строка — как было раньше.
+        """
+        display = item.display
+        for candidate in (item.click, item.insert):
+            if not candidate:
+                continue
+            start = display.find(candidate)
+            if start >= 0:
+                return start, start + len(candidate)
+        return 0, len(display)
+
+    def _item_markup(self, item: CompletionItem, global_index: int) -> str:
+        """Разметка строки пункта: ссылка только на команду, остальное — текст."""
+        start, end = self._link_span(item)
+        display = item.display
+        head = escape(display[:start])
+        link = escape(display[start:end])
+        tail = escape(display[end:])
+        click = f"[@click=app.pick_completion({global_index})]"
+        return f"{head}{click}{link}[/]{tail}"
+
     def _render_list(self) -> None:
         """Отрисовать список; высота окна = число видимых строк."""
         cap = self._visible_capacity()
@@ -1145,11 +1578,11 @@ class CompletionList(Static):
             lines.append(f"[dim]→ {escape(self.preview)}[/dim]")
         for i, item in enumerate(self.candidates):
             global_index = self.window_start + i
-            safe = escape(item.display)
+            body = self._item_markup(item, global_index)
             if global_index == self.selected_index:
-                lines.append(f"[bold reverse] {safe} [/bold reverse]")
+                lines.append(f"[bold reverse] {body} [/bold reverse]")
             else:
-                lines.append(f" {safe}")
+                lines.append(f" {body}")
 
         if self._items:
             lines.append(f"[dim]{escape(self._window_status())}[/dim]")
@@ -1186,6 +1619,12 @@ class CompletionList(Static):
     def get_selected_item(self) -> CompletionItem | None:
         if self._items and 0 <= self.selected_index < len(self._items):
             return self._items[self.selected_index]
+        return None
+
+    def item_at(self, index: int) -> CompletionItem | None:
+        """Пункт по глобальному индексу (то, что зашито в `@click` строки)."""
+        if self._items and 0 <= index < len(self._items):
+            return self._items[index]
         return None
 
     def is_visible(self) -> bool:
@@ -1346,6 +1785,25 @@ class CommandInput(Input):
             return bool(item.reopen)
         return selected.endswith("/")
 
+    def apply_completion_item(self, index: int) -> bool:
+        """Выбрать пункт списка по индексу (клик мышью по строке подсказки).
+
+        Возвращает ``True``, если пункт помечен ``run`` — его надо выполнить,
+        а не только вставить (запросы `?tag`).
+        """
+        clist = self._completion_list
+        if clist is None:
+            return False
+        item = clist.item_at(index)
+        if item is None:
+            return False
+        clist.selected_index = index
+        self.focus()
+        self._apply_selected_completion(item.insert)
+        self._applying_completion = False
+        clist.hide()
+        return bool(item.run)
+
     def action_tab_input(self) -> None:
         """Tab: применить открытую подсказку, иначе перейти на панель вывода."""
         clist = self._completion_list
@@ -1493,6 +1951,24 @@ class CommandInput(Input):
         if bang_items or preview:
             self._completion_list.update_candidates(bang_items, preview=preview)
             return
+        if hasattr(app, "get_tag_query_completions"):
+            # `?` в начале строки — список тегов с подсказками (клик — сразу запрос).
+            tag_items, tag_preview = app.get_tag_query_completions(
+                raw_value, self.cursor_position
+            )
+            if tag_items or tag_preview:
+                self._completion_list.update_candidates(tag_items, preview=tag_preview)
+                return
+        if hasattr(app, "get_colon_completions"):
+            # `:` в начале строки — быстрые подсказки по командам приложения.
+            colon_items, colon_preview = app.get_colon_completions(
+                raw_value, self.cursor_position
+            )
+            if colon_items or colon_preview:
+                self._completion_list.update_candidates(
+                    colon_items, preview=colon_preview
+                )
+                return
         if hasattr(app, "get_llm_completions"):
             llm_items, llm_preview = app.get_llm_completions(raw_value, self.cursor_position)
             if llm_items or llm_preview:
@@ -1549,9 +2025,9 @@ class CommandInput(Input):
             return
         inp = app.query_one(f"#{app.ID_INPUT}", Input)
         if inp.has_focus:
-            app._scroll_journal_wheel(1)
+            app._scroll_journal_wheel(WHEEL_SCROLL_LINES)
         else:
-            app._scroll_journal_and_focus(1)
+            app._scroll_journal_and_focus(WHEEL_SCROLL_LINES)
         event.stop()
 
     def on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
@@ -1562,9 +2038,9 @@ class CommandInput(Input):
             return
         inp = app.query_one(f"#{app.ID_INPUT}", Input)
         if inp.has_focus:
-            app._scroll_journal_wheel(-1)
+            app._scroll_journal_wheel(-WHEEL_SCROLL_LINES)
         else:
-            app._scroll_journal_and_focus(-1)
+            app._scroll_journal_and_focus(-WHEEL_SCROLL_LINES)
         event.stop()
 
 
@@ -1622,7 +2098,7 @@ class JournalScroll(VerticalScroll):
 class CommandRunner(App):
     """Textual приложение для запуска shell команд с поддержкой переменных."""
 
-    CSS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app.css")
+    CSS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app.tcss")
     BINDINGS = [
         ("escape", "focus_input", "Focus Input"),
         ("f2", "toggle_line_nav", "Line cursor"),
@@ -1640,6 +2116,7 @@ class CommandRunner(App):
         Binding("shift+insert", "paste_clipboard", "Paste", show=False),
         Binding("ctrl+v", "paste_clipboard", "Paste", show=False),
         Binding("ctrl+n", "new_window", "New session", show=True),
+        Binding("ctrl+o", "show_console", "Console", show=True),
         Binding("ctrl+c", "copy_input_or_block", "Copy", show=False, priority=True),
         Binding("space", "toggle_block_collapse", "Collapse", show=False),
         Binding("left", "collapse_block", "← Collapse", show=False),
@@ -1647,7 +2124,12 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.115"
+    VERSION = "v1.116"
+    # Клик по ссылке блока с намерением выполнить: значение пишет
+    # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
+    # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
+    # `1` — Ctrl+клик, `>= 2` — двойной клик.
+    _link_click_run: int | None = None
     STARTUP_LOGO = (
         "      ___ ____        _ ____        \n"
         "     |_ _|  _ \\__   _(_)  _ \\ _   _ \n"
@@ -1791,6 +2273,7 @@ class CommandRunner(App):
     KEY_K8S_COMPLETION = "k8s_completion"
     KEY_FILE_COMPLETION = "file_completion"
     KEY_LINE_API_BLOCKS = "line_api_blocks"
+    KEY_LLM_RENDER_MARKDOWN = "llm_render_markdown"
     KEY_CHEAT_SH_URL = "cheat_sh_url"
     KEY_CHEAT_SH_OPTIONS = "cheat_sh_options"
     KEY_CLEAR_CLIP_AFTER_SECRET = "clear_clipboard_after_secret"
@@ -1877,6 +2360,13 @@ class CommandRunner(App):
         # Line API-блоки журнала (render_line вместо одного большого Static).
         # Включается line_api_blocks в settings.yml или IDVJPY_LINE_BLOCKS.
         self._line_api_blocks: bool = False
+        # `:llm` — рисовать ответ как markdown (Rich Markdown) вместо текста.
+        self.llm_render_markdown: bool = True
+        # Анимация ожидания ответа LLM: {блок: (старт, таймаут)} + один таймер
+        # на приложение (запрос идёт в фоновом потоке, см. _start_thinking).
+        self._thinking: dict[CommandBlock, tuple[float, float]] = {}
+        self._thinking_timer: Timer | None = None
+        self._thinking_frame: int = 0
         # cheat.sh (`:cht`): базовый URL и опции запроса (по умолчанию без цветов).
         self.cheat_sh_url: str = DEFAULT_BASE_URL
         self.cheat_sh_options: str = DEFAULT_OPTIONS
@@ -2230,6 +2720,36 @@ class CommandRunner(App):
                 break
         return items
 
+    def get_colon_completions(
+        self, text: str, cursor_pos: int
+    ) -> tuple[list[CompletionItem], str]:
+        """Подсказки `:`-команд: имя ещё набирается, рядом — короткое описание.
+
+        Работает, пока в строке нет пробела (дальше начинаются свои подсказки:
+        `:send ` — сессии, `:llm ` — провайдеры, `:md `/`:ed ` — пути).
+        """
+        raw = (text or "")[:cursor_pos]
+        if not raw.startswith(self.PREFIX_CMD) or any(ch.isspace() for ch in raw):
+            return [], ""
+        needle = raw[len(self.PREFIX_CMD):]
+        if needle.startswith("/"):
+            # `:/text` — поиск по журналу, не команда: список молчит.
+            return [], ""
+        items: list[CompletionItem] = []
+        for name, description in COLON_COMMANDS:
+            if needle and not name.startswith(needle):
+                continue
+            command = f"{self.PREFIX_CMD}{name}"
+            items.append(
+                CompletionItem(
+                    insert=command,
+                    display=f"{command}  — {description}",
+                    replace_token=True,
+                    add_space=True,
+                )
+            )
+        return items, ""
+
     def get_send_completions(
         self, text: str, cursor_pos: int
     ) -> tuple[list[CompletionItem], str]:
@@ -2299,6 +2819,7 @@ class CommandRunner(App):
                 CompletionItem(
                     insert=f"!{tag}",
                     display=f"{tag}  ({n})" if n else tag,
+                    click=tag,
                     replace_token=True,
                     add_space=False,
                     reopen=True,
@@ -2374,6 +2895,66 @@ class CommandRunner(App):
                 preview = f"[{', '.join(prefixed)}]"
 
         return items, preview
+
+    def get_tag_query_completions(
+        self, text: str, cursor_pos: int
+    ) -> tuple[list[CompletionItem], str]:
+        """Подсказки тегов при наборе `?`: что вообще можно спросить.
+
+        `?` раньше молча ждал ввода — приходилось помнить имена тегов. Теперь
+        открывается список: имя тега, число команд и комментарий тега; буквы
+        фильтруют. Вставка — `?tag` (без пробела: аргументов у запроса нет),
+        пункт помечен `run` — клик по списку сразу выполняет запрос
+        (`action_pick_completion`). `??` (все команды) остаётся как есть.
+        """
+        raw = (text or "")[:cursor_pos]
+        if raw != raw.rstrip():
+            return [], ""
+        matched = RE_TAG_QUERY_PREFIX.match(raw)
+        if not matched:
+            return [], ""
+        needle = matched.group("prefix")
+        try:
+            lib = self._library()
+        except Exception:
+            return [], ""
+        if not lib:
+            return [], ""
+        try:
+            comments = dict(database.get_all_tags_with_comments(self.db_file))
+        except Exception:
+            comments = {}
+        counts: dict[str, int] = {}
+        uses: dict[str, int] = {}
+        for entry in lib:
+            tag = entry["tag"]
+            counts[tag] = counts.get(tag, 0) + 1
+            uses[tag] = uses.get(tag, 0) + int(entry.get("use_count") or 0)
+        tags = [tag for tag in counts if not needle or tag.startswith(needle)]
+        # Часто используемые — выше: `?` обычно открывают ради них.
+        tags.sort(key=lambda tag: (-uses.get(tag, 0), tag))
+        items = [
+            CompletionItem(
+                insert=f"?{tag}",
+                display=self._tag_query_display(tag, counts[tag], comments.get(tag)),
+                replace_token=True,
+                add_space=False,
+                run=True,
+            )
+            for tag in tags
+        ]
+        if not items:
+            return [], ""
+        return items, f"{len(tags)} tags · Tab inserts, click runs"
+
+    @staticmethod
+    def _tag_query_display(tag: str, count: int, comment: str | None) -> str:
+        """Строка подсказки для `?`: `?tag  (N)  комментарий тега`."""
+        display = f"?{tag}  ({count})"
+        text = " ".join((comment or "").split())
+        if text:
+            display += f"  {text}"
+        return display
 
     def _unique_history_matches(self, needle: str) -> list[str]:
         """Совпадения history.txt (+ сессия), свежие сверху, одинаковые строки один раз."""
@@ -2618,9 +3199,9 @@ class CommandRunner(App):
             return
         inp = self.query_one(f"#{self.ID_INPUT}", Input)
         if inp.has_focus:
-            self._scroll_journal_wheel(1)
+            self._scroll_journal_wheel(WHEEL_SCROLL_LINES)
         else:
-            self._scroll_journal_and_focus(1)
+            self._scroll_journal_and_focus(WHEEL_SCROLL_LINES)
         event.stop()
 
     def on_mouse_scroll_up(self, event) -> None:
@@ -2630,9 +3211,9 @@ class CommandRunner(App):
             return
         inp = self.query_one(f"#{self.ID_INPUT}", Input)
         if inp.has_focus:
-            self._scroll_journal_wheel(-1)
+            self._scroll_journal_wheel(-WHEEL_SCROLL_LINES)
         else:
-            self._scroll_journal_and_focus(-1)
+            self._scroll_journal_and_focus(-WHEEL_SCROLL_LINES)
         event.stop()
 
     def _data_path(self, name: str) -> str:
@@ -2698,6 +3279,12 @@ class CommandRunner(App):
         self._pin_instance_files()
         self._provision_fresh_data_dir()
         self._refresh_running_title()  # заголовок окна/вкладки: IDvjPy_term · <сессия>
+        # Реестр активных сессий: `:new` без имени берёт наименьшее свободное `sN`
+        # среди работающих (session_registry).
+        register_session(self._data_dir, self.instance_name)
+        # Своя тема должна быть известна до применения темы из settings.yml
+        # (`:theme matrix` работает через `available_themes`).
+        self.register_theme(MATRIX_THEME)
 
         # 0. Привязать список подсказок к полю ввода
         cmd_input = self.query_one(f"#{self.ID_INPUT}", CommandInput)
@@ -2755,6 +3342,9 @@ class CommandRunner(App):
                     ).strip()
                     self._line_api_blocks = bool(
                         settings.get(self.KEY_LINE_API_BLOCKS, False)
+                    )
+                    self.llm_render_markdown = bool(
+                        settings.get(self.KEY_LLM_RENDER_MARKDOWN, True)
                     )
                     self.clear_clipboard_after_secret = bool(
                         settings.get(self.KEY_CLEAR_CLIP_AFTER_SECRET, False)
@@ -3104,6 +3694,11 @@ class CommandRunner(App):
     def on_unmount(self) -> None:
         # Выход: секреты не остаются на диске после закрытия приложения.
         self._purge_secrets_file()
+        # И сессия перестаёт быть активной (реестр `session_<имя>.pid`).
+        unregister_session(
+            getattr(self, "_data_dir", None) or os.getcwd(),
+            getattr(self, "instance_name", None) or INSTANCE_NAME,
+        )
         try:
             driver = getattr(self, "_driver", None)
             if driver is not None:
@@ -3472,7 +4067,11 @@ class CommandRunner(App):
         return isinstance(self.focused, LineNavigable)
 
     def _scroll_journal_wheel(self, delta: int) -> None:
-        """Колесо при фокусе во вводе: крутим журнал и помечаем позицию чтения."""
+        """Колесо при фокусе во вводе: крутим журнал и помечаем позицию чтения.
+
+        Шаг — как в просмотрщике вывода (`:log`/F7) и md-вьювере: 3 строки за
+        щелчок, иначе большой блок (`:?`) приходится листать сотнями щелчков.
+        """
         try:
             container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
         except Exception:
@@ -3512,17 +4111,108 @@ class CommandRunner(App):
         if follow_end:
             self._schedule_journal_follow_end()
 
-    def _make_command_block(self, *args: Any, **kwargs: Any) -> CommandBlock:
+    def _make_command_block(
+        self, *args: Any, markdown: bool = False, **kwargs: Any
+    ) -> CommandBlock:
         """Создать блок журнала: Line API (render_line) или обычный Static.
 
         Переключатель — ``line_api_blocks`` в settings.yml / ``IDVJPY_LINE_BLOCKS``.
         Единая точка создания, чтобы блоки всех путей (shell, calc, :llm, :watch)
         были одинаковыми.
+
+        ``markdown=True`` (ответ `:llm`) — отдельный `MarkdownCommandBlock`:
+        форматированный markdown вместо моноширинного текста.
         """
+        if markdown:
+            return MarkdownCommandBlock(*args, **kwargs)
         cls: type[CommandBlock] = (
             CommandLineBlock if self._line_api_blocks else CommandBlock
         )
         return cls(*args, **kwargs)
+
+    def action_show_console(self) -> None:
+        """Ctrl+O: свернуть TUI и показать консоль под приложением (как в MC).
+
+        Нужно для вывода команд, запущенных с `>`: они работают в настоящем TTY
+        (`htop`, `vim`, `less`) мимо журнала, и после выхода TUI их вывод остаётся
+        только в скроллбеке терминала **под** приложением. Ctrl+O отдаёт
+        терминал пользователю, возврат — любая клавиша (как Ctrl+O в Midnight
+        Commander: `-O ... press any key`).
+
+        Пока TUI спит, терминал в cooked/cbreak-режиме, поэтому работают
+        прокрутка и выделение самого терминала (Shift+PgUp, колесо мыши).
+        """
+        try:
+            with self.suspend():
+                self._wait_console_key()
+        except SuspendNotSupported:
+            self.add_block(
+                InfoBlock(
+                    "Error: this terminal cannot suspend the TUI to show the console."
+                )
+            )
+            return
+        except Exception as exc:  # Не ронять приложение из-за терминала.
+            self.add_block(InfoBlock(f"Console error: {exc}"))
+            return
+        self._refresh_running_title()
+        self.refresh(layout=True)
+
+    def _wait_console_key(self) -> None:
+        """Ждать любую клавишу на «освобождённом» терминале (TUI в это время спит)."""
+        # Импорт внутри: tty/termios — только POSIX (модуль импортируется и на Windows).
+        import termios
+        import tty
+
+        hint = f"{self.TITLE} — console view. Press any key to return."
+        try:
+            sys.stdout.write(f"\n\x1b[2m{hint}\x1b[0m\n")
+            sys.stdout.flush()
+        except Exception:
+            pass
+        try:
+            fd = os.open("/dev/tty", os.O_RDONLY)
+        except OSError:
+            # Нет управляющего терминала — просто ждём Enter со stdin.
+            try:
+                sys.stdin.readline()
+            except Exception:
+                pass
+            return
+        saved = None
+        try:
+            saved = termios.tcgetattr(fd)
+            tty.setcbreak(fd)
+            os.read(fd, 1)
+        except Exception:
+            pass
+        finally:
+            if saved is not None:
+                try:
+                    termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+                except Exception:
+                    pass
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+    def action_pick_completion(self, index: int = -1) -> None:
+        """Клик по пункту списка подсказок: вставить его и, если пункт просил, выполнить.
+
+        Цель — сценарий «спросить у библиотеки одним кликом»: набрал `?`, увидел
+        список тегов с подсказками и кликнул по `?vault` — строка тут же ушла на
+        выполнение. Клавиатурный путь остаётся отдельным: Tab/Enter вставляют
+        `?tag` без запуска (как `:команды`), запуск — отдельный Enter.
+        """
+        try:
+            inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        except Exception:
+            return
+        if not inp.apply_completion_item(index):
+            return
+        # `Input.action_submit` в Textual асинхронный; сообщение — тот же путь.
+        inp.post_message(Input.Submitted(inp, inp.value))
 
     def clear_subtitle(self) -> None:
         """Очищает подзаголовок (статус-бар)."""
@@ -3546,6 +4236,66 @@ class CommandRunner(App):
         """
         return RE_FORMATTING_TAGS.sub('', text)
 
+    # Как часто перерисовывается спиннер ожидания ответа LLM (секунды).
+    THINKING_TICK = 0.1
+
+    def _start_thinking(self, block: CommandBlock, timeout: float) -> None:
+        """Показать, что ждём ответ модели: спиннер и время в блоке `:llm`.
+
+        Запрос идёт в фоновом потоке (`_llm_worker`), поэтому в журнале нужен
+        явный признак жизни — иначе не отличить ожидание от зависания. Время
+        показывается вместе с `timeout` провайдера: видно, сколько ждём и
+        сколько допустимо. `raw_stdout` не трогаем — он остаётся стабильной
+        заглушкой «ещё ждём» до прихода ответа (`_on_command_finished`).
+        """
+        self._thinking[block] = (time.monotonic(), max(0.0, float(timeout)))
+        self._tick_thinking()
+        if self._thinking_timer is None:
+            self._thinking_timer = self.set_interval(
+                self.THINKING_TICK, self._tick_thinking
+            )
+
+    def _stop_thinking(self, block: CommandBlock) -> None:
+        """Снять блок с анимации: ответ пришёл, ошибка или блок убран из журнала."""
+        if self._thinking.pop(block, None) is None:
+            return
+        if not self._thinking and self._thinking_timer is not None:
+            self._thinking_timer.stop()
+            self._thinking_timer = None
+
+    def _tick_thinking(self) -> None:
+        """Кадр анимации для всех блоков `:llm`, которые ещё ждут ответ.
+
+        Смонтирован ли блок, не проверяем: `mount()` асинхронный, и первый кадр
+        попадает в момент, когда блок ещё не в DOM. Анимация по удалённому блоку
+        ни на что не влияет (без исключений) и всегда снимается в
+        `_stop_thinking`, когда приходит ответ.
+        """
+        if not self._thinking:
+            return
+        now = time.monotonic()
+        self._thinking_frame += 1
+        frame = THINKING_FRAMES[self._thinking_frame % len(THINKING_FRAMES)]
+        for block, (started, timeout) in list(self._thinking.items()):
+            try:
+                block.update(
+                    self._thinking_markup(block, frame, now - started, timeout)
+                )
+            except Exception:
+                # Блок в неожиданном состоянии — лучше тишина, чем сломанный кадр.
+                self._stop_thinking(block)
+
+    def _thinking_markup(
+        self, block: CommandBlock, frame: str, elapsed: float, timeout: float
+    ) -> str:
+        """Разметка блока на время ожидания: шапка + спиннер, время и лимит."""
+        header = escape_display_markup(block.header)
+        limit = f" / {timeout:.0f}s" if timeout else ""
+        tail = f"thinking… {elapsed:.0f}s{limit}"
+        if self.simple_output_mode:
+            return f"{header}\n{frame} {tail}\n"
+        return f"{header}\n[bold cyan]{frame}[/bold cyan] [dim]{tail}[/dim]\n"
+
     def _pending_block_display(self, block: "CommandBlock") -> str:
         """Текст «команда выполняется» до прихода update_content из потока."""
         header = escape_display_markup(block.header)
@@ -3561,7 +4311,7 @@ class CommandRunner(App):
                 if getattr(block, "pending", False):
                     block.update(self._pending_block_display(block))
                 else:
-                    block.update(block._format_output(display=True))
+                    block.update(block._display_payload())
         except Exception:
             pass
         self.sub_title = (
@@ -4386,6 +5136,18 @@ class CommandRunner(App):
         if text:
             self.add_block(InfoBlock(text), follow_end=follow_end)
 
+    def action_insert_colon_draft(self, name: str = "") -> None:
+        """Click a command in `:?` — insert `:command ` at the input cursor.
+
+        Same contract as `!tag` links in `??`: кладём текст во ввод и ничего не
+        запускаем (аргументы и Enter — за пользователем). Строку не затираем.
+        """
+        command = (name or "").strip().lstrip(":")
+        if command not in command_names():
+            return
+        self.insert_input_at_cursor(f":{command} ")
+        self.query_one(f"#{self.ID_INPUT}", CommandInput).focus()
+
     def action_insert_seed_command(self, script: str = "") -> None:
         """Insert a handbook --seed command into the input (click from welcome)."""
         name = (script or "").strip()
@@ -4398,19 +5160,68 @@ class CommandRunner(App):
         """Click a tag / tag[tid] in ?? — insert ``!tag `` or ``!tag[tid] `` at the cursor.
 
         Never replaces the input line (so assembling a command is not wiped).
-        Does not run the command. Focus stays on the journal.
+        Ctrl+клик и двойной клик по `!tag[tid]` — вставить и сразу выполнить
+        (просит `note_block_link_click`). Ссылка без tid не выполняется: `!tag `
+        сама по себе не команда. На двойной клик брокер `@click` приходит
+        дважды: первый клик вставил ссылку, второй только выполняет — иначе ввод
+        получил бы `!tag[tid] !tag[tid] `.
         """
+        run_click, self._link_click_run = self._link_click_run, None
         name = (tag or "").strip()
         if not RE_TAG_NAME.match(name):
             return
         extra = (tid or "").strip()
-        if extra:
-            if not extra.isdigit():
-                return
-            draft = f"!{name}[{int(extra)}] "
-        else:
-            draft = f"!{name} "
-        self.insert_input_at_cursor(draft)
+        if extra and not extra.isdigit():
+            return
+        draft = f"!{name}[{int(extra)}] " if extra else f"!{name} "
+        if run_click is None or not extra:
+            self.insert_input_at_cursor(draft)
+            return
+        if run_click < 2:  # Ctrl+клик — вставить и выполнить
+            self.insert_input_at_cursor(draft)
+        # run_click >= 2 — двойной клик: вставку сделал первый клик серии.
+        self._run_input_reference()
+
+    def _run_input_reference(self) -> None:
+        """Выполнить ввод со ссылкой (`!tag[tid]`) — как клавиатурные «Enter, Enter».
+
+        Первый Enter записывает литерал в историю (повтор по ↑ вернёт ссылку) и
+        раскрывает её во ввод, второй — выполняет раскрытое. Сообщения идут в
+        очередь ввода по порядку, поэтому второй запуск видит нужный текст.
+        """
+        try:
+            inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        except Exception:
+            return
+        value = inp.value or ""
+        if not RE_COMMAND_REFS.search(value):
+            return
+        resolved = self._resolve_command_references(value)
+        if not resolved:
+            return
+        inp.post_message(Input.Submitted(inp, value))
+        inp.post_message(Input.Submitted(inp, resolved))
+
+    def note_block_link_click(
+        self, action: str, *, ctrl: bool = False, chain: int = 1
+    ) -> None:
+        """Запомнить, просит ли клик по ссылке блока «вставить и выполнить».
+
+        Вызывается из `LineNavigable.on_click` **до** брокера `@click`, читает и
+        сбрасывает признак `action_insert_bang_draft` — в том же сообщении.
+        Значение: `None` — обычный клик (только вставка), `1` — Ctrl+клик,
+        `>= 2` — двойной клик (серия: ссылку вставил первый клик).
+
+        Почему не `@click.ctrl` в разметке: Textual 7.3.0 разбирает ключ меты как
+        `[@a-zA-Z_-][a-zA-Z0-9_-]*=` — точку в нём написать нельзя, а в
+        `App._broker_event` модификаторы ключа вообще отбрасываются: `@click.ctrl`
+        сработал бы и на простом клике. Для остальных ссылок (`:команды` в `:?`,
+        `.md`, `--seed`) признак сбрасывается — они вставляют или открывают.
+        """
+        wants_run = ctrl or chain >= 2
+        self._link_click_run = (
+            int(chain) if wants_run and action.startswith("app.insert_bang_draft(") else None
+        )
 
     def action_open_handbook_md(self, filename: str = "") -> None:
         """Open markdown: repo handbook basename or an explicit path (vault).
@@ -4748,7 +5559,7 @@ class CommandRunner(App):
                     continue
                 block.collapsed = False
                 try:
-                    block.update(block._format_output(display=True))
+                    block.update(block._display_payload())
                 except Exception:
                     pass
             for i, line in enumerate(block._nav_lines()):
@@ -4868,13 +5679,16 @@ class CommandRunner(App):
         self._switch_session(args[0])
 
     def _next_session_name(self) -> str:
-        """Свободное имя сессии для нового окна: s2, s3, …"""
-        base_dir = getattr(self, "_data_dir", ".") or "."
-        used = set(list_session_names(base_dir))
-        n = 2
-        while f"s{n}" in used:
-            n += 1
-        return f"s{n}"
+        """Свободное имя для нового окна: наименьшее `sN` среди активных сессий.
+
+        Считаем только работающие сессии (реестр `session_<имя>.pid`), а не файлы
+        `history_*.txt` / `.bashrc_term_*`: они остаются от закрытых сессий, и
+        нумерация уползала вверх на каждое Ctrl+N (s2, s3, s4…), хотя работала
+        по-прежнему одна сессия. Модуль — `src/session_registry.py`.
+        """
+        base_dir = getattr(self, "_data_dir", None) or "."
+        current = getattr(self, "instance_name", None) or INSTANCE_NAME
+        return free_session_name(base_dir, taken=(current,))
 
     def _self_launch_argv(self, name: str) -> list[str]:
         """Команда запуска ещё одной копии приложения в сессии `name`.
@@ -4933,6 +5747,9 @@ class CommandRunner(App):
         except OSError as exc:
             self.add_block(InfoBlock(str(exc)))
             return
+        # Резервируем имя сразу: два быстрых нажатия Ctrl+N не должны получить
+        # одно и то же `sN` (окно приложения перезапишет pid на свой при старте).
+        register_session(data_dir, name, pid=getattr(proc, "pid", None))
         self.add_block(InfoBlock(
             f"New window (session {name}, cwd {target_dir}): {format_opened(argv, proc.pid)}"
         ))
@@ -5129,9 +5946,12 @@ class CommandRunner(App):
             and not os.path.exists(self._data_path(bashrc_file_for(name)))
         )
         self._unload_session_env()
+        # Реестр: эта же копия приложения теперь отвечает за другое имя.
+        unregister_session(self._data_dir or ".", current)
         apply_instance_name(name)
         self.instance_name = name
         self._pin_instance_files()
+        register_session(self._data_dir or ".", name)
         self._refresh_running_title()  # заголовок окна/вкладки — имя новой сессии
         self.session_history = []
         self.session_history_pos = 0
@@ -5416,13 +6236,17 @@ class CommandRunner(App):
         return self.local_env.get("NS") or os.environ.get("NS")
 
     def _show_main_help(self) -> None:
-        """Show main help for all commands."""
+        """Show main help for all commands.
+
+        Сначала экранируем разметку (`[bold]` — единственное, что остаётся),
+        потом подставляем кликабельные `:команды` — иначе ссылки попали бы под
+        escape.
+        """
         help_text = MAIN_HELP_TEXT
-        block = InfoBlock(
-            escape_help_markup(
-                help_text.replace("IDvjPy_term VER", f"IDvjPy_term {self.VERSION}", 1)
-            )
+        body = escape_help_markup(
+            help_text.replace("IDvjPy_term VER", f"IDvjPy_term {self.VERSION}", 1)
         )
+        block = InfoBlock(linkify_colon_commands(body))
         self.add_block(block, follow_end=False)
         self._schedule_journal_to_block(block)
 
@@ -6338,6 +7162,11 @@ class CommandRunner(App):
         self, tag: str, tid: int | None = None, *, prefix: str = ""
     ) -> str:
         """Rich ``@click`` that inserts ``!tag `` or ``!tag[tid] `` at the input cursor.
+
+        Обычный клик — только вставка (строку не затирает). Ctrl+клик или двойной
+        клик по `!tag[tid]` — ещё и выполнить: мета-действие модификаторов не
+        знает, поэтому намерение доносит `LineNavigable.on_click` (см.
+        `CommandRunner.note_block_link_click`).
 
         Action name is written *without* the ``action_`` prefix: Textual looks up
         ``action_<name>`` itself, so ``app.action_x`` would resolve to the
@@ -7346,6 +8175,7 @@ class CommandRunner(App):
         forget_history: bool = False,
     ) -> None:
         """UI-поток: запомнить завершённый вывод в сессионную историю, обновить блок."""
+        self._stop_thinking(block)
         now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         self._output_history.append(
             {
@@ -7819,9 +8649,11 @@ class CommandRunner(App):
             raw_stderr="",
             return_code=0,
             source_command=source_command,
+            markdown=self.llm_render_markdown,
         )
-        block.update(block._format_output(display=True))
+        block.update(block._display_payload())
         self.add_block(block)
+        self._start_thinking(block, timeout)
         threading.Thread(
             target=self._llm_worker,
             args=(block, provider, provider_name, message, timeout, history),
@@ -8415,6 +9247,17 @@ class CommandRunner(App):
     def _normalize_theme_name(self, name: str) -> str:
         key = str(name or "").strip().lower()
         return self.THEME_ALIASES.get(key, key)
+
+    def watch_theme(self, theme_name: str) -> None:
+        """Держать `MATRIX_CLASS` на экране в согласии с активной темой.
+
+        Тема меняется из трёх мест (settings.yml, `:theme`, клавиша `d`), поэтому
+        класс ставит watcher, а не вызывающие места. По классу app.tcss красит
+        рамки в тон фосфора — у остальных тем они остаются своими.
+        """
+        is_matrix = theme_name == MATRIX_THEME_NAME
+        for screen in self.screen_stack:
+            screen.set_class(is_matrix, MATRIX_CLASS)
 
     def _apply_theme_name(self, name: str | None) -> None:
         """Ставит тему из settings.yml; неизвестное имя — textual-dark."""

@@ -58,6 +58,22 @@ async def test_wheel_up_pauses_follow_and_keeps_view(isolated_home):
         assert input_widget(app).has_focus
 
 
+async def test_wheel_scrolls_three_lines_per_notch(isolated_home):
+    """Шаг колеса — 3 строки (как в `:log`/F7): `:?` иначе листается сотнями щелчков."""
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        container = await _long_journal(pilot, app)
+        bottom = float(container.scroll_y)
+
+        app.on_mouse_scroll_up(_Wheel())
+        await pilot.pause()
+        assert bottom - float(container.scroll_y) == 3
+
+        app.on_mouse_scroll_down(_Wheel())
+        await pilot.pause()
+        assert float(container.scroll_y) == bottom
+
+
 async def test_submit_resumes_follow(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(80, 24)) as pilot:

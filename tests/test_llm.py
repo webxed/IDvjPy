@@ -6,6 +6,7 @@
 import asyncio
 import io
 import json
+import threading
 import time
 import urllib.error
 
@@ -992,3 +993,244 @@ async def test_colon_llm_ask_ref_action_is_dispatchable(isolated_home, monkeypat
         assert await app.run_action(f"{name}({', '.join(repr(p) for p in params)})")
         await pilot.pause()
         assert input_widget(app).value == "!kpod[1] "
+
+
+# -- markdown-рендер ответа (`llm_render_markdown`) --------------------------
+
+
+def _llm_config(home, extra: str = "") -> None:
+    (home / "llm_providers.yml").write_text(
+        "default: ds\nproviders:\n  ds:\n"
+        "    url: https://api.deepseek.com/chat/completions\n"
+        "    model: deepseek-chat\n"
+        "    system: You are helpful.\n"
+        "    timeout: 5\n"
+        "    headers:\n      Content-Type: application/json\n"
+        "    response_path: choices.0.message.content\n" + extra,
+        encoding="utf-8",
+    )
+
+
+def _add_settings(home, extra: str) -> None:
+    settings = home / "settings.yml"
+    settings.write_text(settings.read_text(encoding="utf-8") + extra, encoding="utf-8")
+
+
+ANSWER_MD = "# Заголовок\n\n**жирный** шаг:\n\n- первый\n- второй\n"
+
+
+async def test_colon_llm_answer_rendered_as_markdown(isolated_home, monkeypatch):
+    """Ответ `:llm` показывается форматированным, а плоская копия не меняется."""
+    from rich.markdown import Markdown
+
+    import app as app_module
+    from app import CommandRunner, MarkdownCommandBlock
+    from tests.conftest import submit, wait_command_done
+
+    _llm_config(isolated_home)
+    monkeypatch.setattr(app_module, "perform_request", lambda *a, **k: ANSWER_MD)
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, ":llm ds распиши шаги")
+        block = await wait_command_done(app, timeout=8.0)
+        await pilot.pause()
+
+        assert isinstance(block, MarkdownCommandBlock)
+        # Плоский текст (для :w, F3, |, $OUT, поиска) не тронут.
+        assert "# Заголовок" in block.text_content
+        assert "**жирный**" in block.text_content
+        # На экран уходит rich-renderable Markdown.
+        assert isinstance(block._display_payload(), Markdown)
+        rendered = "\n".join(block.render_line(y).text for y in range(12))
+        assert "Заголовок" in rendered
+        assert "жирный" in rendered
+        # Маркеры markdown не должны остаться в отрисованном тексте.
+        assert "# Заголовок" not in rendered
+        assert "**" not in rendered
+
+
+async def test_colon_llm_markdown_can_be_disabled(isolated_home, monkeypatch):
+    """`llm_render_markdown: false` — прежний плоский блок."""
+    import app as app_module
+    from app import CommandRunner, MarkdownCommandBlock
+    from tests.conftest import submit, wait_command_done
+
+    _llm_config(isolated_home)
+    _add_settings(isolated_home, "llm_render_markdown: false\n")
+    monkeypatch.setattr(app_module, "perform_request", lambda *a, **k: ANSWER_MD)
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await pilot.pause()
+        assert app.llm_render_markdown is False
+        await submit(pilot, ":llm ds распиши шаги")
+        block = await wait_command_done(app, timeout=8.0)
+        assert not isinstance(block, MarkdownCommandBlock)
+        assert "# Заголовок" in block.text_content
+
+
+async def test_colon_llm_markdown_off_in_simple_mode(isolated_home, monkeypatch):
+    """F6 (простой режим) — markdown-рендер выключен, текст остаётся плоским."""
+    from rich.markdown import Markdown
+
+    import app as app_module
+    from app import CommandRunner, MarkdownCommandBlock
+    from tests.conftest import submit, wait_command_done
+
+    _llm_config(isolated_home)
+    monkeypatch.setattr(app_module, "perform_request", lambda *a, **k: ANSWER_MD)
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await pilot.pause()
+        await pilot.press("f6")
+        await pilot.pause()
+        await submit(pilot, ":llm ds распиши шаги")
+        block = await wait_command_done(app, timeout=8.0)
+        assert isinstance(block, MarkdownCommandBlock)
+        assert not isinstance(block._display_payload(), Markdown)
+        rendered = "\n".join(block.render_line(y).text for y in range(12))
+        assert "# Заголовок" in rendered
+
+
+# -- анимация ожидания ответа (thinking) -------------------------------------
+
+
+def _block_line(block, y: int = 1) -> str:
+    """Текст отрисованной строки блока (y=1 — то, что под шапкой)."""
+    return block.render_line(y).text.strip()
+
+
+def _thinking_line(block, rows: int = 8) -> str:
+    """Отрисованная строка со спиннером (её номер зависит от переноса шапки).
+
+    Ищем по кадру спиннера, а не по слову «thinking»: в шапке блока есть cwd,
+    а временный каталог pytest назван по имени теста (там тоже есть слово).
+    """
+    from app import THINKING_FRAMES
+
+    for y in range(rows):
+        text = block.render_line(y).text.strip()
+        if text and text[0] in THINKING_FRAMES and "thinking" in text:
+            return text
+    return ""
+
+
+async def test_colon_llm_shows_thinking_animation(isolated_home, monkeypatch):
+    """Пока ответ идёт, в блоке виден спиннер и время, а не просто заглушка."""
+    import app as app_module
+    from app import THINKING_FRAMES, CommandBlock, CommandRunner
+    from tests.conftest import submit, wait_command_done
+
+    _llm_config(isolated_home)
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_request(*_args, **_kwargs):
+        started.set()
+        release.wait(10)
+        return "готовый ответ"
+
+    monkeypatch.setattr(app_module, "perform_request", slow_request)
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, ":llm ds привет")
+        for _ in range(100):
+            if started.is_set():
+                break
+            await asyncio.sleep(0.05)
+        await pilot.pause()
+        block = app.query(CommandBlock).last()
+        assert block.pending
+
+        # Блок на анимации, таймер живёт, заглушка "ещё ждём" не меняется.
+        assert list(app._thinking) == [block]
+        assert app._thinking_timer is not None
+        assert block.raw_stdout.startswith("[Consulting")
+
+        line = _thinking_line(block)
+        assert line
+        first = line[0]
+        assert first in THINKING_FRAMES
+
+        app._tick_thinking()
+        await pilot.pause()
+        second = _thinking_line(block)[0]
+        assert second in THINKING_FRAMES
+        assert second != first  # кадры разные — это анимация, а не статика
+
+        release.set()
+        done = await wait_command_done(app, timeout=10.0)
+        assert done is block
+        await pilot.pause()
+        app._tick_thinking()  # лишний тик после ответа ничего не портит
+        await pilot.pause()
+
+        assert app._thinking == {}
+        assert app._thinking_timer is None
+        assert _thinking_line(block) == ""
+        assert "готовый ответ" in block.raw_stdout
+
+
+async def test_colon_llm_thinking_stops_on_error(isolated_home, monkeypatch):
+    """Ошибка запроса тоже снимает анимацию (не остаётся вечного спиннера)."""
+    import app as app_module
+    from app import CommandRunner
+    from llm_client import LlmError
+    from tests.conftest import submit, wait_command_done
+
+    _llm_config(isolated_home)
+
+    def boom(*_args, **_kwargs):
+        raise LlmError("HTTP 500")
+
+    monkeypatch.setattr(app_module, "perform_request", boom)
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, ":llm ds привет")
+        await wait_command_done(app, timeout=10.0)
+        await pilot.pause()
+        assert app._thinking == {}
+        assert app._thinking_timer is None
+
+
+async def test_colon_llm_thinking_is_plain_in_simple_mode(isolated_home, monkeypatch):
+    """F6 (простой режим) — кадр без разметки."""
+    import app as app_module
+    from app import THINKING_FRAMES, CommandBlock, CommandRunner
+    from tests.conftest import submit, wait_command_done
+
+    _llm_config(isolated_home)
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_request(*_args, **_kwargs):
+        started.set()
+        release.wait(10)
+        return "готовый ответ"
+
+    monkeypatch.setattr(app_module, "perform_request", slow_request)
+
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await pilot.pause()
+        await pilot.press("f6")
+        await pilot.pause()
+        await submit(pilot, ":llm ds привет")
+        for _ in range(100):
+            if started.is_set():
+                break
+            await asyncio.sleep(0.05)
+        await pilot.pause()
+        block = app.query(CommandBlock).last()
+        line = _thinking_line(block)
+        assert line
+        # Без разметки: теги не попадают в отрисованный текст.
+        assert "[dim]" not in line
+        assert "[bold" not in line
+        assert line[0] in THINKING_FRAMES
+        release.set()
+        await wait_command_done(app, timeout=10.0)

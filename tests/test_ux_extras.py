@@ -1,12 +1,13 @@
-"""UX-мелочи: :r N, индикатор running, :alias (фича ux-extras)."""
+"""UX-мелочи: :r N, индикатор running, :alias, консоль под TUI (Ctrl+O)."""
 import asyncio
+from contextlib import contextmanager
 from typing import Any, cast
 
 import pytest
 
 pytestmark = pytest.mark.slow
 
-from app import CommandRunner
+from app import CommandRunner, InfoBlock
 from tests.conftest import input_widget, last_info, submit, wait_command_done
 
 
@@ -108,3 +109,53 @@ async def test_alias_usage_and_unknown(isolated_home):
         assert "Usage: :alias" in last_info(app).text_content
         await submit(pilot, ":alias ghost")
         assert "no live commands for 'ghost'" in last_info(app).text_content
+
+
+async def test_ctrl_o_shows_console(isolated_home, monkeypatch):
+    """Ctrl+O: TUI уходит в фон на время просмотра консоли, возврат — клавиша.
+
+    Проверяем порядок: suspend → ожидание клавиши → возврат в TUI. Настоящий
+    `suspend()` в headless-тесте невозможен, поэтому подменяем его.
+    """
+    events: list[str] = []
+
+    @contextmanager
+    def fake_suspend(_self):
+        events.append("suspend")
+        try:
+            yield
+        finally:
+            events.append("resume")
+
+    monkeypatch.setattr(CommandRunner, "suspend", fake_suspend)
+    monkeypatch.setattr(
+        CommandRunner, "_wait_console_key", lambda _self: events.append("wait")
+    )
+
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+o")
+        await pilot.pause()
+
+    assert events == ["suspend", "wait", "resume"]
+    assert not [b for b in app.query(InfoBlock) if "Console error" in b.text_content]
+
+
+async def test_ctrl_o_reports_when_suspend_unsupported(isolated_home, monkeypatch):
+    """Терминал без suspend — явная ошибка, а не молчание."""
+    from textual.app import SuspendNotSupported
+
+    @contextmanager
+    def bad_suspend(_self):
+        raise SuspendNotSupported()
+        yield  # pragma: no cover — генератор-контекст обязан содержать yield
+
+    monkeypatch.setattr(CommandRunner, "suspend", bad_suspend)
+
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+o")
+        await pilot.pause()
+        assert "cannot suspend" in last_info(app).text_content

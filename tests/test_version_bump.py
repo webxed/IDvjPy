@@ -55,6 +55,14 @@ FIXTURES = {
         '"""Автотесты по сценариям test_cmd.md (IDvjPy_term v1.10)."""\n'
     ),
     "DEMO.md": "# Сценарий\n\nВерсия приложения: **v1.10**.\n",
+    "DATABASE.md": (
+        "# Как приложение читает команды из базы данных\n\n"
+        "Схема и пути чтения (состояние на **v1.10**).\n"
+    ),
+    "backup_db.md": (
+        "# backup_db.py\n\n"
+        "Скрипт импорта/экспорта тегов (**v1.10**, `mytags.db`).\n"
+    ),
 }
 
 
@@ -116,6 +124,12 @@ def test_bump_updates_every_marker(tmp_path):
         encoding="utf-8"
     )
 
+    # Справочники: маркер состояния — текущая версия, не трогаем остальное.
+    database = (root / "DATABASE.md").read_text(encoding="utf-8")
+    assert "(состояние на **v1.11**)" in database
+    backup_doc = (root / "backup_db.md").read_text(encoding="utf-8")
+    assert "(**v1.11**, `mytags.db`)" in backup_doc
+
 
 def test_bump_result_passes_check(tmp_path):
     root = _make_repo(tmp_path)
@@ -170,6 +184,18 @@ def test_check_flags_missing_changelog_section(tmp_path):
         encoding="utf-8",
     )
     assert any(rel == "COMPACT_SUMMARY.md" for rel, _ in check(root))
+
+
+def test_check_flags_stale_state_marker(tmp_path):
+    """`--check` ловит протухший маркер в справочниках (DATABASE/backup_db)."""
+    root = _make_repo(tmp_path)
+    bump(root)
+    assert check(root) == []
+    doc = root / "backup_db.md"
+    doc.write_text(
+        doc.read_text(encoding="utf-8").replace("v1.11", "v1.09"), encoding="utf-8"
+    )
+    assert any(rel == "backup_db.md" for rel, _ in check(root))
 
 
 def test_main_check_exit_codes(tmp_path, monkeypatch, capsys):

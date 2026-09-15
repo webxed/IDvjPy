@@ -3,30 +3,44 @@
 Отдельная сессия (свои `.bashrc_term_<NAME>` / `history_<NAME>.txt`), общий
 data-каталог и БД тегов; секреты (`$$`) в новое окно не переносятся.
 """
+import os
+
 import pytest
 
 pytestmark = pytest.mark.slow
 
 from app import CommandRunner
+from session_registry import active_sessions, registry_path, unregister
 from tests.conftest import last_info, submit
 
 
 class _Proc:
-    pid = 4242
+    def __init__(self, pid: int = 4242) -> None:
+        self.pid = pid
 
 
-def _patch_open(monkeypatch) -> list[dict]:
-    """Подменить запуск терминала; вернуть список вызовов."""
+def _patch_open(monkeypatch, *, pid: int = 4242) -> list[dict]:
+    """Подменить запуск терминала; вернуть список вызовов.
+
+    ``pid`` — pid «поднятого» терминала. По умолчанию выдуманный (мёртвый),
+    поэтому автоимя следующего окна его не увидит; тесты, которым нужно живое
+    окно, передают ``os.getpid()``.
+    """
     import app as app_module
 
     calls: list[dict] = []
 
     def fake(command, *, cwd, environ, platform=None):
         calls.append({"command": list(command), "cwd": cwd, "env": dict(environ)})
-        return ["xterm", "-e", *command], _Proc()
+        return ["xterm", "-e", *command], _Proc(pid)
 
     monkeypatch.setattr(app_module, "open_terminal_command", fake)
     return calls
+
+
+def _names(calls: list[dict]) -> list[str | None]:
+    """Автоимена/имена сессий из всех вызовов запуска окна."""
+    return [_flag(call["command"], "--instance-name=") for call in calls]
 
 
 def _flag(command: list[str], prefix: str) -> str | None:
@@ -130,3 +144,67 @@ async def test_ctrl_n_opens_new_window(isolated_home, monkeypatch):
         await pilot.pause()
         assert calls
         assert _flag(calls[0]["command"], "--instance-name=") == "--instance-name=s2"
+
+
+def _touch_closed_session_files(isolated_home) -> None:
+    """Остатки закрытых сессий: `.bashrc_term_*` и `history_*.txt`."""
+    for name in ("history_s2.txt", "history_s3.txt", ".bashrc_term_s2", ".bashrc_term_s3"):
+        (isolated_home / name).write_text("seq 1\n", encoding="utf-8")
+
+
+async def test_new_window_auto_name_ignores_files_of_closed_sessions(isolated_home, monkeypatch):
+    """Кнопка «New session» не считает файлы закрытых сессий занятыми именами.
+
+    Раньше автоимя считалось по `history_*.txt` / `.bashrc_term_*`, поэтому
+    каждое нажатие давало следующее `sN` (s2, s3, s4…), хотя работала одна
+    сессия. Теперь источник — реестр `session_<имя>.pid`.
+    """
+    _touch_closed_session_files(isolated_home)
+    calls = _patch_open(monkeypatch)
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":new")
+        await pilot.pause()
+        assert _names(calls) == ["--instance-name=s2"]
+
+
+async def test_new_window_two_presses_get_distinct_names(isolated_home, monkeypatch):
+    """Два Ctrl+N подряд — разные имена: имя резервируется сразу при запуске."""
+    calls = _patch_open(monkeypatch, pid=os.getpid())
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":new")
+        await submit(pilot, ":new")
+        assert _names(calls) == ["--instance-name=s2", "--instance-name=s3"]
+
+
+async def test_new_window_reuses_name_after_session_exits(isolated_home, monkeypatch):
+    """Закрылась сессия `s2` — то же имя снова свободно."""
+    calls = _patch_open(monkeypatch, pid=os.getpid())
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":new")
+        unregister(str(isolated_home), "s2")
+        await submit(pilot, ":new")
+        assert _names(calls) == ["--instance-name=s2", "--instance-name=s2"]
+
+
+async def test_new_window_reserves_session_name(isolated_home, monkeypatch):
+    """`:new NAME` сразу занимает имя в реестре (активная сессия)."""
+    _patch_open(monkeypatch, pid=os.getpid())
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":new mysess")
+        assert os.path.exists(registry_path(str(isolated_home), "mysess"))
+        assert "mysess" in active_sessions(str(isolated_home))
+
+
+async def test_session_switch_moves_registration(isolated_home, monkeypatch):
+    """`:session NAME` — та же копия приложения отвечает за другое имя."""
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        before = app.instance_name
+        await submit(pilot, ":session alpha")
+        assert app.instance_name == "alpha"
+        assert os.path.exists(registry_path(str(isolated_home), "alpha"))
+        assert not os.path.exists(registry_path(str(isolated_home), before))

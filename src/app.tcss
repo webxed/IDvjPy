@@ -1,4 +1,10 @@
 
+/* Textual CSS (TCSS), а не браузерный CSS: `$surface`, `dock`, `layout`,
+   `text-style` и т.п. — свойства Textual. Расширение `.tcss` выбрано специально:
+   редакторы не линтуют такой файл браузерным CSS-парсером (иначе `property value
+   expected` на каждой `$переменной`).
+   Путь подключается через `CommandRunner.CSS_PATH`. */
+
 Screen {
     layout: vertical;
 }
@@ -35,11 +41,33 @@ CommandBlock, InfoBlock {
 }
 
 CommandBlock:focus, InfoBlock:focus, QueryResultsBlock:focus {
-    background: $primary-darken-1;  /* менее яркий цвет выделения */
+    /* Мягкая подсветка фокуса: 25% основного цвета темы поверх фона блока.
+       Было `$primary-darken-1` — сплошная яркая заливка (замер отрисованного
+       фона в textual-dark: прирост яркости 65 над фоном блока против 19
+       с 25%; на большом `:?` старое слепило). Смешение работает в любой теме. */
+    background: $primary 25%;
 }
 
 CommandBlock.line-nav, InfoBlock.line-nav, QueryResultsBlock.line-nav {
     border-left: thick $accent;
+}
+
+/* Тема matrix (см. `MATRIX_THEME` в src/app.py): рамки в тон фосфору.
+   У всех остальных тем остаются свои цвета выше (класс ставит watch_theme). */
+Screen.matrix-mode Input {
+    border: round $primary;
+}
+
+Screen.matrix-mode Input:focus {
+    border: round $accent;
+}
+
+Screen.matrix-mode CompletionList {
+    border: round $secondary;
+}
+
+Screen.matrix-mode HandbookMarkdownScreen #md-frame {
+    border: round $secondary;
 }
 
 /* Свернутый блок */
