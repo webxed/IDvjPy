@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.116**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.117**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.60 (app v1.116) |
+| `test_cmd.md` | Manual plan v1.61 (app v1.117) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.116 |
+| `src/app.py` | TUI (`CommandRunner`), v1.117 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
@@ -215,6 +215,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.117
+
+- **Инструкции для агентов: команды `codegraph` исправлены.** В `AGENTS.md` был указан `codegraph search` — такой подкоманды в CLI нет, и новая сессия получала `error: unknown command 'search'` на первом же исследовании кода; флага `--no-source` тоже нет. Теперь: `codegraph query <символ>` (поиск символов; `-k/--kind`, `-l/--limit`, `-j/--json`) и `codegraph context <задача>` — у него структуру без кода отдаёт `--no-code`; `codegraph explore` — только когда действительно нужен исходник. Добавлена строка про остальное по надобности: `node`, `callers` / `callees` / `impact`, `files`, `status`, `sync` / `index`.
 
 ## v1.116
 
