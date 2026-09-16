@@ -2124,7 +2124,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.119"
+    VERSION = "v1.120"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -6784,7 +6784,8 @@ class CommandRunner(App):
         """`:kctx [cluster [N]]` / `:kctx N` — кластерный журнал.
 
         :kctx              — список кластеров из журнала
-        :kctx <cluster>    — вход (klogin || kubectl use-context) + снимки NS/POD…
+        :kctx <cluster>    — вход (klogin || kubectl use-context) + снимки NS/POD…;
+                             если у кластера ровно один снимок — применить его сразу
         :kctx <cluster> N  — вход + применить снимок N
         :kctx N            — применить снимок N из последнего открытого списка
         """
@@ -6828,16 +6829,26 @@ class CommandRunner(App):
         if current and current not in {row["cluster"] for row in summary}:
             lines.append(f"  • {escape(current)}  (0 сн.) ← текущий")
         lines.append("")
-        lines.append("  :kctx <cluster> — войти и показать снимки; :kctx <cluster> N — войти и применить N")
+        lines.append(
+            "  :kctx <cluster> — войти и показать снимки (один набор — применится сразу); "
+            ":kctx <cluster> N — войти и применить N"
+        )
         self.add_block(InfoBlock("\n".join(lines)))
 
     def _kctx_open_cluster(self, cluster: str, index: int | None) -> None:
-        """Вход в кластер, показ снимков, опционально — применение набора N."""
+        """Вход в кластер, показ снимков, опционально — применение набора N.
+
+        Если номер не задан, а у кластера ровно один снимок — применяем его
+        сразу: выбирать не из чего, а список из одной строки только мешает.
+        """
         self._current_kube_cluster = cluster
         # Вход выполняется как обычная команда (блок в журнале), но в историю
         # не пишется: строку набрал не пользователь, а :kctx.
         self.handle_normal_command(self._kctx_login_line(cluster), record_history=False)
         self._kctx_list_cluster = cluster
+        if index is None and len(snapshots_for_cluster(self._kctx_load_items(), cluster)) == 1:
+            self._kctx_apply_index(1, auto_single=True)
+            return
         self._kctx_show_snapshots(cluster)
         if index is not None:
             self._kctx_apply_index(index)
@@ -6857,8 +6868,12 @@ class CommandRunner(App):
             lines.append("  :kctx N — применить набор N")
         self.add_block(InfoBlock("\n".join(lines)))
 
-    def _kctx_apply_index(self, index: int) -> None:
-        """Применяет набор N из последнего открытого списка кластера."""
+    def _kctx_apply_index(self, index: int, *, auto_single: bool = False) -> None:
+        """Применяет набор N из последнего открытого списка кластера.
+
+        `auto_single` — набор применился потому, что он у кластера единственный
+        (тогда в строке явно говорим об этом, чтобы не было сюрпризом).
+        """
         cluster = getattr(self, "_kctx_list_cluster", None)
         if not cluster:
             return
@@ -6879,6 +6894,8 @@ class CommandRunner(App):
         self._current_kube_cluster = cluster
         text = format_vars(row["vars"]) or "(пусто)"
         message = f"kctx {escape(cluster)} #{index}: {escape(text)}"
+        if auto_single:
+            message += "  [dim](единственный набор — применился сразу)[/dim]"
         if errors:
             message += f"  [red]errors: {'; '.join(errors)}[/red]"
         elif before and before != cluster:

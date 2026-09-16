@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.119
+# План тестирования IDvjPy_term v1.120
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -978,6 +978,7 @@ x
 2. Задать `$NS=team-a`, `$POD=api-7f` → в журнале появились снимки кластера `prod` (см. `kctx.json` рядом с `settings.yml`).
 3. `:kctx` — список кластеров: имя, число снимков, время последнего; у текущего — «← текущий».
 4. `:kctx prod` — блок входа (`klogin prod || kubectl config use-context prod`) и список ранее использованных наборов переменных (`1. NS=… POD=… (дата)`).
+4.1. Если у кластера ровно один набор, `:kctx <cluster>` применяет его **сразу**: списка из одной строки нет, InfoBlock `kctx <cluster> #1: NS=…` с пометкой `(единственный набор — применился сразу)`. При двух и более наборах — прежний список, применение только по номеру.
 5. `:kctx 1` — применить свежайший набор: переменные в `.bashrc_term_<instance>`, InfoBlock `kctx prod #1: NS=…`. Проверить: `cat .bashrc_term_default`, `echo $NS` в новой команде.
 6. `:kctx staging 2` — вход в staging и применение его набора №2 одной строкой.
 7. `:kctx 99` без открытого списка — подсказка «нет открытого списка»; после `:kctx <cluster>` с одним снимком — «набора 99 нет».
@@ -1322,7 +1323,7 @@ Ctrl+O               # TUI уходит в сторону — виден реа�
 
 ---
 
-**Версия документа**: v1.63
-**Версия приложения**: v1.119
+**Версия документа**: v1.64
+**Версия приложения**: v1.120
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`  
 **Дата**: 2026-09-15

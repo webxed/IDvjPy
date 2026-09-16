@@ -139,7 +139,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 kubectl stack (NS POD DEPLOY SVC ING APP CTR QUOTA) are saved
                 per cluster when set after login
   :kctx <cluster> - Log in (klogin <c> || kubectl config use-context <c>) and
-                show previously used variable sets of that cluster
+                show previously used variable sets of that cluster; with exactly
+                one saved set it is applied right away (nothing to pick from)
   :kctx <cluster> N - Log in and apply saved set N
   :kctx N       - Apply set N from the last shown list (:kctx N sets vars only)
   :import file       - Insert commands from that JSON (new tids)

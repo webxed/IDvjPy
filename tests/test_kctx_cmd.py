@@ -99,6 +99,48 @@ async def test_kctx_cluster_n_applies_in_one_go(isolated_home, monkeypatch):
         assert app._current_kube_cluster == "staging"
 
 
+async def test_kctx_single_snapshot_applies_right_away(isolated_home, monkeypatch):
+    """Один набор у кластера — `:kctx <cluster>` применяет его сразу, без номера."""
+    app = CommandRunner()
+    recorder: list[str] = []
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        monkeypatch.setattr(app, "run_command", lambda cmd, stdin_data=None, *, no_timeout=False: recorder.append(cmd))
+        add_snapshot(app.FILE_KCTX, "staging", {"NS": "default", "POD": "web-1"}, now=100.0)
+
+        await submit(pilot, ":kctx staging")
+        texts = " ".join(block.text_content for block in app.query(InfoBlock))
+        # вошли и применили единственный набор
+        assert recorder[-1] == "klogin staging || kubectl config use-context staging"
+        assert app._current_kube_cluster == "staging"
+        assert app.local_env.get("NS") == "default"
+        assert app.local_env.get("POD") == "web-1"
+        # сказано, почему применилось, а список из одной строки не печатается
+        assert "единственный набор" in texts
+        assert "снимки переменных" not in texts
+
+
+async def test_kctx_several_snapshots_still_need_number(isolated_home, monkeypatch):
+    """Два и больше наборов — по-прежнему только список, применение по номеру."""
+    app = CommandRunner()
+    recorder: list[str] = []
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        monkeypatch.setattr(app, "run_command", lambda cmd, stdin_data=None, *, no_timeout=False: recorder.append(cmd))
+        add_snapshot(app.FILE_KCTX, "prod", {"NS": "team-a", "POD": "api-7f"}, now=100.0)
+        add_snapshot(app.FILE_KCTX, "prod", {"NS": "legacy"}, now=200.0)
+
+        await submit(pilot, ":kctx prod")
+        texts = " ".join(block.text_content for block in app.query(InfoBlock))
+        assert "снимки переменных" in texts
+        assert ":kctx N — применить набор N" in texts
+        assert app.local_env.get("NS") is None  # ничего не применилось само
+
+        await submit(pilot, ":kctx prod 2")  # явный номер работает как раньше
+        assert app.local_env.get("NS") == "team-a"
+        assert app.local_env.get("POD") == "api-7f"
+
+
 async def test_kctx_json_file_shape(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 30)) as pilot:

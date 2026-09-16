@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.119) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.120) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.119` → `v1.120`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.120` → `v1.121`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -78,7 +78,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/history_store.py`**: `history_<instance>.txt` append/read/compact + portalocker file-lock helpers
 - **`src/session_mailbox.py`**: cross-session command relay (`:send` / `:send!`) — per-session `inbox_<instance>.jsonl` (JSON Lines, 0600, same portalocker pattern as `history_store`); `send_message` appends, `drain_inbox` reads-and-truncates, `pending_sessions` lists non-empty inboxes
 - **`src/session_registry.py`**: active-session registry — per-session `session_<instance>.pid` (0600) in the data dir; `register` / `unregister` (with a `pid=` that no longer matches the file, someone else's record is left alone), `active_sessions` (pid files of dead processes are removed), `free_session_name` (lowest free `sN` among **live** sessions, plus `taken`). `:new` without a name uses it, so the counter follows running windows instead of leftover `history_*.txt` / `.bashrc_term_*`. **Not** the same question as `CommandRunner.list_session_names` (by files; `:send` / `:session` lists still show closed sessions)
-- **`src/kctx_store.py`**: cluster journal `kctx.json` (data dir): snapshots of the kubectl var stack (`NS POD DEPLOY SVC ING APP CTR QUOTA`) per cluster, captured on `$VAR=` after a `klogin` / `tsh kube login` / `kubectl config use-context` line; UI `:kctx` lists clusters and applies saved sets
+- **`src/kctx_store.py`**: cluster journal `kctx.json` (data dir): snapshots of the kubectl var stack (`NS POD DEPLOY SVC ING APP CTR QUOTA`) per cluster, captured on `$VAR=` after a `klogin` / `tsh kube login` / `kubectl config use-context` line; UI `:kctx` lists clusters and applies saved sets (`:kctx <cluster>` = log in + show sets, and with exactly **one** set it applies it right away — nothing to pick from; `:kctx N` applies from the last shown list; `:kctx <cluster> N` = log in + apply in one go)
 - **`src/help_texts.py`**: static `:?` / `:i` help text constants
 - **`src/clipboard.py`**: CLIPBOARD / PRIMARY / OSC 52
 - **`src/shell_env.py`**: `.bashrc_term` vars, `~/.bashrc` aliases, `$1` substitution
