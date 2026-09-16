@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.118) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.119) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.118` → `v1.119`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.119` → `v1.120`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -94,7 +94,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/cheat_sh.py`**: `:cht <query>` — cheat.sh (cht.sh) cheat sheets (query → URL with `+`, ANSI stripping, proxy-aware urllib fetch in a background thread). The service returns `text/plain` only to a curl-like User-Agent; settings `cheat_sh_url` / `cheat_sh_options`
 - **`src/gui_open.py`**: `:fm` / `:term` — detach a file manager or system terminal; `open_terminal_command` / `build_terminal_exec_argv` run a command inside a terminal (used by `:new` to launch another app window; Linux / macOS / Windows; `$FILEMAN` / `$TERMINAL` override)
 - **`src/editor_open.py`**: `:ed` — external editor for a file, `$OUT` or `$BLOCK` (settings `editor:` → `$VISUAL`/`$EDITOR` → system list; runs in a real TTY via `_run_in_tty`; temp copies for block output)
-- **`src/screensaver.py`**: idle starfield (`:screensaver`); flying live clock/date; full-width green library ticker; bottom-left command-help typewriter and bottom-right load/RAM (1s `/proc`; may overlap when the window is narrow); `screensaver_idle` seconds, `0` = off; `screensaver_stars: false` hides flying dust/tokens
+- **`src/screensaver.py`**: idle overlay (`:screensaver`) — matrix digital rain (`MatrixRain`; `screensaver_matrix: true`, default) or the NC-style starfield (`StarField`); flying live clock/date (starfield only); full-width green library ticker; bottom-left command-help typewriter and bottom-right load/RAM (1s `/proc`; may overlap when the window is narrow); `screensaver_idle` seconds, `0` = off; `screensaver_stars: false` hides flying dust/tokens in the starfield; `:screensaver matrix|stars` picks the canvas once (no settings write)
 - **`src/seed_catalog.py`**: empty-DB welcome catalog (click `--seed` → input)
 - **`src/demo.py`**: `--demo` YAML player (`src/demos/*.yml`); `loop: true` / `loop: N` (Esc stops)
 - **`src/ingress_analyzer.py`**: `:i` Kubernetes helper
@@ -102,7 +102,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/app.tcss`**: Textual styling (`.tcss` — расширение Textual CSS; браузерный CSS-линтер редактора не должен его разбирать — иначе ложные `property value expected` на `$surface`/`dock`). Путь читается из `CommandRunner.CSS_PATH`; сторожит `tests/test_stylesheet.py`
   - Блок в фокусе подсвечивается смешением `background: $primary 25%` (сплошной `$primary-darken-1` слепил на больших блоках); правила `Screen.matrix-mode …` меняют рамки только у темы matrix
 - **Темы**: своя `matrix` живёт в `src/app.py` (`MATRIX_THEME` — зелёный фосфор `#00ff5f` на почти чёрном, регистрируется в `on_mount` до применения темы из settings.yml). Класс `MATRIX_CLASS` (`matrix-mode`) на `Screen` держит `watch_theme` — он ловит все три пути смены темы (settings.yml, `:theme`, клавиша `d`), по классу app.tcss красит рамки. Смена темы не трогает чужие темы: их CSS остаётся прежним. Тесты — `tests/test_themes.py`
-- **`settings.yml`**: buffer limits, timeout, DB file, `terminal_mouse`, `screensaver_idle`, `screensaver_stars` (cwd)
+- **`settings.yml`**: buffer limits, timeout, DB file, `terminal_mouse`, `screensaver_idle`, `screensaver_matrix`, `screensaver_stars` (cwd)
 - **`.bashrc_term` / `.bashrc_term_<instance>`**: env vars from `$VAR=val` (cwd; template `src/.bashrc_term.example`)
 
 ### Command Prefix System
@@ -188,5 +188,6 @@ Edit `settings.yml`:
 - `md_render_lines` (default 1000): `:md` renders formatted markdown only below this many lines. Above it the file opens as raw source in the Line-API `OutputViewerScreen` (lazy `render_line`, instant) — the Textual `Markdown` widget mounts a widget per block, so 550 lines ≈ 1.3 s, 2200 ≈ 6 s, 13k ≈ 40 s. `start_line` keeps `#L<n>` working in the raw view. `y` copies the source path in **both** views (`HandbookMarkdownScreen` shows the clickable name via `[@click=screen.copy_path]`; `OutputViewerScreen` takes `source_path` and reports `No file path` for plain `:log`).
 - `llm_providers.yml` (cwd): LLM providers for `:llm` — see `src/llm_providers.example.yml`. Keys come from the environment only (`$VAR` refs in headers/body)
 - `cheat_sh_url` (default `https://cht.sh`) / `cheat_sh_options` (default `T` = no ANSI; add `Q` for no comments): base URL and query options for `:cht`
-- `screensaver_idle`: seconds of no keys/clicks/scroll/mouse-move before the DevOps starfield (default 120). `0` disables. Tests set this to `0`. `:screensaver` starts it now; `:screensaver 0` / `:screensaver 120` change idle for this session. A forwarded `:send` command also wakes it (`_wake_screensaver()` from `_deliver_forwarded`) — external events do not touch its own key handlers.
-- `screensaver_stars`: `true` (default) — flying dust/tokens. `false` — black canvas; clock/date, library ticker, and load/mem stay.
+- `screensaver_idle`: seconds of no keys/clicks/scroll/mouse-move before the overlay (default 120). `0` disables. Tests set this to `0`. `:screensaver` starts it now; `:screensaver 0` / `:screensaver 120` change idle for this session; `:screensaver matrix` / `:screensaver stars` show the other canvas once. A forwarded `:send` command also wakes it (`_wake_screensaver()` from `_deliver_forwarded`) — external events do not touch its own key handlers.
+- `screensaver_matrix`: `true` (default) — the canvas is matrix digital rain (`MatrixRain`): falling glyph columns, bright head, dimming tail; the starfield (dust/tokens, clock/date) is then not drawn, while the ticker, help and load/mem stay. `false` — the starfield canvas, where `screensaver_stars` acts.
+- `screensaver_stars`: `true` (default) — flying dust/tokens in the starfield. `false` — black canvas; clock/date, library ticker, and load/mem stay. No effect on the matrix canvas.

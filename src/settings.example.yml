@@ -52,9 +52,15 @@ theme: textual-dark
 # Сверять VERSION с GitHub main при старте. :update проверяет всегда.
 check_updates: true
 
-# Скринсейвер (starfield). Секунды простоя; 0 = выкл. :screensaver — сразу.
+# Скринсейвер. Секунды простоя; 0 = выкл. :screensaver — сразу.
 screensaver_idle: 120
-# Летающие звёзды (пыль + k8s/git/…). false — чёрный холст; часы, лента и load остаются.
+# Холст заставки: true — «матричный дождь» (падающие столбцы глифов, как в «Матрице»),
+# false — звёздное поле (тогда действует screensaver_stars). Лента сверху, справка и
+# load/RAM снизу остаются в обоих случаях. Переключить на раз в TUI:
+# `:screensaver matrix` / `:screensaver stars`.
+screensaver_matrix: true
+# Летающие звёзды звёздного поля (пыль + k8s/git/…). false — чёрный холст; часы, лента и
+# load остаются. На матричный холст не влияет. Также есть `:screensaver stars`.
 screensaver_stars: true
 
 # Подсказки имён k8s-ресурсов из живого кластера (`kubectl get pod <Tab>`).

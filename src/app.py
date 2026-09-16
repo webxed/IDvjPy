@@ -2124,7 +2124,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.118"
+    VERSION = "v1.119"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2270,6 +2270,7 @@ class CommandRunner(App):
     KEY_EDITOR = "editor"
     KEY_SCREENSAVER_IDLE = "screensaver_idle"
     KEY_SCREENSAVER_STARS = "screensaver_stars"
+    KEY_SCREENSAVER_MATRIX = "screensaver_matrix"
     KEY_K8S_COMPLETION = "k8s_completion"
     KEY_FILE_COMPLETION = "file_completion"
     KEY_LINE_API_BLOCKS = "line_api_blocks"
@@ -2389,6 +2390,8 @@ class CommandRunner(App):
         self._fresh_command_db: bool = False
         self.screensaver_idle: float = 0
         self.screensaver_stars: bool = True
+        # Холст заставки: «матричный дождь» (true) или звёздное поле (false).
+        self.screensaver_matrix: bool = True
         self.k8s_completion: bool = False
         # Файловые подсказки: auto / paths / off (settings.yml: file_completion).
         self.file_completion: str = "auto"
@@ -3324,6 +3327,9 @@ class CommandRunner(App):
                         self.screensaver_idle = DEFAULT_SCREENSAVER_IDLE
                     self.screensaver_stars = bool(
                         settings.get(self.KEY_SCREENSAVER_STARS, True)
+                    )
+                    self.screensaver_matrix = bool(
+                        settings.get(self.KEY_SCREENSAVER_MATRIX, True)
                     )
                     self.k8s_completion = bool(
                         settings.get(self.KEY_K8S_COMPLETION, False)
@@ -6033,7 +6039,8 @@ class CommandRunner(App):
         self._bump_screensaver_idle()
 
     def _handle_screensaver_command(self, args: list[str]) -> None:
-        """`:screensaver` preview; `:screensaver 0` / `:screensaver 120` set idle seconds."""
+        """`:screensaver` preview; `:screensaver 0` / `:screensaver 120` set idle seconds;
+        `:screensaver matrix` / `:screensaver stars` — выбрать холст на эту сессию."""
         if args:
             raw = args[0].strip().lower()
             if raw in {"off", "0"}:
@@ -6041,11 +6048,16 @@ class CommandRunner(App):
                 self._bump_screensaver_idle()
                 self.add_block(InfoBlock("Screensaver off (this session). settings.yml: screensaver_idle"))
                 return
+            if raw in {"stars", "matrix"}:
+                # settings.yml не трогаем: холст только для этого показа.
+                self._open_screensaver(matrix=(raw == "matrix"))
+                return
             try:
                 seconds = int(raw)
             except ValueError:
                 self.add_block(InfoBlock(
                     "Usage: :screensaver  |  :screensaver 120  |  :screensaver 0"
+                    "  |  :screensaver matrix|stars"
                 ))
                 return
             if seconds < 0:
@@ -6057,10 +6069,14 @@ class CommandRunner(App):
                 f"Screensaver idle {seconds}s (this session). Persist: screensaver_idle in settings.yml"
             ))
             return
+        self._open_screensaver()
+
+    def _open_screensaver(self, *, matrix: bool | None = None) -> None:
+        """Показать заставку. `matrix` — явный холст, иначе из settings.yml."""
         if self._demo_active:
             self.add_block(InfoBlock("Cannot start screensaver while a demo is playing (Esc first)."))
             return
-        self.push_screen(DevopsScreensaver(stars=self.screensaver_stars))
+        self.push_screen(DevopsScreensaver(stars=self.screensaver_stars, matrix=matrix))
 
     def _start_update_check(self, *, always_report: bool) -> None:
         """Background GitHub version check. Startup only notifies if main is newer."""

@@ -8,12 +8,19 @@ from rich.text import Text
 from app import CommandRunner
 from screensaver import (
     COMMAND_HELP_LINES,
+    MATRIX_GLYPHS,
+    MATRIX_HEAD_STYLE,
+    MATRIX_MAX_SPEED,
+    MATRIX_MIN_SPEED,
+    MATRIX_TAIL_STYLES,
+    TICK_SECONDS,
     TICKER_SEP,
     DevopsScreensaver,
     HelpTypewriter,
     HostSnapshot,
     HostStats,
     LibraryTicker,
+    MatrixRain,
     StarField,
     clock_glyph,
     flatten_command,
@@ -251,6 +258,70 @@ def test_starfield_can_disable_flying_stars():
     assert {star.label for star in field.stars} == {"time", "date"}
 
 
+def test_matrix_rain_pace_is_slow_and_smooth():
+    """Дождь идёт медленно и ровно: за кадр голова сдвигается меньше чем на полстроки."""
+    assert MATRIX_MAX_SPEED * TICK_SECONDS < 0.5
+    assert MATRIX_MIN_SPEED > 0.5  # но столбцы не стоят на месте
+
+
+def test_matrix_rain_columns_fall_and_restart():
+    rain = MatrixRain(30, 10, seed=3)
+    assert len(rain.columns) == 30
+    ys_before = [column.y for column in rain.columns]
+    for _ in range(3):
+        rain.tick(0.1)
+    ys_after = [column.y for column in rain.columns]
+    assert all(after > before for before, after in zip(ys_before, ys_after, strict=True))
+
+    # Столбцы доходят до низа и начинаются заново сверху (шаг 0.5 с — дождь медленный).
+    restarts = 0
+    previous = [column.y for column in rain.columns]
+    for _ in range(200):
+        rain.tick(0.5)
+        current = [column.y for column in rain.columns]
+        restarts += sum(1 for was, now in zip(previous, current, strict=True) if now < was)
+        previous = current
+    assert restarts > 0
+
+
+def test_matrix_rain_render_uses_glyphs_and_trail():
+    rain = MatrixRain(20, 8, seed=11)
+    for _ in range(40):
+        rain.tick(0.1)
+    text = rain.render_text()
+    lines = text.plain.split("\n")
+    assert len(lines) == 8
+    assert all(len(line) == 20 for line in lines)
+
+    glyphs = {ch for ch in text.plain if ch not in " \n"}
+    assert glyphs  # дождь нарисован
+    assert glyphs <= set(MATRIX_GLYPHS)
+    # Голова — самым ярким стилем, хвост затухает в пределах палитры.
+    assert MATRIX_HEAD_STYLE in {span.style for span in text.spans}
+    assert {span.style for span in text.spans} <= {
+        MATRIX_HEAD_STYLE,
+        *MATRIX_TAIL_STYLES,
+    }
+    assert rain._style_for(0) == MATRIX_HEAD_STYLE
+    assert rain._style_for(1) == MATRIX_TAIL_STYLES[0]
+    assert rain._style_for(99) == MATRIX_TAIL_STYLES[-1]
+
+
+def test_matrix_rain_resize_and_seed_are_reproducible():
+    first = MatrixRain(40, 12, seed=9)
+    second = MatrixRain(40, 12, seed=9)
+    for _ in range(10):
+        first.tick(0.1)
+        second.tick(0.1)
+    assert first.render_text().plain == second.render_text().plain
+
+    first.resize(80, 20)
+    assert first.width == 80
+    assert first.height == 20
+    assert len(first.columns) == 80
+    assert len(first.render_text().plain.split("\n")) == 20
+
+
 def test_clock_glyph_formats_time_and_date():
     moment = datetime(2026, 8, 26, 15, 35, 7)
     assert clock_glyph(moment, "time") == "15:35:07"
@@ -385,9 +456,11 @@ async def test_screensaver_host_bar_shows_load_and_mem(isolated_home):
 
 
 async def test_screensaver_stars_off_from_settings(isolated_home):
+    """`screensaver_stars: false` — звёздное поле без пыли/токенов (матрица выключена)."""
     settings = isolated_home / "settings.yml"
     settings.write_text(
-        settings.read_text(encoding="utf-8") + "screensaver_stars: false\n",
+        settings.read_text(encoding="utf-8")
+        + "screensaver_matrix: false\nscreensaver_stars: false\n",
         encoding="utf-8",
     )
     app = CommandRunner()
@@ -395,9 +468,79 @@ async def test_screensaver_stars_off_from_settings(isolated_home):
         await submit(pilot, ":screensaver")
         await pilot.pause()
         assert isinstance(app.screen, DevopsScreensaver)
+        assert app.screensaver_matrix is False
         assert app.screensaver_stars is False
+        assert isinstance(app.screen._field, StarField)
         assert app.screen._field.stars_enabled is False
         assert all(star.kind == "clock" for star in app.screen._field.stars)
+
+
+async def test_screensaver_matrix_on_by_default(isolated_home):
+    """Матричный дождь — холст по умолчанию (`screensaver_matrix: true`)."""
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, ":screensaver")
+        await pilot.pause()
+        assert isinstance(app.screen, DevopsScreensaver)
+        assert app.screensaver_matrix is True
+        assert app.screen._matrix is True
+        assert isinstance(app.screen._field, MatrixRain)
+        # Клик/пауза могли не дать ни одного тика — прокручиваем дождь и смотрим холст.
+        for _ in range(30):
+            app.screen._field.tick(0.08)
+        glyphs = {
+            ch for ch in app.screen._field.render_text().plain if ch not in " \n"
+        }
+        assert glyphs
+        assert glyphs <= set(MATRIX_GLYPHS)
+
+
+async def test_screensaver_matrix_off_from_settings(isolated_home):
+    """`screensaver_matrix: false` — снова звёздное поле (с пылью, как раньше)."""
+    settings = isolated_home / "settings.yml"
+    settings.write_text(
+        settings.read_text(encoding="utf-8") + "screensaver_matrix: false\n",
+        encoding="utf-8",
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, ":screensaver")
+        await pilot.pause()
+        assert isinstance(app.screen, DevopsScreensaver)
+        assert app.screensaver_matrix is False
+        assert isinstance(app.screen._field, StarField)
+        assert app.screen._field.stars_enabled is True
+
+
+async def test_colon_screensaver_switches_canvas(isolated_home):
+    """`:screensaver stars` / `:screensaver matrix` показывают другой холст на раз."""
+    settings = isolated_home / "settings.yml"
+    settings.write_text(
+        settings.read_text(encoding="utf-8") + "screensaver_matrix: false\n",
+        encoding="utf-8",
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, ":screensaver stars")
+        await pilot.pause()
+        assert isinstance(app.screen, DevopsScreensaver)
+        assert isinstance(app.screen._field, StarField)
+        await pilot.press("x")  # закрыть заставку
+        await pilot.pause()
+
+        await submit(pilot, ":screensaver matrix")
+        await pilot.pause()
+        assert isinstance(app.screen, DevopsScreensaver)
+        assert isinstance(app.screen._field, MatrixRain)
+        # Настройка не менялась — это только показ.
+        assert app.screensaver_matrix is False
+
+
+async def test_colon_screensaver_usage_on_unknown_arg(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, ":screensaver nope")
+        assert "matrix|stars" in last_info(app).text_content
 
 
 async def test_forwarded_command_wakes_screensaver(isolated_home):

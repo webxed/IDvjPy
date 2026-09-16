@@ -67,7 +67,11 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 after `:send `. Recorded in history (↑ / `:h`), never suggested
   :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
-  :screensaver  - Starfield; full-width ticker; bottom-left help; bottom-right load/mem (idle: screensaver_idle; keys/clicks/scroll/mouse move reset it; a forwarded :send command wakes it too; 0 = off; screensaver_stars: false hides flying dust)
+  :screensaver  - Idle overlay: matrix digital rain (screensaver_matrix, default) or the
+                NC-style starfield; full-width ticker; bottom-left help; bottom-right
+                load/mem. `:screensaver matrix` / `:screensaver stars` pick the canvas
+                once; `:screensaver 0` / `120` set idle seconds (screensaver_idle);
+                keys/clicks/scroll/mouse move reset it, a forwarded :send wakes it
   :r          - Put the focused (or last) block command into the input
   :r N        - Put the command N blocks back into the input (0 = last)
   :cmd [N] [show] - Materialize the block command with current $VAR values (secrets

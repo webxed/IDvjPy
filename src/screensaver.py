@@ -1,4 +1,4 @@
-"""Norton Commander-style starfield, DevOps-themed.
+"""Norton Commander-style starfield, DevOps-themed — or Matrix digital rain.
 
 Stars fly toward the viewer (classic NC screensaver). Closer particles
 become kubectl/git/helm tokens and IDvjPy fragments. Live clock and date
@@ -7,6 +7,10 @@ the top. Command help types along the bottom left; load 1/5/15 and RAM sit
 on the bottom right with the same corner inset (they may overlap in a
 narrow terminal). Any key or click dismisses the overlay; that key is not
 typed into the prompt.
+
+`screensaver_matrix: true` (settings.yml) заменяет холст на «матричный дождь»
+(`MatrixRain`) — падающие столбцы глифов; лента, справка и load/RAM остаются.
+На раз холст переключается из TUI: `:screensaver matrix` / `:screensaver stars`.
 """
 from __future__ import annotations
 
@@ -58,6 +62,26 @@ STYLE_HOST_MEM = "bold #67e8f9"
 TICKER_SEP = "    ·    "
 TICKER_CPS = 2.5  # characters per second; slow crawl so it stays readable
 HELP_TYPE_CPS = 22.0
+
+# --- Матричный дождь (`screensaver_matrix`) ---------------------------------
+# Глифы как в «Матрице»: полуширинные катаканы, цифры, знаки.
+MATRIX_GLYPHS = (
+    "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホ"
+    "0123456789"
+    "ABCDEFZ<>*+-/\\|=%$#@!?"
+)
+MATRIX_HEAD_STYLE = "bold #d8ffe4"  # голова столбца — самая яркая
+MATRIX_TAIL_STYLES = ("#00ff5f", "#00d44f", "#00a83c", "#007c2c", "#00571f", "#003a15")
+# Скорость в строках в секунду. Медленно и ровно: за кадр (`TICK_SECONDS`) голова
+# сдвигается меньше чем на полстроки — шаг вниз глаза не «дёргает».
+MATRIX_MIN_SPEED = 1.8
+MATRIX_MAX_SPEED = 6.0
+MATRIX_MIN_TRAIL = 4
+MATRIX_MAX_TRAIL = 16
+MATRIX_FLICKER_PER_SECOND = 2.0  # сколько раз в секунду в хвосте меняется глиф
+# Кадр заставки: 20 fps. Все тики принимают `dt`, поэтому на скорости звёзд, ленты,
+# справки и load/RAM это не влияет — только на плавность движения.
+TICK_SECONDS = 0.05
 HELP_PAUSE_SEC = 2.2
 HELP_INDENT_RATIO = 0.2  # off the left edge, left of center
 HOST_POLL_SEC = 1.0  # /proc reads; not every starfield frame
@@ -560,7 +584,7 @@ class StarField:
                 clocks.append(self._spawn_clock(label))
         self.stars = others + clocks
 
-    def tick(self, dt: float = 0.08) -> None:
+    def tick(self, dt: float = TICK_SECONDS) -> None:
         for star in self.stars:
             star.z -= star.speed * dt
             if star.kind == "clock":
@@ -686,6 +710,111 @@ class StarField:
                 row[px] = (ch, style)
 
 
+@dataclass
+class RainColumn:
+    """Столбец дождя: голова (строка, float), скорость, длина хвоста, глифы строк."""
+
+    y: float
+    speed: float
+    length: int
+    glyphs: list[str]
+
+
+class MatrixRain:
+    """Digital rain в стиле «Матрицы» — падающие вниз столбцы глифов.
+
+    Тот же интерфейс, что у `StarField` (`tick` / `resize` / `render_text`),
+    чтобы `DevopsScreensaver` рисовал на холсте либо звёздное поле, либо дождь.
+    Голова столбца — самым ярким стилем, хвост затухает (`MATRIX_TAIL_STYLES`).
+    Чистая симуляция: без Textual, тестируется без TUI.
+    """
+
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        *,
+        seed: int | None = None,
+        glyphs: str | None = None,
+    ) -> None:
+        self.width = max(8, width)
+        self.height = max(4, height)
+        self.rng = random.Random(seed)
+        self.glyphs = glyphs or MATRIX_GLYPHS
+        self.columns: list[RainColumn] = []
+        self._seed_columns()
+
+    def resize(self, width: int, height: int) -> None:
+        """Пересобрать столбцы под новый размер (головы снова вразнобой)."""
+        self.width = max(8, width)
+        self.height = max(4, height)
+        self._seed_columns()
+
+    def tick(self, dt: float = TICK_SECONDS) -> None:
+        for column in self.columns:
+            column.y += column.speed * dt
+            if self.rng.random() < MATRIX_FLICKER_PER_SECOND * dt:
+                column.glyphs[self.rng.randrange(self.height)] = self._glyph()
+            if column.y - column.length > self.height:
+                self._reset(column)
+
+    def render_text(self) -> Text:
+        cells: list[list[tuple[str, str]]] = [
+            [(" ", "")] * self.width for _ in range(self.height)
+        ]
+        for x, column in enumerate(self.columns):
+            head = int(column.y)
+            for i in range(column.length):
+                row = head - i
+                if not 0 <= row < self.height:
+                    continue
+                cells[row][x] = (column.glyphs[row], self._style_for(i))
+        canvas = Text()
+        for y, row in enumerate(cells):
+            if y:
+                canvas.append("\n")
+            for ch, style in row:
+                if style:
+                    canvas.append(ch, style=style)
+                else:
+                    canvas.append(ch)
+        return canvas
+
+    def head_rows(self) -> list[int]:
+        """Строки голов всех столбцов (тесты/отладка)."""
+        return [int(column.y) for column in self.columns]
+
+    def _seed_columns(self) -> None:
+        self.columns = [self._new_column(stagger=True) for _ in range(self.width)]
+
+    def _new_column(self, *, stagger: bool) -> RainColumn:
+        length = self.rng.randint(MATRIX_MIN_TRAIL, MATRIX_MAX_TRAIL)
+        # Вразнобой: при старте головы разбросаны над экраном, после сброса —
+        # столбец начинается целиком за верхней границей (без «вспышки» в кадре).
+        start = self.rng.uniform(-float(self.height), 0.0) if stagger else -float(length)
+        return RainColumn(
+            y=start,
+            speed=self.rng.uniform(MATRIX_MIN_SPEED, MATRIX_MAX_SPEED),
+            length=length,
+            glyphs=[self._glyph() for _ in range(self.height)],
+        )
+
+    def _reset(self, column: RainColumn) -> None:
+        fresh = self._new_column(stagger=False)
+        column.y = fresh.y
+        column.speed = fresh.speed
+        column.length = fresh.length
+        column.glyphs = fresh.glyphs
+
+    def _glyph(self) -> str:
+        return self.rng.choice(self.glyphs)
+
+    def _style_for(self, index: int) -> str:
+        if index == 0:
+            return MATRIX_HEAD_STYLE
+        return MATRIX_TAIL_STYLES[min(index - 1, len(MATRIX_TAIL_STYLES) - 1)]
+
+
 class DevopsScreensaver(ModalScreen[None]):
     """Full-screen starfield. Any key / click returns to the TUI."""
 
@@ -736,6 +865,7 @@ class DevopsScreensaver(ModalScreen[None]):
         help_lines: Sequence[str] | None = None,
         host_reader: Callable[[], HostSnapshot] | None = None,
         stars: bool | None = None,
+        matrix: bool | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -744,7 +874,10 @@ class DevopsScreensaver(ModalScreen[None]):
         self._ticker_items = ticker_items
         self._help_lines = help_lines
         self._stars = stars
-        self._field = StarField(80, 24, seed=seed, tokens=tokens, stars=stars is not False)
+        self._matrix = matrix
+        self._field: StarField | MatrixRain = StarField(
+            80, 24, seed=seed, tokens=tokens, stars=stars is not False
+        )
         self._ticker = LibraryTicker((), seed=seed)
         self._help = HelpTypewriter(help_lines, seed=seed)
         self._host = HostStats(reader=host_reader)
@@ -764,19 +897,18 @@ class DevopsScreensaver(ModalScreen[None]):
         self._help = HelpTypewriter(self._help_lines, seed=self._seed)
         if self._stars is None:
             self._stars = bool(getattr(self.app, "screensaver_stars", True))
-        self._field = StarField(
+        if self._matrix is None:
+            self._matrix = bool(getattr(self.app, "screensaver_matrix", True))
+        self._field = self._make_field(
             max(8, self.size.width or 80),
             max(4, (self.size.height or 24) - (1 if items else 0)),
-            seed=self._seed,
-            tokens=self._tokens,
-            stars=self._stars,
         )
         canvas = self.query_one("#ss-canvas", Static)
         canvas.can_focus = True
         canvas.focus()
         self._sync_size()
         self._paint()
-        self._timer = self.set_interval(0.08, self._tick)
+        self._timer = self.set_interval(TICK_SECONDS, self._tick)
 
     def on_unmount(self) -> None:
         if self._timer is not None:
@@ -789,6 +921,22 @@ class DevopsScreensaver(ModalScreen[None]):
     def on_resize(self) -> None:
         self._sync_size()
 
+    def _make_field(self, width: int, height: int) -> StarField | MatrixRain:
+        """Холст заставки: матричный дождь или звёздное поле.
+
+        `matrix` — из settings.yml (`screensaver_matrix`) или явного аргумента
+        (`:screensaver matrix` / `:screensaver stars`).
+        """
+        if self._matrix:
+            return MatrixRain(width, height, seed=self._seed)
+        return StarField(
+            width,
+            height,
+            seed=self._seed,
+            tokens=self._tokens,
+            stars=self._stars is not False,
+        )
+
     def _sync_size(self) -> None:
         try:
             canvas = self.query_one("#ss-canvas", Static)
@@ -800,10 +948,10 @@ class DevopsScreensaver(ModalScreen[None]):
         self._field.resize(width, height)
 
     def _tick(self) -> None:
-        self._field.tick(0.08)
-        self._ticker.tick(0.08)
-        self._help.tick(0.08)
-        self._host.tick(0.08)
+        self._field.tick(TICK_SECONDS)
+        self._ticker.tick(TICK_SECONDS)
+        self._help.tick(TICK_SECONDS)
+        self._host.tick(TICK_SECONDS)
         self._paint()
 
     def _paint(self) -> None:

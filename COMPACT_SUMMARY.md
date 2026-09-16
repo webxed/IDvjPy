@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.118**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.119**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.62 (app v1.118) |
+| `test_cmd.md` | Manual plan v1.63 (app v1.119) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -163,7 +163,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
 | `tests/test_demo.py` | YAML `--demo` (short/full/ip/features/all, guardrails тура `all`), `:playbook`, `loop: N` / `loop: true` |
 | `tests/test_gui_open.py` | `:fm` / `:term` argv by OS, `$FILEMAN` / `$TERMINAL`, detached spawn |
-| `tests/test_screensaver.py` | starfield, `:screensaver`, idle timer, key swallowed, `:send` снимает заставку |
+| `tests/test_screensaver.py` | starfield и матричный дождь (`MatrixRain`: падение/сброс, глифы, палитра), `:screensaver` и холст по `screensaver_matrix` / `:screensaver matrix|stars`, idle timer, key swallowed, `:send` снимает заставку |
 | `tests/test_docker_stand.py` | Файлы docker-стенда: seed-скрипты в entrypoint, compose-том/TTY, Dockerfile, `.dockerignore`, job CI |
 | `tests/test_ux_extras.py` | `:r N`, счётчик running в заголовке, `:alias`, консоль под TUI по Ctrl+O (suspend → ожидание клавиши → возврат, `SuspendNotSupported`) |
 
@@ -180,10 +180,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.118 |
+| `src/app.py` | TUI (`CommandRunner`), v1.119 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
-| `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
+| `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
 | `src/database_v2.py` | SQLite tagged history |
 | `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
 | `src/seed_catalog.py` | Empty-DB welcome catalog (click `--seed` / `.md`) |
@@ -215,6 +215,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.119
+
+- **Заставка в стиле «Матрицы» + ключ выключения (как `screensaver_stars`).** Новый холст `MatrixRain` (`src/screensaver.py`) — падающие столбцы глифов (полуширинные катаканы, цифры, знаки): голова столбца рисуется самым ярким стилем (`MATRIX_HEAD_STYLE`), хвост затухает по палитре (`MATRIX_TAIL_STYLES`), столбцы стартуют вразнобой и целиком перезапускаются из-за верхней границы — «вспышки» в кадре при сбросе нет. Темп медленный и ровный: 1.8–6.0 строк/с (`MATRIX_MIN_SPEED` / `MATRIX_MAX_SPEED`), кадр 20 fps (`TICK_SECONDS = 0.05`) — за кадр голова сдвигается меньше чем на полстроки, поэтому шаг вниз не «дёргает»; мерцание хвоста — 2 смены глифа в секунду (`MATRIX_FLICKER_PER_SECOND`), а не на каждый кадр. Все тики заставки и раньше принимали `dt`, поэтому поднятая частота кадров не ускорила звёзды, ленту, справку и load/RAM — только плавность. Ключ `screensaver_matrix` (по умолчанию `true`) выбирает холст: дождь вместо звёздного поля; `false` возвращает прежний starfield, где снова действует `screensaver_stars`. Лента команд сверху, справка и load/RAM снизу остаются в обоих случаях. На раз холст переключается из TUI: `:screensaver matrix` / `:screensaver stars` (settings.yml не трогает, поэтому можно сравнить «на глаз»); неизвестный аргумент — `Usage:` по-прежнему. Интерфейс `MatrixRain` повторяет `StarField` (`tick` / `resize` / `render_text`), поэтому `DevopsScreensaver._make_field` выбирает холст, а дальше всё рисуется одинаково; холст берётся из `app.screensaver_matrix`, если не задан явно. Тесты: `tests/test_screensaver.py` (40: +4 юнит на дождь — темп «меньше полстроки за кадр», падение и перезапуск столбцов, глифы и палитра хвоста, воспроизводимость по seed и resize; +4 на холст — дождь по умолчанию, `screensaver_matrix: false` возвращает starfield, `:screensaver stars|matrix` переключают холст без записи в настройки, `Usage:` на неизвестный аргумент).
 
 ## v1.118
 
