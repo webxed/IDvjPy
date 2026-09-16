@@ -141,6 +141,21 @@ async def test_kctx_several_snapshots_still_need_number(isolated_home, monkeypat
         assert app.local_env.get("POD") == "api-7f"
 
 
+async def test_kctx_login_line_keeps_operators_with_alias(isolated_home):
+    """`:kctx <cluster>` не теряет `||` при `$1`-алиасе `klogin` (вход → fallback kubectl).
+
+    Регрессия: раскрытие алиаса пересобирало хвост через shlex.quote, tsh получал
+    аргумент «'||'» и падал с `tsh: error: unexpected ||`.
+    """
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        app.aliases["klogin"] = "tsh kube login $1"
+        assert app._expand_aliases(app._kctx_login_line("prod")) == (
+            "tsh kube login prod || kubectl config use-context prod"
+        )
+
+
 async def test_kctx_json_file_shape(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 30)) as pilot:

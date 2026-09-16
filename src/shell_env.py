@@ -6,11 +6,17 @@ import os
 import re
 import shlex
 from collections.abc import Mapping
+from typing import NamedTuple
 
 RE_VAR_SUBST = re.compile(
     r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)\b"
 )
 RE_ALIAS_POS = re.compile(r'\$\{(\d+|[@*])\}|\$(\d+|[@*])')
+# Символы shell-синтаксиса. На первом таком вне кавычек кончаются аргументы
+# вызова алиаса и начинается «хвост строки» — его нельзя ни пересобирать, ни
+# цитировать: `klogin prod || kubectl …` с телом `tsh kube login $1` отдавал в
+# tsh аргумент «'||'» (shlex.quote), и вход в кластер падал с `unexpected ||`.
+SHELL_META_CHARS = "|&;<>"
 RE_VAR_NAME = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
 RE_OUT_PLACEHOLDER = re.compile(r"\$\{OUT\}|\$OUT\b")
 LAZY_PLACEHOLDERS = frozenset({"OUT"})
@@ -139,30 +145,119 @@ def last_nonempty_line(text: str) -> str:
     return line.strip()
 
 
+def _word_end(text: str, start: int) -> int:
+    """Позиция после слова: пробел, shell-оператор или конец строки (кавычки — часть слова)."""
+    index = start
+    length = len(text)
+    while index < length:
+        ch = text[index]
+        if ch in " \t\n" or ch in SHELL_META_CHARS:
+            break
+        if ch == "\\":
+            index += 2
+            continue
+        if ch in "'\"":
+            quote = ch
+            index += 1
+            while index < length and text[index] != quote:
+                if quote == '"' and text[index] == "\\":
+                    index += 1
+                index += 1
+            index += 1
+            continue
+        index += 1
+    return min(index, length)
+
+
+class AliasCall(NamedTuple):
+    """Разобранный вызов алиаса: имя, аргументы и хвосты строки — как набраны.
+
+    `after_name` — всё после имени (классический alias: «тело + остаток»),
+    `tail` — хвост после аргументов, т.е. shell-синтаксис (`||`, `|`, `;`, `>`).
+    """
+
+    name: str
+    args: list[str]
+    words: list[str]
+    after_name: str
+    tail: str
+
+
+def parse_alias_call(command: str) -> AliasCall | None:
+    """Разобрать `имя аргументы … <shell-синтаксис>` на части (без исполнения).
+
+    Аргументы — слова до первого оператора вне кавычек; они безопасно уходят
+    в `$1` / `$@` тела алиаса (с цитированием). Хвост возвращается **как
+    набран** и приклеивается к раскрытой строке без изменений.
+    """
+    text = (command or "").strip()
+    if not text:
+        return None
+    name_end = _word_end(text, 0)
+    name_raw = text[:name_end]
+    try:
+        name_parts = shlex.split(name_raw, posix=True)
+    except ValueError:
+        name_parts = [name_raw]
+    name = name_parts[0] if name_parts else name_raw
+
+    args: list[str] = []
+    words: list[str] = []
+    index = name_end
+    length = len(text)
+    while index < length:
+        while index < length and text[index] in " \t\n":
+            index += 1
+        if index >= length or text[index] in SHELL_META_CHARS:
+            break
+        word_end = _word_end(text, index)
+        word = text[index:word_end]
+        # `2>&1` / `2>>log`: цифра вплотную к `>`/`<` — это номер дескриптора,
+        # а не аргумент: он уходит в хвост вместе с оператором.
+        if (
+            word_end < length
+            and text[word_end] in "<>"
+            and (fd := re.match(r"[0-9]+$", word))
+        ):
+            word_end -= len(fd.group(0))
+            word = text[index:word_end]
+        index = word_end
+        if not word:
+            break
+        words.append(word)
+        try:
+            args.extend(shlex.split(word, posix=True))
+        except ValueError:
+            args.append(word)
+    return AliasCall(
+        name=name,
+        args=args,
+        words=words,
+        after_name=text[name_end:].lstrip(" \t"),
+        tail=text[index:].lstrip(" \t"),
+    )
+
+
 def expand_aliases(command: str, aliases: Mapping[str, str]) -> str:
     """
     Раскрывает алиас в первом слове.
 
     Если в теле есть $1, $2, $@ / $* — подставляет аргументы (как у shell-функции).
     Иначе классический alias: тело + оставшаяся строка.
+
+    Хвост строки после аргументов (`|| rm`, `| grep`, `; cmd`, `> file`) остаётся
+    как набран — это shell-синтаксис, а не аргументы алиаса.
     """
-    raw = command.strip()
-    if not raw:
+    if not command or not command.strip():
         return command
-    try:
-        tokens = shlex.split(raw, posix=True)
-    except ValueError:
-        tokens = raw.split()
-    if not tokens:
+    call = parse_alias_call(command)
+    if call is None or call.name not in aliases:
         return command
-    name = tokens[0]
-    if name not in aliases:
-        return command
-    body = aliases[name]
-    args = tokens[1:]
+    body = aliases[call.name]
+    args = call.args
     if not RE_ALIAS_POS.search(body):
-        if len(raw.split(None, 1)) > 1:
-            return f"{body} {raw.split(None, 1)[1]}"
+        if call.after_name:
+            return f"{body} {call.after_name}"
         return body
 
     used_max = 0
@@ -176,17 +271,21 @@ def expand_aliases(command: str, aliases: Mapping[str, str]) -> str:
             return " ".join(shlex.quote(a) for a in args)
         idx = int(token)
         if idx == 0:
-            return shlex.quote(name)
+            return shlex.quote(call.name)
         used_max = max(used_max, idx)
         if 1 <= idx <= len(args):
             return shlex.quote(args[idx - 1])
         return ""
 
     expanded = RE_ALIAS_POS.sub(repl, body).strip()
-    if not used_all and used_max < len(args):
-        extra = " ".join(shlex.quote(a) for a in args[used_max:])
-        if extra:
-            expanded = f"{expanded} {extra}".strip()
+    rest_parts: list[str] = []
+    if not used_all and used_max < len(call.words):
+        # Аргументы, которые тело не разобрало ($2 без $1 и т.п.) — как набраны.
+        rest_parts.append(" ".join(call.words[used_max:]))
+    if call.tail:
+        rest_parts.append(call.tail)
+    if rest_parts:
+        expanded = f"{expanded} {' '.join(rest_parts)}".strip()
     return expanded
 
 

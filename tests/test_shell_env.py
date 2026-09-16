@@ -70,6 +70,40 @@ def test_expand_aliases_positional_and_classic():
     assert expand_aliases("echo hi", aliases) == "echo hi"
 
 
+def test_expand_aliases_keeps_shell_syntax_after_args():
+    """Хвост строки после аргументов — shell-синтаксис, его нельзя цитировать.
+
+    Регрессия: `klogin prod || kubectl config use-context prod` при теле
+    `tsh kube login $1` пересобиралось через shlex.quote и уходило в tsh
+    аргументом «'||'» (`tsh: error: unexpected ||`) — падал вход в кластер,
+    который делает `:kctx <cluster>`.
+    """
+    aliases = {
+        "klogin": "tsh kube login $1",
+        "kget": "kubectl -n $NS get $1",
+        "kall": "kubectl $@",
+        "ll": "ls -la",
+    }
+    assert (
+        expand_aliases("klogin prod || kubectl config use-context prod", aliases)
+        == "tsh kube login prod || kubectl config use-context prod"
+    )
+    assert expand_aliases("kget pod | grep api", aliases) == "kubectl -n $NS get pod | grep api"
+    assert expand_aliases("kget pod > pods.txt", aliases) == "kubectl -n $NS get pod > pods.txt"
+    assert (
+        expand_aliases("kget pod 2>&1 | head -5", aliases)
+        == "kubectl -n $NS get pod 2>&1 | head -5"
+    )
+    # `$@` забирает аргументы, но синтаксис после них остаётся синтаксисом
+    # (shlex.quote цитирует только то, что требует кавычек).
+    assert expand_aliases("kall get pod || echo no", aliases) == "kubectl get pod || echo no"
+    assert expand_aliases("kall 'my pod' || echo no", aliases) == "kubectl 'my pod' || echo no"
+    # Классический алиас: тело + остаток строки как есть (было так и раньше).
+    assert expand_aliases("ll /tmp || echo no", aliases) == "ls -la /tmp || echo no"
+    # Кавычки в неиспользованных аргументах не теряются.
+    assert expand_aliases('kget pod "my pod"', aliases) == 'kubectl -n $NS get pod "my pod"'
+
+
 def test_diff_exported_env_skips_shell_bookkeeping():
     from shell_env import diff_exported_env, skip_tty_env_key
 

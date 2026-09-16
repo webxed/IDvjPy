@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.120**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.121**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.64 (app v1.120) |
+| `test_cmd.md` | Manual plan v1.65 (app v1.121) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.120 |
+| `src/app.py` | TUI (`CommandRunner`), v1.121 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -215,6 +215,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.121
+
+- **Раскрытие алиасов больше не ломает `||`, `|` и `2>&1` (вход в кластер по `:kctx`).** Симптом: `:kctx <cluster>` с алиасом `klogin='tsh kube login $1'` давал `tsh kube login k8s.dev-du '||' kubectl config use-context k8s.dev-du` и ошибку `tsh: error: unexpected ||` — оператор уезжал в `tsh` аргументом. Причина: `expand_aliases` (`src/shell_env.py`) разбирала строку `shlex.split`, а остаток после подстановки `$1`/`$@` пересобирала через `shlex.quote` — а `shlex.quote("||")` даёт `'||'`. Теперь вызов алиаса разбирается своим сканером (`parse_alias_call`, `_word_end`): аргументы — это слова до первого shell-оператора вне кавычек (они безопасно уходят в `$1` / `$@` с цитированием), а хвост строки приклеивается **как набран** — операторы остаются операторами, кавычки не теряются; номер дескриптора (`2>&1`, `2>>log`) остаётся с оператором, а не становится аргументом. Заодно починилось то же самое для `$@`-алиасов: `kget pod | grep api` больше не превращается в `kubectl get pod '|' grep api`. Классические алиасы (без `$N`) работают как раньше. Тесты: `tests/test_shell_env.py` (+1: `||`, `|`, `>`, `2>&1`, `$@`, кавычки в хвосте, классический алиас), `tests/test_kctx_cmd.py` (+1: строка входа `:kctx` с `$1`-алиасом сохраняет `||`).
 
 ## v1.120
 

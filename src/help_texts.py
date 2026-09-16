@@ -219,7 +219,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                clipboard after pasting a value into `$$NAME=…`.
   aliases    - From ~/.bashrc. If the body has $1 / $2 / $@, args are substituted
                (klogin cluster → tsh kube login cluster). Else the rest of the line
-               is appended as in a classic alias.
+               is appended as in a classic alias. Arguments end at the first shell
+               operator: `klogin prod || kubectl config use-context prod` keeps `||`
+               an operator (it does not become an argument of the alias body).
 
 [bold]Help topics[/bold]
   :? calc    - Calculator + ipcalc reference (syntax, units, percent, IPv4 subnets)
