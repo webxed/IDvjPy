@@ -20,12 +20,12 @@ cheat.sh — сервис шпаргалок: `https://cht.sh/<запрос>` в
 from __future__ import annotations
 
 import os
-import re
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Mapping
 
+from ansi_output import strip_escapes
 from update_check import (
     looks_like_proxy_auth_error,
     proxy_handler_map,
@@ -40,11 +40,6 @@ DEFAULT_TIMEOUT = 15.0
 USER_AGENT = "curl"
 MAX_ERROR_BODY = 300
 
-# ANSI CSI / OSC / одиночные escape-последовательности.
-RE_ANSI = re.compile(
-    r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\)|[@-Z\\-_])"
-)
-
 CHEAT_SH_PROXY_HINT = (
     "Proxy requires login: set $PROXY_USER and $PROXY_PASS "
     "(in .bashrc_term or type $PROXY_USER=… here), then retry :cht."
@@ -56,8 +51,12 @@ class CheatShError(Exception):
 
 
 def strip_ansi(text: str) -> str:
-    """Убрать ANSI-последовательности: в журнал идёт чистый текст."""
-    return RE_ANSI.sub("", text or "")
+    """Убрать ANSI-последовательности: в журнал идёт чистый текст.
+
+    Общая реализация — `ansi_output.strip_escapes` (тот же разбор, что и для
+    вывода команд).
+    """
+    return strip_escapes(text)
 
 
 def _merge_options(*chunks: str) -> str:

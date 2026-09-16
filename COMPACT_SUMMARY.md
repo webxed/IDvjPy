@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.121**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.123**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.65 (app v1.121) |
+| `test_cmd.md` | Manual plan v1.67 (app v1.123) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.121 |
+| `src/app.py` | TUI (`CommandRunner`), v1.123 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -205,6 +205,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/session_mailbox.py` | Пересылка команд между сессиями (`:send`): `inbox_<instance>.jsonl` 0600, append под lock / drain |
 | `src/session_registry.py` | Реестр активных сессий — `session_<instance>.pid` 0600: автоимя `:new` = наименьшее свободное `sN` среди работающих окон (устаревшие pid-файлы подчищаются) |
 | `src/help_texts.py` | Static `:?` / `:i` help texts |
+| `src/ansi_output.py` | ANSI/ESC в выводе команд: SGR → цвета (`to_markup`), плоский текст без кодов (`to_plain`), терминальный `\r` (`collapse_carriage_returns`); ключ `ansi_colors` |
 | `src/seed_*.py` | Handbook seeds (linux, k8s, git, ops, …) |
 | `src/app.tcss` | Styles (JSON viewer, line-nav border, block focus); Textual CSS — расширение `.tcss`, чтобы редакторы не линтовали его браузерным CSS |
 | `settings.yml` | Личные настройки — **не в git** (`.gitignore`), создаётся копией `src/settings.example.yml` при первом запуске в новом data-каталоге |
@@ -215,6 +216,14 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.123
+
+- **Вывод цветных команд — как в терминале (`ansi_colors`).** Симптом: алиас `ww='curl wttr.in; …` и любой другой вывод с ANSI-цветами ломался — арт wttr.in, `ls --color=always`, цветной `grep` и прогресс-бары превращались в кашу, хотя сама команда отрабатывала. Причина: приложение пишет текст блока прямо в терминал (кадр TUI целиком), а в тексте оставались сырые escape-последовательности — реальный терминал исполнял их **внутри кадра**: цвета текли на соседние клетки, `\x1b[0m` сбрасывал стиль приложения, `\r` уводил курсор в начало строки. Новый модуль `src/ansi_output.py` разбирает вывод: SGR (`\x1b[..m`) → Textual-разметка через Rich `Text.from_ansi` (цвета стандартные/256/truecolor, bold/italic/underline/dim/reverse), всё остальное (курсор, стирание, OSC/гиперссылки, bracketed paste, управляющие символы) вырезается всегда, а `\r`-перерисовка сворачивается до итоговой строки — прогресс-бары `curl`/`docker`/`pip` показывают результат, а не сотни кадров. Чтобы `\r` вообще доживал до разбора, `_execute_in_thread` и `_capture_watch_tick` читают каналы байтами (`text=True` переводил `\r` в `\n`). Ключ `ansi_colors` (по умолчанию `true`) выключает цвета: вывод плоский; `F6` (простой режим) делает то же на сессию, ведь его обещание — плоский текст для выделения мышью. Плоские данные никогда не содержат escape-кодов: новое `CommandBlock.plain_stdout` / `plain_stderr` используют F3-копия, пайп `|`, `$OUT`/`$BLOCK` (`:llm`, `:ed`), `:log`/F7, `@key` (таблицы vault), `:diff`, JSON-вьюер и поиск по журналу, а `raw_stdout` остаётся настоящим для цветного рендера. Огромный цветной вывод (> `MAX_MARKUP_CHARS`) рендерится плоским: разбор ANSI стоит ~25 ms на 300 строк и не должен задерживать кадр. `cheat_sh.strip_ansi` теперь делегирует в общий `strip_escapes` (одна реализация разбора). Тесты: `tests/test_ansi_output.py` (14: юнит на SGR/OSC/управляющие/`\r`/лимит и Pilot на цвета в кадре без сырых ESC / выключенные цвета / плоские F3 и `|` / F6 / дефолт ключа).
+
+## v1.122
+
+- **Заставка больше не встречает на возврате из `> cmd`.** Пока настоящий TTY был у чужого процесса (`> vim`, `> htop`, Ctrl+O, `:ed`), цикл Textual стоит на блокирующем `subprocess.run`, а таймер заставки в это время «перезревал»: сразу после возврата он срабатывал и открывал заставку — вместо журнала с результатом команды. Теперь `CommandRunner.suspend` — своя обёртка: на время паузы поднят флаг `_tty_active` (пока он стоит, `_launch_screensaver` ничего не открывает, а сработавший таймер переносится), а после возврата заставка снимается (если всё-таки успела открыться) и простой отсчитывается заново. Плюс страховка от «хвостового» срабатывания: `_launch_screensaver` сверяет реальное время последней активности (`_ss_bumped_at`, ставит `_bump_screensaver_idle`) и переносит запуск, если простоя по факту ещё нет (запас `SCREENSAVER_TIMER_SLACK`). Покрывает все паузы TUI сразу, включая `:ed` — он идёт через тот же `_run_in_tty`. Тесты: `tests/test_screensaver.py` (+2: возврат из TTY при перезревшем таймере — заставки нет, а после настоящего простоя она открывается как обычно; сработавший таймер во время паузы ничего не открывает).
 
 ## v1.121
 
@@ -315,7 +324,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 ## v1.103
 
 - **Блоки журнала на Textual Line API (`CommandLineBlock`).** `render_line` + кэш `Strip`'ов на текущую ширину: разметка парсится один раз, перерисовка зависит от числа видимых строк, а не от размера вывода. Перенос строк совпадает с обычным `Static`; построчный курсор рисуется `Style(reverse)` в `render_line`, а не перезаписью текста. Единая фабрика `CommandRunner._make_command_block()` для shell / `calc` / `:llm` / `:watch`. Переключатель — `line_api_blocks` в `settings.yml` (по умолчанию `true`) или `IDVJPY_LINE_BLOCKS`. Замер (`experiments/line_api_block_bench.py`, 300 строк): движение курсора 1.46 мс → 0.006 мс. Модуль — `src/app.py` (`CommandLineBlock`, `_make_command_block`); тесты — `tests/test_line_api_block.py`.
-- **Полный вывод блока в Line-API просмотрщике (`:log` / F7).** `src/output_viewer.py` — прокрутка без обрезки в 300 строк, настоящие строки (как F3) + `STDERR`. Обрезка журнала переведена на `rsplit` (без списка всех строк).
+- **Полный вывод блока в Line-API просмотрщике (`:log` / F7).** `src/output_viewer.py` — прокрутка без обрезки в 300 строк, строки вывода (как F3), уже без escape-кодов + `STDERR`. Обрезка журнала переведена на `rsplit` (без списка всех строк).
 - **Фикс `textual.markup.MarkupError`.** Пользовательский текст (`cat` JSON, логи с `[`) экранируется для рендера (`escape_display_markup`), из-за ошибки разметки блок больше не залипает в `[Executing...]`. Тест — `tests/test_markup_safety.py`.
 
 ## v1.102

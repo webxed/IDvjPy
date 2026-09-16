@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.121
+# План тестирования IDvjPy_term v1.123
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -782,9 +782,10 @@ x
 x
 :screensaver 0
 :screensaver nope
+> sleep 3
 ```
 
-**Ожидание:** `:screensaver` открывает полноэкранную заставку — по умолчанию «матричный дождь» (`screensaver_matrix: true`): падающие столбцы глифов, голова яркая, хвост затухает. `:screensaver stars` — звёздное поле: звёзды летят на зрителя, среди них живые часы (`HH:MM:SS`) и дата (`YYYY-MM-DD`); `:screensaver matrix` — наоборот, вернуть дождь (выбор только на этот показ, `settings.yml` не меняется). При `screensaver_matrix: false` заставка сразу открывается звёздным полем. Общее: сверху на всю ширину — зелёная лента `!tag[tid]  cmd` если в БД есть команды; снизу слева справка команд (печать слева направо, отступ от края); снизу справа `load` 1/5/15 и `mem` (опрос раз в секунду из `/proc`), с таким же отступом от правого угла; в узком окне load может перекрыть справку. `x` закрывает и **не** попадает во ввод. После `screensaver_idle` секунд без клавиш/клика то же самое само (в тестах `screensaver_idle: 0` — выкл). `:screensaver 0` выключает на сессию; неизвестный аргумент (`:screensaver nope`) — `Usage:` со `matrix|stars`. Во время `--demo` idle-скринсейвер не стартует. `screensaver_stars: false` убирает летающую пыль/токены в звёздном поле (на матричный холст не влияет).
+**Ожидание:** `:screensaver` открывает полноэкранную заставку — по умолчанию «матричный дождь» (`screensaver_matrix: true`): падающие столбцы глифов, голова яркая, хвост затухает. `:screensaver stars` — звёздное поле: звёзды летят на зрителя, среди них живые часы (`HH:MM:SS`) и дата (`YYYY-MM-DD`); `:screensaver matrix` — наоборот, вернуть дождь (выбор только на этот показ, `settings.yml` не меняется). При `screensaver_matrix: false` заставка сразу открывается звёздным полем. Общее: сверху на всю ширину — зелёная лента `!tag[tid]  cmd` если в БД есть команды; снизу слева справка команд (печать слева направо, отступ от края); снизу справа `load` 1/5/15 и `mem` (опрос раз в секунду из `/proc`), с таким же отступом от правого угла; в узком окне load может перекрыть справку. `x` закрывает и **не** попадает во ввод. После `screensaver_idle` секунд без клавиш/клика то же самое само (в тестах `screensaver_idle: 0` — выкл). `:screensaver 0` выключает на сессию; неизвестный аргумент (`:screensaver nope`) — `Usage:` со `matrix|stars`. Во время `--demo` idle-скринсейвер не стартует. `screensaver_stars: false` убирает летающую пыль/токены в звёздном поле (на матричный холст не влияет). **Возврат из `> cmd` заставкой не встречает:** пока TUI спит (настоящий TTY: `>` , Ctrl+O, `:ed`), заставка не открывается, а после возврата простой отсчитывается заново — проверка с малым `screensaver_idle` (например, `:screensaver 5`, затем `> sleep 20`): после выхода из `sleep` виден журнал с `TTY: … Exit code: 0`, а не заставка.
 
 Автотест: `tests/test_screensaver.py`.
 
@@ -1323,7 +1324,25 @@ Ctrl+O               # TUI уходит в сторону — виден реа�
 
 ---
 
-**Версия документа**: v1.65
-**Версия приложения**: v1.121
-**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`  
+## Секция 49: Вывод цветных команд — как в терминале (`ansi_colors`)
+
+```
+alias ww='curl wttr.in; curl v2d.wttr.in/Irkutsk;'
+ww                     # цветной арт wttr.in
+ls --color=always /
+printf 'работаю 0%%\rработаю 50%%\rготово\n'
+:llm ds привет        # ответ в markdown — цвета не нужны
+```
+
+**Ожидание:** вывод с ANSI-цветами рисуется цветами блока (SGR → стили Textual), а не выводится в терминал сырыми escape-кодами — раньше из-за этого цвета текли на соседние клетки, `\x1b[0m` сбрасывал стиль приложения, а `\r` уводил курсор в начало строки: вывод выглядел сломанным при том, что сама команда отрабатывала. Теперь курсорные/стирающие/OSC-последовательности и управляющие символы вырезаются всегда, а `\r`-перерисовка (прогресс-бары `curl`/`docker`/`pip`) сворачивается до итоговой строки — в блоке виден результат, а не все промежуточные кадры (для этого вывод читается байтами: `text=True` переводил `\r` в `\n`).
+
+Плоский текст всегда без escape-кодов: `F3` (копия блока), `| cmd`, `$OUT`/`$BLOCK`, `:log` / `F7`, `@key` (вычитка значений из таблиц vault) — в буфер обмена и в следующую команду не уходят ANSI-последовательности. `F6` (простой режим) и `ansi_colors: false` выключают цвета: вывод плоский.
+
+Автотесты: `tests/test_ansi_output.py` (юнит: SGR/OSC/управляющие/`\r`, лимит разбора; Pilot: цвета в кадре без сырых ESC, `F3` и `|` получают плоский текст, `F6` и ключ выключают цвета), `tests/test_cheat_sh.py` (`strip_ansi` — общий разбор).
+
+---
+
+**Версия документа**: v1.67
+**Версия приложения**: v1.123
+**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

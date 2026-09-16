@@ -78,7 +78,8 @@ try:
     import os
     import threading
     import time
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Iterator, Mapping, Sequence
+    from contextlib import contextmanager
     from dataclasses import replace
     from pathlib import Path
     from typing import Any, Optional, cast
@@ -103,6 +104,7 @@ try:
     import calc
     import database_v2 as database
     import ipcalc
+    from ansi_output import to_markup, to_plain
     from block_label import BlockLabelScreen
     from cheat_sh import (
         DEFAULT_BASE_URL,
@@ -297,6 +299,9 @@ def _identity(text: str) -> str:
 
 
 DEFAULT_SCREENSAVER_IDLE = 120
+# Запас при проверке «простой действительно прошёл»: таймер Textual может
+# сработать на волосок раньше срока, из-за чего заставка без нужды переносилась бы.
+SCREENSAVER_TIMER_SLACK = 0.05
 
 # Сколько строк журнала проматывает один щелчок колеса. Столько же — в Line-API
 # просмотрщике (`:log`/F7) и md-вьювере: иначе большой блок (`:?` на ~300 строк)
@@ -744,6 +749,44 @@ class CommandBlock(LineNavigable, Static):
         app = getattr(self, "app", None)
         return bool(app and getattr(app, "simple_output_mode", False))
 
+    def _ansi_colors(self) -> bool:
+        """Рисовать ANSI-цвета вывода (ключ `ansi_colors`), а не вырезать их.
+
+        В простом режиме (F6) цвета выключаются: обещание режима — плоский текст,
+        который удобно выделять мышью и копировать.
+        """
+        if self._simple_mode():
+            return False
+        app = getattr(self, "app", None)
+        return bool(getattr(app, "ansi_colors", True))
+
+    def _output_transform(self, display: bool) -> "Callable[[str], str]":
+        """Чем прогнать stdout/stderr: рендер (цвета/плоско) или копирование.
+
+        Возвращаемая функция применяется к обрезанному тексту в
+        `_truncate_output`, поэтому не бесплатна только для цветного вывода.
+        """
+        if not display:
+            return to_plain
+        if self._ansi_colors():
+            return to_markup
+        return lambda text: escape_display_markup(to_plain(text))
+
+    @property
+    def plain_stdout(self) -> str:
+        """stdout без escape-кодов: пайп, `$OUT`/`$BLOCK`, `@key`, `:log`, F3.
+
+        `raw_stdout` остаётся настоящим (с ANSI): он источник цветного рендера.
+        В другие команды и в журнал-просмотрщик должен уходить чистый текст —
+        иначе escape-коды ломают и кадр, и разбор значений (`@key`).
+        """
+        return to_plain(self.raw_stdout or "")
+
+    @property
+    def plain_stderr(self) -> str:
+        """stderr без escape-кодов (для `:log` и копирования)."""
+        return to_plain(self.raw_stderr or "")
+
     def _mask_for_display(self, text: str) -> str:
         """Спрятать значения секретов ($$NAME=…) в показываемом тексте.
 
@@ -760,7 +803,7 @@ class CommandBlock(LineNavigable, Static):
         return text
 
     def _truncate_output(
-        self, text: str, safe: "Callable[[str], str] | None" = None
+        self, text: str, render: "Callable[[str], str] | None" = None
     ) -> str:
         """
         Обрезает вывод для стабильного рендера UI, сохраняя полный raw_stdout.
@@ -768,10 +811,10 @@ class CommandBlock(LineNavigable, Static):
         прокруткой открывает `:log` / F7.
 
         Без `split("\\n")` по всему тексту: `rsplit` с лимитом на C-уровне
-        аллоцирует только префикс и хвост, а не список всех строк. `safe` —
-        экранирование пользовательского хвоста для Textual-разметки (None — как есть).
+        аллоцирует только префикс и хвост, а не список всех строк. `render` —
+        преобразование хвоста для рендера (ANSI-цвета / экранирование, None — как есть).
         """
-        escape_text = safe or _identity
+        escape_text = render or _identity
         parts = text.rsplit("\n", self.MAX_DISPLAY_LINES)
         if len(parts) <= self.MAX_DISPLAY_LINES:
             self._truncated = False
@@ -789,19 +832,21 @@ class CommandBlock(LineNavigable, Static):
 
         `display=True` — версия для рендера: пользовательский текст (заголовок с
         командой, stdout, stderr) экранируется, чтобы `[` из вывода не ломал
-        Textual-разметку. `display=False` (по умолчанию) — плоский текст без
-        экранирования для копирования, навигации и `:w`.
+        Textual-разметку, а ANSI-цвета вывода становятся цветами (`ansi_colors`).
+        `display=False` (по умолчанию) — плоский текст без разметки и escape-кодов
+        для копирования, пайпа, навигации и `:w`.
         """
-        safe = escape_display_markup if display else _identity
+        escape_header = escape_display_markup if display else _identity
+        safe = self._output_transform(display)
         prefix = self._label_prefix(display)
         if self.collapsed:
             # Свернутый вид — только заголовок
             if self._simple_mode():
-                return f"▶ {prefix}{safe(self.header)}\n"
+                return f"▶ {prefix}{escape_header(self.header)}\n"
             indicator = "[dim]▶[/dim]"
-            return f"{indicator} {prefix}{safe(self.header)}\n"
+            return f"{indicator} {prefix}{escape_header(self.header)}\n"
 
-        parts = [prefix + safe(self.header)]
+        parts = [prefix + escape_header(self.header)]
 
         # Основной вывод (с обрезкой если нужно)
         if self.raw_stdout:
@@ -2124,7 +2169,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.121"
+    VERSION = "v1.123"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2278,6 +2323,10 @@ class CommandRunner(App):
     KEY_CHEAT_SH_URL = "cheat_sh_url"
     KEY_CHEAT_SH_OPTIONS = "cheat_sh_options"
     KEY_CLEAR_CLIP_AFTER_SECRET = "clear_clipboard_after_secret"
+    # ANSI-цвета в выводе команд: true — SGR-коды становятся цветами (как в
+    # терминале), false — весь вывод плоский. Прочие escape-последовательности
+    # вырезаются всегда.
+    KEY_ANSI_COLORS = "ansi_colors"
     # `file_completion` — когда подсказывать файлы/каталоги:
     #   auto  — явные пути + голое имя файла у команд ниже (иначе `kubectl get po`
     #           и `docker co` забьют подсказки мусором из cwd);
@@ -2358,6 +2407,9 @@ class CommandRunner(App):
         # viewport и не крадёт фокус (см. add_block / _journal_reading).
         self._follow_paused: bool = False
         self.simple_output_mode: bool = False
+        # ANSI-цвета вывода (`ansi_colors`): SGR → цвета, прочие escape-коды
+        # вырезаются (см. src/ansi_output.py).
+        self.ansi_colors: bool = True
         # Line API-блоки журнала (render_line вместо одного большого Static).
         # Включается line_api_blocks в settings.yml или IDVJPY_LINE_BLOCKS.
         self._line_api_blocks: bool = False
@@ -2392,6 +2444,10 @@ class CommandRunner(App):
         self.screensaver_stars: bool = True
         # Холст заставки: «матричный дождь» (true) или звёздное поле (false).
         self.screensaver_matrix: bool = True
+        # Время последней активности (для проверки, что простой реально есть)
+        # и признак «TUI спит» (`> cmd`, Ctrl+O, `:ed` — настоящий TTY).
+        self._ss_bumped_at: float = 0.0
+        self._tty_active: bool = False
         self.k8s_completion: bool = False
         # Файловые подсказки: auto / paths / off (settings.yml: file_completion).
         self.file_completion: str = "auto"
@@ -3355,6 +3411,7 @@ class CommandRunner(App):
                     self.clear_clipboard_after_secret = bool(
                         settings.get(self.KEY_CLEAR_CLIP_AFTER_SECRET, False)
                     )
+                    self.ansi_colors = bool(settings.get(self.KEY_ANSI_COLORS, True))
                     self.editor = str(settings.get(self.KEY_EDITOR) or "").strip()
         except (FileNotFoundError, KeyError, yaml.YAMLError):
             pass
@@ -4366,8 +4423,9 @@ class CommandRunner(App):
         focused = self.focused
         if isinstance(focused, CommandBlock):
             try:
-                # Для CommandBlock копируем только raw_stdout без заголовка и CompletedProcess
-                text_to_copy = focused.raw_stdout
+                # Для CommandBlock копируем только raw_stdout без заголовка и CompletedProcess.
+                # plain_stdout: в буфере обмена не нужны escape-коды вывода.
+                text_to_copy = focused.plain_stdout
 
                 # Удаляем служебные сообщения, если они есть
                 lines_to_remove = [
@@ -4458,7 +4516,7 @@ class CommandRunner(App):
 
     def _text_from_json_block(self, block: Static) -> str:
         if isinstance(block, CommandBlock):
-            return block.raw_stdout or ""
+            return block.plain_stdout
         return self._strip_formatting_tags(getattr(block, "text_content", "") or "")
 
     def _extract_json(self, text: str) -> Any | None:
@@ -5024,7 +5082,7 @@ class CommandRunner(App):
     def _editor_block_text(self, token: str) -> str | None:
         """Текст $OUT / $BLOCK для :ed; None — ошибка уже показана."""
         block = self._output_block_for_placeholder()
-        stdout = "" if block is None else (block.raw_stdout or "")
+        stdout = "" if block is None else block.plain_stdout
         if block is None or getattr(block, "pending", False) or stdout == "[Executing...]":
             self.add_block(
                 InfoBlock(
@@ -5516,7 +5574,8 @@ class CommandRunner(App):
         """`:log [N]` — полный вывод блока (Line API), без обрезки в 300 строк.
 
         N — сколько командных блоков назад (0 = сфокусированный/последний).
-        Видны настоящие строки `raw_stdout` (как F3), плюс STDERR, если был.
+        Видны настоящие строки вывода (как F3), плюс STDERR, если был; escape-коды
+        вырезаны: приложение выводит строки в кадр, ANSI тут не место.
         """
         nums = [arg for arg in args if arg.isdigit()]
         if args and not nums:
@@ -5538,9 +5597,9 @@ class CommandRunner(App):
                 ))
                 return
             block = blocks[idx]
-        stdout = block.raw_stdout or ""
+        stdout = block.plain_stdout
         lines = stdout.splitlines()
-        stderr = (block.raw_stderr or "").rstrip("\n")
+        stderr = block.plain_stderr.rstrip("\n")
         if stderr.strip():
             lines = [*lines, "", "STDERR:", *stderr.splitlines()]
         if not lines:
@@ -5560,7 +5619,7 @@ class CommandRunner(App):
             if not isinstance(block, LineNavigable):
                 continue
             if isinstance(block, CommandBlock) and getattr(block, "collapsed", False):
-                blob = f"{block.header}\n{block.raw_stdout}\n{block.raw_stderr}"
+                blob = f"{block.header}\n{block.plain_stdout}\n{block.plain_stderr}"
                 if lowered not in blob.lower():
                     continue
                 block.collapsed = False
@@ -5991,6 +6050,7 @@ class CommandRunner(App):
 
     def _bump_screensaver_idle(self) -> None:
         """Restart the idle timer. 0 in settings.yml disables the screensaver."""
+        self._ss_bumped_at = time.monotonic()  # последняя активность
         if self._ss_timer is not None:
             try:
                 self._ss_timer.stop()
@@ -6005,9 +6065,20 @@ class CommandRunner(App):
         self._ss_timer = self.set_timer(idle, self._launch_screensaver)
 
     def _launch_screensaver(self) -> None:
-        if self._screensaver_idle_seconds() <= 0:
+        idle = self._screensaver_idle_seconds()
+        if idle <= 0:
             return
         if self._demo_active or self._demo_pressing:
+            self._bump_screensaver_idle()
+            return
+        if self._tty_active:
+            # TUI спит (`> cmd`, Ctrl+O, `:ed`): терминал у чужого процесса,
+            # заставка подождёт возврата (`suspend()` перезапустит простой).
+            self._bump_screensaver_idle()
+            return
+        if time.monotonic() - self._ss_bumped_at + SCREENSAVER_TIMER_SLACK < idle:
+            # Таймер сработал «хвостом» — например, был в очереди, пока TUI спал
+            # в `> vim`: простоя по факту ещё нет, переносим.
             self._bump_screensaver_idle()
             return
         try:
@@ -6021,21 +6092,27 @@ class CommandRunner(App):
             return
         self.push_screen(DevopsScreensaver(stars=self.screensaver_stars))
 
+    def _dismiss_screensaver(self) -> bool:
+        """Снять активную заставку, если она на экране (без перезапуска таймера)."""
+        try:
+            current = self.screen
+        except Exception:
+            return False
+        if not isinstance(current, DevopsScreensaver):
+            return False
+        try:
+            self.pop_screen()
+        except Exception:
+            pass
+        return True
+
     def _wake_screensaver(self) -> None:
         """Снять активный скринсейвер по внешнему событию (напр. команда по `:send`).
 
         Свои клавиши/клики скринсейвер ловит сам (`_wake`), но переслать команду
         может другая сессия — тогда заслонка осталась бы поверх журнала.
         """
-        try:
-            current = self.screen
-        except Exception:
-            return
-        if isinstance(current, DevopsScreensaver):
-            try:
-                self.pop_screen()
-            except Exception:
-                pass
+        self._dismiss_screensaver()
         self._bump_screensaver_idle()
 
     def _handle_screensaver_command(self, args: list[str]) -> None:
@@ -6689,7 +6766,7 @@ class CommandRunner(App):
         block = self._output_block_for_placeholder()
         if block is None or getattr(block, "pending", False):
             return None, "no finished command block to capture from"
-        stdout = block.raw_stdout or ""
+        stdout = block.plain_stdout
         if stdout == "[Executing...]":
             return None, "no finished command block to capture from"
         lines = stdout.splitlines()
@@ -7631,14 +7708,14 @@ class CommandRunner(App):
         else:
             source_block = self.active_pipe_source or self.query(CommandBlock).last()
 
-        if source_block is None or not source_block.raw_stdout:
+        if source_block is None or not source_block.plain_stdout:
             self.add_block(InfoBlock("Error: No command output available to pipe from."))
             return
         if getattr(source_block, "pending", False):
             self.add_block(InfoBlock("Error: that block is still running; wait for it."))
             return
 
-        input_for_pipe = source_block.raw_stdout
+        input_for_pipe = source_block.plain_stdout
         history_line = self._labelled_pipe_history(user_input) or user_input
         if history_line not in self.session_history:
             self.session_history.append(history_line)
@@ -8111,7 +8188,7 @@ class CommandRunner(App):
             return ""
         if getattr(block, "pending", False):
             return ""
-        stdout = getattr(block, "raw_stdout", "") or ""
+        stdout = getattr(block, "plain_stdout", "") or ""
         if stdout == "[Executing...]":
             return ""
         return last_nonempty_line(stdout)
@@ -8145,6 +8222,10 @@ class CommandRunner(App):
             if self.COMMAND_TIMEOUT and self.COMMAND_TIMEOUT > 0 and not no_timeout:
                 timeout = float(self.COMMAND_TIMEOUT)
             try:
+                # Бинарные каналы + своя декодировка: text=True переводит `\r`
+                # в `\n` (universal newlines), и прогресс-бары превращаются в
+                # сотни строк. `\r` нужен терминалу как есть — свёрткой
+                # занимается ansi_output (to_plain / to_markup).
                 proc = subprocess.Popen(
                     command,
                     shell=True,
@@ -8152,18 +8233,18 @@ class CommandRunner(App):
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     stdin=subprocess.PIPE if stdin_data is not None else None,
-                    text=True,
-                    encoding=self.ENCODING,
-                    errors="replace",
                     start_new_session=True,
                 )
                 with self._proc_lock:
                     self._proc_registry[block] = proc
                 self.call_from_thread(self._refresh_running_title)
+                stdin_bytes = (
+                    stdin_data.encode(self.ENCODING) if stdin_data is not None else None
+                )
                 try:
-                    stdout, stderr = proc.communicate(input=stdin_data, timeout=timeout)
-                    raw_stdout = stdout.strip()
-                    raw_stderr = stderr.strip()
+                    stdout, stderr = proc.communicate(input=stdin_bytes, timeout=timeout)
+                    raw_stdout = stdout.decode(self.ENCODING, "replace").strip()
+                    raw_stderr = stderr.decode(self.ENCODING, "replace").strip()
                     return_code = proc.returncode
                 except subprocess.TimeoutExpired:
                     # communicate убил сам shell; добиваем группу (внуки могут жить).
@@ -8207,15 +8288,19 @@ class CommandRunner(App):
         self, block: CommandBlock, raw_stdout: str, raw_stderr: str, return_code: int,
         forget_history: bool = False,
     ) -> None:
-        """UI-поток: запомнить завершённый вывод в сессионную историю, обновить блок."""
+        """UI-поток: запомнить завершённый вывод в сессионную историю, обновить блок.
+
+        В `_output_history` (для `:o` / `:o /text`) идёт плоский текст: ANSI тут
+        бесполезен, а в InfoBlock он бы попал в кадр сырыми escape-кодами.
+        """
         self._stop_thinking(block)
         now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         self._output_history.append(
             {
                 "time": now,
                 "command": block.source_command or "",
-                "stdout": raw_stdout or "",
-                "stderr": raw_stderr or "",
+                "stdout": to_plain(raw_stdout),
+                "stderr": to_plain(raw_stderr),
                 "code": return_code,
             }
         )
@@ -8756,7 +8841,7 @@ class CommandRunner(App):
         block = self._output_block_for_placeholder()
         if block is None or getattr(block, "pending", False):
             return None
-        stdout = block.raw_stdout or ""
+        stdout = block.plain_stdout
         last_line = last_nonempty_line(stdout)
         full = stdout.rstrip("\n")
 
@@ -8891,8 +8976,8 @@ class CommandRunner(App):
             block_b, block_a = focused, blocks[idx - 1]
         else:
             block_b, block_a = blocks[-1], blocks[-2]
-        a_text = (block_a.raw_stdout or "").rstrip("\n")
-        b_text = (block_b.raw_stdout or "").rstrip("\n")
+        a_text = block_a.plain_stdout.rstrip("\n")
+        b_text = block_b.plain_stdout.rstrip("\n")
         if a_text == b_text:
             self.add_block(InfoBlock("[bold]Diff:[/bold] outputs are identical."))
             return
@@ -9145,15 +9230,14 @@ class CommandRunner(App):
                 executable="/bin/bash",
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
-                encoding=self.ENCODING,
-                errors="replace",
                 start_new_session=True,
             )
             with self._proc_lock:
                 state["proc"] = proc
             out, err = proc.communicate()
-            stdout, stderr, rc = out.strip(), err.strip(), proc.returncode
+            stdout = out.decode(self.ENCODING, "replace").strip()
+            stderr = err.decode(self.ENCODING, "replace").strip()
+            rc = proc.returncode
         except Exception as e:
             stderr, rc = str(e), -1
         finally:
@@ -9178,9 +9262,10 @@ class CommandRunner(App):
                 f"[dim]watch #{tick} · every {interval:g}s · F4/:kill stop[/dim]",
             ]
             if stdout:
-                parts.append(block._truncate_output(stdout, escape_display_markup))
+                parts.append(block._truncate_output(stdout, block._output_transform(True)))
             if stderr and stderr.strip():
-                parts.append(f"[bold red]STDERR:[/bold red]\n{escape_display_markup(stderr)}")
+                stderr_text = block._output_transform(True)(stderr)
+                parts.append(f"[bold red]STDERR:[/bold red]\n{stderr_text}")
             if rc:
                 parts.append(f"[bold yellow]Exit code: {rc}[/bold yellow]")
             text = "\n".join(parts) + "\n\n"
@@ -9378,6 +9463,24 @@ class CommandRunner(App):
         except Exception:
             pass
         return True
+
+    @contextmanager
+    def suspend(self) -> Iterator[None]:
+        """Пауза TUI — настоящий TTY отдаётся чужому процессу (`> cmd`, Ctrl+O, `:ed`).
+
+        Таймеры Textual при этом продолжают идти, поэтому долгая сессия (`> vim`,
+        `> htop`) успевала «зажечь» заставку: она открывалась сразу после возврата.
+        Пока пауза активна, `_launch_screensaver` не открывает ничего, а по возврате
+        простой отсчитывается заново (и уже открытый экран снимается).
+        """
+        self._tty_active = True
+        try:
+            with super().suspend():
+                yield
+        finally:
+            self._tty_active = False
+            self._dismiss_screensaver()
+            self._bump_screensaver_idle()
 
     def exit(self, result: Any = None, *, return_code: int = 0, message: Any = None) -> None:
         """При выходе (в т.ч. :q, --demo-quit) останавливаем фоновые процессы."""

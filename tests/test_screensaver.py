@@ -1,9 +1,11 @@
 """DevOps starfield screensaver (Norton Commander-style idle overlay)."""
 import asyncio
 import time
+from contextlib import contextmanager
 from datetime import datetime
 
 from rich.text import Text
+from textual.app import App as TextualApp
 
 from app import CommandRunner
 from screensaver import (
@@ -368,6 +370,59 @@ async def test_colon_screensaver_opens_and_key_does_not_type(isolated_home):
         await pilot.pause()
         assert not isinstance(app.screen, DevopsScreensaver)
         assert input_widget(app).value == ""
+
+
+async def test_tty_command_return_does_not_show_screensaver(isolated_home, monkeypatch):
+    """Возврат из `> cmd` не встречает заставкой, даже если TTY был долгим.
+
+    Регрессия: таймеры Textual идут и во время `suspend()`, поэтому `> vim` на
+    пару минут «зажигал» заставку — она открывалась сразу после выхода из TTY.
+    """
+
+    @contextmanager
+    def slow_tty(_self):
+        # TTY-сессия длиннее screensaver_idle (в тесте — блокирующая пауза, как
+        # настоящий subprocess.run в `_run_in_tty`).
+        time.sleep(2.5)
+        yield
+
+    # Подменяем базовый `App.suspend`: обёртка `CommandRunner.suspend`
+    # (пауза + перезапуск простоя) должна отработать как в жизни.
+    monkeypatch.setattr(TextualApp, "suspend", slow_tty)
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        app.screensaver_idle = 2.0  # в settings.yml только целые секунды
+        app._bump_screensaver_idle()
+        await submit(pilot, "> true")
+        await pilot.pause()
+        await pilot.pause()
+        # Сразу после выхода из TTY заставки нет, хотя таймер уже перезрел: до
+        # фикса он срабатывал на возврате (`> vim` встречал заставкой).
+        assert not isinstance(app.screen, DevopsScreensaver)
+        assert app._ss_timer is not None  # и простой отсчитывается заново
+        # А после настоящего простоя — открывается как обычно.
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and not isinstance(
+            app.screen, DevopsScreensaver
+        ):
+            await asyncio.sleep(0.05)
+            await pilot.pause()
+        assert isinstance(app.screen, DevopsScreensaver)
+
+
+async def test_launch_screensaver_waits_out_a_tty_session(isolated_home):
+    """Пока TUI спит (`> cmd`), сработавший таймер заставку не открывает."""
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        app.screensaver_idle = 2.0
+        app._tty_active = True
+        app._ss_bumped_at = time.monotonic() - 10  # таймер давно перезрел
+        app._launch_screensaver()
+        await pilot.pause()
+        assert not isinstance(app.screen, DevopsScreensaver)
+        app._tty_active = False
 
 
 async def test_screensaver_idle_zero_never_starts(isolated_home):

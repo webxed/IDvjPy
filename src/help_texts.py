@@ -71,7 +71,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 NC-style starfield; full-width ticker; bottom-left help; bottom-right
                 load/mem. `:screensaver matrix` / `:screensaver stars` pick the canvas
                 once; `:screensaver 0` / `120` set idle seconds (screensaver_idle);
-                keys/clicks/scroll/mouse move reset it, a forwarded :send wakes it
+                keys/clicks/scroll/mouse move reset it, a forwarded :send wakes it,
+                and a real-TTY session (`> cmd`, Ctrl+O, `:ed`) restarts the idle
+                countdown — it never greets you with the overlay on return
   :r          - Put the focused (or last) block command into the input
   :r N        - Put the command N blocks back into the input (0 = last)
   :cmd [N] [show] - Materialize the block command with current $VAR values (secrets
@@ -80,8 +82,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :log [N]    - Full output of a block in a scrollable Line-API viewer (no 300-line
                 cap; arrows/PgUp/PgDn scroll, Esc or q closes). Find with `/`;
                 Enter — search, n/N — next/prev match, Esc — close the find field.
-                N = blocks back (0 = focused/last). Shows the real raw output
-                (like F3). Also F7. `y` copies the source file path (raw `:md` view)
+                N = blocks back (0 = focused/last). Shows the block stdout
+                (like F3), escape codes stripped. Also F7. `y` copies the source
+                file path (raw `:md` view)
   :kill [all] - Stop the running background command (focused block or the last one;
                 `:kill all` stops every running command). SIGTERM, then SIGKILL.
   :watch <sec> <command> - Rerun <command> every <sec> seconds in one block
@@ -176,6 +179,10 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   > <cmd>    - Suspend TUI and run with a real TTY (htop, vim, ssh, less)
                After exit: import that shell's export/unset and $PWD; also :env
   @ <cmd>    - Run without command_timeout (long non-TTY jobs; stdout captured)
+  Output     - ANSI colors from a command are drawn as colors (ansi_colors: true);
+               cursor/OSC escapes and control chars are stripped, \r progress
+               redraws collapse to the final line — like a real terminal. Plain
+               text (F3, |, $OUT/$BLOCK, :log, @key) never contains escapes
   #<tag>     - Save command to database with tag (`#tag cmd`, no space after #)
   # command  - Park a line in history without running (bash-style; space after #)
   #tag! / #tag!tid - Restore soft-deleted tag / command
@@ -243,7 +250,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   F4         - Stop the running background command (same as :kill; SIGTERM group)
   Ctrl+C     - Copy the whole input line; if a journal block is focused, copy the block (same as F3)
   F5         - Open focused (or last command) block in JSON viewer
-  F6         - Toggle simple (plain) output
+  F6         - Toggle simple (plain) output (Rich markup and ANSI colors off;
+               escape sequences are stripped from any command output in either mode)
   F8         - Label block dialog (`:name`): type a label, Enter saves, empty removes,
                Esc cancels. Then `|@<label> <command>` reuses its output without re-running.
   F2         - Toggle line-cursor mode (see below)

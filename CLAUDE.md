@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.121) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.123) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.121` → `v1.122`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.123` → `v1.124`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -79,6 +79,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/session_mailbox.py`**: cross-session command relay (`:send` / `:send!`) — per-session `inbox_<instance>.jsonl` (JSON Lines, 0600, same portalocker pattern as `history_store`); `send_message` appends, `drain_inbox` reads-and-truncates, `pending_sessions` lists non-empty inboxes
 - **`src/session_registry.py`**: active-session registry — per-session `session_<instance>.pid` (0600) in the data dir; `register` / `unregister` (with a `pid=` that no longer matches the file, someone else's record is left alone), `active_sessions` (pid files of dead processes are removed), `free_session_name` (lowest free `sN` among **live** sessions, plus `taken`). `:new` without a name uses it, so the counter follows running windows instead of leftover `history_*.txt` / `.bashrc_term_*`. **Not** the same question as `CommandRunner.list_session_names` (by files; `:send` / `:session` lists still show closed sessions)
 - **`src/kctx_store.py`**: cluster journal `kctx.json` (data dir): snapshots of the kubectl var stack (`NS POD DEPLOY SVC ING APP CTR QUOTA`) per cluster, captured on `$VAR=` after a `klogin` / `tsh kube login` / `kubectl config use-context` line; UI `:kctx` lists clusters and applies saved sets (`:kctx <cluster>` = log in + show sets, and with exactly **one** set it applies it right away — nothing to pick from; `:kctx N` applies from the last shown list; `:kctx <cluster> N` = log in + apply in one go)
+- **`src/ansi_output.py`**: ANSI/ESC in command output — `to_markup` (SGR → Textual markup via Rich `Text.from_ansi`, everything else stripped, `[` escaped), `to_plain` (no escapes at all: copy / pipe / `$OUT` / `:log`), `collapse_carriage_returns` (terminal `\r` semantics, `\x1b[K` = line rewritten), `strip_escapes`, `MAX_MARKUP_CHARS` (huge colored output falls back to plain — ANSI parsing costs ~25 ms per 300 lines). `cheat_sh.strip_ansi` delegates here. Setting `ansi_colors`; tests `tests/test_ansi_output.py`
 - **`src/help_texts.py`**: static `:?` / `:i` help text constants
 - **`src/clipboard.py`**: CLIPBOARD / PRIMARY / OSC 52
 - **`src/shell_env.py`**: `.bashrc_term` vars, `~/.bashrc` aliases, `$1` substitution
@@ -140,7 +141,7 @@ Aliases load from `~/.bashrc`. If the body contains `$1` / `$2` / `$@` / `$*`, a
 2. **Journal**: PgUp/PgDn / arrows (when a block is focused) scroll the journal; the **visible** block becomes active (no jump to its first line). Click a block to focus it (`terminal_mouse: true`)
 3. **Reading mode (no yank)**: once the view is scrolled up (`_follow_paused`) or a journal block holds focus, `add_block` only mounts the block: no scroll to the end, no focus stealing. Unpaused by scrolling back to the end (`_note_journal_scroll`) or by submitting a line (`_resume_journal_follow` in `on_input_submitted`). `_journal_reading()` / `_should_follow_journal_end()` / `_journal_at_end()` are the predicates; `_scroll_journal_wheel()` is the input-focused wheel path.
 4. **Tab** from the input focuses the last journal block (`:h` / `:?` included)
-5. **Focused block as pipe source**: `|` uses the focused block's stdout. `$OUT` is that block's last non-empty line, computed only when the command contains `$OUT` / `${OUT}`
+5. **Focused block as pipe source**: `|` uses the focused block's stdout (escape-free `plain_stdout`). `$OUT` is that block's last non-empty line, computed only when the command contains `$OUT` / `${OUT}`
 6. **Bash aliases**: loaded at startup; `$1` positional substitution supported
 7. **Background execution**: shell commands run in threads so the UI stays responsive
 8. **Line-cursor (F2 / Enter on a focused block)**: copy or append individual output lines. **Ctrl+C** copies the whole input draft, or the focused journal block (same as F3).
@@ -191,3 +192,4 @@ Edit `settings.yml`:
 - `screensaver_idle`: seconds of no keys/clicks/scroll/mouse-move before the overlay (default 120). `0` disables. Tests set this to `0`. `:screensaver` starts it now; `:screensaver 0` / `:screensaver 120` change idle for this session; `:screensaver matrix` / `:screensaver stars` show the other canvas once. A forwarded `:send` command also wakes it (`_wake_screensaver()` from `_deliver_forwarded`) — external events do not touch its own key handlers.
 - `screensaver_matrix`: `true` (default) — the canvas is matrix digital rain (`MatrixRain`): falling glyph columns, bright head, dimming tail; the starfield (dust/tokens, clock/date) is then not drawn, while the ticker, help and load/mem stay. `false` — the starfield canvas, where `screensaver_stars` acts.
 - `screensaver_stars`: `true` (default) — flying dust/tokens in the starfield. `false` — black canvas; clock/date, library ticker, and load/mem stay. No effect on the matrix canvas.
+- `ansi_colors`: `true` (default) — draw ANSI/ESC from command output as terminal-like colors: SGR (`\x1b[..m`) is parsed into Textual markup by `src/ansi_output.py` (`to_markup`), while cursor/erase/OSC sequences and control chars are stripped. Without this, an app frame containing raw escapes makes the **real** terminal execute them mid-frame (bleeding colors, `\x1b[0m` resetting the app style). `\r` progress redraws collapse to the final line (`collapse_carriage_returns`), so `_execute_in_thread` / `_capture_watch_tick` read pipes as **bytes** (`text=True` turned `\r` into `\n`). `false` — plain output; F6 turns colors off for the session. Data paths never see escapes: `CommandBlock.plain_stdout` / `plain_stderr` (F3 copy, `|`, `$OUT`/`$BLOCK`, `:log`/F7, `@key`, `:diff`, `:ed`, JSON viewer), while `raw_stdout` stays raw for rendering
