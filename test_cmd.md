@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.117
+# План тестирования IDvjPy_term v1.118
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1317,7 +1317,7 @@ Ctrl+O               # TUI уходит в сторону — виден реа�
 
 ---
 
-**Версия документа**: v1.61
-**Версия приложения**: v1.117
+**Версия документа**: v1.62
+**Версия приложения**: v1.118
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`  
 **Дата**: 2026-09-15

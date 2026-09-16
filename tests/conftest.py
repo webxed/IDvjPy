@@ -50,6 +50,28 @@ def isolated_home(tmp_path, monkeypatch):
     return tmp_path
 
 
+@pytest.fixture(autouse=True)
+def isolated_instance_name():
+    """Откатить переключение сессии (`:session NAME`) после теста.
+
+    `app.apply_instance_name` меняет **модульную** `INSTANCE_NAME` и классовые
+    `FILE_HISTORY` / `FILE_BASHRC` — то есть на весь процесс. Без отката
+    переключение сессии в одном тесте ломает все следующие: заголовок окна
+    (`IDvjPy_term · NAME`), `secrets_<NAME>.json`, `inbox_<NAME>.jsonl`,
+    `history_<NAME>.txt`, реестр `session_<NAME>.pid`. Именно так падал полный
+    прогон (14 тестов в CI), хотя те же файлы по отдельности проходили.
+    """
+    import app as app_module
+
+    original_name = app_module.INSTANCE_NAME
+    original_history = app_module.CommandRunner.FILE_HISTORY
+    original_bashrc = app_module.CommandRunner.FILE_BASHRC
+    yield
+    app_module.INSTANCE_NAME = original_name
+    app_module.CommandRunner.FILE_HISTORY = original_history
+    app_module.CommandRunner.FILE_BASHRC = original_bashrc
+
+
 @pytest.fixture
 def clip_store(monkeypatch):
     """Доступ к подменённому буферу обмена (тот же объект, что в isolated_home)."""

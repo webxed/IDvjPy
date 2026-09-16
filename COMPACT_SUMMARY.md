@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.117**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.118**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.61 (app v1.117) |
+| `test_cmd.md` | Manual plan v1.62 (app v1.118) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.117 |
+| `src/app.py` | TUI (`CommandRunner`), v1.118 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle starfield + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`) |
@@ -215,6 +215,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.118
+
+- **Полный прогон падал: имя сессии утекало между тестами (14 тестов в CI).** `app.apply_instance_name` (его зовёт `:session NAME`) меняет **модульную** `INSTANCE_NAME` и классовые `FILE_HISTORY` / `FILE_BASHRC` — то есть на весь процесс. Новый тест `test_new_window.py::test_session_switch_moves_registration` делал `:session alpha` и не откатывал это (в `test_commands.py` ручной откат был), поэтому все следующие файлы видели чужой инстанс: заголовок окна `IDvjPy_term · alpha` вместо `default`, `secrets_alpha.json`, `inbox_alpha.jsonl`, `history_alpha.txt`. Отсюда падения в `test_screensaver` (2), `test_secrets` (1), `test_session_mailbox` (9), `test_tag_ref_click` (1), `test_ux_extras` (1) — при том что те же файлы по отдельности проходили. Новый autouse-фикстур `isolated_instance_name` в `tests/conftest.py` запоминает `INSTANCE_NAME` / `FILE_HISTORY` / `FILE_BASHRC` и возвращает их после каждого теста, так что сессию можно переключать в любом тесте. Заодно `tests/test_tag_ref_click.py` читает историю по `app.FILE_HISTORY`, а не по захардкоженному `history_default.txt`. Полный прогон: 829 passed.
 
 ## v1.117
 

@@ -72,7 +72,7 @@ async def test_ctrl_click_inserts_and_runs(isolated_home):
         assert input_widget(app).value == ""  # строка ушла на выполнение
         # История — как после клавиатурного «Enter, Enter»: сами ссылки в историю
         # не пишутся (`log_to_history` пропускает `!`), остаётся раскрытая команда.
-        history = (isolated_home / "history_default.txt").read_text(encoding="utf-8")
+        history = (isolated_home / app.FILE_HISTORY).read_text(encoding="utf-8")
         assert history.strip().splitlines()[-1] == "echo hello"
 
 
