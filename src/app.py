@@ -158,6 +158,7 @@ try:
         format_vars,
         load_snapshots,
         parse_cluster_login,
+        parse_kctx_vars,
         snapshots_for_cluster,
     )
     from llm_client import (
@@ -2201,7 +2202,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.128"
+    VERSION = "v1.129"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2260,6 +2261,9 @@ class CommandRunner(App):
     # Список `:`-команд, вызовы которых пишутся в history_*.txt (↑ / `:h`), но не
     # подсказываются (по умолчанию :llm :cht :rg :md :run :send :send!).
     KEY_HISTORY_QUERIES = "history_queries"
+    # Какие переменные считаются «кластерным журналом» (:kctx): их присваивание
+    # пишет снимок в kctx.json, они видны в списках :kctx и возвращаются :kctx N.
+    KEY_KCTX_VARS = "kctx_vars"
     KEY_MD_DIR = "md_dir"
     KEY_MD_RENDER_LINES = "md_render_lines"
     HISTORY_SEARCH_LIMIT = 50
@@ -2509,6 +2513,10 @@ class CommandRunner(App):
         self.k8s_completion: bool = False
         # Файловые подсказки: auto / paths / off (settings.yml: file_completion).
         self.file_completion: str = "auto"
+        # Переменные кластерного журнала (:kctx) — settings.yml: kctx_vars.
+        # По умолчанию стек bundled-шаблонов: kubectl (NS…QUOTA) + helm
+        # (RELEASE/CHART/VALUES). Пустой кортеж — журнал выключен.
+        self.kctx_vars: tuple[str, ...] = KUBE_STACK_VARS
         # Очищать буфер обмена после вставки значения в `$$NAME=…`
         # (settings.yml: clear_clipboard_after_secret).
         self.clear_clipboard_after_secret: bool = False
@@ -3482,6 +3490,9 @@ class CommandRunner(App):
                     ).strip().lower()
                     self.file_completion = (
                         mode if mode in self.FILE_COMPLETION_MODES else "auto"
+                    )
+                    self.kctx_vars = parse_kctx_vars(
+                        settings.get(self.KEY_KCTX_VARS, KUBE_STACK_VARS)
                     )
                     self.cheat_sh_url = str(
                         settings.get(self.KEY_CHEAT_SH_URL) or DEFAULT_BASE_URL
@@ -6776,7 +6787,7 @@ class CommandRunner(App):
                 self.add_block(InfoBlock(f"Variable ${var_name} set{captured_note}"))
             else:
                 self.add_block(InfoBlock(f"Variable ${var_name} set to '{var_value}'"))
-            if var_name in KUBE_STACK_VARS:
+            if var_name in self.kctx_vars:
                 self._remember_kctx_snapshot()
         else:
             self.add_block(InfoBlock("Invalid syntax. Use: $VAR_NAME=VALUE"))
@@ -7034,11 +7045,12 @@ class CommandRunner(App):
         self._secret_names.clear()
 
     def _remember_kctx_snapshot(self) -> None:
-        """Кластерный журнал: снимок kubectl-стека для текущего кластера.
+        """Кластерный журнал: снимок переменных журнала для текущего кластера.
 
-        Пишется при присваивании переменной стека ($NS=…), когда известен
-        кластер (вход через `klogin …` / `tsh kube login …` /
-        `kubectl config use-context …` / `:kctx <cluster>`).
+        Пишется при присваивании переменной из `kctx_vars` (`$NS=…`,
+        `$RELEASE=…`), когда известен кластер (вход через `klogin …` /
+        `tsh kube login …` / `kubectl config use-context …` / `:kctx <cluster>`).
+        `kctx_vars: []` — журнал выключен, сюда не попадаем вовсе.
         Ошибки журнала не мешают самому присваиванию переменной.
         """
         cluster = self._current_kube_cluster
@@ -7050,11 +7062,19 @@ class CommandRunner(App):
                 cluster,
                 self.local_env,
                 lock_timeout=self.FILE_LOCK_TIMEOUT,
+                var_names=self.kctx_vars,
             )
         except Exception:
             pass
 
-    # --- :kctx — кластерный журнал kubectl-стека (v1.58) ---
+    # --- :kctx — кластерный журнал переменных стека (v1.58, kctx_vars — v1.129) ---
+
+    def _kctx_vars_hint(self) -> str:
+        """Подсказка про переменные журнала (`kctx_vars`) для InfoBlock'ов `:kctx`."""
+        if not self.kctx_vars:
+            return "Журнал выключен: kctx_vars: [] в settings.yml."
+        names = " ".join(f"${name}=…" for name in self.kctx_vars)
+        return f"Задайте переменные журнала ({names}) — они запишутся в журнал."
 
     @staticmethod
     def _kctx_login_line(cluster: str) -> str:
@@ -7119,7 +7139,7 @@ class CommandRunner(App):
         if not summary and not current:
             lines.append("  (пусто)")
             lines.append("  Войдите в кластер (klogin … / tsh kube login … / kubectl config use-context …)")
-            lines.append("  и задайте переменные стека: $NS=… $POD=… — они запишутся в журнал.")
+            lines.append(f"  {self._kctx_vars_hint()}")
             self.add_block(InfoBlock("\n".join(lines)))
             return
         for i, row in enumerate(summary, start=1):
@@ -7163,11 +7183,12 @@ class CommandRunner(App):
         lines = [f"[bold]kctx — {escape(cluster)}: снимки переменных:[/bold]"]
         if not rows:
             lines.append("  (снимков нет)")
-            lines.append("  Задайте $NS=… / $POD=… — они запишутся в журнал для этого кластера.")
+            lines.append(f"  {self._kctx_vars_hint()}")
         else:
             for i, row in enumerate(rows, start=1):
                 when = datetime.datetime.fromtimestamp(row["ts"]).strftime("%d.%m %H:%M")
-                lines.append(f"  {i}. {escape(format_vars(row['vars']) or '—')}  ({when})")
+                text = format_vars(row["vars"], self.kctx_vars) or "—"
+                lines.append(f"  {i}. {escape(text)}  ({when})")
             lines.append("")
             lines.append("  :kctx N — применить набор N")
         self.add_block(InfoBlock("\n".join(lines)))
@@ -7196,7 +7217,7 @@ class CommandRunner(App):
             if err:
                 errors.append(f"{name}: {err}")
         self._current_kube_cluster = cluster
-        text = format_vars(row["vars"]) or "(пусто)"
+        text = format_vars(row["vars"], self.kctx_vars) or "(пусто)"
         message = f"kctx {escape(cluster)} #{index}: {escape(text)}"
         if auto_single:
             message += "  [dim](единственный набор — применился сразу)[/dim]"

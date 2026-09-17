@@ -33,6 +33,7 @@ def test_settings_example_has_all_keys_and_defaults_to_nano():
         "screensaver_idle",
         "screensaver_stars",
         "k8s_completion",
+        "kctx_vars",
         "editor",
     }
     assert expected <= set(cfg), expected - set(cfg)

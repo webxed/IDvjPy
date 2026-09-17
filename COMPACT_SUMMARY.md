@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.128**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.129**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.72 (app v1.128) |
+| `test_cmd.md` | Manual plan v1.73 (app v1.129) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.128 |
+| `src/app.py` | TUI (`CommandRunner`), v1.129 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -191,7 +191,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/k8s_complete.py` | Имена ресурсов k8s из живого кластера (`kubectl get`) |
 | `src/update_check.py` | Compare `VERSION` with GitHub main (`:update`) |
 | `src/data_dirs.py` | Data-каталог: `--data-dir` / `$IDVJPY_DATA_DIR` / portable / OS default |
-| `src/kctx_store.py` | Кластерный журнал kubectl-стека (`kctx.json` в data-dir, снимки NS/POD/… по кластерам) |
+| `src/kctx_store.py` | Кластерный журнал (`kctx.json` в data-dir): снимки переменных из `kctx_vars` по кластерам, парсер `parse_kctx_vars` |
 | `src/llm_client.py` | LLM-запросы по `llm_providers.yml` (`:llm`) |
 | `src/llm_context.py` | Контекст приложения для LLM: шпаргалка префиксов + выжимка тегов/команд (`:llm ask`, ключ `app_context`) |
 | `src/llm_providers.example.yml` | Образец конфига провайдеров LLM |
@@ -217,6 +217,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.129
+
+- **Список переменных кластерного журнала — в settings.yml (`kctx_vars`).** `:kctx` запоминал по кластерам только kubectl-стек (`NS POD DEPLOY SVC ING APP CTR QUOTA`) — и этот же зашитый кортеж решал, что видно в списках и что возвращает `:kctx N`. Для helm-шаблонов (`helm upgrade --install $RELEASE $CHART -n $NS -f $VALUES`, тег `hvars`) этого мало: `$RELEASE=…` не попадал в `kctx.json` вообще, и, вернувшись в кластер, приходилось заново вспоминать релиз, чарт и values. Теперь список имён — ключ `kctx_vars` в settings.yml: список или строка через запятую/пробел (ведущие `$` / `:` отбрасываются, негодные имена и повторы — мимо), порядок имён — это же порядок в списках `:kctx` (`kctx prod #1: NS=team-a RELEASE=myapp`), а дефолт — стек bundled-шаблонов: kubectl **и** helm (`RELEASE CHART VALUES`). `[]` / `false` / `null` выключают журнал целиком: снимки не пишутся, а `:kctx` без журнала прямо говорит «Журнал выключен: kctx_vars: [] в settings.yml». Присваивание переменной вне списка (`$EDITOR=…`) в журнал по-прежнему не идёт. Технически список стал параметром: `stack_vars` / `format_vars` / `add_snapshot(var_names=…)` (пустой список — «ничего», а не дефолт), рабочий список хранит `CommandRunner.kctx_vars` (`handle_variable_assignment` → `_remember_kctx_snapshot`, парсер `parse_kctx_vars` в `src/kctx_store.py` — модуль без Textual), а подсказки `:kctx` печатают настроенный список (`_kctx_vars_hint`). NB: `VALUES` — обычно относительный путь, `:kctx N` вернёт его как есть — запускайте helm из каталога с values (или задайте абсолютный путь). Тесты: `tests/test_kctx_store.py` (+3: разбор `kctx_vars` — список/строка/`$`/мусор/`[]`/`true`/число, дефолт покрывает kubectl+helm, `stack_vars`/`format_vars`/`add_snapshot` с чужим списком), `tests/test_kctx_cmd.py` (+2: с `kctx_vars: [NS, RELEASE, CHART, VALUES]` `$RELEASE=myapp` пишет снимок, а `$POD=` — нет, и `:kctx prod 1` возвращает релиз; с `kctx_vars: []` журнала нет и `:kctx` объясняет почему), `tests/test_data_dirs.py` (ключ в шаблоне).
 
 ## v1.128
 

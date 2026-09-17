@@ -6,7 +6,10 @@
 data-каталога — не в БД тегов и не в историю.
 
 Файл: список снимков ``[{"cluster": str, "ts": float, "vars": {…}}]``.
-``vars`` — только переменные kubectl-стека (``KUBE_STACK_VARS``).
+``vars`` — только переменные из списка ``KUBE_STACK_VARS`` (по умолчанию стек
+kubectl **и** helm). Список настраивается ключом ``kctx_vars`` в settings.yml —
+парсер ``parse_kctx_vars``; присваивание любой из этих переменных пишет снимок,
+они же показываются в ``:kctx`` и возвращаются по ``:kctx N``.
 Записи под portalocker-локом, как ``history_store``; идентичный последний
 снимок кластера не дублируется (обновляется время). Модуль без Textual.
 """
@@ -15,7 +18,8 @@ from __future__ import annotations
 import json
 import re
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from history_store import (
     FileLockTimeoutError,
@@ -23,9 +27,51 @@ from history_store import (
     release_file_lock,
 )
 
-# Переменные, которыми живут шаблоны kubectl (src/seed_k8s_chains.py).
-KUBE_STACK_VARS = ("NS", "POD", "DEPLOY", "SVC", "ING", "APP", "CTR", "QUOTA")
+# Переменные, которыми живут bundled-шаблоны: kubectl (src/seed_k8s_chains.py —
+# NS…QUOTA) и helm (src/seed_helm.py — RELEASE/CHART/VALUES, тег `hvars`).
+# Это только значение по умолчанию: рабочий список читается из ключа
+# `kctx_vars` в settings.yml (`parse_kctx_vars`), в нём же — порядок имён
+# в списках `:kctx` и в `$NS=… RELEASE=…` из `:kctx N`.
+KUBE_STACK_VARS = (
+    "NS", "POD", "DEPLOY", "SVC", "ING", "APP", "CTR", "QUOTA",
+    "RELEASE", "CHART", "VALUES",
+)
 KUBE_STACK_VAR_NAMES = frozenset(KUBE_STACK_VARS)
+
+# Имя переменной окружения — как `RE_VAR_NAME` в shell_env (не с цифры).
+RE_VAR_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def parse_kctx_vars(raw: Any) -> tuple[str, ...]:
+    """Прочитать ключ `kctx_vars`: список имён или строка через запятую.
+
+    Принимает ``[NS, RELEASE]``, ``"NS, RELEASE"``, ``"NS RELEASE"``, ``"$NS"``
+    и `:NS` (ведущие `$` / `:` отбрасываются). `null` / `false` / `[]` / ``""`` —
+    пусто: журнал выключен, снимки не пишутся. Непонятное значение (число,
+    словарь, `true`) — как по умолчанию (`KUBE_STACK_VARS`). Негодные имена и
+    повторы отбрасываются, порядок остальных сохраняется — он же порядок
+    в списках `:kctx`.
+    """
+    if raw is None or raw is False:
+        return ()
+    if raw is True:
+        return KUBE_STACK_VARS
+    if isinstance(raw, str):
+        items: list[Any] = [raw]
+    elif isinstance(raw, (list, tuple, set, frozenset)):
+        items = list(raw)
+    else:
+        return KUBE_STACK_VARS
+    names: list[str] = []
+    for item in items:
+        if item is None or isinstance(item, bool):
+            continue
+        for token in re.split(r"[\s,]+", str(item)):
+            name = token.strip().lstrip("$:").strip()
+            if name and RE_VAR_NAME.match(name) and name not in names:
+                names.append(name)
+    return tuple(names)
+
 
 ENCODING = "utf-8"
 DEFAULT_LOCK_TIMEOUT = 5
@@ -49,10 +95,16 @@ def parse_cluster_login(text: str) -> str | None:
     return match.group(1).strip() if match else None
 
 
-def stack_vars(env: Mapping[str, str]) -> dict[str, str]:
-    """Подмножество env только из kubectl-стека (непустые значения)."""
+def stack_vars(
+    env: Mapping[str, str], names: Sequence[str] | None = None
+) -> dict[str, str]:
+    """Подмножество env из списка `names` (по умолчанию — `KUBE_STACK_VARS`).
+
+    Непустые значения. Пустой список (`names=()`) — пустой результат: журнал
+    выключен ключом `kctx_vars: []`.
+    """
     result: dict[str, str] = {}
-    for key in KUBE_STACK_VARS:
+    for key in (KUBE_STACK_VARS if names is None else names):
         value = env.get(key)
         if value is not None and str(value).strip() != "":
             result[key] = str(value)
@@ -144,16 +196,19 @@ def add_snapshot(
     per_cluster_limit: int = DEFAULT_PER_CLUSTER_LIMIT,
     total_limit: int = DEFAULT_TOTAL_LIMIT,
     lock_timeout: int = DEFAULT_LOCK_TIMEOUT,
+    var_names: Sequence[str] | None = None,
 ) -> bool:
-    """Сохраняет снимок kubectl-стека для кластера.
+    """Сохраняет снимок переменных журнала для кластера.
 
+    `var_names` — какие переменные считать стеком (по умолчанию
+    `KUBE_STACK_VARS`; рабочий список приходит из ключа `kctx_vars`).
     Возвращает True, если файл изменился. Идентичный последнему снимку того
     же кластера набор не дублируется — обновляется только время. Пустой
     стек/нет кластера → False без записи. При конфликте лока или ошибке
     записи — False (присваивание переменной работает как раньше).
     """
     name = (cluster or "").strip()
-    snapshot_vars = stack_vars(env)
+    snapshot_vars = stack_vars(env, var_names)
     if not name or not snapshot_vars:
         return False
     ts = time.time() if now is None else float(now)
@@ -223,10 +278,12 @@ def cluster_summary(items: list[dict]) -> list[dict]:
     return summary
 
 
-def format_vars(vars_map: Mapping[str, str]) -> str:
-    """`NS=team-a POD=api-7f` — для списков журнала."""
+def format_vars(
+    vars_map: Mapping[str, str], names: Sequence[str] | None = None
+) -> str:
+    """`NS=team-a POD=api-7f` — для списков журнала (порядок — как в `names`)."""
     parts: list[str] = []
-    for key in KUBE_STACK_VARS:
+    for key in (KUBE_STACK_VARS if names is None else names):
         value = vars_map.get(key)
         if value is not None and str(value).strip() != "":
             parts.append(f"{key}={value}")

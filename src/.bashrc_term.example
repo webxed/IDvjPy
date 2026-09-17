@@ -13,8 +13,10 @@
 # export FILEMAN=explorer
 # export TERMINAL=wt
 
-# kubectl-стек (seed_k8s_chains.py, история — :kctx): NS POD DEPLOY ING APP QUOTA
-# SVC и CTR — в блоке docker ниже; :kctx <cluster> запоминает/возвращает эти значения.
+# Кластерный журнал :kctx (ключ kctx_vars; по умолчанию — стек bundled-шаблонов):
+# kubectl (seed_k8s_chains.py) — NS POD DEPLOY ING APP QUOTA (SVC и CTR — в блоке
+# docker ниже) и helm (seed_helm.py, блок ниже) — RELEASE CHART VALUES.
+# :kctx <cluster> запоминает и возвращает их по кластерам; свои имена — kctx_vars.
 # export NS=default
 # export POD=
 # export DEPLOY=

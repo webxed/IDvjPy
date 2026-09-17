@@ -10,6 +10,14 @@ from kctx_store import add_snapshot, load_snapshots
 from tests.conftest import submit
 
 
+def _with_settings(isolated_home, extra: str) -> None:
+    """Дописать ключи к уже созданному conftest'ом settings.yml."""
+    settings = isolated_home / "settings.yml"
+    settings.write_text(
+        settings.read_text(encoding="utf-8") + extra, encoding="utf-8"
+    )
+
+
 async def test_assignment_records_snapshot_for_login_cluster(isolated_home, monkeypatch):
     """Вход `klogin prod` запоминает кластер; `$NS=` пишет снимок в kctx.json."""
     app = CommandRunner()
@@ -178,3 +186,48 @@ async def test_kctx_json_file_shape(isolated_home):
             {"cluster": "prod", "vars": {"NS": "team-a"}, "ts": data[0]["ts"]}
         ]
         assert isinstance(data[0]["ts"], float)
+
+
+async def test_kctx_vars_from_settings_extend_the_journal(isolated_home, monkeypatch):
+    """`kctx_vars` в settings.yml: $RELEASE=… пишет снимок, переменные вне списка — нет."""
+    _with_settings(isolated_home, "kctx_vars: [NS, RELEASE, CHART, VALUES]\n")
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        monkeypatch.setattr(
+            app,
+            "run_command",
+            lambda cmd, stdin_data=None, *, no_timeout=False: None,
+        )
+        assert app.kctx_vars == ("NS", "RELEASE", "CHART", "VALUES")
+        assert "$RELEASE" in app._kctx_vars_hint()
+        await submit(pilot, "klogin prod")
+        await submit(pilot, "$RELEASE=myapp")
+        await submit(pilot, "$POD=api-7f")  # вне kctx_vars — в журнал не идёт
+        items = load_snapshots(app.FILE_KCTX)
+        assert [item["vars"] for item in items] == [{"RELEASE": "myapp"}]
+        # Снимок применяется как обычно, и в журнале видно RELEASE.
+        await submit(pilot, ":kctx prod 1")
+        assert app.local_env.get("RELEASE") == "myapp"
+        texts = " ".join(block.text_content for block in app.query(InfoBlock))
+        assert "RELEASE=myapp" in texts
+
+
+async def test_kctx_vars_empty_disables_the_journal(isolated_home, monkeypatch):
+    """`kctx_vars: []` — журнал выключен: присваивания ничего не пишут, :kctx говорит прямо."""
+    _with_settings(isolated_home, "kctx_vars: []\n")
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        monkeypatch.setattr(
+            app,
+            "run_command",
+            lambda cmd, stdin_data=None, *, no_timeout=False: None,
+        )
+        assert app.kctx_vars == ()
+        await submit(pilot, ":kctx")  # ни журнала, ни кластера
+        texts = " ".join(block.text_content for block in app.query(InfoBlock))
+        assert "Журнал выключен" in texts
+        await submit(pilot, "klogin prod")
+        await submit(pilot, "$NS=team-a")
+        assert not (isolated_home / "kctx.json").exists()

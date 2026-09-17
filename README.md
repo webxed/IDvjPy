@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.128 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.129 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -59,7 +59,7 @@ IDvjPy — терминальное приложение (TUI) на Python (Text
 - `> cmd` — настоящий TTY (htop, vim, ssh); клик и PgUp/PgDn активируют видимый блок журнала. Фоновая команда терминала не получает: `stdin` — `/dev/null`, поэтому `read`, `tsh`, `kubectl`, `ssh` не «крадут» клавиши и мышь (раньше `:kctx` с зависшим `tsh kube login` делал ввод нерабочим), а по таймауту/`F4` приложение возвращает терминал в свой режим. Нужен интерактив — `> cmd`, долгая задача без TTY — `@ cmd`; `:kctx <cluster>` запускает вход без `command_timeout`
 - Калькулятор без спец-команд: строка, начинающаяся с цифры (или `(` / `-`) и целиком разбираемая как арифметика/перевод единиц, считается локально — `512Mi + 20% in Gi`, `20% of 512Mi`, `2Gi/512Mi`, `500m in cores`
 - ipcalc: IPv4-сети считаются так же, без спец-команд — `192.168.1.0/24`, `300 hosts` → `/23` (как jodies.de/ipcalc)
-- Кластерный журнал kubectl: переменные стека (`NS POD DEPLOY SVC ING APP CTR QUOTA`) запоминаются по кластерам в `kctx.json` (data-каталог). `:kctx` — список кластеров; `:kctx <cluster>` — вход (`klogin <c> || kubectl config use-context <c>`) и ранее использованные наборы переменных (если набор ровно один — применяется сразу); `:kctx N` возвращает набор (переменные → `.bashrc_term_*`); `:kctx <cluster> N` — вход и применение одной строкой
+- Кластерный журнал kubernetes: переменные из списка `kctx_vars` (по умолчанию — стек bundled-шаблонов: kubectl `NS POD DEPLOY SVC ING APP CTR QUOTA` и helm `RELEASE CHART VALUES`) запоминаются по кластерам в `kctx.json` (data-каталог). `:kctx` — список кластеров; `:kctx <cluster>` — вход (`klogin <c> || kubectl config use-context <c>`) и ранее использованные наборы переменных (если набор ровно один — применяется сразу); `:kctx N` возвращает набор (переменные → `.bashrc_term_*`); `:kctx <cluster> N` — вход и применение одной строкой; `kctx_vars: []` выключает журнал
 
 ## Установка
 
@@ -309,7 +309,7 @@ curl -H "Bearer $TOKEN" https://api.example   # обычная подстано�
 - `:update` — сверить `VERSION` с GitHub [`webxed/IDvjPy`](https://github.com/webxed/IDvjPy) `main`. При старте то же самое, если `check_updates: true` (пишет в журнал только если на GitHub новее). Прокси с логином: `$PROXY_USER` / `$PROXY_PASS` в `.bashrc_term` (плюс `HTTPS_PROXY` / `HTTP_PROXY`).
 - `:theme [name]` — тема TUI (`dark` / `light` / `nord` / `matrix` / …); пишется в `settings.yml`. Клавиша `d` — dark/light. Своя тема приложения — `matrix`: зелёный фосфор на почти чёрном, как в скринсейвере (рамки ввода, подсказок и справки тоже становятся зелёными)
 - Подсветка блока в фокусе — мягкая: 25% основного цвета темы поверх фона блока (раньше сплошной `$primary-darken-1` слепил, особенно на большом `:?`); работает в любой теме
-- `:kctx` — кластерный журнал (`kctx.json`): список кластеров; `:kctx <cluster>` — вход (`klogin <c>` или `kubectl config use-context <c>`) и ранее использованные наборы `NS`/`POD`/… (при единственном наборе он применяется сразу: выбирать не из чего); `:kctx N` — применить набор N; `:kctx <cluster> N` — вход и применение одной строкой
+- `:kctx` — кластерный журнал (`kctx.json`): список кластеров; `:kctx <cluster>` — вход (`klogin <c>` или `kubectl config use-context <c>`) и ранее использованные наборы `NS`/`POD`/… (при единственном наборе он применяется сразу: выбирать не из чего); `:kctx N` — применить набор N; `:kctx <cluster> N` — вход и применение одной строкой. Какие переменные считаются журналом — ключ `kctx_vars` в settings.yml
 - `:?` — эта справка внутри TUI
 
 ## Горячие клавиши
@@ -397,6 +397,7 @@ screensaver_matrix: true     # холст заставки: true — «матр�
 screensaver_stars: true      # звёздное поле: летающие звёзды; false — чёрный холст (часы/лента/load остаются)
 k8s_completion: false        # имена k8s-ресурсов из кластера в подсказках (`kubectl get pod <Tab>`)
 file_completion: auto        # файловые подсказки: auto | paths | off (см. ниже)
+kctx_vars: [NS, POD, DEPLOY, SVC, ING, APP, CTR, QUOTA, RELEASE, CHART, VALUES]  # переменные кластерного журнала (:kctx); [] — выкл.
 line_api_blocks: true        # блоки журнала (команды и инфоблоки) на Textual Line API (render_line); false — прежний Static
 llm_render_markdown: true    # ответ `:llm` — форматированный markdown; false — плоский текст (F6 отключает разово)
 ansi_colors: true            # ANSI-цвета вывода команд как в терминале; false — плоский текст (F6 отключает разово)

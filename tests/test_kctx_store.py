@@ -6,11 +6,13 @@ import json
 import pytest
 
 from kctx_store import (
+    KUBE_STACK_VARS,
     add_snapshot,
     cluster_summary,
     format_vars,
     load_snapshots,
     parse_cluster_login,
+    parse_kctx_vars,
     snapshots_for_cluster,
     stack_vars,
 )
@@ -40,6 +42,44 @@ def test_parse_cluster_login(line: str, expected: str | None) -> None:
     assert parse_cluster_login(line) == expected
 
 
+# --- parse_kctx_vars -----------------------------------------------------
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (["NS", "RELEASE"], ("NS", "RELEASE")),
+        ("NS, RELEASE", ("NS", "RELEASE")),
+        ("NS RELEASE", ("NS", "RELEASE")),
+        # Ведущие `$` / `:` — как в settings.yml их пишут руками — отбрасываются.
+        (["$NS", ":RELEASE", " NS "], ("NS", "RELEASE")),
+        (["NS, CHART", "VALUES"], ("NS", "CHART", "VALUES")),
+        # Повторы — один раз (порядок первого вхождения сохраняется).
+        (["NS", "NS", "POD"], ("NS", "POD")),
+        # Негодные имена (дефис, с цифры) и пустые элементы — мимо.
+        (["bad-name", "2X", "NS", ""], ("NS",)),
+        # Явное «выключено».
+        ([], ()),
+        (None, ()),
+        (False, ()),
+        ("", ()),
+        # Непонятное значение — как по умолчанию.
+        (True, KUBE_STACK_VARS),
+        (42, KUBE_STACK_VARS),
+        ({"NS": 1}, KUBE_STACK_VARS),
+    ],
+)
+def test_parse_kctx_vars(raw, expected) -> None:
+    assert parse_kctx_vars(raw) == expected
+
+
+def test_default_kctx_vars_cover_bundled_templates() -> None:
+    """Дефолт — стек bundled-шаблонов: kubectl (seed_k8s_chains) + helm (seed_helm)."""
+    assert set(KUBE_STACK_VARS) == {
+        "NS", "POD", "DEPLOY", "SVC", "ING", "APP", "CTR", "QUOTA",
+        "RELEASE", "CHART", "VALUES",
+    }
+
+
 # --- stack_vars / format_vars -------------------------------------------
 
 def test_stack_vars_keeps_only_kube_stack() -> None:
@@ -58,6 +98,15 @@ def test_stack_vars_keeps_only_kube_stack() -> None:
 
 def test_stack_vars_empty_when_nothing_set() -> None:
     assert stack_vars({"EDITOR": "nvim", "QUOTA": ""}) == {}
+
+
+def test_stack_vars_and_format_vars_respect_custom_names() -> None:
+    """Список имён задаётся снаружи (kctx_vars); порядок строки — как в нём."""
+    env = {"NS": "team-a", "RELEASE": "myapp", "EDITOR": "nvim"}
+    assert stack_vars(env, ("RELEASE",)) == {"RELEASE": "myapp"}
+    assert stack_vars(env, ()) == {}  # журнал выключен ключом kctx_vars: []
+    assert stack_vars(env)["RELEASE"] == "myapp"  # дефолт включает helm
+    assert format_vars(env, ("RELEASE", "NS")) == "RELEASE=myapp NS=team-a"
 
 
 # --- add_snapshot / load -------------------------------------------------
@@ -110,12 +159,21 @@ def test_add_snapshot_appends_on_var_change_and_orders_newest_first(tmp_path) ->
 
 def test_add_snapshot_respects_per_cluster_and_total_limits(tmp_path) -> None:
     path = tmp_path / "kctx.json"
-    kwargs = {"per_cluster_limit": 3, "total_limit": 10}
+    per_cluster, total = 3, 10
     for i in range(5):
-        add_snapshot(str(path), "prod", {"NS": f"ns{i}"}, now=float(i), **kwargs)
+        add_snapshot(
+            str(path), "prod", {"NS": f"ns{i}"}, now=float(i),
+            per_cluster_limit=per_cluster, total_limit=total,
+        )
     for i in range(3):
-        add_snapshot(str(path), "staging", {"NS": f"d{i}"}, now=float(i), **kwargs)
-    add_snapshot(str(path), "prod", {"NS": "fresh"}, now=100.0, **kwargs)
+        add_snapshot(
+            str(path), "staging", {"NS": f"d{i}"}, now=float(i),
+            per_cluster_limit=per_cluster, total_limit=total,
+        )
+    add_snapshot(
+        str(path), "prod", {"NS": "fresh"}, now=100.0,
+        per_cluster_limit=per_cluster, total_limit=total,
+    )
     items = load_snapshots(str(path))
     # per-cluster лимит 3: у prod остаются свежайшие 3
     prod_rows = snapshots_for_cluster(items, "prod")
@@ -145,3 +203,17 @@ def test_add_snapshot_repairs_garbage_file(tmp_path) -> None:
     items = load_snapshots(str(path))
     assert len(items) == 1
     assert items[0]["vars"] == {"NS": "team-a"}
+
+
+def test_add_snapshot_honours_custom_var_names(tmp_path) -> None:
+    """`var_names` (ключ kctx_vars) решает, что попадёт в снимок."""
+    path = tmp_path / "kctx.json"
+    env = {"NS": "team-a", "RELEASE": "myapp"}
+    assert add_snapshot(
+        str(path), "prod", env, now=1000.0, var_names=("RELEASE",)
+    ) is True
+    items = load_snapshots(str(path))
+    assert items[0]["vars"] == {"RELEASE": "myapp"}
+    # Пустой список — журнал выключен: новая запись не появляется.
+    assert add_snapshot(str(path), "prod", env, now=2000.0, var_names=()) is False
+    assert len(load_snapshots(str(path))) == 1
