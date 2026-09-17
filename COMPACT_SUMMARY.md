@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.129**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.131**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.73 (app v1.129) |
+| `test_cmd.md` | Manual plan v1.75 (app v1.131) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.129 |
+| `src/app.py` | TUI (`CommandRunner`), v1.131 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -206,7 +206,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/session_registry.py` | Реестр активных сессий — `session_<instance>.pid` 0600: автоимя `:new` = наименьшее свободное `sN` среди работающих окон (устаревшие pid-файлы подчищаются) |
 | `src/help_texts.py` | Static `:?` / `:i` help texts |
 | `src/ansi_output.py` | ANSI/ESC в выводе команд: SGR → цвета (`to_markup`), плоский текст без кодов (`to_plain`), терминальный `\r` (`collapse_carriage_returns`); ключ `ansi_colors` |
-| `src/runbook.py` | `:run` — полуавтоматический прогон цепочки: шаги `auto`/`manual`/`prompt`, директивы `run:` в комментариях тега, план из YAML |
+| `src/runbook.py` | `:run` — полуавтоматический прогон цепочки: шаги `auto`/`manual`/`prompt`, директивы `run:` в комментариях тега, план из YAML (`note:` для тега без единой директивы) |
 | `src/seed_*.py` | Handbook seeds (linux, k8s, git, ops, …) |
 | `src/app.tcss` | Styles (JSON viewer, line-nav border, block focus); Textual CSS — расширение `.tcss`, чтобы редакторы не линтовали его браузерным CSS |
 | `settings.yml` | Личные настройки — **не в git** (`.gitignore`), создаётся копией `src/settings.example.yml` при первом запуске в новом data-каталоге |
@@ -217,6 +217,14 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.131
+
+- **Порядок ↑ — хронология набора, а не «сначала файл, потом лента».** Симптом: `:screensaver`, затем обычная команда (`vault …`) — по ↑ первой всплывала `:screensaver`, а не только что набранная команда. Причина: пул истории склеивался как «все строки `history_<instance>.txt`, затем лента сессии», поэтому любая строка, которой в файле нет (`:`-команды, `?теги`, `!ссылки`, `#теги`, `$VAR=…`), оседала в самом хвосте пула — **после всех** строк файла, независимо от того, когда её набрали. Обычная же команда уходит в файл и потому оказывалась глубже. Теперь `_history_pool_pairs` собирает пул по хронологии: сначала строки файла, которых в этой сессии не набирали (старое), затем лента сессии целиком (её порядок и есть порядок набора). Заодно исправился тот же порядок у двух других потребителей того же пула: подсказки `↺` (`get_history_completions`) и `:h /текст` (`_unique_history_matches`) — «свежие сверху» теперь действительно по времени, а не «сначала всё из файла». `_history_pool` больше не дублирует правило — это тот же список без casefold. Тесты: `tests/test_session_history.py` (+1: `echo first-plain` → `:stats` → `echo last-typed`, три ↑ по порядку дают `echo last-typed`, `:stats`, `echo first-plain` — до правки первый же ↑ возвращал `:stats`).
+
+## v1.130
+
+- **`run vapprole` больше не выполняет шаг роли вместо человека; тег без `run:`-директив виден в плане.** Симптом: `:run vapprole` сам выполнял `$ROLE=custom-role` и падал на следующем шаге — `vault read auth/approle/role/$ROLE/role-id`. Причина — устаревший сид в рабочей БД: в старом наборе (до v1.124) не было ни одной директивы `run:`, а `RunSpec.mode` по умолчанию — `auto`, поэтому прогон брал `auto` на все шаги и молча шёл дальше (включая мутирующий `vault write -force … secret-id`). Теперь, во-первых, шаг 2 в сиде — строка-префикс `$ROLE=` (как и шаг 1 `$$VAULT_TOKEN=`): значение **дописывается после `=`**, и Enter с нетронутой строкой не отправит вымышленное имя роли (раньше стояло `$ROLE=custom-role`, и Enter выполнял именно его). Во-вторых, тег без единой `run:`-директивы получает заметку в плане: `note: в теге нет run:-директив — все шаги пойдут auto; мутирующий шаг безопаснее пометить run:manual (см. :? run)` — молчаливый «всё auto» для устаревшего сида больше невозможен (`NO_DIRECTIVES_NOTE` / `has_run_directive` в `src/runbook.py`, `steps_from_tag`), а при `--step` заметка снимается: все шаги и так ждут Enter. Диагностика в один шаг — `:run <тег> --dry`: в плане видны режимы всех шагов. Тесты: `tests/test_runbook.py` (+3: тег без директив — заметка в плане и она снимается `--step`, достаточно одной директивы (в т.ч. в комментарии тега), `has_run_directive` читает только первый токен), `tests/test_seed_ops.py` (шаг 2 `vapprole` — `$ROLE=`, не `$ROLE=custom-role`). `seed_vault.py` в справке `--seed` теперь честно перечисляет `vapprole` в списке заменяемых тегов.
 
 ## v1.129
 

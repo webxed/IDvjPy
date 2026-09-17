@@ -2202,7 +2202,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.129"
+    VERSION = "v1.131"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -8286,26 +8286,31 @@ class CommandRunner(App):
         return list(lines)
 
     def _history_pool(self) -> list[str]:
-        """history.txt плюс команды сессии, которых ещё нет в файле."""
-        pool = self._read_file_history()
-        seen = set(pool)
-        for cmd in self.session_history:
-            text = (cmd or "").strip()
-            if text and text not in seen:
-                pool.append(text)
-                seen.add(text)
-        return pool
+        """history.txt плюс команды сессии — в порядке набора (см. `_history_pool_pairs`)."""
+        return [text for text, _folded in self._history_pool_pairs()]
 
     def _history_pool_pairs(self) -> list[tuple[str, str]]:
-        """Как _history_pool, но парами (оригинал, casefold) — fold файла закэширован."""
+        """(оригинал, casefold) в порядке набора: старые строки файла, затем сессия.
+
+        `fold` строк файла закэширован. Строки, которые в этой сессии набирали
+        и которые есть в файле, берём **из ленты сессии**: только она знает
+        хронологию набора. Иначе строки, не попадающие в файл (`:…`, `?…`,
+        `$VAR=…`), оказывались бы после всех строк файла — и по ↑ после
+        `:screensaver` → `vault …` первой всплывала `:screensaver`, хотя
+        последней набрана была `vault …` (то же и в `:h /текст`: «свежие сверху»
+        вставали не по времени).
+        """
         lines = self._read_file_history()
-        seen = set(lines)
-        pairs = list(zip(lines, self._history_file_folded, strict=True))
-        for cmd in self.session_history:
-            text = (cmd or "").strip()
-            if text and text not in seen:
-                pairs.append((text, text.casefold()))
-                seen.add(text)
+        session = [
+            text for text in ((cmd or "").strip() for cmd in self.session_history) if text
+        ]
+        in_session = set(session)
+        pairs = [
+            (line, folded)
+            for line, folded in zip(lines, self._history_file_folded, strict=True)
+            if line not in in_session
+        ]
+        pairs.extend((text, text.casefold()) for text in session)
         return pairs
 
     def _history_matches_for(self, needle: str) -> list[str]:

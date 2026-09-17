@@ -79,6 +79,16 @@ MODES_HELP = (
     "(пустой Enter — пропустить) · prompt — набрать строку"
 )
 
+# Тег без единой `run:`-директивы: прогон пойдёт целиком auto. Молчать нельзя —
+# так выглядит устаревший сид (директивы появились в v1.124): `:run vapprole`
+# старого набора сам выполнял `$ROLE=custom-role` и падал на следующем шаге, а
+# мутирующий `vault write -force` ушёл бы без подтверждения. Поэтому в план
+# печатается замечание (`format_plan` показывает его как `note:`).
+NO_DIRECTIVES_NOTE = (
+    "в теге нет run:-директив — все шаги пойдут auto; мутирующий шаг "
+    "безопаснее пометить run:manual (см. :? run)"
+)
+
 
 class RunbookError(Exception):
     """Ошибка плана прогона: нет тега/файла, пустой или неверный YAML."""
@@ -183,6 +193,12 @@ def parse_directives(comment: str, base: RunSpec | None = None) -> tuple[RunSpec
     return spec, warnings
 
 
+def has_run_directive(comment: str | None) -> bool:
+    """Есть ли в начале комментария директива `run:…` (токены идут первыми)."""
+    tokens = (comment or "").strip().split()
+    return bool(tokens) and bool(RE_DIRECTIVE.match(tokens[0]))
+
+
 def steps_from_tag(db_file: str, tag: str) -> RunPlan:
     """Шаги тега по порядку tid; режимы — из `run:`-директив комментариев."""
     name = (tag or "").strip()
@@ -192,7 +208,9 @@ def steps_from_tag(db_file: str, tag: str) -> RunPlan:
             f"Runbook: tag '{name}' not found or has no live commands. "
             "`?tag` — библиотека, `:run` — usage."
         )
-    base, base_warnings = parse_directives(database.get_tag_comment(db_file, name))
+    tag_comment = database.get_tag_comment(db_file, name)
+    base, base_warnings = parse_directives(tag_comment)
+    directed = has_run_directive(tag_comment)
     plan = RunPlan(
         title=name,
         source=name,
@@ -200,7 +218,9 @@ def steps_from_tag(db_file: str, tag: str) -> RunPlan:
         warnings=list(base_warnings),
     )
     for row in rows:
-        spec, warnings = parse_directives(row["comment"] or "", base=base)
+        comment = row["comment"] or ""
+        spec, warnings = parse_directives(comment, base=base)
+        directed = directed or has_run_directive(comment)
         origin = f"{name}[{row['tid']}]"
         plan.warnings.extend(f"{origin}: {w}" for w in warnings)
         plan.steps.append(
@@ -213,6 +233,8 @@ def steps_from_tag(db_file: str, tag: str) -> RunPlan:
                 origin=origin,
             )
         )
+    if not directed:
+        plan.warnings.insert(0, NO_DIRECTIVES_NOTE)
     return plan
 
 
@@ -303,6 +325,8 @@ def build_plan(db_file: str, target: str, *, step: bool = False) -> RunPlan:
         for item in plan.steps:
             if item.mode == MODE_AUTO:
                 item.mode = MODE_MANUAL
+        # `--step` переводит всё в manual — замечание об auto-шагах больше не нужно.
+        plan.warnings = [w for w in plan.warnings if w != NO_DIRECTIVES_NOTE]
     return plan
 
 

@@ -4,9 +4,11 @@ Seed HashiCorp Vault handbook tags (see SEED_VAULT_COMMANDS.md).
 
 Playbooks are inspect-only: no seal, revoke, kv put/delete.
 `vapprole` logs in via AppRole (generates a short-lived secret-id and a token —
-credentials, not data changes) and is meant to be run as a chain: `:run vapprole`
-(`run:manual` waits for Enter where the web token, the role name and the
-secret-id issue are confirmed).
+credentials, not data changes) and is meant to be run as a chain: `:run vapprole`.
+`run:manual` stops where the human decides: steps 1 and 2 are **prefix lines to
+complete** (`$$VAULT_TOKEN=`, `$ROLE=` — the value is typed after `=`), and step 5
+confirms issuing a new secret-id. The other steps carry no `run:` directive and
+run themselves (`vault read`, `$$VAR=@key`).
 vvars does not echo VAULT_TOKEN (only set/unset).
 
 Run: python3 src/seed_vault.py --seed
@@ -87,7 +89,7 @@ SEED_TAGS = {
                 "$$VAULT_TOKEN=",
                 "run:manual токен из vault.website: вставьте значение после =",
             ),
-            ("$ROLE=custom-role", "run:manual имя AppRole (поправьте и Enter)"),
+            ("$ROLE=", "run:manual имя AppRole: допишите после = (напр. custom-role)"),
             (
                 "vault read auth/approle/role/$ROLE/role-id",
                 "run:auto role_id из табличного вывода",
@@ -119,7 +121,7 @@ def run_seed(db_file: str) -> int:
 def main() -> None:
     seed_cli(
         description="Seed IDvjPy_term DB with Vault handbook (SEED_VAULT_COMMANDS.md)",
-        seed_help="Replace vault/vvars/vstat/vkv (does not touch proc/kube/git)",
+        seed_help="Replace vault/vvars/vstat/vkv/vapprole (does not touch proc/kube/git)",
         seed_tags=SEED_TAGS,
         argv=sys.argv,
     )

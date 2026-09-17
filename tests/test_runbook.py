@@ -21,6 +21,7 @@ from runbook import (
     RunbookError,
     build_plan,
     format_plan,
+    has_run_directive,
     parse_directives,
     steps_from_tag,
     steps_from_yaml,
@@ -140,6 +141,52 @@ def test_tags_with_directives(tmp_path):
     assert tags_with_directives(db) == [("chain", 1)]
     assert "Runbook tags" in usage_text(db)
     assert "chain" in usage_text(db)
+
+
+def test_steps_from_tag_without_directives_notes_all_auto(tmp_path):
+    """Тег без `run:`-директив: все шаги auto — план об этом предупреждает.
+
+    Так выглядел `vapprole` старого сида (до v1.124): `:run vapprole` сам
+    выполнял `$ROLE=custom-role` и падал на следующем шаге, а мутирующий
+    `vault write -force` ушёл бы без подтверждения. Молчать нельзя —
+    предупреждение видно в плане (`format_plan` печатает его как `note:`).
+    """
+    db = _db(tmp_path)
+    _add(db, "echo one")
+    _add(db, "echo two")
+    plan = steps_from_tag(db, "chain")
+    assert [step.mode for step in plan.steps] == [MODE_AUTO, MODE_AUTO]
+    assert any("run:-директив" in warning for warning in plan.warnings)
+    assert "run:-директив" in format_plan(plan)
+    # `--step` переводит все шаги в manual — замечание теряет смысл.
+    stepped = build_plan(db, "chain", step=True)
+    assert [step.mode for step in stepped.steps] == [MODE_MANUAL, MODE_MANUAL]
+    assert not any("run:-директив" in warning for warning in stepped.warnings)
+
+
+def test_steps_from_tag_with_a_directive_has_no_note(tmp_path):
+    """Одной директивы достаточно (в т.ч. в комментарии тега) — замечания нет."""
+    db = _db(tmp_path)
+    _add(db, "echo one", comment="run:manual проверьте")
+    _add(db, "echo two")
+    assert not any(
+        "run:-директив" in warning for warning in steps_from_tag(db, "chain").warnings
+    )
+    db2 = str(tmp_path / "tagcomment.db")
+    database.init_db(db2)
+    _add(db2, "echo one")
+    database.set_tag_comment(db2, "chain", "run:pause=1.5 цепочка")
+    assert not any(
+        "run:-директив" in warning for warning in steps_from_tag(db2, "chain").warnings
+    )
+
+
+def test_has_run_directive_reads_only_the_first_token():
+    assert has_run_directive("run:manual шаг")
+    assert has_run_directive("  run:pause=2")
+    assert not has_run_directive("role_id из вывода run:manual")
+    assert not has_run_directive("")
+    assert not has_run_directive(None)
 
 
 def test_steps_from_yaml_modes_and_errors(tmp_path):

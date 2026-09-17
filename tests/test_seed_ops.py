@@ -292,9 +292,10 @@ def test_seed_vault_inspect_playbooks(tmp_path):
     # AppRole: токен → имя роли → role_id → secret_id → login (захват из вывода @key).
     # Режимы шагов для `:run vapprole` — директивами в комментариях.
     assert database.get_command_by_tid(db, "vapprole", 1)["command"] == "$$VAULT_TOKEN="
-    assert database.get_command_by_tid(db, "vapprole", 2)["command"] == (
-        "$ROLE=custom-role"
-    )
+    # Шаг 2 — тоже префикс, как и токен: имя роли человек **дописывает** после `=`.
+    # Регрессия: вымышленная `$ROLE=custom-role` выполнялась по Enter, и
+    # следующий шаг (`vault read .../role/$ROLE/role-id`) падал.
+    assert database.get_command_by_tid(db, "vapprole", 2)["command"] == "$ROLE="
     assert database.get_command_by_tid(db, "vapprole", 3)["command"] == (
         "vault read auth/approle/role/$ROLE/role-id"
     )

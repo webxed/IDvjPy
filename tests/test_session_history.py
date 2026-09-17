@@ -58,6 +58,35 @@ async def test_up_arrow_returns_colon_command(isolated_home):
         assert input_widget(app).value == ":stats"
 
 
+async def test_up_arrow_starts_from_the_line_just_typed(isolated_home):
+    """↑ идёт по хронологии: последняя набранная строка — первая.
+
+    Регрессия: `:screensaver`, затем обычная команда (`vault …`) — по ↑ первой
+    всплывала `:screensaver`. Строки, которых нет в файле (`:…`, `?…`, `$VAR=…`),
+    дописывались в пул **после всех** строк файла, а не в порядке набора.
+    """
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, "echo first-plain")
+        await wait_command_done(app, timeout=10)
+        await submit(pilot, ":stats")
+        await submit(pilot, "echo last-typed")
+        await wait_command_done(app, timeout=10)
+
+        await pilot.press("escape")
+        input_widget(app).value = ""
+        input_widget(app).cursor_position = 0
+        await pilot.press("up")
+        await pilot.pause()
+        assert input_widget(app).value == "echo last-typed"
+        await pilot.press("up")
+        await pilot.pause()
+        assert input_widget(app).value == ":stats"
+        await pilot.press("up")
+        await pilot.pause()
+        assert input_widget(app).value == "echo first-plain"
+
+
 async def test_secrets_never_enter_the_session_walk(isolated_home):
     """`$$…` не попадает ни в ленту (иначе значение всплывёт по ↑), ни в файл."""
     app = CommandRunner()
