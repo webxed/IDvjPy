@@ -96,9 +96,11 @@ async def test_setting_can_turn_queries_off(isolated_home):
         await submit(pilot, ":llm offline привет")
         await pilot.pause()
         assert ":llm offline привет" not in app._read_file_history()
-        # И строка снова подсказывается: исключать больше нечего.
+        # Список выключен — строка не «history-only»; но в подсказки `:`-строки не
+        # идут вовсе: у `:`-команд своя таблица (набор из ленты — только для ↑).
         app.session_history.append(":llm offline привет")
-        assert ":llm offline привет" in app.get_completion_candidates(":l")
+        assert app._is_history_only_query(":llm offline привет") is False
+        assert app.get_completion_candidates(":l") == []
 
 
 @pytest.mark.slow

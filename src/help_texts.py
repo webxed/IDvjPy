@@ -146,7 +146,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                 per cluster when set after login
   :kctx <cluster> - Log in (klogin <c> || kubectl config use-context <c>) and
                 show previously used variable sets of that cluster; with exactly
-                one saved set it is applied right away (nothing to pick from)
+                one saved set it is applied right away (nothing to pick from).
+                The login runs WITHOUT command_timeout (tsh goes to the network;
+                a hung login is visible in the block and stops with F4 / :kill)
   :kctx <cluster> N - Log in and apply saved set N
   :kctx N       - Apply set N from the last shown list (:kctx N sets vars only)
   :import file       - Insert commands from that JSON (new tids)
@@ -187,7 +189,10 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                Full calculator reference: type `:? calc`.
   > <cmd>    - Suspend TUI and run with a real TTY (htop, vim, ssh, less)
                After exit: import that shell's export/unset and $PWD; also :env
-  @ <cmd>    - Run without command_timeout (long non-TTY jobs; stdout captured)
+               Interactive input belongs here: a background command gets
+               /dev/null as stdin, so it cannot read the TUI keyboard/mouse
+  @ <cmd>    - Run without command_timeout (long non-TTY jobs; stdout captured,
+               stdin is /dev/null). Timeout message also points here and at `> cmd`
   Output     - ANSI colors from a command are drawn as colors (ansi_colors: true);
                cursor/OSC escapes and control chars are stripped, \r progress
                redraws collapse to the final line — like a real terminal. Plain
@@ -243,7 +248,10 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :? calc    - Calculator + ipcalc reference (syntax, units, percent, IPv4 subnets)
 
 [bold]Navigation[/bold]
-  ↑/↓        - Instance history file in input (typed text filters, case-insensitive); journal scroll when a block is focused
+  ↑/↓        - Input history walk: everything typed in this session (`:`-commands,
+               `?tags`, `!refs`, `#tags`, `$VAR=…` — except `$$secrets`), then the
+               filtered history_<instance>.txt file; typed text filters matches
+               (case-insensitive); journal scroll when a block is focused
   Tab        - Focus last journal block (from input), including :h / :?
   Click      - Focus a journal block without jumping to its start
                (needs terminal_mouse: true in settings.yml)
@@ -271,8 +279,10 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                In line-cursor mode Ctrl+V appends the current line instead
   Ctrl+D     - Clear the entire input line
   (k8s) kubectl get <res> <Tab> - live cluster resource names (k8s_completion: true)
-  (paths) ./ | / | ~/ <Tab> - file/dir hints; bare names only after file-taking
-               commands (cat/vim/grep/…) — file_completion: auto | paths | off
+  (paths) ./ | / | ~/ <Tab> - file/dir hints; bare names after file-taking
+               commands (cat/vim/…) and from the 2nd arg of grep/sed/awk/jq.
+               Computed per command segment: `cat f | grep ot` lists nothing.
+               file_completion: auto | paths | off
   (hist) ↺ history <Tab> - history lines matching what you typed, incl. `@`/`>`
                commands (history_completion: true; :h /text filters too)
   (JSON) Enter - Insert `jq 'path'` into input; also sets $JSON

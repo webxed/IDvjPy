@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.125
+# План тестирования IDvjPy_term v1.128
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1135,11 +1135,13 @@ F8                     # диалог метки: пусто — снять, Esc
 touch podfile.txt project.log
 cat po
 kubectl get po
+grep ot
+cat podfile.txt | grep ot
 cat ./po
 cd po
 ```
 
-**Ожидание:** при `file_completion: auto` (по умолчанию) `cat po` показывает файлы (`podfile.txt`), а `kubectl get po` — **не** листит cwd (нет мусора от `kubectl`/`docker`/`git`). Явные пути (`./po`, `/…`, `~/…`) и `cd`/`pushd` работают во всех режимах. `file_completion: paths` — только явные пути и `cd`/`pushd` (голое `cat po` — без файлов). `file_completion: off` — файловых подсказок нет. Неизвестное значение — как `auto`.
+**Ожидание:** при `file_completion: auto` (по умолчанию) `cat po` показывает файлы (`podfile.txt`), а `kubectl get po` — **не** листит cwd (нет мусора от `kubectl`/`docker`/`git`). У `grep`/`sed`/`awk`/`jq` первый аргумент — шаблон: `grep ot` файлов не листит, а `grep -n x po` — листит. Контекст считается по текущему сегменту строки: в `cat podfile.txt | grep ot` подсказки относятся к `grep`, а не к `cat`. Список, оставшийся от ранее набранного текста, скрывается сам (Esc жать не нужно), и Enter больше не затирает набранное исчезнувшим кандидатом. Явные пути (`./po`, `/…`, `~/…`) и `cd`/`pushd` работают во всех режимах. `file_completion: paths` — только явные пути и `cd`/`pushd` (голое `cat po` — без файлов). `file_completion: off` — файловых подсказок нет. Неизвестное значение — как `auto`.
 
 Автотест: `tests/test_file_completion.py`.
 
@@ -1171,6 +1173,33 @@ kub ec            # ↺ kubectl get pods (Tab/Enter — вставить, вто
 **Ожидание:** в `history_*.txt` (↑ / `:h`) попадают только вызовы команд из списка `history_queries` в `settings.yml` (по умолчанию `llm, cht, rg, md, run, send, send!`) — и с аргументами: `:llm` без вопроса не записывается. В подсказках эти строки не появляются, даже когда их достали из истории через ↑. `history_queries: []` (или `false`/`null`) — вызовы `:`-команд в историю не пишутся вообще; ключа нет — набор по умолчанию.
 
 Автотест: `tests/test_history_queries.py`.
+
+### Лента сессии (↑) против файла истории (v1.127)
+
+```
+:stats
+?demo
+$NS=team-a
+#saved echo saved-line
+!1
+:h 5                  # в файле только то, что разрешено; в ↑ — всё набранное
+```
+
+**Ожидание:** по ↑ во время сессии перелистывается **всё**, что вводилось — `:`-команды, `?теги`, `!ссылки`, `#теги`, `$VAR=…` (включая то, что в файл не пишется). В `history_<instance>.txt` попадает только разрешённое: обычные команды, `>`/`@`-строки, `# command`, хвост `history_queries`; `:stats`, `?demo`, `!1`, `#tag cmd`, `$VAR=…` в файле не появляются. Секреты (`$$VAR=…`) не запоминаются ни в ленте, ни в файле — значение не должно всплывать в строке. Повторы в ленте не дублируются; подсказки по `:`-строкам даёт своя таблица (`:`-строки в выпадающий список из ленты не попадают).
+
+Автотест: `tests/test_session_history.py`.
+
+### Таймаут, stdin и возврат терминала (v1.126)
+
+```
+read line; echo "rc=$? line=[$line]"   # фоновая команда видит EOF, а не клавиатуру
+sleep 15                              # больше command_timeout → сообщение и подсказка
+:kctx <cluster>                       # tsh kube login — без command_timeout
+```
+
+**Ожидание:** фоновая команда не получает терминал TUI: `stdin` — `/dev/null` (пайп `| cmd` по-прежнему передаёт данные), поэтому `read`/`tsh`/`kubectl`/`ssh` не «крадут» клавиши и мышь и не могут оставить терминал в чужом режиме — раньше зависший на вводе `tsh kube login` из `:kctx` делал ввод нерабочим, а заставку нельзя было закрыть. По таймауту группа убивается и подчищается (процесса не остаётся, хвост вывода попадает в блок), в блоке — `Process timed out …` и подсказка `@ cmd` (без таймаута) / `> cmd` (настоящий TTY). После убийства (таймаут или F4) приложение возвращает терминал в свой режим и снимает заставку. `:kctx <cluster>` запускает вход без `command_timeout`: `tsh` ходит в сеть и в 10 с легко не укладывается; висящий вход останавливают F4 / `:kill`.
+
+Автотест: `tests/test_command_stdio.py` (stdin-EOF, пайп, таймаут с убийством группы и подсказкой).
 
 ---
 
@@ -1387,7 +1416,7 @@ steps:
 
 ---
 
-**Версия документа**: v1.69
-**Версия приложения**: v1.125
+**Версия документа**: v1.72
+**Версия приложения**: v1.128
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

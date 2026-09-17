@@ -101,6 +101,8 @@ def _run_kubectl(resource: str, namespace: str | None, timeout: float) -> list[s
         args,
         capture_output=True,
         text=True,
+        # Клавиатура TUI не для детей: kubectl не должен читать stdin.
+        stdin=subprocess.DEVNULL,
         timeout=timeout,
     )
     if completed.returncode != 0:

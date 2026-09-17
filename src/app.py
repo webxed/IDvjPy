@@ -2201,7 +2201,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.125"
+    VERSION = "v1.128"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2274,7 +2274,10 @@ class CommandRunner(App):
     
     MSG_COPIED = "Copied to clipboard!"
     MSG_NO_FOCUS = "No command block focused."
-    MSG_TIMEOUT = "Process timed out ({sec}s). Killed."
+    MSG_TIMEOUT = (
+        "Process timed out ({sec}s). Killed. "
+        "Long jobs: `@ cmd` (no timeout) · interactive: `> cmd` (real TTY)."
+    )
     MSG_STOPPED = "Process stopped by user."
     KILL_GRACE = 0.8  # Секунды между SIGTERM и SIGKILL при остановке процесса
     
@@ -2369,17 +2372,27 @@ class CommandRunner(App):
     #   paths — только явные пути (`./`, `/`, `~/`) и cd/pushd;
     #   off   — выключено.
     FILE_COMPLETION_MODES = ("auto", "paths", "off")
-    # Команды, у которых второй токен с большой вероятностью — имя файла.
+    # Команды, у которых первый аргумент — файл/путь (голое имя = кандидат).
     FILE_ARG_COMMANDS = frozenset((
         "cat", "bat", "less", "more", "head", "tail",
         "vim", "vi", "nano", "emacs", "code", "micro", "subl",
-        "grep", "egrep", "fgrep", "rg", "ag",
-        "awk", "sed", "sort", "uniq", "cut", "tr", "tee", "xargs",
+        "sort", "uniq", "cut", "tr", "tee",
         "find", "ls", "tree", "du", "stat", "file", "wc", "diff", "patch",
         "cp", "mv", "rm", "mkdir", "rmdir", "ln", "chmod", "chown", "touch",
         "tar", "gzip", "gunzip", "zip", "unzip", "rsync", "scp",
-        "jq", "yq", "python", "python3", "node", "sh", "bash", "source",
+        "python", "python3", "node", "sh", "bash", "source",
     ))
+    # Команды, у которых первый аргумент — шаблон/выражение, а путь идёт позже
+    # (`grep pattern file`, `sed 's/a/b/' file`, `jq .f file`). Подсказки для
+    # первого не-флагового слова здесь — мусор из cwd (`grep ot`), поэтому
+    # `auto` даёт их только для второго и следующих аргументов.
+    PATTERN_ARG_COMMANDS = frozenset((
+        "grep", "egrep", "fgrep", "rg", "ag",
+        "awk", "sed", "jq", "yq", "xargs",
+    ))
+    # Разделители команд для эвристики файловых подсказок: контекст считается по
+    # текущему сегменту строки (`cat f | grep ot` — токен `ot` из grep, а не cat).
+    RE_CMD_SEPARATORS = re.compile(r"\|\||&&|[|;&\n]")
     FILE_LLM_PROVIDERS = "llm_providers.yml"
     FILE_KCTX = "kctx.json"  # Кластерный журнал kubectl-стека (:kctx, v1.57)
     DEFAULT_THEME = "textual-dark"
@@ -2539,6 +2552,16 @@ class CommandRunner(App):
             or "\\" in token
         )
 
+    def _current_command_segment(self, text: str) -> str:
+        """Текущий сегмент строки — после последнего shell-разделителя.
+
+        Файловые подсказки относятся к текущей команде, а не к началу строки:
+        в `cat f | grep ot` токен `ot` принадлежит `grep`, и подсказки из cwd
+        по `cat` — чужие (набор «другого текста» оставлял список висящим).
+        """
+        parts = self.RE_CMD_SEPARATORS.split(text or "")
+        return parts[-1].strip() if parts else ""
+
     def _is_path_context(self, text: str) -> bool:
         """
         Path-контекст: последний токен похож на путь, либо аргумент cd/pushd.
@@ -2548,7 +2571,9 @@ class CommandRunner(App):
         `auto` дополнительно считает путём голое слово после команд, которые
         работают с файлами (FILE_ARG_COMMANDS) — `cat te`. Для подкомандных CLI
         (`kubectl get po`, `docker co`, `git ch`) файлы не листятся: иначе
-        подсказки забиваются содержимым cwd.
+        подсказки забиваются содержимым cwd. У команд, где первый аргумент —
+        шаблон (PATTERN_ARG_COMMANDS), голое слово подсказывается только со
+        второго аргумента (`grep -n x pro`, но не `grep ot`).
         `paths` — только явные пути и cd/pushd (голое слово файлом не считается).
         `:h /…` и `:o /…` — поиск по истории, не листинг `/`.
         """
@@ -2558,8 +2583,9 @@ class CommandRunner(App):
         if not stripped:
             return False
 
-        parts = stripped.split()
-        if parts and parts[0] in self.COLON_NO_PATH_ARGS:
+        segment = self._current_command_segment(stripped)
+        segment_words = segment.split()
+        if segment_words and segment_words[0] in self.COLON_NO_PATH_ARGS:
             return False
 
         token = self._extract_path_token(text)
@@ -2568,11 +2594,20 @@ class CommandRunner(App):
         if self._last_token_is_path_like(token):
             return True
 
-        if len(parts) >= 2 and parts[0] in ("cd", "pushd"):
+        if len(segment_words) < 2:
+            return False
+        command = segment_words[0]
+        # cd/pushd — аргумент-путь в любом режиме (`paths` тоже).
+        if command in ("cd", "pushd"):
             return True
-        # Голое имя файла после команды — только в `auto` и только у FILE_ARG_COMMANDS.
-        if self.file_completion == "auto" and len(parts) >= 2 and token and not token.startswith("-"):
-            return parts[0] in self.FILE_ARG_COMMANDS
+        if self.file_completion != "auto" or not token or token.startswith("-"):
+            return False
+        if command in self.FILE_ARG_COMMANDS:
+            return True
+        if command in self.PATTERN_ARG_COMMANDS:
+            # Первый не-флаговый аргумент — шаблон/выражение, не путь.
+            args = [word for word in segment_words[1:] if not word.startswith("-")]
+            return len(args) >= 2
         return False
 
     def _get_file_completion_candidates(self, text: str) -> list[str]:
@@ -3166,9 +3201,13 @@ class CommandRunner(App):
             pass
         # Записи `:llm …` / `:run …` лежат в history_*.txt для ↑/`:h`, но в
         # подсказках не предлагаются (это запросы, а не команды для повтора).
+        # Строки с `:` — вообще не сюда: у `:`-команд своя таблица подсказок.
         for cmd in self.session_history:
-            if cmd.strip().startswith(prefix) and not self._is_history_only_query(cmd.strip()):
-                candidates.append(cmd.strip())
+            line = cmd.strip()
+            if not line.startswith(prefix) or line.startswith(self.PREFIX_CMD):
+                continue
+            if not self._is_history_only_query(line):
+                candidates.append(line)
         return sorted(set(candidates))[:20]
 
     def on_key(self, event: events.Key) -> None:
@@ -4675,6 +4714,9 @@ class CommandRunner(App):
                 if not user_input.startswith(self.PREFIX_SECRET):
                     self._playbook_log.append(user_input)
 
+        # Лента сессии (↑) — всё набранное; файл истории — только то, что
+        # разрешает `history_queries` и фильтр `log_to_history`.
+        self._remember_session_line(user_input)
         self.log_to_history(user_input)
         if self._is_history_comment(user_input):
             self._park_history_comment(user_input)
@@ -4835,6 +4877,26 @@ class CommandRunner(App):
             return False
         return parts[0] in self.history_queries and len(parts) > 1 and bool(parts[1].strip())
 
+    def _remember_session_line(self, text: str) -> None:
+        """Запомнить набранную строку для перелистывания по ↑ (лента сессии).
+
+        Два хранилища — две роли: в ленту сессии идёт **всё**, что человек ввёл
+        за эту сессию — `:`-команды, `?тег`, `!ссылка`, `#тег`, `$VAR=…`: ↑ — это
+        «что я вообще набирал». Файл `history_<instance>.txt` остаётся
+        фильтрованным (`log_to_history`: список `history_queries`, сохранения
+        `#tag`, подстановки).
+
+        Не запоминаем: секреты `$$…` — их значение не должно всплывать по ↑ — и
+        пайпы `|…` (их кладёт `handle_pipe_command` в развёрнутом виде: строку
+        `|@метка cmd` без буфера не воспроизвести). Повторы не дублируются.
+        """
+        line = (text or "").strip()
+        if not line or line.startswith((self.PREFIX_SECRET, self.PREFIX_PIPE)):
+            return
+        if line not in self.session_history:
+            self.session_history.append(line)
+        self.session_history_pos = len(self.session_history)
+
     @staticmethod
     def _is_history_comment(text: str) -> bool:
         """`# command` — не тег и не shell, только запись в историю."""
@@ -4906,7 +4968,7 @@ class CommandRunner(App):
             if rest.strip().lower() == "compact":
                 self._handle_history_compact()
             elif rest.startswith("/") and rest[1:].strip():
-                self._show_history_search(rest[1:])
+                self._show_history_search(rest[1:], exclude=user_input)
             else:
                 try:
                     num_arg = parts[1] if len(parts) > 1 and not parts[1].startswith("/") else None
@@ -6638,6 +6700,7 @@ class CommandRunner(App):
                     ["kubectl", "get", "namespace", namespace, "-o", "json"],
                     capture_output=True,
                     text=True,
+                    stdin=subprocess.DEVNULL,
                     timeout=30
                 )
                 if result.returncode == 0:
@@ -7080,8 +7143,12 @@ class CommandRunner(App):
         """
         self._current_kube_cluster = cluster
         # Вход выполняется как обычная команда (блок в журнале), но в историю
-        # не пишется: строку набрал не пользователь, а :kctx.
-        self.handle_normal_command(self._kctx_login_line(cluster), record_history=False)
+        # не пишется: строку набрал не пользователь, а :kctx. Без command_timeout:
+        # `tsh kube login` ходит в сеть и легко не укладывается в 10 с; висит —
+        # видно в блоке, останавливается F4 / :kill.
+        self.handle_normal_command(
+            self._kctx_login_line(cluster), record_history=False, no_timeout=True
+        )
         self._kctx_list_cluster = cluster
         if index is None and len(snapshots_for_cluster(self._kctx_load_items(), cluster)) == 1:
             self._kctx_apply_index(1, auto_single=True)
@@ -8259,8 +8326,12 @@ class CommandRunner(App):
         self._history_walk_index = len(matches)
         return True
 
-    def _show_history_search(self, pattern: str) -> None:
-        """`:h /text` — совпадения по всему history.txt, свежие сверху."""
+    def _show_history_search(self, pattern: str, *, exclude: str = "") -> None:
+        """`:h /text` — совпадения по всему history.txt, свежие сверху.
+
+        `exclude` — строка текущего вызова (`:h /text`): лента сессии помнит всё
+        набранное, и без этого поиск находил бы самого себя.
+        """
         needle = (pattern or "").strip()
         if not needle:
             self.add_block(InfoBlock("Usage: :h /text"))
@@ -8268,7 +8339,10 @@ class CommandRunner(App):
         if not os.path.exists(self.FILE_HISTORY):
             self.add_block(InfoBlock(f"{self.FILE_HISTORY} not found."))
             return
-        matches = self._unique_history_matches(needle)
+        skip = (exclude or "").strip()
+        matches = [
+            line for line in self._unique_history_matches(needle) if line.strip() != skip
+        ]
         if not matches:
             self.add_block(InfoBlock(f"{self.FILE_HISTORY}: no matches for /{needle}"))
             return
@@ -8392,7 +8466,12 @@ class CommandRunner(App):
                     executable="/bin/bash",
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    stdin=subprocess.PIPE if stdin_data is not None else None,
+                    # stdin=DEVNULL, а не наследование терминала: фоновая команда
+                    # не должна читать клавиатуру/мышь TUI (`read`, tsh, kubectl,
+                    # ssh, cat без аргументов). Иначе ввод «пропадает»: клавиши
+                    # уходят чужому процессу, приложение выглядит зависшим,
+                    # а заставка не закрывается. Интерактив — `> cmd` (TTY).
+                    stdin=subprocess.PIPE if stdin_data is not None else subprocess.DEVNULL,
                     start_new_session=True,
                 )
                 with self._proc_lock:
@@ -8407,10 +8486,18 @@ class CommandRunner(App):
                     raw_stderr = stderr.decode(self.ENCODING, "replace").strip()
                     return_code = proc.returncode
                 except subprocess.TimeoutExpired:
-                    # communicate убил сам shell; добиваем группу (внуки могут жить).
+                    # communicate не убивает процесс при таймауте — добиваем группу
+                    # (внуки могли остаться) и сами собираем хвост вывода: иначе
+                    # сироты держат каналы, а зомби живёт до сборки мусора.
                     self._signal_proc_group(proc, signal.SIGKILL)
-                    raw_stderr = self.MSG_TIMEOUT.format(sec=self.COMMAND_TIMEOUT)
+                    tail_out, tail_err = self._drain_after_kill(proc)
+                    raw_stdout = tail_out
+                    timeout_note = self.MSG_TIMEOUT.format(sec=self.COMMAND_TIMEOUT)
+                    raw_stderr = f"{tail_err}\n{timeout_note}" if tail_err else timeout_note
                     return_code = 124
+                    # Команда могла сама перевести терминал в свой режим и не
+                    # вернуть его (убили сигналом) — возвращаем драйвер TUI.
+                    self.call_from_thread(self._restore_terminal_mode)
             except Exception as e:
                 raw_stderr = str(e)
                 return_code = -1
@@ -8467,6 +8554,10 @@ class CommandRunner(App):
         if len(self._output_history) > self._OUTPUT_HISTORY_CAP:
             del self._output_history[: len(self._output_history) - self._OUTPUT_HISTORY_CAP]
         block.update_content(raw_stdout, raw_stderr, return_code)
+        # Остановленный пользователем процесс (F4 / :kill) мог оставить
+        # терминал в своём режиме — возвращаем драйвер TUI в рабочее состояние.
+        if getattr(block, "_stop_requested", False):
+            self._restore_terminal_mode()
         # Опечатка (command not found): убрать строку из истории, чтобы ↑/`:h`
         # не подсовывали заведомо битую команду. Вывод в журнале остаётся.
         if forget_history:
@@ -8510,6 +8601,52 @@ class CommandRunner(App):
             os.killpg(pgid, sig)
         except (ProcessLookupError, PermissionError):
             pass
+
+    def _restore_terminal_mode(self) -> None:
+        """Вернуть терминал в режим приложения после убийства чужого процесса.
+
+        Остановленная сигналом программа (tsh, ssh, sudo, less) могла сама
+        переключить терминал — raw-режим, `VMIN=0`, выключенный echo — и не
+        восстановить его: клавиши и мышь «пропадают», заставка не закрывается,
+        приложение выглядит зависшим. Пустой `suspend()` — документированный
+        способ перевести драйвер туда и обратно (`stop_application_mode` →
+        `start_application_mode`); заодно он снимает заставку и считает простой
+        заново (см. `suspend`). Терминал без поддержки паузы — no-op.
+        """
+        try:
+            with self.suspend():
+                pass
+        except Exception:
+            pass
+
+    def _drain_after_kill(
+        self, proc: subprocess.Popen, grace: float = 0.5
+    ) -> tuple[str, str]:
+        """Собрать остатки вывода после SIGKILL и закрыть каналы процесса.
+
+        Внуки могли унаследовать pipe и держать его открытым, поэтому долго не
+        ждём: закрываем свои концы сами. Выводим хвост (обычно и есть причина
+        сбоя), процесс дожидаем — иначе он остаётся зомби.
+        """
+        raw_out = raw_err = ""
+        try:
+            out, err = proc.communicate(timeout=grace)
+            raw_out = out.decode(self.ENCODING, "replace").strip()
+            raw_err = err.decode(self.ENCODING, "replace").strip()
+        except (subprocess.TimeoutExpired, ValueError, OSError):
+            pass
+        finally:
+            for stream in (proc.stdin, proc.stdout, proc.stderr):
+                try:
+                    if stream is not None:
+                        stream.close()
+                except OSError:
+                    pass
+            try:
+                proc.wait(timeout=grace)
+            except (subprocess.TimeoutExpired, OSError):
+                pass
+        return raw_out, raw_err
 
     def _terminate_proc_group(self, proc: subprocess.Popen) -> None:
         """SIGTERM группе; если через KILL_GRACE сек ещё жива — SIGKILL (в потоке)."""
@@ -9395,6 +9532,9 @@ class CommandRunner(App):
                 executable="/bin/bash",
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                # Как и в фоновом запуске: команда :watch не должна читать
+                # клавиатуру TUI (иначе ввод уходит ей, а не приложению).
+                stdin=subprocess.DEVNULL,
                 start_new_session=True,
             )
             with self._proc_lock:

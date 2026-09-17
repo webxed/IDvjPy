@@ -47,9 +47,15 @@ async def test_kctx_lists_clusters(isolated_home):
 async def test_kctx_open_cluster_shows_snapshots_and_apply(isolated_home, monkeypatch):
     app = CommandRunner()
     recorder: list[str] = []
+    calls: list[dict] = []
+
+    def fake_run(cmd, stdin_data=None, *, no_timeout=False):
+        recorder.append(cmd)
+        calls.append({"cmd": cmd, "no_timeout": no_timeout})
+
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause()
-        monkeypatch.setattr(app, "run_command", lambda cmd, stdin_data=None, *, no_timeout=False: recorder.append(cmd))
+        monkeypatch.setattr(app, "run_command", fake_run)
         add_snapshot(app.FILE_KCTX, "prod", {"NS": "team-a", "POD": "api-7f"}, now=100.0)
         add_snapshot(app.FILE_KCTX, "prod", {"NS": "legacy"}, now=200.0)
 
@@ -58,6 +64,9 @@ async def test_kctx_open_cluster_shows_snapshots_and_apply(isolated_home, monkey
         assert "NS=legacy" in texts
         assert "NS=team-a POD=api-7f" in texts
         assert recorder[-1] == "klogin prod || kubectl config use-context prod"
+        # Вход в кластер — без command_timeout: tsh ходит в сеть и легко
+        # не укладывается в 10 с, а висящий вход останавливают F4 / :kill.
+        assert calls[-1]["no_timeout"] is True
 
         await submit(pilot, ":kctx 1")  # свежайший снимок prod
         assert app.local_env.get("NS") == "legacy"

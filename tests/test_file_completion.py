@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from app import CommandRunner
+from tests.conftest import input_widget, type_keys
 
 
 async def test_auto_skips_cwd_files_for_subcommand_clis(isolated_home):
@@ -56,6 +57,73 @@ async def test_off_disables_file_completion(isolated_home):
         assert app.get_completion_candidates("cat ./po") == []
         assert app.get_completion_candidates("cd po") == []
         assert app.get_completion_candidates("cat po") == []
+
+
+def _cwd_files(isolated_home) -> None:
+    (isolated_home / "tfile.txt").write_text("x", encoding="utf-8")
+    (isolated_home / "other.txt").write_text("x", encoding="utf-8")
+    (isolated_home / "subdir").mkdir()
+
+
+async def test_auto_uses_the_current_command_segment(isolated_home):
+    """Контекст считается по текущему сегменту: после `|`/`&&`/`;` — своя команда.
+
+    Симптом: `cat f | grep ot` давало подсказки из cwd по `cat` — чужой токен
+    оставлял висящий список, а Enter затирал набранное подсказкой.
+    """
+    _cwd_files(isolated_home)
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        # Чужая команда: у `grep` первый аргумент — шаблон (см. ниже), файлов нет.
+        assert "other.txt" not in app.get_completion_candidates("cat tfile.txt | grep ot")
+        assert "other.txt" not in app.get_completion_candidates("ls ot && echo ec")
+        assert "other.txt" not in app.get_completion_candidates("cat ot; vim ec")
+        # А внутри своего сегмента подсказки остаются.
+        assert "other.txt" in app.get_completion_candidates("cd subdir && ls ot")
+        assert "other.txt" in app.get_completion_candidates("echo x; cat ot")
+
+
+async def test_pattern_commands_hint_only_after_their_pattern(isolated_home):
+    """У `grep`/`sed`/`jq`/`awk` первый аргумент — шаблон, а не файл."""
+    _cwd_files(isolated_home)
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        # Первый аргумент — шаблон: файловые подсказки тут только мешали бы.
+        assert app.get_completion_candidates("grep ot") == []
+        assert app.get_completion_candidates("rg ot") == []
+        # Со второго аргумента путь идёт — подсказки нужны.
+        assert "other.txt" in app.get_completion_candidates("grep -n x ot")
+        assert "other.txt" in app.get_completion_candidates("sed 's/a/b/' ot")
+        assert "other.txt" in app.get_completion_candidates("jq .f ot")
+        assert "other.txt" in app.get_completion_candidates("awk '{print $1}' ot")
+        # У файл-первых команд — как раньше, на любом аргументе.
+        assert "other.txt" in app.get_completion_candidates("cat ot")
+        assert "other.txt" in app.get_completion_candidates("ls -la ot")
+
+
+async def test_no_stale_hints_while_typing_another_command(isolated_home):
+    """Покадрово: набрал чужую команду — список подсказок закрылся, Enter запускает."""
+    _cwd_files(isolated_home)
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        # Подсказки для аргумента `cat` — законные (на них и наткнулся пользователь).
+        await type_keys(pilot, "cat tfile.txt")
+        await pilot.pause()
+        assert app._completion_list.is_visible()
+        # А дальше в строке чужая команда: список не должен висеть ни на одном символе.
+        for char in " | grep ot":
+            await type_keys(pilot, char)
+            await pilot.pause()
+            assert not app._completion_list.is_visible(), (
+                f"подсказки висят на {input_widget(app).value!r}"
+            )
+        await pilot.press("enter")
+        await pilot.pause()
+        # Enter выполнил строку, а не подставил подсказку (ввод очищен).
+        assert input_widget(app).value == ""
 
 
 async def test_settings_file_completion_mode(isolated_home):

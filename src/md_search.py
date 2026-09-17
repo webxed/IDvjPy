@@ -110,6 +110,7 @@ def _search_rg(pattern: str, base: str, glob: str, limit: int) -> MdSearchResult
             text=True,
             encoding="utf-8",
             errors="replace",
+            stdin=subprocess.DEVNULL,
             timeout=RG_TIMEOUT,
             check=False,
         )

@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.125**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.128**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.69 (app v1.125) |
+| `test_cmd.md` | Manual plan v1.72 (app v1.128) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.125 |
+| `src/app.py` | TUI (`CommandRunner`), v1.128 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -217,6 +217,21 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.128
+
+- **Файловая подсказка больше не «прилипает» и не затирает набранное (Enter).** Симптом: набираешь `cat f`, список файлов открывается — потом продолжаешь строку другим текстом (`cat f | grep ot`), список **остаётся висеть**, а Enter подставляет в него выбранного кандидата и стирает набранный текст; убрать — только Esc. Причина: `_is_path_context` смотрела на **первое слово всей строки** (`cat` ∈ `FILE_ARG_COMMANDS`), поэтому любой хвост (`grep ot`) считался файловым аргументом `cat`, а по нему в cwd находились совпадения (`project.log` на `ot`) — список не пустел и перехватывал Enter.
+  Теперь контекст считается по **текущему сегменту** строки (`_current_command_segment` — после `||`/`&&`/`|`/`;`): в `cat f | grep ot` токен принадлежит `grep`, подсказки от `cat` больше не примешиваются. Заодно команды, у которых **первый аргумент — шаблон** (`grep`/`egrep`/`fgrep`/`rg`/`ag`/`awk`/`sed`/`jq`/`yq`/`xargs`), вынесены из `FILE_ARG_COMMANDS` в `PATTERN_ARG_COMMANDS`: `auto` даёт им файлы только со второго не-флагового аргумента (`grep ot` — без листинга cwd, `grep -n x project.log` — с листингом). `cd`/`pushd` по-прежнему работают в любом режиме.
+  Тесты: `tests/test_file_completion.py` (+4: `_cwd_files`, контекст по текущему сегменту, шаблонные команды подсказывают только со второго аргумента, покадровый сценарий «список виден на `cat tfile.txt` → скрыт при наборе ` | grep ot` → Enter не портит ввод»).
+
+## v1.127
+
+- **Лента сессии (↑) и файл истории окончательно разведены.** По ↑ во время сессии теперь перелистывается **всё**, что человек вводил, а в `history_<instance>.txt` попадает только разрешённое. Раньше `session_history` наполняли только обычные команды (плюс `>`/пайпы/`# command`/калькулятор), поэтому `:stats`, `?vault`, `!deploy[1]`, `#tag cmd`, `$NS=team-a` по ↑ не возвращались — их не было ни в ленте, ни (по фильтру `log_to_history`) в файле. Теперь `on_input_submitted` помнит набранную строку одной точкой входа (`_remember_session_line`): `:`-команды, `?теги`, `!ссылки`, `#теги`, `$VAR=…`, обычные команды и `@`/`>`-строки.
+  Что попадает в файл, по-прежнему решает `log_to_history` (`history_queries`, сохранения `#tag` и подстановки — мимо). Исключения ленты: секреты `$$…` (значение не должно всплывать в строке по ↑) и пайпы `|…` — их кладёт `handle_pipe_command` в развёрнутом виде (`|@метка cmd` без буфера не воспроизвести). Повторы не дублируются (как и раньше), позиция ↑ сбрасывается на конец. Выпадающий список подсказок `:`-строки из ленты не показывает: у `:`-команд своя таблица (`get_completion_candidates` пропускает `:…`), обычные строки из ленты подсказываются как раньше. Тесты: `tests/test_session_history.py` (5: все виды строк в ленте и ни одной лишней в файле, `:stats` возвращается по ↑, секреты не запоминаются, дедуп повторов, `:`-строки не в подсказках). Заодно `:h /text` не находит сам себя (`_show_history_search(exclude=…)`): лента помнит набранное, но поиск не должен показывать собственный вызов (прежние `:h /…` в результатах остаются как обычная история).
+
+## v1.126
+
+- **Фоновая команда больше не может «украсть» клавиатуру (и починить это не приходилось kill'ом).** Симптом: `:kctx <cluster>` запускал `tsh kube login`, тот висел на интерактиве, команда закрылась по таймауту — а приложение «перестало отвечать»: клавиши и мышь не работали, заставка не закрывалась, оставалось только `kill`. Причина: `Popen(..., stdin=None)` **наследовал терминал TUI**, поэтому команда читала клавиши/мышь напрямую (её ввод шёл ей, а не приложению) и могла перевести терминал в свой режим (raw, `VMIN=0`, без echo) и не вернуть его, будучи убитой сигналом. Теперь фоновая команда получает `stdin=subprocess.DEVNULL` (`_execute_in_thread`, `_capture_watch_tick`, а также вспомогательные запуски в `_describe_namespace`, `src/k8s_complete.py`, `src/md_search.py`, `src/ingress_analyzer.py`): интерактивные `read`/`tsh`/`kubectl`/`ssh` видят EOF (пайп `| cmd` по-прежнему передаёт данные как раньше) — интерактив остаётся за `> cmd`. Таймаут стал чистым: по `TimeoutExpired` группа добивается SIGKILL, хвост вывода собирается, каналы закрываются и процесс дожидается (`_drain_after_kill` — иначе сироты держали pipe, а зомби жил до сборки мусора), а после любого убийства (таймаут или F4 / `:kill`) приложение возвращает терминал в свой режим (`_restore_terminal_mode` — пустой `suspend()`: `stop/start_application_mode` + снятие заставки и сброс простоя). Сообщение таймаута теперь с подсказкой: `Process timed out (Ns). Killed. Long jobs: `@ cmd` (no timeout) · interactive: `> cmd` (real TTY).` Заодно `:kctx <cluster>` запускает вход **без** `command_timeout`: `tsh kube login` ходит в сеть и в 10 с легко не укладывается, висящий вход видно в блоке и останавливают F4 / `:kill`. Тесты: `tests/test_command_stdio.py` (3: `read` видит EOF вместо клавиатуры, пайп всё ещё доходит до stdin, таймаут убивает группу — процесса больше нет, в stderr есть подсказка `@ cmd` / `> cmd`), `tests/test_kctx_cmd.py` (+проверка `no_timeout=True` у строки входа).
 
 ## v1.125
 

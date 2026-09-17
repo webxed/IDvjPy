@@ -142,6 +142,8 @@ class IngressAnalyzer:
                 cmd,
                 capture_output=True,
                 text=True,
+                # Клавиатура TUI не для детей: kubectl не читает stdin.
+                stdin=subprocess.DEVNULL,
                 timeout=self.timeout
             )
             return result.returncode, result.stdout, result.stderr
@@ -427,6 +429,7 @@ class IngressAnalyzer:
                      "cat", config_path],
                     capture_output=True,
                     text=True,
+                    stdin=subprocess.DEVNULL,
                     timeout=self.timeout
                 )
 
