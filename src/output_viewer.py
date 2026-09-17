@@ -7,7 +7,10 @@
 
 Поиск по тексту: `/` открывает поле ввода, Enter — искать вперёд от текущей
 позиции, `n` / `N` — следующее / предыдущее совпадение (с заворотом), Esc в поле
-закрывает поиск. Найденная строка подсвечивается. `q` / Esc — закрыть экран.
+закрывает поиск. Строка совпадения подсвечивается **целиком** — фоном `--hit`
+(плюс bold), а не только найденными символами. `f` оставляет на экране только
+строки с совпадениями (как фильтр в JSON-вьюере), повторный `f` или Esc
+возвращают весь вывод. `q` / Esc — закрыть экран.
 `y` копирует путь исходного файла (`source_path`, raw-вид `:md`) в буфер.
 
 Строки берутся из `raw_stdout` (настоящие, как F3), секреты не маскируются —
@@ -33,7 +36,11 @@ MAX_LINE_WIDTH = 4096
 
 
 class OutputView(ScrollView):
-    """Line-API виджет: рисует только видимые строки списка."""
+    """Line-API виджет: рисует только видимые строки списка.
+
+    Список строк — либо весь вывод, либо только совпадения поиска
+    (`set_filter`; клавиша `f` в `OutputViewerScreen`).
+    """
 
     COMPONENT_CLASSES = {"outputview--even", "outputview--odd", "outputview--hit"}
 
@@ -58,16 +65,40 @@ class OutputView(ScrollView):
 
     def __init__(self, lines: Sequence[str], **kwargs) -> None:
         super().__init__(**kwargs)
+        self._all_lines: list[str] = list(lines)
         self._lines: list[str] = list(lines)
+        # Исходные номера видимых строк — только когда включён фильтр.
+        self._rows: list[int] = []
+        self._filtered = False
         self._pattern = ""
         self._match_row: int | None = None
-        longest = max((len(line) for line in self._lines), default=1)
+        longest = max((len(line) for line in self._all_lines), default=1)
         self._max_width = max(1, min(MAX_LINE_WIDTH, longest))
         self.virtual_size = Size(self._max_width, len(self._lines))
 
     @property
     def line_count(self) -> int:
+        """Сколько строк в выводе — всего, независимо от фильтра."""
+        return len(self._all_lines)
+
+    @property
+    def visible_count(self) -> int:
+        """Сколько строк показано сейчас (весь вывод или отобранные)."""
         return len(self._lines)
+
+    @property
+    def filtered(self) -> bool:
+        """Включён ли режим «только совпадения»."""
+        return self._filtered
+
+    def source_line(self, row: int) -> int:
+        """1-based номер строки вывода для видимой строки `row`."""
+        return self._source_index(row) + 1
+
+    def _source_index(self, row: int) -> int:
+        if self._filtered and 0 <= row < len(self._rows):
+            return self._rows[row]
+        return row
 
     @property
     def match_row(self) -> int | None:
@@ -80,10 +111,45 @@ class OutputView(ScrollView):
         return self._pattern
 
     def set_pattern(self, pattern: str) -> None:
-        """Задать образец поиска (сбрасывает подсветку совпадения)."""
+        """Задать образец поиска (сбрасывает совпадение и фильтр «только совпадения»)."""
         self._pattern = pattern or ""
         self._match_row = None
+        if self._filtered:
+            self.set_filter(False)
         self.refresh()
+
+    def set_filter(self, enabled: bool) -> int:
+        """Оставить только строки с совпадениями (`enabled`) или весь вывод.
+
+        Возвращает число видимых строк. Если совпадений нет, фильтр не
+        включается — пустой экран без объяснения хуже полного списка (вызов
+        остаётся за вызывающим: он говорит «No match»). Индекс совпадения
+        пересчитывается так, чтобы не потерять место при включении/выключении.
+        """
+        pattern = self._pattern.casefold()
+        current = None if self._match_row is None else self._source_index(self._match_row)
+        rows = (
+            [i for i, line in enumerate(self._all_lines) if pattern in line.casefold()]
+            if enabled and pattern
+            else []
+        )
+        if enabled and not rows:
+            if self._filtered:
+                self.set_filter(False)
+            return 0
+        self._filtered = bool(enabled)
+        self._rows = rows
+        self._lines = (
+            [self._all_lines[i] for i in rows] if enabled else list(self._all_lines)
+        )
+        self.virtual_size = Size(self._max_width, len(self._lines))
+        if enabled:
+            self._match_row = rows.index(current) if current in rows else 0
+        else:
+            self._match_row = current
+        self.scroll_to(y=0, animate=False)
+        self.refresh()
+        return len(self._lines)
 
     def find(self, from_row: int, direction: int = 1) -> int | None:
         """Найти совпадение (регистр не важен), начиная со следующей строки.
@@ -115,19 +181,24 @@ class OutputView(ScrollView):
         text = self._lines[row][:MAX_LINE_WIDTH]
         if len(text) < scroll_x + width:
             text = text.ljust(scroll_x + width)
-        name = "outputview--even" if row % 2 == 0 else "outputview--odd"
-        strip = Strip([Segment(text, self.get_component_rich_style(name))])
-        strip = strip.crop(scroll_x, scroll_x + width)
+        # Стиль строки выбираем сразу, а не через `Strip.apply_style`: в Rich/Textual
+        # он сливается как `применяемый + стиль сегмента`, поэтому цвета сегмента
+        # (фон чётной/нечётной строки) побеждали бы фон совпадения и от `--hit`
+        # оставался бы только `bold` — т. е. подсветка строки не появлялась.
         if row == self._match_row:
-            strip = strip.apply_style(self.get_component_rich_style("outputview--hit"))
-        return strip
+            name = "outputview--hit"
+        else:
+            name = "outputview--even" if row % 2 == 0 else "outputview--odd"
+        strip = Strip([Segment(text, self.get_component_rich_style(name))])
+        return strip.crop(scroll_x, scroll_x + width)
 
 
 class OutputViewerScreen(ModalScreen[None]):
     """Модальный экран: полный вывод блока с прокруткой и поиском.
 
-    Esc / q — закрыть (если открыт поиск — сначала закрыть его). `/` — поиск,
-    Enter — искать вперёд, `n` / `N` — следующее / предыдущее совпадение.
+    Esc / q — закрыть (сначала — поле поиска, затем фильтр «только совпадения»),
+    `/` — поиск, Enter — искать вперёд, `n` / `N` — следующее / предыдущее
+    совпадение, `f` — оставить только строки с совпадениями.
     """
 
     _modal = True
@@ -141,6 +212,7 @@ class OutputViewerScreen(ModalScreen[None]):
         # `shift+n` — для терминалов с modifyOtherKeys, где модификатор явный.
         Binding("N", "find_prev", "Prev"),
         Binding("shift+n", "find_prev", "Prev", show=False),
+        Binding("f", "toggle_filter", "Filter"),
         Binding("y", "copy_path", "Copy path", show=False),
     ]
 
@@ -175,7 +247,10 @@ class OutputViewerScreen(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
         yield Input(
-            placeholder="text  ·  Enter — search · n / N — next / prev · Esc — close field",
+            placeholder=(
+                "text  ·  Enter — search · n / N — next / prev"
+                "  ·  f — matches only · Esc — close field"
+            ),
             id="output-search",
         )
         yield OutputView(self._lines, id="output-view")
@@ -226,9 +301,14 @@ class OutputViewerScreen(ModalScreen[None]):
             self._hide_search()
             return
         view = self._view()
+        was_filtered = view.filtered
         if pattern != view.pattern:
             # Новый образец — начинаем поиск заново; тот же — идём от совпадения.
             view.set_pattern(pattern)
+        if was_filtered:
+            # Фильтр перестраивается под образец; если совпадений нет, `set_filter`
+            # возвращает полный список — тогда ниже скажем «No match».
+            view.set_filter(True)
         current = view.match_row
         from_row = current if current is not None else int(view.scroll_offset.y) - 1
         row = view.find(from_row, direction)
@@ -242,7 +322,13 @@ class OutputViewerScreen(ModalScreen[None]):
         view.set_match(row)
         height = max(1, int(view.size.height))
         view.scroll_to(y=max(0, row - height // 3), animate=False)
-        self.sub_title = f"{pattern}  ·  line {row + 1}/{view.line_count}"
+        if view.filtered:
+            self.sub_title = (
+                f"{pattern}  ·  matches {view.visible_count}/{view.line_count}"
+                f"  ·  line {view.source_line(row)}  ·  f / Esc — all lines"
+            )
+        else:
+            self.sub_title = f"{pattern}  ·  line {row + 1}/{view.line_count}"
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         event.stop()
@@ -261,10 +347,36 @@ class OutputViewerScreen(ModalScreen[None]):
             return
         self._run_search(-1)
 
+    def action_toggle_filter(self) -> None:
+        """`f` — оставить только строки с совпадениями (повторно — весь вывод).
+
+        Работает от текущего образца поиска, поэтому `f` без поиска ничего не
+        делает и говорит, чего не хватает. Если совпадений нет — фильтр не
+        включается (`set_filter` возвращает 0), журнал не пустеет.
+        """
+        view = self._view()
+        if not view.pattern:
+            self.sub_title = "Filter needs a search first: / text, Enter, then f"
+            return
+        if view.filtered:
+            view.set_filter(False)
+            row = view.match_row
+            if row is not None:
+                self._jump(row, view.pattern)
+            return
+        if not view.set_filter(True):
+            self.sub_title = f"No match: {view.pattern}"
+            return
+        row = view.match_row if view.match_row is not None else 0
+        self._jump(row, view.pattern)
+
     def action_escape_action(self) -> None:
-        """Esc: сначала закрыть поле поиска, затем сам экран."""
+        """Esc: сначала закрыть поле поиска, затем фильтр, затем сам экран."""
         if self._search_input().display:
             self._hide_search()
+            return
+        if self._view().filtered:
+            self.action_toggle_filter()
             return
         self.dismiss(None)
 

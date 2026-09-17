@@ -179,6 +179,52 @@ async def test_log_viewer_search_jumps(isolated_home):
         assert not isinstance(app.screen, OutputViewerScreen)
 
 
+async def test_log_viewer_search_highlights_the_whole_row(isolated_home):
+    """Строка совпадения подсвечивается целиком (фон + bold), а не только текст.
+
+    Регрессия: стиль `--hit` накладывался через `Strip.apply_style`, а он в
+    Rich/Textual сливается как «применяемый + стиль сегмента» — цвета сегмента
+    (фон чётной/нечётной строки) побеждали, и от `--hit` оставался только
+    `bold`: фоновая подсветка строки не появлялась никогда.
+    """
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await submit(pilot, "printf 'alpha\\nhit-line\\ngamma\\n'")
+        await wait_command_done(app)
+        await submit(pilot, ":log")
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, OutputViewerScreen)
+        view = screen.query_one(OutputView)
+        search = screen.query_one("#output-search", Input)
+
+        await pilot.press("slash")
+        await pilot.pause()
+        search.value = "hit"
+        await pilot.press("enter")
+        await pilot.pause()
+        row = view.match_row
+        assert row is not None
+
+        hit_bg = view.get_component_rich_style("outputview--hit").bgcolor
+        plain_bg = view.get_component_rich_style("outputview--even").bgcolor
+        assert hit_bg is not None and hit_bg != plain_bg
+
+        # render_line ждёт y относительно окна; здесь прокрутки нет (строка у верха).
+        y = row - int(view.scroll_offset.y)
+        matched = view.render_line(y)
+        assert matched.cell_length == int(view.size.width)  # на всю ширину
+        style = next(seg.style for seg in matched if seg.text.strip())
+        assert style is not None
+        assert style.bgcolor == hit_bg, "фон строки совпадения не подсвечен"
+        assert style.bold is True
+
+        # Соседняя строка осталась обычной.
+        other = view.render_line(y + 1)
+        other_style = next(seg.style for seg in other if seg.text.strip())
+        assert other_style is not None and other_style.bgcolor != hit_bg
+
+
 async def test_log_viewer_search_next_and_prev(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 20)) as pilot:
@@ -214,6 +260,146 @@ async def test_log_viewer_search_next_and_prev(isolated_home):
         await pilot.press("shift+n")
         await pilot.pause()
         assert view.match_row == 2
+
+
+async def test_log_viewer_filter_keeps_only_matches(isolated_home):
+    """`f` — на экране только строки с совпадениями; `f` / Esc возвращают всё.
+
+    Номера строк при этом остаются **исходными** (как в блоке), а не порядковыми
+    в отборе.
+    """
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await submit(pilot, "seq -f 'row-%03g' 1 30")
+        await wait_command_done(app)
+        await submit(pilot, ":log")
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, OutputViewerScreen)
+        view = screen.query_one(OutputView)
+        search = screen.query_one("#output-search", Input)
+        assert view.line_count == 30
+
+        await pilot.press("slash")
+        await pilot.pause()
+        search.value = "row-01"
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("escape")  # убрать поле, оставить поиск
+        await pilot.pause()
+        assert view.match_row == 9  # row-010
+        assert "line 10/30" in (screen.sub_title or "")
+
+        await pilot.press("f")
+        await pilot.pause()
+        assert view.filtered
+        assert view.visible_count == 10  # row-010 … row-019
+        assert view.line_count == 30  # всего строк не изменилось
+        assert all("row-01" in line for line in view._lines)
+        assert "matches 10/30" in (screen.sub_title or "")
+        row = view.match_row
+        assert row is not None and view._lines[row] == "row-010"
+        assert view.source_line(row) == 10  # номер в исходном выводе
+        assert "line 10" in (screen.sub_title or "")
+
+        # `n` идёт по отобранным строкам.
+        await pilot.press("n")
+        await pilot.pause()
+        assert view._lines[view.match_row] == "row-011"
+
+        # Esc снимает фильтр (поле уже закрыто) и возвращает весь вывод,
+        # место при этом не теряется.
+        await pilot.press("escape")
+        await pilot.pause()
+        assert isinstance(app.screen, OutputViewerScreen)
+        assert not view.filtered
+        assert view.visible_count == 30
+        assert view._lines[view.match_row] == "row-011"
+
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not isinstance(app.screen, OutputViewerScreen)
+
+
+async def test_log_viewer_filter_second_press_returns_all(isolated_home):
+    """Повторный `f` — снова весь вывод (и место совпадения сохраняется)."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await submit(pilot, "printf 'alpha\\nhit-one\\nbeta\\nhit-two\\n'")
+        await wait_command_done(app)
+        await submit(pilot, ":log")
+        await pilot.pause()
+        screen = app.screen
+        view = screen.query_one(OutputView)
+        search = screen.query_one("#output-search", Input)
+
+        await pilot.press("slash")
+        await pilot.pause()
+        search.value = "hit"
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("f")
+        await pilot.pause()
+        assert view.filtered and view.visible_count == 2
+        assert view._lines == ["hit-one", "hit-two"]
+
+        await pilot.press("f")
+        await pilot.pause()
+        assert not view.filtered
+        assert view.visible_count == 4
+        row = view.match_row
+        assert row is not None
+        assert view._lines[row] == "hit-one"
+
+
+async def test_log_viewer_filter_needs_a_search(isolated_home):
+    """`f` без поиска ничего не фильтрует и говорит, чего не хватает."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await submit(pilot, "seq 1 12")
+        await wait_command_done(app)
+        await submit(pilot, ":log")
+        await pilot.pause()
+        screen = app.screen
+        view = screen.query_one(OutputView)
+
+        await pilot.press("f")
+        await pilot.pause()
+        assert not view.filtered
+        assert view.visible_count == view.line_count == 12
+        assert "needs a search" in (screen.sub_title or "")
+
+
+async def test_log_viewer_filter_drops_when_new_pattern_has_no_match(isolated_home):
+    """Новый образец без совпадений: фильтр снимается, список остаётся полным."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await submit(pilot, "printf 'ala\\nbeta\\nhit-one\\nhit-two\\n'")
+        await wait_command_done(app)
+        await submit(pilot, ":log")
+        await pilot.pause()
+        screen = app.screen
+        view = screen.query_one(OutputView)
+        search = screen.query_one("#output-search", Input)
+
+        await pilot.press("slash")
+        await pilot.pause()
+        search.value = "hit"
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("f")
+        await pilot.pause()
+        assert view.filtered and view.visible_count == 2
+
+        # Новый образец без совпадений — пустой экран был бы хуже полного списка.
+        await pilot.press("slash")
+        await pilot.pause()
+        search.value = "zzz-not-here"
+        await pilot.press("enter")
+        await pilot.pause()
+        assert not view.filtered
+        assert view.visible_count == view.line_count == 4
+        assert "No match" in (screen.sub_title or "")
 
 
 async def test_log_viewer_search_reports_no_match(isolated_home):

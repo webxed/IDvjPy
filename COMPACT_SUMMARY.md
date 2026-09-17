@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.131**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.133**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.75 (app v1.131) |
+| `test_cmd.md` | Manual plan v1.77 (app v1.133) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.131 |
+| `src/app.py` | TUI (`CommandRunner`), v1.133 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -217,6 +217,14 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.133
+
+- **F7: режим «только совпадения» (`f`).** Второй вариант из задачи («подсветка строки **или** как в JSON-вьюере — только найденные строки»): подсветку починили в v1.132, а теперь есть и фильтр — на 13k строках с тремя совпадениями он полезнее подсветки. `f` в `OutputViewerScreen` оставляет на экране только строки с текущим образцом поиска, повторный `f` и Esc возвращают весь вывод; работает и в raw-виде `:md`. Что решено по механике: (1) работает от **текущего** образца, поэтому `f` без поиска — подсказка `Filter needs a search first: / text, Enter, then f`, а не пустой экран; (2) если совпадений нет, фильтр не включается (`set_filter` возвращает 0, вызывающий говорит `No match`), а если образец сменили на «пустой» — фильтр снимается сам: пустой экран без объяснения хуже полного списка; (3) отображение не расходится с журналом — в подзаголовке `hit · matches 2/30 · line 17 · f / Esc — all lines`, где номер строки **исходный** (`OutputView.source_line` по карте `_rows`), а `line_count` остаётся числом строк всего вывода (`visible_count` — сколько показано); (4) `n`/`N` ходят по отобранным строкам (в режиме фильтра все видимые строки — совпадения), а место совпадения пересчитывается при включении/выключении так, чтобы не теряться; (5) `Esc` идёт по цепочке: поле поиска → фильтр → экран. Тесты: `tests/test_output_viewer.py` (+4: фильтр оставляет только совпадения и исходный номер строки в подзаголовке, `n` по отбору и снятие фильтра по `f`/Esc с сохранением места, повторный `f` возвращает весь вывод, `f` без поиска ничего не фильтрует, новый образец без совпадений снимает фильтр).
+
+## v1.132
+
+- **F7: строка совпадения подсвечивается целиком, а не только найденный текст.** Симптом: в поиске по выводу (`:log` / F7, `/` → Enter) жирным становились только символы совпадения — фона строки не было, хотя стиль `outputview--hit` его задаёт (`background: $accent 55%`). Причина в семантике `Strip.apply_style`: `rich.segment.Segment.apply_style` сливает стили как `применяемый + стиль_сегмента`, то есть **стиль сегмента побеждает** — фон/цвет чётной-нечётной строки (`outputview--even` / `--odd`) перебивали фон хитового стиля, и от него выживал только атрибут `bold` (его в базовых стилях нет). Теперь `OutputView.render_line` выбирает имя компонентного стиля сразу (`--hit` вместо `--even` / `--odd`), а не накладывает его поверх; строка совпадения заливается акцентом на всю ширину. Тот же приём уже был в `highlight_selection` (`segment_style + style` вручную) — поэтому выделение мышью работало. Тесты: `tests/test_output_viewer.py` (+1: у строки совпадения `bgcolor` равен `--hit`, `bold` есть, ширина — полная, у соседней строки фон другой).
 
 ## v1.131
 

@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.131) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.133) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.131` → `v1.132`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.133` → `v1.134`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -85,7 +85,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/clipboard.py`**: CLIPBOARD / PRIMARY / OSC 52
 - **`src/shell_env.py`**: `.bashrc_term` vars, `~/.bashrc` aliases, `$1` substitution
 - **`src/json_viewer.py`**: JSON tree modal
-- **`src/output_viewer.py`**: `:log` / F7 — full block output in a Line-API `ScrollView` (lazy `render_line`, no 300-line cap; arrows/PgUp/PgDn scroll)
+- **`src/output_viewer.py`**: `:log` / F7 — full block output in a Line-API `ScrollView` (lazy `render_line`, no 300-line cap; arrows/PgUp/PgDn scroll). Search: `/` → Enter (forward), `n`/`N` (wrap around), Esc closes the field; the matching row is drawn with the `outputview--hit` component style **chosen in `render_line`** (not `Strip.apply_style` — Rich/Textual merges that as `applied + segment style`, so the base row colours would win and only `bold` would survive). `f` toggles matches-only mode (`OutputView.set_filter`: the visible list becomes the matching rows, `source_line()` keeps the original block line numbers for the subtitle, `line_count` stays the total; with no matches the filter does not turn on, and a new pattern without matches drops it). Esc goes field → filter → screen.
 - **`src/block_label.py`**: F8 label dialog for block buffers (`:name`); sets/removes a label used by `|@<label> <command>`
 - **`src/md_viewer.py`**: handbook Markdown modal (`:md`, welcome `.md` clicks); `resolve_md_path` also opens explicit paths (vault files from `:rg`)
 - **`src/md_search.py`**: `:rg` markdown search — ripgrep backend (`--json`) when `rg` is in PATH, built-in walk otherwise (skips `.git`/`.obsidian`/`node_modules`); smart case; `rg_available` / `install_hint`
