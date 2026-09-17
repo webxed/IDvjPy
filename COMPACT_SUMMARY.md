@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.123**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.125**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -27,7 +27,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no such tag) searches command text + comments across tags |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:fm` `:term` `:env` `:session` `:new` `:welcome` `:backup` `:screensaver` `:r` `:cmd` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:update` `:kill` `:watch` `:mv` `:stats` `:diff` `:o` `:alias` `:llm` |
+| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:fm` `:term` `:env` `:session` `:new` `:welcome` `:backup` `:screensaver` `:r` `:cmd` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:run` `:update` `:kill` `:watch` `:mv` `:stats` `:diff` `:o` `:alias` `:llm` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.67 (app v1.123) |
+| `test_cmd.md` | Manual plan v1.69 (app v1.125) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.123 |
+| `src/app.py` | TUI (`CommandRunner`), v1.125 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -206,6 +206,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/session_registry.py` | Реестр активных сессий — `session_<instance>.pid` 0600: автоимя `:new` = наименьшее свободное `sN` среди работающих окон (устаревшие pid-файлы подчищаются) |
 | `src/help_texts.py` | Static `:?` / `:i` help texts |
 | `src/ansi_output.py` | ANSI/ESC в выводе команд: SGR → цвета (`to_markup`), плоский текст без кодов (`to_plain`), терминальный `\r` (`collapse_carriage_returns`); ключ `ansi_colors` |
+| `src/runbook.py` | `:run` — полуавтоматический прогон цепочки: шаги `auto`/`manual`/`prompt`, директивы `run:` в комментариях тега, план из YAML |
 | `src/seed_*.py` | Handbook seeds (linux, k8s, git, ops, …) |
 | `src/app.tcss` | Styles (JSON viewer, line-nav border, block focus); Textual CSS — расширение `.tcss`, чтобы редакторы не линтовали его браузерным CSS |
 | `settings.yml` | Личные настройки — **не в git** (`.gitignore`), создаётся копией `src/settings.example.yml` при первом запуске в новом data-каталоге |
@@ -216,6 +217,14 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.125
+
+- **Список «запросных» `:`-команд — в settings.yml (`history_queries`).** Какие вызовы `:`-команд остаются в `history_<instance>.txt` для ↑ / `:h`, но не подсказываются, было зашито регуляркой (`RE_HISTORY_ONLY_QUERY`: `llm|cht|rg|md|run|send!?`); каждое новое такое поведение требовало правки кода. Теперь это список имён без `:` в ключе `history_queries` — по умолчанию `llm, cht, rg, md, run, send, send!` (прежнее поведение). Принимает список (`- llm`) или строку через запятую/пробел (`history_queries: llm, run`), двоеточия в именах отбрасываются, пустые элементы игнорируются; `[]` / `false` / `null` — выключено (вызовы `:`-команд в историю не пишутся), ключа нет или мусор в значении — набор по умолчанию. Аргументы по-прежнему обязательны (`:llm` без вопроса не записывается). Оба места (запись в историю — `log_to_history`, фильтр подсказок — `get_completion_candidates`) работают через один метод `CommandRunner._is_history_only_query`, парсер значения — `parse_history_queries`. Тесты: `tests/test_history_queries.py` (7: формы ключа и выключение, дефолт, аргументы/имя `:send!`, запись без подсказок, узкий список `[rg]`, `[]` — не пишем, отсутствие ключа — прежний набор).
+
+## v1.124
+
+- **Прогон цепочки — runbook (`:run`).** Цепочки вроде vault-AppRole требуют ручного `!tag[N]` на каждый шаг, хотя значения переносятся из вывода автоматически (`@key`), а решение человека нужно всего в двух-трёх местах. Теперь цепочка запускается одной командой и останавливается там, где нужно решение. Источник: тег (`:run vapprole` — шаги в порядке tid) или YAML (`:run chain.yml`), в т.ч. файл `:playbook` (демо-ключи `start_pause`/`type_delay`/`command_timeout`/`reset_tags`/`wait_command` принимаются и не мешают). Режимы шага: `auto` — вставить во ввод, выполнить, дождаться завершения и идти дальше; `manual` — вставить строку и ждать Enter человека (можно править; `$$VAR=…` при этом маскируется); `prompt` — ввод пуст, ждёт набранную строку; пустой Enter пропускает шаг (токен уже есть, шаг не нужен). Ошибка auto-шага (`exit ≠ 0`) останавливает прогон с номером шага, `run:continue` в комментарии отменяет это для конкретного шага. `Esc` останавливает прогон в любой момент (`:run stop` — то же), сама команда — F4 / `:kill`. Флаги: `--step` (полуавтомат — каждый шаг ждёт Enter), `--dry` (только план, ничего не выполнять). Режимы шага тега задаются директивами в начале комментария команды: `run:auto` / `run:manual` / `run:prompt` / `run:pause=SEC` / `run:continue` / `run:stop`; остаток комментария — подсказка в плане и в `??`. Директивы в комментарии тега задают значения по умолчанию для его шагов (пауза, реакция на ошибку). Перед прогоном в журнал печатается план (шаги, режимы, подсказки, предупреждения о неизвестных директивах/ключах), в подзаголовке — `RUN <цепочка> · 3/9 · auto · Esc stops`; `:run` без аргументов — usage и список тегов с директивами, `:? run` — полная справка. Пока прогон идёт, заставка не всплывает, смена сессии и `:watch` отклоняются, `:send` откладывается, счётчик отправок (`_run_submits`) обслуживает пропуск шага, а вставленные прогоном строки не попадают в `:playbook`. `:run …` пишется в `history_*.txt` (↑ / `:h`), но не в подсказки (как `:llm`/`:cht`). Движок набора/Enter общий с `--demo` (`demo.submit_line`, `_driving()` учитывает `_run_active`). Модуль — `src/runbook.py`. Seed `vapprole` пересобран под прогон: шаг 1 — `$$VAULT_TOKEN=` (`run:manual`; токен из vault.website и остаётся маскированным), шаг 2 — имя роли (`run:manual`), шаг 5 — выпуск `secret_id` (`run:manual`: мутирующий шаг — только по подтверждению), остальное `run:auto`; tids сдвинулись на один (см. `docs/SEED_VAULT_COMMANDS.md`). Тесты: `tests/test_runbook.py` (23: директивы/наследование/YAML/план и Pilot — auto-цепочка, manual ждёт Enter, prompt ждёт набранную строку, пустой Enter пропускает шаг, остановка по ошибке и `run:continue`, Esc и `:run stop`, `--dry`, свой YAML, отказы при `:watch` и втором прогоне), `tests/test_seed_ops.py` (tids и директивы `vapprole`), `tests/test_colon_commands.py` (`:run` в таблице).
 
 ## v1.123
 

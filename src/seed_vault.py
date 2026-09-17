@@ -4,7 +4,9 @@ Seed HashiCorp Vault handbook tags (see SEED_VAULT_COMMANDS.md).
 
 Playbooks are inspect-only: no seal, revoke, kv put/delete.
 `vapprole` logs in via AppRole (generates a short-lived secret-id and a token —
-credentials, not data changes).
+credentials, not data changes) and is meant to be run as a chain: `:run vapprole`
+(`run:manual` waits for Enter where the web token, the role name and the
+secret-id issue are confirmed).
 vvars does not echo VAULT_TOKEN (only set/unset).
 
 Run: python3 src/seed_vault.py --seed
@@ -79,28 +81,32 @@ SEED_TAGS = {
         ],
     ),
     "vapprole": (
-        "AppRole: role_id → secret_id → login (значения — `$$…=@key`)",
+        "AppRole: вход цепочкой (значения — `$$…=@key`; прогон — `:run vapprole`)",
         [
-            ("$ROLE=custom-role", "имя AppRole (поправьте под свой)"),
+            (
+                "$$VAULT_TOKEN=",
+                "run:manual токен из vault.website: вставьте значение после =",
+            ),
+            ("$ROLE=custom-role", "run:manual имя AppRole (поправьте и Enter)"),
             (
                 "vault read auth/approle/role/$ROLE/role-id",
-                "role_id из табличного вывода",
+                "run:auto role_id из табличного вывода",
             ),
-            ("$$ROLE_ID=@role_id", "секрет: role_id из прошлого блока"),
+            ("$$ROLE_ID=@role_id", "run:auto секрет: role_id из прошлого блока"),
             (
                 "vault write -force auth/approle/role/$ROLE/secret-id",
-                "новый secret_id (меняет креденшелы, не данные)",
+                "run:manual выпуск secret_id — подтвердите Enter",
             ),
-            ("$$SECRET_ID=@secret_id", "секрет: secret_id из прошлого блока"),
+            ("$$SECRET_ID=@secret_id", "run:auto секрет: secret_id из прошлого блока"),
             (
                 'vault write auth/approle/login role_id="$ROLE_ID" secret_id="$SECRET_ID"',
-                "login → token",
+                "run:auto login → token",
             ),
             (
                 "$$VAULT_TOKEN=@token",
-                "секрет: обновить `$VAULT_TOKEN` на approle-токен",
+                "run:auto секрет: обновить `$VAULT_TOKEN` на approle-токен",
             ),
-            ("vault read $SECRET", "проверить доступ новым токеном"),
+            ("vault read $SECRET", "run:auto проверить доступ новым токеном"),
         ],
     ),
 }

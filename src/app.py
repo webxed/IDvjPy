@@ -104,6 +104,7 @@ try:
     import calc
     import database_v2 as database
     import ipcalc
+    import runbook
     from ansi_output import to_markup, to_plain
     from block_label import BlockLabelScreen
     from cheat_sh import (
@@ -135,7 +136,7 @@ try:
         open_terminal_command,
         resolve_target_dir,
     )
-    from help_texts import CALC_HELP_TEXT, INGRESS_HELP_TEXT, MAIN_HELP_TEXT
+    from help_texts import CALC_HELP_TEXT, INGRESS_HELP_TEXT, MAIN_HELP_TEXT, RUNBOOK_HELP_TEXT
     from history_store import (
         DEFAULT_HISTORY_KEEP,
         FileLockTimeoutError,
@@ -187,6 +188,7 @@ try:
     from md_search import search as search_markdown
     from md_viewer import HandbookMarkdownScreen, handbook_md_path, resolve_md_path
     from output_viewer import OutputViewerScreen
+    from runbook import play_runbook
     from screensaver import DevopsScreensaver
     from seed_catalog import (
         KNOWN_SEED_SCRIPTS,
@@ -261,9 +263,39 @@ RE_TAG_QUERY_PREFIX = re.compile(r"^\?(?!\?)(?P<prefix>[A-Za-z0-9_-]*)$")
 RE_COLON_H_SEARCH = re.compile(r"^:h\s*/(.*)$")
 RE_HELP_KEEP_MARKUP = re.compile(r"(\[/?bold\])")
 RE_TAG_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-# `:`-команды, которые пишутся в history_*.txt для ↑/`:h` (но не в подсказки):
-# запросы/навигация, которые полезно повторить — `:llm`, `:cht`, `:rg`, `:md`, `:send[!]`.
-RE_HISTORY_ONLY_QUERY = re.compile(r"^:(?:llm|cht|rg|md|send!?)\s+\S")
+# `:`-команды, вызовы которых остаются в `history_*.txt` (↑ / `:h`), но не попадают
+# в подсказки: запросы и навигация, которые полезно повторить — `:llm`, `:cht`,
+# `:rg`, `:md`, `:send[!]`, `:run`. Список настраивается ключом `history_queries`
+# в settings.yml (имена без `:`, можно строкой через запятую; пусто — выключить).
+DEFAULT_HISTORY_QUERIES: tuple[str, ...] = ("llm", "cht", "rg", "md", "run", "send", "send!")
+
+
+def parse_history_queries(raw: Any) -> frozenset[str]:
+    """Прочитать ключ `history_queries`: список имён или строка через запятую.
+
+    Принимает ``[llm, md]``, ``"llm, md"``, ``"llm md"`` и `:llm` (двоеточия
+    просто отбрасываются). `null` / `false` / пусто — набор пуст: вызовы
+    `:`-команд в историю не пишутся. Непонятное значение — как по умолчанию.
+    """
+    if raw is None or raw is False:
+        return frozenset()
+    if raw is True:
+        return frozenset(DEFAULT_HISTORY_QUERIES)
+    if isinstance(raw, str):
+        items: list[Any] = [raw]
+    elif isinstance(raw, (list, tuple, set)):
+        items = list(raw)
+    else:
+        return frozenset(DEFAULT_HISTORY_QUERIES)
+    names: set[str] = set()
+    for item in items:
+        if item is None:
+            continue
+        for token in re.split(r"[\s,]+", str(item)):
+            name = token.strip().lstrip(":")
+            if name:
+                names.add(name)
+    return frozenset(names)
 # `:md <путь>#L<строка>` — открыть markdown на нужной строке (как в GitHub).
 RE_MD_LINE = re.compile(r"^(?P<path>.+?)#L(?P<line>\d+)$")
 # Метка буфера (`:name`): буква/`_` в начале, дальше буквы/цифры/`_`/`-`.
@@ -2169,7 +2201,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.123"
+    VERSION = "v1.125"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2225,6 +2257,9 @@ class CommandRunner(App):
     KEY_HISTORY_LINES = "history_lines"
     KEY_HISTORY_KEEP = "history_keep"
     KEY_HISTORY_COMPLETION = "history_completion"
+    # Список `:`-команд, вызовы которых пишутся в history_*.txt (↑ / `:h`), но не
+    # подсказываются (по умолчанию :llm :cht :rg :md :run :send :send!).
+    KEY_HISTORY_QUERIES = "history_queries"
     KEY_MD_DIR = "md_dir"
     KEY_MD_RENDER_LINES = "md_render_lines"
     HISTORY_SEARCH_LIMIT = 50
@@ -2285,6 +2320,7 @@ class CommandRunner(App):
     CMD_THEME = "theme"
     CMD_MD = "md"
     CMD_PLAYBOOK = "playbook"
+    CMD_RUN = "run"  # полуавтоматический прогон цепочки (runbook)
     CMD_UPDATE = "update"
     CMD_SESSION = "session"
     CMD_NEW = "new"  # новое окно приложения в отдельном терминале
@@ -2367,6 +2403,13 @@ class CommandRunner(App):
         self._requested_data_dir = (data_dir or "").strip() or None
         self._demo_active = False
         self._demo_pressing = False
+        # Прогон цепочки (`:run`): шаги идут в фоне, manual/prompt ждут человека.
+        # Пока идёт прогон — заставка, смена сессии и `:send` откладываются.
+        self._run_active = False
+        self._run_state: dict[str, Any] | None = None
+        # Сколько строк человек отправил с начала прогона (пустой Enter на
+        # шаге manual/prompt — пропуск шага, это видно по счётчику).
+        self._run_submits = 0
         self._demo_worker_started = False
         self.session_history: list[str] = []
         self._playbook_log: list[str] = []
@@ -2387,6 +2430,8 @@ class CommandRunner(App):
         self._db_stat: tuple[int, int] | None = None
         self.history_lines: int = 20
         self.history_keep: int = DEFAULT_HISTORY_KEEP
+        # `:`-команды, чьи вызовы остаются в истории (и не подсказываются).
+        self.history_queries: frozenset[str] = frozenset(DEFAULT_HISTORY_QUERIES)
         # Подсказки из history_*.txt при наборе (в т.ч. `@`/`>`): см. get_history_completions.
         self.history_completion: bool = True
         self.check_updates: bool = False
@@ -3119,10 +3164,10 @@ class CommandRunner(App):
             candidates.extend(from_db)
         except Exception:
             pass
-        # Записи `:llm …` лежат в history_*.txt для ↑/`:h`, но в подсказках
-        # не предлагаются (это вопросы, а не команды для повтора).
+        # Записи `:llm …` / `:run …` лежат в history_*.txt для ↑/`:h`, но в
+        # подсказках не предлагаются (это запросы, а не команды для повтора).
         for cmd in self.session_history:
-            if cmd.strip().startswith(prefix) and not RE_HISTORY_ONLY_QUERY.match(cmd.strip()):
+            if cmd.strip().startswith(prefix) and not self._is_history_only_query(cmd.strip()):
                 candidates.append(cmd.strip())
         return sorted(set(candidates))[:20]
 
@@ -3357,6 +3402,9 @@ class CommandRunner(App):
                     self.history_lines = settings.get(self.KEY_HISTORY_LINES, 20)
                     self.history_completion = bool(
                         settings.get(self.KEY_HISTORY_COMPLETION, True)
+                    )
+                    self.history_queries = parse_history_queries(
+                        settings.get(self.KEY_HISTORY_QUERIES, DEFAULT_HISTORY_QUERIES)
                     )
                     self.md_dir = str(settings.get(self.KEY_MD_DIR) or "").strip()
                     try:
@@ -3782,6 +3830,9 @@ class CommandRunner(App):
         """Переводит фокус в строку ввода без выделения всего текста."""
         if self._demo_active and not self._demo_pressing:
             self._stop_demo()
+        if self._run_active and not self._demo_pressing:
+            # Esc на шаге manual/prompt — это и есть «остановить прогон».
+            self._stop_runbook()
         inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
         inp.focus()
         inp.cursor_position = len(inp.value or "")
@@ -4279,7 +4330,7 @@ class CommandRunner(App):
 
     def clear_subtitle(self) -> None:
         """Очищает подзаголовок (статус-бар)."""
-        if self._demo_active:
+        if self._demo_active or self._run_active:
             return
         self.sub_title = ""
 
@@ -4602,13 +4653,18 @@ class CommandRunner(App):
         input_widget.reset_undo()  # новая строка — «чистая» история правок
         self._reset_history_walk()
 
+        # Прогон (`:run`) на шаге manual/prompt: отправка строки — это событие
+        # шага, даже если человек отправил пусто (так шаг пропускается).
+        if self._run_active:
+            self._run_submits += 1
+
         if not user_input:
             return
 
         # Пользователь запускает команду — снова следим за выводом (`_follow_paused`).
         self._resume_journal_follow()
 
-        if not (self._demo_active or self._demo_pressing):
+        if not (self._demo_active or self._demo_pressing or self._run_active):
             colon = user_input[1:].split()[:1] if user_input.startswith(":") else []
             if not colon or colon[0] not in {
                 self.CMD_PLAYBOOK, self.CMD_QUIT, self.CMD_UPDATE, self.CMD_SESSION,
@@ -4750,10 +4806,10 @@ class CommandRunner(App):
             resolved = self._labelled_pipe_history(command)
             if resolved:
                 command = resolved
-        # :llm / :cht / :rg / :md / :send <аргументы> — запросы, навигация и пересылка:
-        # сохраняем в историю (для ↑ и :h), но из подсказок они не появляются
-        # (см. get_completion_candidates).
-        is_history_only_query = bool(RE_HISTORY_ONLY_QUERY.match(command or ""))
+        # `:llm` / `:cht` / `:rg` / `:md` / `:run` / `:send` (список в settings.yml)
+        # — запросы, навигация и пересылка: сохраняем в историю (для ↑ и :h), но из
+        # подсказок они не появляются (см. get_completion_candidates).
+        is_history_only_query = self._is_history_only_query(command)
         if command.startswith(prefixes) and not self._is_history_comment(command) and not is_history_only_query:
             return
         append_history_file_line(
@@ -4763,6 +4819,21 @@ class CommandRunner(App):
             lock_timeout=self.FILE_LOCK_TIMEOUT,
         )
         self._history_file_stat = None
+
+    def _is_history_only_query(self, command: str) -> bool:
+        """Вызов `:`-команды из `history_queries`: пишем в историю, не подсказываем.
+
+        Имя берётся до первого пробела (`:send! s2 echo hi` — это `send!`),
+        аргументы обязательны: одиночное `:llm` без вопроса — просто команда
+        приложения, в истории ей делать нечего.
+        """
+        text = (command or "").strip()
+        if not text.startswith(self.PREFIX_CMD):
+            return False
+        parts = text[1:].split(None, 1)
+        if not parts:
+            return False
+        return parts[0] in self.history_queries and len(parts) > 1 and bool(parts[1].strip())
 
     @staticmethod
     def _is_history_comment(text: str) -> bool:
@@ -4882,6 +4953,8 @@ class CommandRunner(App):
             topic = parts[1].strip().lower() if len(parts) > 1 else ""
             if topic in ("calc", "calculator", "калькулятор"):
                 self._show_calc_help()
+            elif topic in ("run", "runbook"):
+                self._show_runbook_help()
             else:
                 self._show_main_help()
         elif command == self.CMD_CD:
@@ -4921,6 +4994,8 @@ class CommandRunner(App):
             self.action_open_handbook_md(" ".join(parts[1:]))
         elif command == self.CMD_PLAYBOOK:
             self._handle_playbook_command(parts[1:])
+        elif command == self.CMD_RUN:
+            self._handle_run_command(parts[1:])
         elif command == self.CMD_UPDATE:
             self._handle_update_command()
         elif command == self.CMD_SESSION:
@@ -5708,7 +5783,85 @@ class CommandRunner(App):
             return
         n = len(scenario["steps"])
         self.add_block(InfoBlock(
-            f"Wrote {n} step(s) to {path}. Replay: python3 app.py --demo {path}"
+            f"Wrote {n} step(s) to {path}. Replay: python3 app.py --demo {path} "
+            f"or :run {path}"
+        ))
+
+    # --- прогон цепочки (runbook) ------------------------------------------
+
+    def _handle_run_command(self, args: list[str]) -> None:
+        """`:run <tag|файл.yml> [--step] [--dry]` и `:run stop` — прогон цепочки.
+
+        Шаг `auto` выполняется и ждёт завершения, `manual`/`prompt` ждут человека
+        (см. `src/runbook.py` и `:? run`). Без аргументов — usage и список тегов
+        с директивами `run:`.
+        """
+        if not args:
+            self.add_block(InfoBlock(runbook.usage_text(self.db_file)))
+            return
+        if args[0] in ("stop", "kill"):
+            self._stop_runbook()
+            return
+        flags = {arg for arg in args if arg.startswith("--")}
+        targets = [arg for arg in args if not arg.startswith("--")]
+        unknown = sorted(flags - {"--step", "--dry"})
+        if unknown or len(targets) != 1:
+            note = f"\nUnknown flag(s): {', '.join(unknown)}" if unknown else ""
+            self.add_block(InfoBlock(
+                "Usage: :run <tag|file.yml> [--step] [--dry]   |   :run stop" + note
+            ))
+            return
+        if self._demo_active or self._demo_pressing:
+            self.add_block(InfoBlock("A demo is playing — stop it first (Esc)."))
+            return
+        if self._run_active:
+            self.add_block(InfoBlock("A runbook is already running. Stop it: :run stop"))
+            return
+        if self._watch_state is not None:
+            self.add_block(InfoBlock(":watch is running — stop it first: :watch stop"))
+            return
+        try:
+            plan = runbook.build_plan(self.db_file, targets[0], step="--step" in flags)
+        except runbook.RunbookError as e:
+            self.add_block(InfoBlock(str(e)))
+            return
+        if "--dry" in flags:
+            self.add_block(InfoBlock(runbook.format_plan(plan, dry=True)))
+            return
+        self._start_runbook(plan)
+
+    def _start_runbook(self, plan: runbook.RunPlan) -> None:
+        """Показать план и запустить прогон в фоне (одна цепочка за раз)."""
+        self.add_block(InfoBlock(runbook.format_plan(plan)))
+        self._run_submits = 0
+        self._run_state = {"plan": plan, "index": 0}
+        self._run_active = True
+        self.run_worker(
+            play_runbook(self, plan),
+            name="runbook",
+            group="runbook",
+            exclusive=True,
+            exit_on_error=False,
+        )
+
+    def _stop_runbook(self, message: str = "") -> None:
+        """Остановить прогон (Esc / `:run stop`): где встали — в журнале."""
+        if not self._run_active:
+            return
+        state = self._run_state or {}
+        plan = state.get("plan")
+        index = int(state.get("index") or 0)
+        total = len(getattr(plan, "steps", []) or [])
+        title = getattr(plan, "title", "runbook")
+        self._run_active = False
+        self._run_state = None
+        self.sub_title = ""
+        try:
+            self.workers.cancel_group(self, "runbook")
+        except Exception:
+            pass
+        self.add_block(InfoBlock(
+            message or f"Runbook {title}: stopped at step {index}/{total}. You can type now."
         ))
 
     def _session_status_text(self) -> str:
@@ -5941,8 +6094,8 @@ class CommandRunner(App):
         batch = self._forward_pending + drained
         self._forward_pending = []
         for message in batch:
-            if self._demo_active or self._demo_pressing:
-                self._forward_pending.append(message)  # тур не прерываем
+            if self._demo_active or self._demo_pressing or self._run_active:
+                self._forward_pending.append(message)  # тур/прогон не прерываем
                 continue
             self._deliver_forwarded(message)
         self.set_timer(self.MAILBOX_POLL_INTERVAL, self._poll_session_inbox)
@@ -5990,9 +6143,9 @@ class CommandRunner(App):
         self._handle_new_window([])
 
     def _switch_session(self, raw_name: str) -> None:
-        if self._demo_active or self._demo_pressing:
+        if self._demo_active or self._demo_pressing or self._run_active:
             self.add_block(InfoBlock(
-                "Cannot change session while a demo is playing (Esc first)."
+                "Cannot change session while a demo or runbook is playing (Esc first)."
             ))
             return
         name = validate_instance_name(raw_name)
@@ -6060,7 +6213,7 @@ class CommandRunner(App):
         idle = self._screensaver_idle_seconds()
         if idle <= 0:
             return
-        if self._demo_active or self._demo_pressing:
+        if self._demo_active or self._demo_pressing or self._run_active:
             return
         self._ss_timer = self.set_timer(idle, self._launch_screensaver)
 
@@ -6068,7 +6221,7 @@ class CommandRunner(App):
         idle = self._screensaver_idle_seconds()
         if idle <= 0:
             return
-        if self._demo_active or self._demo_pressing:
+        if self._demo_active or self._demo_pressing or self._run_active:
             self._bump_screensaver_idle()
             return
         if self._tty_active:
@@ -6150,8 +6303,10 @@ class CommandRunner(App):
 
     def _open_screensaver(self, *, matrix: bool | None = None) -> None:
         """Показать заставку. `matrix` — явный холст, иначе из settings.yml."""
-        if self._demo_active:
-            self.add_block(InfoBlock("Cannot start screensaver while a demo is playing (Esc first)."))
+        if self._demo_active or self._run_active:
+            self.add_block(InfoBlock(
+                "Cannot start screensaver while a demo or runbook is playing (Esc first)."
+            ))
             return
         self.push_screen(DevopsScreensaver(stars=self.screensaver_stars, matrix=matrix))
 
@@ -6350,6 +6505,11 @@ class CommandRunner(App):
     def _show_calc_help(self) -> None:
         """Show the full calculator reference (`:? calc`)."""
         self.add_block(InfoBlock(CALC_HELP_TEXT))
+
+    def _show_runbook_help(self) -> None:
+        """Показать справку по прогону цепочек (`:? run`)."""
+        body = escape_help_markup(RUNBOOK_HELP_TEXT)
+        self.add_block(InfoBlock(linkify_colon_commands(body)), follow_end=False)
 
     def _list_ingresses(self, namespace: str | None = None) -> None:
         """List ingresses in namespace or all namespaces."""
@@ -9131,6 +9291,11 @@ class CommandRunner(App):
         if self._watch_state is not None:
             self.add_block(
                 InfoBlock("A watch is already running. Stop it first: :watch stop")
+            )
+            return
+        if self._run_active:
+            self.add_block(
+                InfoBlock("A runbook is running — stop it first: :run stop (or Esc).")
             )
             return
         try:

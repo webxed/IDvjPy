@@ -61,44 +61,48 @@ $FIELD=
 
 ## AppRole: вход (тег `vapprole`)
 
-Сценарий: `role_id` → `secret_id` → `login` → временный токен. Значения из
-таблиц `vault` переносятся в переменные прямо из вывода блока — запись
+Сценарий: токен → имя роли → `role_id` → `secret_id` → `login` → временный токен.
+Значения из таблиц `vault` переносятся в переменные прямо из вывода блока — запись
 `$VAR=@key` / `$$VAR=@key` берёт остаток строки, первый токен которой равен
 `key` (учитывается только сфокусированный или последний **завершённый** блок).
 `@last` — последняя непустая строка (удобно после `| jq -r .field`).
 
-| tid | Шаг | Что делает |
-|-----|-----|------------|
-| 1 | `$ROLE=custom-role` | имя AppRole (поправьте) |
-| 2 | `vault read auth/approle/role/$ROLE/role-id` | `role_id` |
-| 3 | `$$ROLE_ID=@role_id` | секрет из шага 2 |
-| 4 | `vault write -force auth/approle/role/$ROLE/secret-id` | новый `secret_id` |
-| 5 | `$$SECRET_ID=@secret_id` | секрет из шага 4 |
-| 6 | `vault write auth/approle/login role_id="$ROLE_ID" secret_id="$SECRET_ID"` | вход, `token` |
-| 7 | `$$VAULT_TOKEN=@token` | обновить токен |
-| 8 | `vault read $SECRET` | проверка доступа новым токеном |
+Шаги размечены директивами прогона (`run:`): где нужно решение человека —
+`run:manual`, остальное идёт само. Поэтому цепочка запускается одной командой
+`:run vapprole` (см. `:? run`): прогон встанет на токене, на имени роли и на
+выпуске `secret_id`, а `role_id`/`secret_id`/`token` заберёт из вывода блоков.
+
+| tid | Шаг | Режим | Что делает |
+|-----|-----|-------|------------|
+| 1 | `$$VAULT_TOKEN=` | `run:manual` | токен из vault.website: вставьте значение после `=` и Enter |
+| 2 | `$ROLE=custom-role` | `run:manual` | имя AppRole (поправьте и Enter) |
+| 3 | `vault read auth/approle/role/$ROLE/role-id` | `run:auto` | `role_id` |
+| 4 | `$$ROLE_ID=@role_id` | `run:auto` | секрет из шага 3 |
+| 5 | `vault write -force auth/approle/role/$ROLE/secret-id` | `run:manual` | новый `secret_id` (выпуск — по подтверждению) |
+| 6 | `$$SECRET_ID=@secret_id` | `run:auto` | секрет из шага 5 |
+| 7 | `vault write auth/approle/login role_id="$ROLE_ID" secret_id="$SECRET_ID"` | `run:auto` | вход, `token` |
+| 8 | `$$VAULT_TOKEN=@token` | `run:auto` | обновить токен |
+| 9 | `vault read $SECRET` | `run:auto` | проверка доступа новым токеном |
 
 ```text
-# начальный токен (админ):
-> vault login
-# или
-$$VAULT_TOKEN=hvs.начальный_токен
+# вся цепочка (полуавтомат): останавливается там, где нужен человек
+:run vapprole
 
-$SECRET=services/service/stage/key
-!vapprole[1]   # $ROLE=custom-role
-!vapprole[2]   # role-id  → блок с role_id
-!vapprole[3]   # $$ROLE_ID=@role_id
-!vapprole[4]   # secret-id
-!vapprole[5]   # $$SECRET_ID=@secret_id
-!vapprole[6]   # login
-!vapprole[7]   # $$VAULT_TOKEN=@token
-!vapprole[8]   # vault read $SECRET
+# то же, но с остановкой на каждом шаге (править строку и Enter),
+# или без выполнения — только план:
+:run vapprole --step
+:run vapprole --dry
+
+# прервать между шагами: Esc или
+:run stop
 ```
 
-Шаги идут отдельными Enter: `$$VAR=@key` — это префикс переменной, его нельзя
-приклеить к команде через `;`. Каждый `!vapprole[N]` только вставляет строку.
+Вручную те же шаги остаются в библиотеке: `!vapprole[N]` вставляет строку во ввод,
+запуск — отдельным Enter (`$$VAR=@key` — префикс переменной, его нельзя приклеить
+к команде через `;`). В `:run` шаг с `run:manual` вставляет строку сам и ждёт,
+а пустой Enter пропускает шаг (например, токен уже есть).
 
-Готовая строка логина с подставленными значениями: после шага 6 (блок login)
+Готовая строка логина с подставленными значениями: после шага 7 (блок login)
 `:cmd` кладёт в буфер обмена раскрытую команду
 `vault write auth/approle/login role_id="2474…" secret_id="3ab7…"`;
 в журнал попадает маскированная версия (`****`), `:cmd show` печатает полную строку.

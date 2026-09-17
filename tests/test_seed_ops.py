@@ -289,24 +289,33 @@ def test_seed_vault_inspect_playbooks(tmp_path):
     assert "!vault[14]" in vkv["command"]
     assert "kv get $SECRET" not in vkv["command"]
     assert "kv put" not in vkv["command"]
-    # AppRole: role_id → secret_id → login через захват из вывода (@key).
+    # AppRole: токен → имя роли → role_id → secret_id → login (захват из вывода @key).
+    # Режимы шагов для `:run vapprole` — директивами в комментариях.
+    assert database.get_command_by_tid(db, "vapprole", 1)["command"] == "$$VAULT_TOKEN="
     assert database.get_command_by_tid(db, "vapprole", 2)["command"] == (
-        "vault read auth/approle/role/$ROLE/role-id"
+        "$ROLE=custom-role"
     )
     assert database.get_command_by_tid(db, "vapprole", 3)["command"] == (
+        "vault read auth/approle/role/$ROLE/role-id"
+    )
+    assert database.get_command_by_tid(db, "vapprole", 4)["command"] == (
         "$$ROLE_ID=@role_id"
     )
-    assert database.get_command_by_tid(db, "vapprole", 5)["command"] == (
+    assert database.get_command_by_tid(db, "vapprole", 6)["command"] == (
         "$$SECRET_ID=@secret_id"
     )
-    login = database.get_command_by_tid(db, "vapprole", 6)["command"]
+    login = database.get_command_by_tid(db, "vapprole", 7)["command"]
     assert 'role_id="$ROLE_ID"' in login and 'secret_id="$SECRET_ID"' in login
-    assert database.get_command_by_tid(db, "vapprole", 7)["command"] == (
+    assert database.get_command_by_tid(db, "vapprole", 8)["command"] == (
         "$$VAULT_TOKEN=@token"
     )
-    assert database.get_command_by_tid(db, "vapprole", 8)["command"] == (
+    assert database.get_command_by_tid(db, "vapprole", 9)["command"] == (
         "vault read $SECRET"
     )
+    # Директивы прогона: человек ждёт токен/роль и выпуск secret_id, остальное само.
+    app_role = {row["tid"]: row["comment"] for row in database.get_commands_by_tag(db, "vapprole")}
+    assert all(app_role[tid].startswith("run:manual") for tid in (1, 2, 5))
+    assert app_role[3].startswith("run:auto")
 
 
 def test_seed_text_grep_awk_sed(tmp_path):

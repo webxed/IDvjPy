@@ -22,6 +22,8 @@ def test_settings_example_has_all_keys_and_defaults_to_nano():
         "max_lines",
         "history_lines",
         "history_keep",
+        "history_completion",
+        "history_queries",
         "database_tags_file",
         "backup_dir",
         "command_timeout",

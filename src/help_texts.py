@@ -14,6 +14,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :q          - Quit application
   :w <file>   - Write output to file
   :h [N]      - Last N lines of history_<instance>.txt (default: 20)
+                Calls of query commands (`:llm`, `:cht`, `:rg`, `:md`, `:run`,
+                `:send`) stay there for Up/`:h` but are never suggested — the
+                list is `history_queries` in settings.yml (empty — do not record)
   :h /text    - Search that file in completions (unique lines, newest first); Enter dumps a block
   :h compact  - Unique old history; keep the last history_keep lines as a sequence
   :c          - Clear all output blocks
@@ -152,6 +155,12 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
                (like the screensaver); its borders go green too.
   :playbook [file] - Write this session's commands as a --demo YAML (default playbook.yml)
   :playbook - / clear - Preview YAML in the journal / forget recorded lines
+  :run <tag|file.yml> - Run a command chain (runbook): auto steps run and are
+                waited for, `manual` waits for your Enter (the line is put in the
+                input for editing), `prompt` waits for a line you type. A step
+                failure stops the chain; Esc stops it too. `--step` — every step
+                waits (step-by-step), `--dry` — show the plan only, `:run stop`
+                — stop, `:run` — usage + tags with run: directives (see :? run)
   :update     - Compare this VERSION with GitHub main (webxed/IDvjPy)
                 Proxy 407: set $PROXY_USER / $PROXY_PASS (and HTTPS_PROXY)
 
@@ -318,6 +327,66 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   Type the command here, then ?? (or wait ~5s). Each --seed replaces only its own tags.
   Live DB is copied to backups/ first; :backup does the same snapshot by hand.
   Click a green --seed line to insert it, then Enter. Click a .md name (terminal_mouse) or :md SEED_LINUX_COMMANDS.md to read the handbook.
+"""
+
+
+RUNBOOK_HELP_TEXT = """[bold]Runbook — a half-automatic command chain (:run)[/bold]
+
+One chain, several commands: auto steps run one after another and are waited for,
+and the chain stops to wait for you where a value or a decision is needed.
+
+[bold]Usage[/bold]
+  :run <tag>              - steps of that tag in tid order (modes from run: directives)
+  :run <tag> --step       - step-by-step: every step waits for your Enter
+  :run chain.yml          - steps from YAML (manual: / prompt: in a step)
+  :run <tag|file> --dry   - show the plan and run nothing
+  :run stop               - stop the chain (same as Esc)
+  :run                    - usage + tags that carry run: directives
+
+[bold]Step modes[/bold]
+  auto   - the line is inserted into the input, run, and waited for; exit ≠ 0
+           stops the chain (unless the step says run:continue)
+  manual - the line is inserted and the chain waits: edit it if needed and press
+           Enter (empty Enter skips the step; Esc stops the chain)
+  prompt - the input is empty: type the whole line and press Enter (e.g. a value
+           or a whole `$$VAULT_TOKEN=…` line — secrets stay masked)
+
+[bold]Directives in a tag command comment[/bold] (first tokens; the rest is the
+hint shown in ?? — e.g. `#vapprole=5=run:manual выпуск secret_id`):
+  run:auto | run:manual | run:prompt
+  run:pause=SEC      - pause after that step
+  run:continue       - this step's failure does not stop the chain
+  run:stop           - stop on failure (default)
+Directives in the TAG comment set defaults for all its steps (pause, failure
+policy); the step mode always comes from the command's own comment.
+
+[bold]YAML source[/bold] (`:playbook` writes a compatible file)
+  title: vault approle
+  pause: 0.3                 # pause between auto steps
+  steps:
+    - echo one               # string = auto step
+    - type: vault read …     # same, spelled out
+      wait_command: true
+    - type: $ROLE=custom-role
+      manual: true           # wait for Enter (the line is pre-filled)
+      caption: имя роли      # hint in the plan and the step header
+    - prompt: AppRole name   # wait for a line typed from scratch
+    - echo checked
+
+The YAML path is relative to the process cwd (launched by an alias from your home
+dir — that is that dir); a tag lives in the data-dir DB and is therefore more
+robust across sessions. `:playbook` also writes playbook.yml into the cwd.
+
+[bold]While it runs[/bold]
+  subtitle shows `RUN <chain> · 3/8 · manual · Esc stops`; the plan (with modes)
+is printed into the journal first. Esc stops the chain; the running command
+itself is stopped with F4 / :kill. Banner `:run` calls are written to
+history_<instance>.txt (↑ / :h) but never into completions, and the steps the
+runbook inserted are not recorded by `:playbook`.
+
+A chain is not a tour: steps run for real, in the same session and journal, each
+one visible with its output. Interactive programs (`htop`, `vault login` with a
+password prompt) are not runbook steps — use `> cmd` for them.
 """
 
 

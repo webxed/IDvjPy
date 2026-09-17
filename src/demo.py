@@ -390,6 +390,17 @@ def _delay(seconds: float, speed: float) -> float:
     return max(0.0, seconds / max(speed, 0.05))
 
 
+def _driving(app: Any) -> bool:
+    """Приложение само управляет вводом: демо (`--demo`) или прогон (`:run`).
+
+    Оба режима вставляют строки в prompt и ждут команду, поэтому проверки
+    «а не остановилось ли проигрывание» идут по общему признаку.
+    """
+    return bool(
+        getattr(app, "_demo_active", False) or getattr(app, "_run_active", False)
+    )
+
+
 async def play_demo(app: Any, scenario: dict[str, Any], speed: float = 1.0, quit_when_done: bool = False) -> None:
     """Drive ``CommandRunner`` with simulated keypresses."""
     title = str(scenario.get("title") or "demo")
@@ -578,6 +589,23 @@ async def _play_step(
         await _wait_command_done(app, command_timeout, after=prior)
 
 
+async def submit_line(
+    app: Any, text: str, *, clear: bool = True, type_delay: float = 0.0
+) -> None:
+    """Ввести строку в prompt и нажать Enter — без ожидания завершения команды.
+
+    Нужно `:run`: там ожидание своё (по шагам, и manual/prompt ждут человека),
+    а вот аккуратный Enter — общий с демо: подсказки скрываются, а Enter,
+    попавший в блок журнала (он включает построчный курсор), повторяется.
+    """
+    step = normalize_step({"type": text, "clear": clear, "enter": True})
+    app._demo_pressing = True
+    try:
+        await _play_step(app, step, type_delay=type_delay, command_timeout=0.0)
+    finally:
+        app._demo_pressing = False
+
+
 def _hide_completion(app: Any) -> None:
     completion = getattr(app, "_completion_list", None)
     if completion is not None:
@@ -653,7 +681,7 @@ async def _type_text(app: Any, text: str, type_delay: float) -> None:
     inp = app.query_one("#command-input")
     gap = _type_gap(type_delay, text)
     for char in text:
-        if not getattr(app, "_demo_active", False):
+        if not _driving(app):
             return
         if not inp.has_focus:
             _exit_line_nav(app)
@@ -709,7 +737,7 @@ async def _wait_command_done(app: Any, timeout: float, after: Any = None) -> Non
     deadline = time.monotonic() + max(timeout, 0.5)
     block = None
     while time.monotonic() < deadline:
-        if not getattr(app, "_demo_active", False):
+        if not _driving(app):
             return
         blocks = list(app.query("CommandBlock"))
         if blocks and blocks[-1] is not after:
@@ -719,7 +747,7 @@ async def _wait_command_done(app: Any, timeout: float, after: Any = None) -> Non
     if block is None:
         return
     while time.monotonic() < deadline:
-        if not getattr(app, "_demo_active", False):
+        if not _driving(app):
             return
         if (
             not getattr(block, "pending", False)

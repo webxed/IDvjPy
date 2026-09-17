@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.123
+# План тестирования IDvjPy_term v1.125
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1160,6 +1160,18 @@ kub ec            # ↺ kubectl get pods (Tab/Enter — вставить, вто
 
 Автотест: `tests/test_history_completion.py`.
 
+### Какие `:`-команды остаются в истории (`history_queries`)
+
+```
+:llm offline привет
+:stats
+:h 5                  # в файле истории есть `:llm …`, но нет `:stats`
+```
+
+**Ожидание:** в `history_*.txt` (↑ / `:h`) попадают только вызовы команд из списка `history_queries` в `settings.yml` (по умолчанию `llm, cht, rg, md, run, send, send!`) — и с аргументами: `:llm` без вопроса не записывается. В подсказках эти строки не появляются, даже когда их достали из истории через ↑. `history_queries: []` (или `false`/`null`) — вызовы `:`-команд в историю не пишутся вообще; ключа нет — набор по умолчанию.
+
+Автотест: `tests/test_history_queries.py`.
+
 ---
 
 ## Секция 39: Поиск по markdown (`:rg`, Obsidian-vault)
@@ -1342,7 +1354,40 @@ printf 'работаю 0%%\rработаю 50%%\rготово\n'
 
 ---
 
-**Версия документа**: v1.67
-**Версия приложения**: v1.123
+## Секция 50: Прогон цепочки — runbook (`:run`)
+
+Проверка на цепочке vault (комментарии-директивы уже в seed):
+
+```
+python3 src/seed_vault.py --seed
+:run vapprole --dry      # план: видно режимы шагов, ничего не выполняется
+:run vapprole            # токен (manual) → роль (manual) → role_id → secret_id
+                         # (manual) → login → подмена токена → проверка
+:run vapprole --step     # полуавтомат: каждый шаг вставляется и ждёт Enter
+:run stop                # остановить между шагами (или Esc)
+```
+
+**Ожидание:** перед прогоном в журнал печатается план (шаги с режимами и подсказками), в подзаголовке — `RUN vapprole · 3/9 · auto · Esc stops`. Шаги `auto` идут сами и ждут завершения команды; `manual` вставляет строку в ввод и ждёт — её можно править и запустить Enter, а пустой Enter пропускает шаг; `prompt` оставляет ввод пустым и ждёт набранную строку. Ошибка auto-шага (`exit ≠ 0`) останавливает прогон с сообщением о номере шага (`run:continue` в комментарии отменяет остановку); Esc останавливает на любом шаге, сама команда — F4 / `:kill`. Пока прогон идёт, заставка не всплывает, `:send` откладывается, смена сессии отклоняется; `:run` пишется в `history_*.txt` (↑ / `:h`), но не в подсказки, а вставленные прогоном шаги не попадают в `:playbook`.
+
+Свой YAML (`:playbook`-файл тоже подойдёт):
+
+```yaml
+title: vault approle
+pause: 0.3
+steps:
+  - type: $$VAULT_TOKEN=
+    manual: true
+    caption: токен из vault.website (вставить после =)
+  - $ROLE=custom-role
+  - prompt: имя AppRole
+  - vault read auth/approle/role/$ROLE/role-id
+```
+
+Автотесты: `tests/test_runbook.py` (23: разбор директив/YAML/плана и Pilot: auto-цепочка, manual ждёт Enter, prompt ждёт набранную строку, пустой Enter пропускает шаг, стоп по ошибке и `run:continue`, Esc и `:run stop`, `--dry`, свой YAML, отказы при `:watch`/втором прогоне).
+
+---
+
+**Версия документа**: v1.69
+**Версия приложения**: v1.125
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

@@ -60,6 +60,7 @@ COLON_COMMANDS: tuple[tuple[str, str], ...] = (
     ("screensaver", "starfield now (idle: screensaver_idle)"),
     ("theme", "TUI theme (:theme nord / dark / light)"),
     ("playbook", "dump this session as a --demo YAML"),
+    ("run", "run a command chain (runbook): tag or YAML, wait for you where told"),
     ("update", "compare VERSION with GitHub main"),
 )
 
