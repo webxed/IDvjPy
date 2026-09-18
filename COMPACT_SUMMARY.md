@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.135**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.136**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -27,7 +27,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no such tag) searches command text + comments across tags |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:q` `:w` `:h` `:c` `:json` `:i` `:?` `:cd` `:fm` `:term` `:env` `:session` `:new` `:welcome` `:backup` `:screensaver` `:r` `:cmd` `:/` `:g` `:n` `:N` `:export` `:import` `:theme` `:md` `:playbook` `:run` `:update` `:kill` `:watch` `:mv` `:stats` `:diff` `:o` `:alias` `:llm` |
+| `:` | `:?` `:q` `:w` `:h` `:c` `:json` `:md` `:rg` `:i` `:cd` `:fm` `:term` `:ed` `:env` `:r` `:cmd` `:log` `:o` `:diff` `:name` `:kill` `:watch` `:llm` `:cht` `:g` `:/` `:n` `:N` `:stats` `:mv` `:export` `:import` `:alias` `:kctx` `:session` `:new` `:send` `:send!` `:backup` `:welcome` `:screensaver` `:theme` `:playbook` `:run` `:update` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.79 (app v1.135) |
+| `test_cmd.md` | Manual plan v1.80 (app v1.136) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.135 |
+| `src/app.py` | TUI (`CommandRunner`), v1.136 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -217,6 +217,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.136
+
+- **Справка по командам догнала поведение (v1.119–v1.133).** Документация местами описывала прежнее поведение — правились только тексты, логика не менялась. Подсказка `:screensaver` обещала «starfield now», хотя с v1.119 холст по умолчанию — «матричный дождь» (`screensaver_matrix`); `:kctx` в `:?` и в ленте заставки перечислял только kubectl-стек, хотя с v1.129 список задаёт `kctx_vars` (по умолчанию kubectl **и** helm: `RELEASE CHART VALUES`), а `kctx_vars: []` выключает журнал; `:log` (в `:?`, в подсказке автодополнения и в ленте заставки) молчал про `f` — режим «только совпадения» и подсветку строки целиком (v1.132–v1.133). `:? run` получил предупреждение про тег без единой `run:`-директивы (все шаги уйдут `auto`, v1.130), а YAML-пример в справке переведён на префиксную строку `$ROLE=` (как в сиде `vapprole`: значение дописывается после `=`). В таблицу `:`-команд в `COMPACT_SUMMARY.md` добавлены пропущенные 8 команд (`:rg`, `:cht`, `:ed`, `:log`, `:name`, `:kctx`, `:send`, `:send!`), в перечень клавиш заставки — F7, в её ленту — `:run`. Тесты: `tests/test_colon_commands.py` (полнота таблицы подсказок), `tests/test_screensaver.py`, `tests/test_kctx_cmd.py`, `tests/test_runbook.py`, `tests/test_output_viewer.py`; `ruff` — без замечаний.
 
 ## v1.135
 

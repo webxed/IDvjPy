@@ -89,6 +89,9 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :log [N]    - Full output of a block in a scrollable Line-API viewer (no 300-line
                 cap; arrows/PgUp/PgDn scroll, Esc or q closes). Find with `/`;
                 Enter — search, n/N — next/prev match, Esc — close the find field.
+                The matching line is highlighted in full (accent background + bold).
+                `f` — only matching lines (again `f` / Esc — back to all lines;
+                needs a search first; the subtitle keeps the original line number).
                 N = blocks back (0 = focused/last). Shows the block stdout
                 (like F3), escape codes stripped. Also F7. `y` copies the source
                 file path (raw `:md` view)
@@ -145,9 +148,12 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :o [N]        - Last N finished command outputs of this session (default 5)
   :o /text      - grep the stored outputs (stdout/stderr); survives :c
   :o clear      - Forget the stored outputs (memory only, not the DB)
-  :kctx         - Cluster journal (kctx.json): list clusters; variables of the
-                kubectl stack (NS POD DEPLOY SVC ING APP CTR QUOTA) are saved
-                per cluster when set after login
+  :kctx         - Cluster journal (kctx.json): list clusters; the variables from
+                `kctx_vars` in settings.yml are saved per cluster when set after
+                login. Default — the bundled stack: kubectl (NS POD DEPLOY SVC ING
+                APP CTR QUOTA) plus helm (RELEASE CHART VALUES); the order of the
+                names is the order in the :kctx lists. `kctx_vars: []` turns the
+                journal off and `:kctx` says so
   :kctx <cluster> - Log in (klogin <c> || kubectl config use-context <c>) and
                 show previously used variable sets of that cluster; with exactly
                 one saved set it is applied right away (nothing to pick from).
@@ -273,6 +279,8 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   F5         - Open focused (or last command) block in JSON viewer
   F6         - Toggle simple (plain) output (Rich markup and ANSI colors off;
                escape sequences are stripped from any command output in either mode)
+  F7         - Full block output in the Line-API viewer (`:log`): `/` find, n/N,
+               f — only matching lines
   F8         - Label block dialog (`:name`): type a label, Enter saves, empty removes,
                Esc cancels. Then `|@<label> <command>` reuses its output without re-running.
   F2         - Toggle line-cursor mode (see below)
@@ -373,6 +381,9 @@ hint shown in ?? — e.g. `#vapprole=5=run:manual выпуск secret_id`):
   run:stop           - stop on failure (default)
 Directives in the TAG comment set defaults for all its steps (pause, failure
 policy); the step mode always comes from the command's own comment.
+A tag with NO run: directive at all gets a warning in the plan — otherwise every
+step would run auto, mutations included; mark the mutating step run:manual.
+`--step` drops that note (every step waits for your Enter anyway).
 
 [bold]YAML source[/bold] (`:playbook` writes a compatible file)
   title: vault approle
@@ -381,7 +392,7 @@ policy); the step mode always comes from the command's own comment.
     - echo one               # string = auto step
     - type: vault read …     # same, spelled out
       wait_command: true
-    - type: $ROLE=custom-role
+    - type: $ROLE=            # prefix line: append the value after =
       manual: true           # wait for Enter (the line is pre-filled)
       caption: имя роли      # hint in the plan and the step header
     - prompt: AppRole name   # wait for a line typed from scratch
