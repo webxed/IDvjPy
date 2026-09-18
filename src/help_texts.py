@@ -63,8 +63,12 @@ MAIN_HELP_TEXT = """[bold]IDvjPy_term VER - Commands Help[/bold]
   :send <session|*> <cmd> - Forward a command to another app session (its own
                 window): it is inserted into that session's input (Enter there
                 runs it). `:send!` runs it at once. `*` = every other session.
-                The command is materialized here ($VAR/$OUT, aliases); `$$`
-                secrets are masked (****) and never written to disk. The inbox is
+                The command is materialized here ($VAR/$OUT, aliases). Secrets
+                `$$` travel by NAME (`$TOKEN`): a value the target lacks is
+                written to its secrets file (secrets_<session>.json, 0600,
+                cleared when that session exits), the target's own value is
+                never overwritten — so the command really runs there, while the
+                inbox, history and journal never see the value. The inbox is
                 inbox_<session>.jsonl (0600) in the data dir; a message for a
                 stopped session waits for its start. Tab completes session names
                 after `:send `. Recorded in history (↑ / `:h`), never suggested

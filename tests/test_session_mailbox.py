@@ -2,14 +2,15 @@
 
 Сессии — отдельные процессы; обмен идёт файлами в data-каталоге (см.
 `src/session_mailbox.py`). Здесь: unit-тесты ящика (запись/вычерпывание/lock/
-права) и Pilot-тесты `:send` / `:send!` / broadcast / маскировки секретов.
+права) и Pilot-тесты `:send` / `:send!` / broadcast, а также секретов: по ящику
+едет только имя `$NAME`, значение — в секретное хранилище цели (`secrets_*.json`).
 """
 import json
 import os
 
 import pytest
 
-from app import CommandRunner
+from app import CommandRunner, InfoBlock
 from session_mailbox import (
     MAX_COMMAND_BYTES,
     MODE_INSERT,
@@ -186,17 +187,97 @@ async def test_send_without_other_sessions_reports_none(isolated_home):
         assert "No other sessions" in last_info(app).text_content
 
 
-async def test_send_masks_secrets_in_inbox(isolated_home):
+async def test_send_passes_secret_value_to_target_store(isolated_home):
+    """Секрет едет **именем**, значение — в secrets-файл цели, а не в ящик.
+
+    Так команда у цели действительно выполнится (`$NAME` подставит её
+    окружение), но значения не будет ни в ящике, ни в журнале, ни в истории.
+    """
     app = CommandRunner()
     async with app.run_test(size=(120, 40)) as pilot:
         await submit(pilot, "$$TOKEN=supersecret")
+        await submit(pilot, ':send beta curl -H "Bearer $TOKEN" https://api')
+        await pilot.pause()
+        raw = (isolated_home / "inbox_beta.jsonl").read_text(encoding="utf-8")
+        assert "$TOKEN" in raw
+        assert "supersecret" not in raw  # значения в ящике нет
+        assert "****" not in raw  # и заглушки-разрушителя больше нет
+        store = isolated_home / "secrets_beta.json"
+        assert json.loads(store.read_text(encoding="utf-8")) == {
+            "TOKEN": "supersecret"
+        }
+        assert (os.stat(store).st_mode & 0o777) == 0o600
+        text = last_info(app).text_content
+        assert "$TOKEN → beta" in text
+        assert "supersecret" not in text
+
+
+async def test_send_keeps_target_own_secret(isolated_home):
+    """Свой секрет цели не перезаписывается: команда пойдёт с её значением."""
+    (isolated_home / "secrets_beta.json").write_text(
+        json.dumps({"TOKEN": "beta-own"}), encoding="utf-8"
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "$$TOKEN=sender-value")
         await submit(pilot, ":send beta echo $TOKEN")
         await pilot.pause()
-        path = inbox_path(str(isolated_home), "beta")
-        raw = open(path, encoding="utf-8").read()
-        assert "supersecret" not in raw
-        assert "****" in raw
-        assert "secret values masked" in last_info(app).text_content
+        store = json.loads(
+            (isolated_home / "secrets_beta.json").read_text(encoding="utf-8")
+        )
+        assert store == {"TOKEN": "beta-own"}
+        text = last_info(app).text_content
+        assert "$TOKEN @ beta" in text
+        assert "sender-value" not in text
+
+
+async def test_send_without_secrets_writes_nothing(isolated_home):
+    """Обычная пересылка в чужие секреты не лезет."""
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":send beta echo plain")
+        await pilot.pause()
+        assert not (isolated_home / "secrets_beta.json").exists()
+        assert "secret" not in last_info(app).text_content
+
+
+async def test_poll_picks_up_passed_secret(isolated_home):
+    """Ящик принёс имя, а значение лежит в secrets-файле — подхватываем до доставки."""
+    (isolated_home / "secrets_default.json").write_text(
+        json.dumps({"TOKEN": "supersecret"}), encoding="utf-8"
+    )
+    send_message(
+        str(isolated_home), "default", "curl -H $TOKEN https://api", sender="beta"
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        app._poll_session_inbox()
+        await pilot.pause()
+        assert app.local_env.get("TOKEN") == "supersecret"
+        assert input_widget(app).value == "curl -H $TOKEN https://api"
+        assert "supersecret" not in "".join(
+            block.text_content for block in app.query(InfoBlock)
+        )
+
+
+async def test_poll_runs_forwarded_command_with_secret(isolated_home):
+    """`:send!` с секретом: у цели команда выполняется, значение не светится."""
+    (isolated_home / "secrets_default.json").write_text(
+        json.dumps({"TOKEN": "supersecret"}), encoding="utf-8"
+    )
+    send_message(
+        str(isolated_home), "default", "echo token=$TOKEN", sender="beta", mode=MODE_RUN
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        app._poll_session_inbox()
+        await pilot.pause()
+        block = await wait_command_done(app)
+        assert "token=supersecret" in block.raw_stdout  # выполнилось по-настоящему
+        assert "supersecret" not in (block.header or "")  # в шапке — маска
+        history = app._read_file_history()
+        assert "echo token=$TOKEN" in history  # история знает только имя
+        assert not any("supersecret" in line for line in history)
 
 
 async def test_poll_delivers_queued_insert(isolated_home):

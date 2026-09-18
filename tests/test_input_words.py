@@ -3,13 +3,13 @@ import pytest
 
 pytestmark = pytest.mark.slow
 
-from app import CommandInput, CommandRunner
+from app import CommandLineInput, CommandRunner
 from tests.conftest import input_widget
 
 TEXT = "kubectl get pods hello"
 
 
-async def _focused_input(app: CommandRunner, pilot, value: str, pos: int) -> CommandInput:
+async def _focused_input(app: CommandRunner, pilot, value: str, pos: int) -> CommandLineInput:
     inp = input_widget(app)
     inp.focus()
     inp.value = value

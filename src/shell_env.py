@@ -5,7 +5,7 @@ import json
 import os
 import re
 import shlex
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import NamedTuple
 
 RE_VAR_SUBST = re.compile(
@@ -90,17 +90,24 @@ def substitute_variables(
     local_env: Mapping[str, str],
     environ: Mapping[str, str] | None = None,
     extra: Mapping[str, str] | None = None,
+    skip: Collection[str] | None = None,
 ) -> str:
     """Заменяет $VAR. Приоритет: extra > local_env > environ.
 
     ``extra`` — ленивые плейсхолдеры (например OUT): считаются только в момент
     подстановки, в local_env / .bashrc_term не пишутся.
+    ``skip`` — имена, которые остаются в тексте как `$NAME` / `${NAME}`.
+    Нужно для `:send`: значение секрета не должно уезжать в другую сессию —
+    ящик перевозит только имя, а значение получатель подставит своё.
     """
     env = os.environ if environ is None else environ
     extra = extra or {}
+    keep = skip or ()
 
     def replacer(match: re.Match) -> str:
         var_name = match.group(1) or match.group(2)
+        if var_name in keep:
+            return match.group(0)
         if var_name in extra:
             return extra[var_name]
         if var_name in local_env:

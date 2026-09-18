@@ -43,6 +43,17 @@ def test_substitute_variables_prefers_local_env():
     assert not command_requests_placeholder("echo hi")
 
 
+def test_substitute_variables_skips_named_refs():
+    """`skip` оставляет имя как есть — так `:send` пересылает `$NAME`, а не значение."""
+    env = {"TOKEN": "s3cr3t", "NS": "team-a"}
+    out = substitute_variables("curl -H $TOKEN -n $NS", env, {}, skip={"TOKEN"})
+    assert out == "curl -H $TOKEN -n team-a"
+    # Скобочная форма — тоже имя, а не значение.
+    assert substitute_variables("echo ${TOKEN}", env, {}, skip={"TOKEN"}) == "echo ${TOKEN}"
+    assert substitute_variables("echo $TOKEN", env, {}) == "echo s3cr3t"
+    assert substitute_variables("echo $TOKEN", env, {}, skip=set()) == "echo s3cr3t"
+
+
 def test_last_nonempty_line_does_not_split_whole_buffer():
     assert last_nonempty_line("") == ""
     assert last_nonempty_line("US\n") == "US"

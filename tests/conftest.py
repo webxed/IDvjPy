@@ -13,7 +13,7 @@ _SRC = PROJECT_ROOT / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from app import CommandBlock, CommandInput, CommandRunner, InfoBlock
+from app import CommandBlock, CommandLineInput, CommandRunner, InfoBlock
 from json_viewer import JSONViewer
 
 TEST_SETTINGS = """\
@@ -81,8 +81,8 @@ def clip_store(monkeypatch):
     return pyperclip
 
 
-def input_widget(app: CommandRunner) -> CommandInput:
-    return app.query_one(f"#{app.ID_INPUT}", CommandInput)
+def input_widget(app: CommandRunner) -> CommandLineInput:
+    return app.query_one(f"#{app.ID_INPUT}", CommandLineInput)
 
 
 async def type_keys(pilot, text: str) -> None:
@@ -98,7 +98,7 @@ async def submit(pilot, text: str) -> None:
     Если выбран уже введённый путь (`ls ~/`), Enter выполняет команду.
     """
     await pilot.press("escape")
-    inp = pilot.app.query_one("#command-input", CommandInput)
+    inp = pilot.app.query_one("#command-input", CommandLineInput)
     inp.value = ""
     inp.cursor_position = 0
     await type_keys(pilot, text)

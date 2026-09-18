@@ -1728,8 +1728,19 @@ RE_SECRET_ENTRY = re.compile(r"^\$\$[A-Za-z_][A-Za-z0-9_]*=.")
 RE_CAPTURE_VALUE = re.compile(r"^@([A-Za-z0-9_][A-Za-z0-9_.:-]*)$")
 
 
-class CommandInput(Input):
-    """Поле ввода: Tab — в журнал; Ctrl+D — очистить строку."""
+class CommandLineInput(Input):
+    """Поле ввода: Tab — в журнал; Ctrl+D — очистить строку.
+
+    Имя класса намеренно НЕ `CommandInput`: в `textual/command.py` есть свой
+    `CommandInput` — поле палитры `Ctrl+P` — со своим `DEFAULT_CSS`
+    (`width: 1fr; border: blank; background: transparent; …`). CSS в Textual
+    матчится по имени класса, поэтому одноимённый виджет начинает ловить чужой
+    стиль, как только палитра хоть раз открыта (ее CSS попадает в общий
+    stylesheet), а применяется он при следующем переприменении CSS — например,
+    при смене темы: поле получало `width: 1fr`, и вместе с `margin: 0 1` его
+    правая рамка уезжала за край экрана (v1.134). Переименование снимает
+    совпадение целиком, а не только этот симптом.
+    """
 
     @property
     def app(self) -> "CommandRunner":
@@ -2202,7 +2213,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.133"
+    VERSION = "v1.135"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -3268,7 +3279,7 @@ class CommandRunner(App):
         if not clip:
             return
 
-        input_widget = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        input_widget = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         if not input_widget.has_focus:
             input_widget.focus()
         current = input_widget.value or ""
@@ -3303,7 +3314,7 @@ class CommandRunner(App):
         """
         if not self.clear_clipboard_after_secret:
             return
-        inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        inp = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         value = (inp.value or "").lstrip()
         if not RE_SECRET_ENTRY.match(value):
             return
@@ -3384,7 +3395,7 @@ class CommandRunner(App):
         self.FILE_BASHRC = self._data_path(bashrc_file_for(name))
         self.FILE_LLM_PROVIDERS = self._data_path("llm_providers.yml")
         self.FILE_KCTX = self._data_path("kctx.json")
-        self.FILE_SECRETS = self._data_path(f"secrets_{name}.json")
+        self.FILE_SECRETS = self._data_path(secrets_file_for(name))
 
     @staticmethod
     def _settings_example_path() -> str:
@@ -3438,7 +3449,7 @@ class CommandRunner(App):
         self.register_theme(MATRIX_THEME)
 
         # 0. Привязать список подсказок к полю ввода
-        cmd_input = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        cmd_input = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         cmd_input.set_completion_list(self._completion_list)
 
         # 1. Загрузка общих настроек
@@ -3870,7 +3881,7 @@ class CommandRunner(App):
     def compose(self) -> ComposeResult:
         """Построение UI."""
         yield Header()
-        yield CommandInput(placeholder="Enter command (type 2+ chars for completion)", id=self.ID_INPUT)
+        yield CommandLineInput(placeholder="Enter command (type 2+ chars for completion)", id=self.ID_INPUT)
         self._completion_list = CompletionList()
         yield self._completion_list
         yield JournalScroll(id=self.ID_RESULTS_CONTAINER)
@@ -3883,13 +3894,13 @@ class CommandRunner(App):
         if self._run_active and not self._demo_pressing:
             # Esc на шаге manual/prompt — это и есть «остановить прогон».
             self._stop_runbook()
-        inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        inp = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         inp.focus()
         inp.cursor_position = len(inp.value or "")
 
     def set_input_draft(self, text: str) -> None:
         """Подставляет черновик команды во ввод (после JSON viewer / jq-пути)."""
-        inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        inp = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         inp._applying_completion = True
         inp.value = text
         inp.cursor_position = len(text)
@@ -3902,7 +3913,7 @@ class CommandRunner(App):
         chunk = text or ""
         if not chunk:
             return
-        inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        inp = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         current = inp.value or ""
         pos = inp.cursor_position
         if pos < 0 or pos > len(current):
@@ -4370,7 +4381,7 @@ class CommandRunner(App):
         `?tag` без запуска (как `:команды`), запуск — отдельный Enter.
         """
         try:
-            inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+            inp = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         except Exception:
             return
         if not inp.apply_completion_item(index):
@@ -4496,7 +4507,7 @@ class CommandRunner(App):
 
     def copy_input_line(self) -> None:
         """Копирует весь текст поля ввода в системный буфер."""
-        inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        inp = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         text = inp.value or ""
         if not text:
             self.sub_title = "Input is empty."
@@ -4513,7 +4524,7 @@ class CommandRunner(App):
         """Ctrl+C: выделение мышью → в буфер; иначе вся строка ввода / весь блок (F3)."""
         if self._copy_selection_to_clipboard():
             return
-        inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        inp = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         if inp.has_focus:
             self.copy_input_line()
             return
@@ -4698,7 +4709,7 @@ class CommandRunner(App):
         даже если начинаются с !. Это позволяет использовать ссылки в составных командах.
         """
         user_input = message.value.strip()
-        input_widget = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        input_widget = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         input_widget.value = ""
         input_widget.reset_undo()  # новая строка — «чистая» история правок
         self._reset_history_walk()
@@ -5358,7 +5369,7 @@ class CommandRunner(App):
         if command not in command_names():
             return
         self.insert_input_at_cursor(f":{command} ")
-        self.query_one(f"#{self.ID_INPUT}", CommandInput).focus()
+        self.query_one(f"#{self.ID_INPUT}", CommandLineInput).focus()
 
     def action_insert_seed_command(self, script: str = "") -> None:
         """Insert a handbook --seed command into the input (click from welcome)."""
@@ -5402,7 +5413,7 @@ class CommandRunner(App):
         очередь ввода по порядку, поэтому второй запуск видит нужный текст.
         """
         try:
-            inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+            inp = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         except Exception:
             return
         value = inp.value or ""
@@ -6052,13 +6063,48 @@ class CommandRunner(App):
         name = getattr(self, "instance_name", None) or INSTANCE_NAME
         return self._data_path(inbox_file_for(name))
 
+    def _pass_secrets_to(
+        self, target: str, names: Sequence[str]
+    ) -> tuple[list[str], list[str], str | None]:
+        """Отдать цели секреты из этой сессии, которых у неё нет.
+
+        Возвращает `(переданные, её собственные, ошибка записи)`. Значения
+        ложатся в секретное хранилище цели (`secrets_<target>.json`, 0600,
+        удаляется при выходе её сессии); в ящике едет только имя `$NAME`, и в
+        журнале/истории цели останется оно же. **Свои секреты цели не
+        перезаписываются** — если имя там уже есть, команда выполнится с её
+        собственным значением (и отправитель это видит).
+        """
+        store = self._data_path(secrets_file_for(target))
+        existing = read_secrets_file(store, encoding=self.ENCODING)
+        added: list[str] = []
+        kept: list[str] = []
+        for name in names:
+            if name in existing:
+                kept.append(name)
+                continue
+            value = self.local_env.get(name)
+            if not value:
+                continue
+            existing[name] = value
+            added.append(name)
+        if not added:
+            return added, kept, None
+        error = write_secrets_file(store, existing, encoding=self.ENCODING)
+        if error:
+            return [], kept, error
+        return added, kept, None
+
     def _handle_send_command(self, args: list[str], *, run: bool = False) -> None:
         """`:send[!] <session|*> <command…>` — переслать команду в другую сессию.
 
         Без `!` — вставить во ввод целевой сессии (запуск там — отдельным Enter),
         `:send!` — выполнить сразу. `*` — всем сессиям, кроме своей. Команда
-        материализуется у отправителя (текущие `$VAR` / `$OUT` / алиасы);
-        значения секретов `$$` в ящик не попадают — маскируются `****`.
+        материализуется у отправителя (текущие `$VAR` / `$OUT` / алиасы).
+
+        Секреты `$$` едут **именем** (`$TOKEN`), а значение — в секретное хранилище
+        цели (`_pass_secrets_to`), поэтому команда там действительно выполнится,
+        но ни в ящике, ни в журнале/истории цели значения не будет.
         """
         if not args:
             self._show_send_help()
@@ -6086,7 +6132,19 @@ class CommandRunner(App):
             ))
             return
 
-        expanded = self._expand_aliases(self._substitute_variables(payload))
+        # Материализация: `$VAR` / `$OUT` / алиасы раскрываются, а имена **своих
+        # секретов остаются** (`$TOKEN`) — значение в ящик не пишем, оно уйдёт
+        # в секретное хранилище цели (`_pass_secrets_to`), поэтому команда там
+        # выполнится по-настоящему, а не с `****`.
+        expanded = self._expand_aliases(
+            self._substitute_variables(payload, keep_secrets=True)
+        )
+        secret_refs = [
+            name for name in unexpanded_variables(expanded) if name in self._secret_names
+        ]
+        # Страховка: значение могло приехать из вывода блока (`$OUT`), из алиаса
+        # или быть вставленным литерально — такое маскируем и говорим прямо,
+        # что команда у цели не выполнится.
         masked = self._mask_secrets(expanded)
         secret_hidden = masked != expanded
         current = getattr(self, "instance_name", None) or INSTANCE_NAME
@@ -6115,6 +6173,19 @@ class CommandRunner(App):
                 return
             names = [name]
 
+        # Значения секретов — в секретное хранилище цели, до отправки: свой
+        # секрет цели не трогаем, недостающий — передаём (только упомянутые).
+        passed: list[str] = []
+        own: list[str] = []
+        secret_errors: list[str] = []
+        if secret_refs:
+            for name in names:
+                added, kept, error = self._pass_secrets_to(name, secret_refs)
+                passed.extend(f"${var} → {name}" for var in added)
+                own.extend(f"${var} @ {name}" for var in kept)
+                if error:
+                    secret_errors.append(f"{name}: {error}")
+
         sent: list[str] = []
         failed: list[str] = []
         for name in names:
@@ -6132,11 +6203,31 @@ class CommandRunner(App):
 
         verb = "run" if run else "insert"
         preview = masked if len(masked) <= 120 else masked[:117] + "…"
-        note = " [yellow](secret values masked)[/yellow]" if secret_hidden else ""
+        note = (
+            " [yellow](the value found in the text was masked — use $NAME so the "
+            "target substitutes its own)[/yellow]"
+            if secret_hidden else ""
+        )
+        notes: list[str] = []
+        if passed:
+            notes.append(
+                "[dim]secret value(s) → target secrets file (0600, cleared when "
+                "that session exits): " + ", ".join(passed) + "[/dim]"
+            )
+        if own:
+            notes.append(
+                "[dim]target's own secret(s) kept (its value is used): "
+                + ", ".join(own) + "[/dim]"
+            )
+        if secret_errors:
+            notes.append(
+                "[red]secret store not updated: " + "; ".join(secret_errors) + "[/red]"
+            )
         if sent:
-            self.add_block(InfoBlock(
-                f"Sent to {', '.join(sent)} ({verb}):{note}\n{escape(preview)}"
-            ))
+            body = f"Sent to {', '.join(sent)} ({verb}):{note}\n{escape(preview)}"
+            if notes:
+                body += "\n" + "\n".join(notes)
+            self.add_block(InfoBlock(body))
         if failed:
             self.add_block(InfoBlock(f"Error: could not send to {', '.join(failed)}."))
 
@@ -6152,6 +6243,8 @@ class CommandRunner(App):
             "  *        — every other session",
             f"  this session: {current}",
             f"  other sessions: {', '.join(others) or 'none'}",
+            "  secrets  — only `$NAME` travels; a value the target lacks is passed",
+            "             to its secrets file (0600, cleared when it exits)",
         ]
         pending = pending_sessions(self._data_dir or ".")
         if pending:
@@ -6164,6 +6257,10 @@ class CommandRunner(App):
             drained = drain_inbox(self._session_inbox_path())
         except Exception:
             drained = []
+        if drained:
+            # `:send` кладёт значения секретов прямо в наш secrets-файл (в ящике
+            # едет только имя `$NAME`) — подхватываем их до доставки.
+            self.load_secrets()
         batch = self._forward_pending + drained
         self._forward_pending = []
         for message in batch:
@@ -6201,7 +6298,7 @@ class CommandRunner(App):
         chunk = (text or "").strip()
         if not chunk:
             return
-        inp = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        inp = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         current = (inp.value or "").strip()
         new_value = f"{current} {chunk}" if current else chunk
         inp._applying_completion = True
@@ -6937,45 +7034,20 @@ class CommandRunner(App):
     def _save_secrets(self) -> str | None:
         """Атомарно записать secrets-файл с правами 0600. Ошибка или None."""
         data = {n: self.local_env.get(n, "") for n in sorted(self._secret_names)}
-        tmp = self.FILE_SECRETS + ".tmp"
-        try:
-            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "w", encoding=self.ENCODING) as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, self.FILE_SECRETS)
-            self._chmod_secrets()
-        except OSError as e:
-            return str(e)
-        return None
-
-    def _chmod_secrets(self) -> None:
-        """Секреты — только владельцу (best effort)."""
-        try:
-            os.chmod(self.FILE_SECRETS, 0o600)
-        except OSError:
-            pass
+        return write_secrets_file(self.FILE_SECRETS, data, encoding=self.ENCODING)
 
     def load_secrets(self) -> None:
         """Загрузить секреты из `secrets_<instance>.json` в env.
 
         Делает их доступными как `$NAME` (и в дочерних процессах через
         os.environ), но не пишет в `.bashrc_term` и не показывает в UI.
+        Вызывается и при доставке чужой команды: `:send` кладёт значения
+        секретов прямо в этот файл — по ящику едет только имя `$NAME`.
         """
         self._secret_names = set()
-        if not os.path.exists(self.FILE_SECRETS):
-            return
-        try:
-            with open(self.FILE_SECRETS, encoding=self.ENCODING) as f:
-                data = json.load(f)
-        except (OSError, json.JSONDecodeError):
-            return
-        if not isinstance(data, dict):
-            return
-        for raw_name, raw_value in data.items():
-            name = str(raw_name)
-            if not RE_VAR_NAME.match(name):
-                continue
-            value = str(raw_value)
+        for name, value in read_secrets_file(
+            self.FILE_SECRETS, encoding=self.ENCODING
+        ).items():
             self.local_env[name] = value
             os.environ[name] = value
             self._secret_names.add(name)
@@ -8328,7 +8400,7 @@ class CommandRunner(App):
         self._history_walk_index = 0
 
     def _apply_history_line(self, text: str) -> None:
-        cmd_input = self.query_one(f"#{self.ID_INPUT}", CommandInput)
+        cmd_input = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         cmd_input._applying_completion = True
         cmd_input.value = text
         cmd_input.cursor_position = len(text)
@@ -8423,11 +8495,22 @@ class CommandRunner(App):
             self._history_walk_index = len(self._history_matches)
             self._apply_history_line(self._history_draft)
 
-    def _substitute_variables(self, command: str) -> str:
+    def _substitute_variables(self, command: str, *, keep_secrets: bool = False) -> str:
+        """Подставить `$VAR` / `$OUT` (см. `shell_env.substitute_variables`).
+
+        ``keep_secrets=True`` оставляет имена своих секретов как `$NAME`: так
+        `:send` пересылает **только имя**, а значение уходит в секретное хранилище
+        цели (`_pass_secrets_to`) — не в ящик, не в историю и не в журнал.
+        """
         extra = None
         if command_requests_placeholder(command, "OUT"):
             extra = {"OUT": self._last_output_line()}
-        return substitute_variables(command, self.local_env, extra=extra)
+        return substitute_variables(
+            command,
+            self.local_env,
+            extra=extra,
+            skip=self._secret_names if keep_secrets else None,
+        )
 
     def _handle_lazy_placeholder_query(self, user_input: str) -> bool:
         """`$OUT` без `=` — показать текущую строку, ничего не запоминая."""
@@ -9822,6 +9905,48 @@ class CommandRunner(App):
         if "mouse" not in kwargs:
             kwargs["mouse"] = self._settings_terminal_mouse()
         return super().run(**kwargs)
+
+
+def secrets_file_for(name: str) -> str:
+    """Имя файла секретов сессии (0600, чистится при её выходе)."""
+    return f"secrets_{name}.json"
+
+
+def read_secrets_file(path: str, encoding: str = "utf-8") -> dict[str, str]:
+    """Прочитать `secrets_*.json`; нет файла / битый / не тот формат — пусто."""
+    try:
+        with open(path, encoding=encoding) as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {
+        str(name): str(value)
+        for name, value in data.items()
+        if RE_VAR_NAME.match(str(name))
+    }
+
+
+def write_secrets_file(
+    path: str, data: Mapping[str, str], encoding: str = "utf-8"
+) -> str | None:
+    """Атомарно записать секреты (0600). Текст ошибки или None.
+
+    Одна реализация на всех: свои секреты (`$$NAME=…`) и полученные от другой
+    сессии в `:send` (туда пишет отправитель — только значения, команда едет
+    с именем `$NAME`).
+    """
+    tmp = path + ".tmp"
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding=encoding) as f:
+            json.dump({n: data[n] for n in sorted(data)}, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+        os.chmod(path, 0o600)  # best effort: секреты — только владельцу
+    except OSError as e:
+        return str(e)
+    return None
 
 
 def bashrc_file_for(name: str) -> str:

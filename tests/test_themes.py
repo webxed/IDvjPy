@@ -129,6 +129,37 @@ async def test_matrix_theme_survives_restart(isolated_home):
         assert second.screen.has_class(MATRIX_CLASS)
 
 
+async def test_palette_theme_change_keeps_input_margins(isolated_home):
+    """Смена темы при открытой палитре не ломает рамку поля ввода.
+
+    Textual матчит CSS по **имени класса**: `textual.command.CommandLineInput`
+    (поле палитры `Ctrl+P`) объявляет `width: 1fr; border: blank; ...`.
+    Пока наш виджет тоже назывался `CommandLineInput`, это правило начинало
+    действовать на нём, как только палитра открывалась (её CSS попадает в общий
+    stylesheet), а применялось — при следующем переприменении CSS (смена темы).
+    С `width: 1fr` и `margin: 0 1` поле становится шире экрана на колонку,
+    и правая рамка уезжает за край (симптом: «рамка исчезает»).
+    """
+    app = CommandRunner()
+    async with app.run_test(size=(70, 18)) as pilot:
+        await pilot.pause()
+        inp = app.query_one(f"#{app.ID_INPUT}", Input)
+        assert inp.region.width == 70 - 2  # margin 0 1: по колонке с каждой стороны
+
+        await pilot.press("ctrl+p")
+        await pilot.pause()
+        await pilot.pause()
+        app.theme = "textual-light"  # ровно как ThemeProvider (DiscoveryHit)
+        await pilot.pause()
+        await pilot.pause()
+        assert inp.region.width == 70 - 2, "поле ввода получило width: 1fr из чужого CSS"
+
+        await pilot.press("escape")
+        await pilot.pause()
+        await pilot.pause()
+        assert inp.region.width == 70 - 2
+
+
 async def test_block_focus_highlight_is_soft(isolated_home):
     """Подсветка блока в фокусе: видна, но не слепит (было `$primary-darken-1`)."""
     app = CommandRunner()

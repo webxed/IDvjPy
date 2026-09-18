@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.133**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.135**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.77 (app v1.133) |
+| `test_cmd.md` | Manual plan v1.79 (app v1.135) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.133 |
+| `src/app.py` | TUI (`CommandRunner`), v1.135 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -217,6 +217,16 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.135
+
+- **Секреты в `:send`: значение — в секретное хранилище цели, а не в ящик и не заглушкой.** `:send s2 curl -H "Bearer $TOKEN" …` раньше уходил в ящик с `****` вместо значения — секрет был защищён, но команда у цели заведомо не выполнялась (в ящике лежала заглушка). Теперь отправитель материализует команду, **не раскрывая свои секретные имена** (`substitute_variables(..., skip=…)`, `_substitute_variables(keep_secrets=True)`): в ящике едет `$TOKEN`, а значения упомянутых секретов (только их, не всех подряд) `_pass_secrets_to` кладёт прямо в секретное хранилище цели — `secrets_<target>.json` (0600, чистится при выходе её сессии, как и свои). Своё значение цели **не перезаписывается**: если имя у неё уже есть, команда выполнится с ним, и отправитель видит это в журнале (`secret value(s) → target secrets file: $TOKEN → beta` и `target's own secret(s) kept: $TOKEN @ beta`). Получатель при выемке ящика перечитывает свой secrets-файл (`load_secrets` в `_poll_session_inbox`) — поэтому `$NAME` в уже доставленной команде сразу что-то значит. Итог: `:send!` с секретом у цели действительно выполняется, а значение не появляется ни в `inbox_*.jsonl`, ни в её журнале/истории (в шапке блока — маска `****`, в истории — имя). Маска осталась как страховка от значений, попавших в текст иначе (`$OUT` блока, алиас, вставлено руками) — но теперь она явно говорит, что команда у цели не выполнится, и предлагает писать `$NAME`. Заодно вспомогательное: `secrets_file_for` / `read_secrets_file` / `write_secrets_file` (одна реализация атомарной записи 0600 вместо дублирования в `_save_secrets` / `load_secrets`), в справке `:send` — строка про секреты. Тесты: `tests/test_session_mailbox.py` (вместо проверки `****` — 5 своих: значение в хранилище цели и 0600, самого значения в ящике нет, свой секрет цели не перезаписан, обычная пересылка в чужие секреты не лезет, при выемке имя подхватывается из файла и в ввод/журнал идёт только имя, а `:send!` у цели выполняется по-настоящему и в историю попадёт имя), `tests/test_shell_env.py` (+1: `skip` оставляет `$NAME`/`${NAME}`, без `skip` — как раньше).
+
+## v1.134
+
+- **Правая рамка поля ввода больше не уезжает за край после смены темы через `Ctrl+P`.** Симптом: открыл палитру команд (`Ctrl+P`), выбрал тему — справа у поля ввода пропала рамка (и оставалась пропавшей после закрытия палитры). Причина — **совпадение имён классов**: в `textual/command.py` есть свой `CommandInput` (поле палитры) с `DEFAULT_CSS`:
+  `CommandInput, CommandInput:focus { border: blank; width: 1fr; padding-left: 0; background: transparent; background-tint: 0% }`,
+  а наш виджет поля ввода назывался так же (`src/app.py`: `class CommandInput(Input)`), и Textual матчит CSS **по имени класса** — селектор `CommandInput` накрывал оба виджета. Правило вступало в силу, как только палитра хоть раз открывалась (её CSS попадает в общий stylesheet), а применялось при следующем переприменении CSS — как раз при смене темы. Для `width` мы своего правила не имели: `CommandInput` (селектор-класс) побеждал `Input` (селектор-тип) в `DEFAULT_CSS`, поле получало `width: 1fr`, и вместе с `margin: 0 1` (68 + 2 > 70) его бокс выходил за правый край экрана — рамка обрезалась. Рамка при этом не исчезала в CSS («все четыре грани на месте» в `styles.border`), а именно вылезала за экран — поэтому смена темы через `:theme` или `d` ничего не ломала (палитра не открывалась), а через палитру — ломала. Лечение — корень, а не симптом: класс переименован в `CommandLineInput` (24 ссылки в `src/app.py`, `tests/conftest.py`, `tests/test_input_words.py`), совпадение снято целиком — заодно наш виджет больше не наследует `border: blank` / `background: transparent` / `background-tint: 0%` от чужого `DEFAULT_CSS`. В `CLAUDE.md` и в докстроке класса — предупреждение «не переименовывать обратно» (имя класса виджета в Textual — глобальный идентификатор для CSS). Тесты: `tests/test_themes.py` (+1: `Ctrl+P` → смена темы → `region.width` поля остаётся `экран − 2`; до правки тест падал на `width=70` вместо 68). Проверены и соседние наборы, где виджет фигурирует: `test_input_words`, `test_commands`, `test_completion`, `test_colon_commands`, `test_secrets`.
 
 ## v1.133
 
