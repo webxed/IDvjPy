@@ -141,6 +141,11 @@ try:
         resolve_editor,
         write_temp_text,
     )
+    from example_config import (
+        detect_language,
+        llm_providers_example_path,
+        settings_example_path,
+    )
     from gui_open import (
         GuiOpenError,
         format_opened,
@@ -2235,7 +2240,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.141"
+    VERSION = "v1.143"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -3418,24 +3423,21 @@ class CommandRunner(App):
         self.FILE_KCTX = self._data_path("kctx.json")
         self.FILE_SECRETS = self._data_path(secrets_file_for(name))
 
-    @staticmethod
-    def _settings_example_path() -> str:
-        return os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "settings.example.yml"
-        )
-
     def _provision_fresh_data_dir(self) -> None:
         """Первый запуск в новом (не портативном) data-каталоге — кладём шаблоны.
 
+        `settings.yml` — шаблон языка, выбранного в режиме auto (--lang /
+        $IDVJPY_LANG → системная локаль → en): комментарии сразу читаемы.
         Портативный режим (data_dir == cwd) не трогаем: там файлами управляет
         пользователь (repo / старая раскладка).
         """
         if self._data_dir == os.getcwd():
             return
+        lang = detect_language(CLI_LANGUAGE)
         try:
             if not os.path.exists(self.FILE_SETTINGS):
-                example = self._settings_example_path()
-                if os.path.exists(example):
+                example = settings_example_path(lang)
+                if example:
                     shutil.copy(example, self.FILE_SETTINGS)
                 else:
                     with open(self.FILE_SETTINGS, "w", encoding=self.ENCODING) as f:
@@ -3443,10 +3445,10 @@ class CommandRunner(App):
         except OSError:
             pass
         try:
-            if not os.path.exists(self.FILE_LLM_PROVIDERS) and os.path.exists(
-                example_config_path()
-            ):
-                shutil.copy(example_config_path(), self.FILE_LLM_PROVIDERS)
+            if not os.path.exists(self.FILE_LLM_PROVIDERS):
+                example = llm_providers_example_path(lang)
+                if example:
+                    shutil.copy(example, self.FILE_LLM_PROVIDERS)
         except OSError:
             pass
 

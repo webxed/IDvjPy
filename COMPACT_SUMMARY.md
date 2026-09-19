@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.141**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.143**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.85 (app v1.141) |
+| `test_cmd.md` | Manual plan v1.87 (app v1.143) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.141 |
+| `src/app.py` | TUI (`CommandRunner`), v1.143 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -194,8 +194,8 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/kctx_store.py` | Кластерный журнал (`kctx.json` в data-dir): снимки переменных из `kctx_vars` по кластерам, парсер `parse_kctx_vars` |
 | `src/llm_client.py` | LLM-запросы по `llm_providers.yml` (`:llm`); `answer_language` провайдера, а при `auto`/отсутствии — имя языка UI (`llm.answer_language` из локали; `off`/`none`/`no`/`false`/`0` отключают правило) |
 | `src/llm_context.py` | Контекст приложения для LLM: шпаргалка префиксов + выжимка тегов/команд (`:llm ask`, ключ `app_context`) |
-| `src/llm_providers.example.yml` | Образец конфига провайдеров LLM |
-| `src/settings.example.yml` | Шаблон настроек для первого запуска в новом data-каталоге |
+| `src/llm_providers/<lang>.yml` | Локализованные шаблоны провайдеров LLM (en/ru/zh): язык файла задаёт `answer_language` и текст офлайн-заглушки (префикс `[offline]` общий) |
+| `src/settings/<lang>.yml` | Локализованные шаблоны настроек (en/ru/zh, ключи/значения синхронны) для первого запуска в новом data-каталоге |
 | `src/gui_open.py` | `:fm` / `:term` detached file manager / terminal |
 | `src/editor_open.py` | Внешний редактор для `:ed` (settings.yml `editor:` → `$VISUAL`/`$EDITOR` → системный; временные копии для `$OUT`/`$BLOCK`) |
 | `src/json_viewer.py` | JSON tree modal |
@@ -207,18 +207,28 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/help_texts.py` | Accessors for the `:?` / `:? run` / `:? calc` / `:i` help texts — files `src/locales/help/<lang>/{main,runbook,calc,ingress}.txt` via `i18n.text()` (`en` is the source of truth) |
 | `src/relang.py` | `:relang [code]` — перевод комментариев **уже засеянной** библиотеки (подписи тегов и подсказки команд) после смены языка, без повторного `--seed`: `_collect()` собирает канонический индекс из `seed_linux_commands` / `seed_k8s_chains` / `seed_git` / `seed_ops`, строка матчится по `(тег, команда)` (linux-дополнения — по `tid - 1`), правленый руками комментарий не трогается, снимок БД в `backups/` до записи; CLI `python3 src/relang.py --lang ru`. Тесты: `tests/test_relang.py` |
 | `src/i18n.py` | UI-language core: catalogue lookup (`t`/`tlist`) and long texts (`text("main")` → `locales/help/<lang>/*.txt`), language resolution (`--lang` → `$IDVJPY_LANG` → `settings.yml: language` → `en`; `auto` follows `$LANG`). Catalogues: `src/locales/<lang>.yml` plus parts in `src/locales/<lang>/*.yml` (`screensaver`, `seed`), deep-merged; `en` is the source of truth; missing keys fall back to `en`, unknown keys return themselves. Tests: `tests/test_i18n.py` (keys are strings — YAML reads bare `off`/`n`/`N` as bool; every language has all help texts and all `catalog.desc.*`) |
+| `src/example_config.py` | Локализованные шаблоны личных файлов: `available_settings_languages`/`available_llm_providers_languages`, `settings_example_path(lang)`, `llm_providers_example_path(lang)` (откат на `en`), `detect_language(explicit)` — `--lang` → `$IDVJPY_LANG` → системная локаль (auto) → `en`; шаблоны — `src/settings/<lang>.yml` и `src/llm_providers/<lang>.yml` |
 | `src/ansi_output.py` | ANSI/ESC в выводе команд: SGR → цвета (`to_markup`), плоский текст без кодов (`to_plain`), терминальный `\r` (`collapse_carriage_returns`); ключ `ansi_colors` |
 | `src/runbook.py` | `:run` — полуавтоматический прогон цепочки: шаги `auto`/`manual`/`prompt`, директивы `run:` в комментариях тега, план из YAML (`note:` для тега без единой директивы) |
 | `src/seed_*.py` | Handbook seeds (linux, k8s, git, ops, …) |
 | `src/app.tcss` | Styles (JSON viewer, line-nav border, block focus); Textual CSS — расширение `.tcss`, чтобы редакторы не линтовали его браузерным CSS |
-| `settings.yml` | Личные настройки — **не в git** (`.gitignore`), создаётся копией `src/settings.example.yml` при первом запуске в новом data-каталоге |
-| `src/settings.example.yml` | Шаблон настроек: все ключи с комментариями, `editor: nano` по умолчанию |
+| `settings.yml` | Личные настройки — **не в git** (`.gitignore`), создаётся копией `src/settings/<lang>.yml` (язык `auto`) при первом запуске в новом data-каталоге |
+| `src/settings/<lang>.yml` | Локализованные шаблоны настроек: ключи и значения синхронны, различаются только комментарии; `editor: nano`, `language: auto` |
+| `docs/<lang>/README.md` | Переводы README (en/zh); корневой `README.md` — русский, но маркер версии (`**IDvjPy_term** vX.YY — …`) синхронизирует `bump_version` во всех трёх |
 | `K8S_CHAINS.md` | k8s investigation overview |
 | `docs/SEED_*_COMMANDS.md` | Canonical tids per handbook |
 | `DATABASE.md` | How commands are read from SQLite |
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.143
+
+- **Тот же языковой механизм для `llm_providers.example.yml` и `README.md`.** Шаблон провайдеров разложен по каталогу `src/llm_providers/<lang>.yml` (`en`/`ru`/`zh`): комментарии переведены, а язык файла задаёт `answer_language` (`English`/`Russian`/`Chinese`) и текст офлайн-заглушки (префикс `[offline]` во всех — на него опирается демо-тест). Провижининг копирует в новый data-каталог файл того же языка, выбранного в режиме auto; `llm_client.example_config_path(lang)` делегирует в новый общий модуль `src/example_config.py` (вместо `settings_example.py`: `settings_example_path`, `llm_providers_example_path`, `detect_language`). Docker-стенд выбирает оба шаблона одним языком, CI-проверка обновлена. README локализован: корневой остаётся русским, переводы — `docs/en/README.md` и `docs/zh/README.md` (по той же конвенции `docs/<lang>/`, что и справочники); относительные ссылки и `<img src>` внутри переложены на `../../`. Маркер версии в переводах — тот же (`**IDvjPy_term** vX.YY — …`), поэтому локализованные README добавлены в `bump_version.TARGETS` и под `test_release_meta` — версия не протухает. Заодно исправлены устаревшие тесты `tests/test_llm.py` (правило `answer_language` по умолчанию — язык интерфейса с v1.137; добавлен кейс `off`). Тесты: `tests/test_data_dirs.py` (+структура и языковые значения шаблонов провайдеров, паритет языков обоих каталогов), `tests/test_version_bump.py` (фикстуры локализованных README), `tests/test_release_meta.py` (+маркер версии в переводах), `tests/test_docker_stand.py`, `tests/test_llm.py`.
+
+## v1.142
+
+- **Локализованные шаблоны настроек + выбор языка при первом старте.** Шаблон `src/settings.example.yml` разложен по каталогу `src/settings/<lang>.yml` (`en`, `ru`, `zh`): ключи и значения синхронны, различаются только комментарии; `language:` оставлен `auto`. Новый модуль `src/settings_example.py` (`available_settings_languages`, `settings_example_path`, `detect_language`) и `_provision_fresh_data_dir` копируют в новый data-каталог **шаблон языка, выбранного в режиме auto** — `--lang` → `$IDVJPY_LANG` → системная локаль → `en`; нет файла языка — падает на `en`. Заодно поправлен приоритет в `i18n.resolve_language`: явный код (`--lang ru` / `$IDVJPY_LANG`) теперь бьёт `language: auto` в settings (раньше `auto` из settings перебивал CLI). Docker-стенд (`entrypoint.sh`) выбирает шаблон так же (env → `$LC_ALL`/`$LANG` → en), CI-проверка обновлена. Тесты: `tests/test_data_dirs.py` (параметризованный разбор всех шаблонов, равенство значений между языками, паритет с `available_languages()`, `settings_example_path`/`detect_language`, провижининг копирует en и ru по локали), `tests/test_i18n.py` (+`test_explicit_language_beats_auto`), `tests/test_docker_stand.py` (entrypoint ссылается на `src/settings/<lang>.yml`).
 
 ## v1.141
 

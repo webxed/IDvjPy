@@ -1,6 +1,6 @@
 """Запросы к LLM по конфигу из YAML (команда `:llm <провайдер> <сообщение>`).
 
-Конфиг — `llm_providers.yml` в каталоге запуска (пример: src/llm_providers.example.yml).
+Конфиг — `llm_providers.yml` в каталоге запуска (шаблоны: src/llm_providers/<lang>.yml).
 Каждый провайдер описывает URL, заголовки и тело запроса шаблоном с
 плейсхолдерами. Ключи API — не в конфиге: значения вида `$VAR` подставляются
 из окружения (os.environ + local_env приложения).
@@ -93,9 +93,22 @@ class LlmError(Exception):
     """Ошибка конфигурации, запроса или ответа LLM."""
 
 
-def example_config_path() -> str:
-    """Путь к эталонному llm_providers.example.yml (рядом с этим модулем)."""
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "llm_providers.example.yml")
+def example_config_path(lang: str | None = None) -> str:
+    """Путь к шаблону llm_providers (язык по умолчанию — автоопределение).
+
+    Шаблоны — `src/llm_providers/<lang>.yml` (см. `src/example_config.py`); нет
+    файла языка — падаем на `en`. Возвращается всегда строка: путь нужен и для
+    подсказки в ошибке, даже если шаблонов в сборке нет.
+    """
+    from example_config import (
+        DEFAULT_EXAMPLE_LANG,
+        LLM_PROVIDERS_DIR,
+        llm_providers_example_path,
+    )
+
+    return llm_providers_example_path(lang) or str(
+        LLM_PROVIDERS_DIR / f"{DEFAULT_EXAMPLE_LANG}.yml"
+    )
 
 
 def load_providers(path: str) -> dict[str, Any]:
@@ -114,7 +127,7 @@ def load_providers(path: str) -> dict[str, Any]:
     if not isinstance(cfg, dict) or not isinstance(cfg.get("providers"), dict):
         raise LlmError(
             f"{path} must be a mapping with a `providers:` section "
-            "(see {example_config_path()})."
+            f"(see {example_config_path()})."
         )
     # Встроенная офлайн-заглушка доступна всегда (свой `offline:` — приоритетнее).
     cfg["providers"].setdefault(OFFLINE_PROVIDER_NAME, dict(OFFLINE_PROVIDER))

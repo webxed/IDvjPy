@@ -1,0 +1,109 @@
+# LLM providers for the `:llm <name> <message>` command — template (English).
+#
+# Templates live in src/llm_providers/<lang>.yml. On first run in a new
+# data directory the app copies the file for the language selected in auto
+# mode (--lang / $IDVJPY_LANG → system locale → en). Manual copy:
+#   cp src/llm_providers/en.yml llm_providers.yml
+#
+# No secrets here: `$VAR` values in headers/body are substituted from the
+# environment on every request (export, `$VAR=val` in the TUI, .bashrc_term).
+#
+# Provider fields:
+#   url            — endpoint (POST)
+#   model          — model name (%MODEL% placeholder and auto body)
+#   system         — system prompt (%SYSTEM% placeholder, optional)
+#   answer_language — answer language: a hard rule is appended to system
+#                    (bilingual models like DeepSeek otherwise sometimes answer
+#                    in the wrong language, e.g. Chinese); empty = no rule
+#   headers        — request headers; $VAR are resolved from the environment
+#   body           — body template. Placeholders: %MSG% (JSON-escaped),
+#                    %MSG_RAW% (as is), %SYSTEM% / %MODEL% (JSON-escaped).
+#                    If body is absent — auto OpenAI-compatible chat/completions.
+#   response_path  — where the model text is in the response (dots: choices.0.message.content);
+#                    without it — heuristics over the known fields
+#   timeout        — seconds to wait for a response (default 60)
+#   mock           — true: do not go to the network, return `answer` right away (offline stub)
+#   answer         — response text for `mock: true`
+#   history_turns  — how many recent user/assistant pairs to keep in :llm context
+#                    (memory of the current session; 0/absent = no context; reset — :llm reset)
+#   max_attachment_bytes — file limit for `@path` in a message (default 200000)
+#   app_context    — attach the IDvjPy_term cheat sheet and a digest of the tag
+#                    library (tag/tid/command/comment) to the system prompt,
+#                    so the model answers with ready-made `!tag[tid]` links.
+#                    false/absent — disabled; true — budget of 6000 characters;
+#                    a number — your own character budget. Does not affect `:llm ask`
+#                    (there the context is always attached).
+# A message can embed file text: `:llm ds explain @app.log` (UTF-8,
+# several files in a row; a literal @ — @@).
+# `:llm ask <task>` — a separate mode: app context + an answer as a chain of
+# `!tag[tid]` / `!! tag[tid] && other[tid]`. Provider: the first argument if
+# it matched a name from providers; otherwise `default:`.
+# providers.* — a name → description mapping as above.
+# default — the default provider name (for `:llm <msg>` without a name — optional).
+
+default: ds
+
+providers:
+  ds:
+    url: https://api.deepseek.com/chat/completions
+    model: deepseek-chat
+    system: "You are a helpful assistant."
+    answer_language: English
+    timeout: 60
+    # App cheat sheet + tag library in system (for `:llm` without `ask`).
+    # app_context: true
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer $DEEPSEEK_API_KEY"
+    response_path: choices.0.message.content
+
+  openai:
+    url: https://api.openai.com/v1/chat/completions
+    model: gpt-4o-mini
+    system: "You are a helpful assistant."
+    answer_language: English
+    timeout: 60
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer $OPENAI_API_KEY"
+    response_path: choices.0.message.content
+
+  grok:
+    url: https://api.x.ai/v1/chat/completions
+    model: grok-2-latest
+    system: "You are a helpful assistant."
+    answer_language: English
+    timeout: 60
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer $XAI_API_KEY"
+    response_path: choices.0.message.content
+
+  # Local, no key needed (OpenAI-compatible Ollama endpoint).
+  ollama:
+    url: http://localhost:11434/v1/chat/completions
+    model: llama3.2
+    answer_language: English
+    timeout: 120
+    headers:
+      Content-Type: application/json
+    response_path: choices.0.message.content
+
+  # Built-in offline stub: a mock answer without HTTP or keys. Present
+  # always, even if this block is deleted (see llm_client.OFFLINE_PROVIDER).
+  # Useful for demos and for testing `:llm` / `:llm ask` without a network.
+  offline:
+    model: stub
+    mock: true
+    answer: "[offline] IDvjPy_term stub: no network request was made."
+
+  # Example with a manual body template and no JSON response parsing.
+  echo-demo:
+    url: http://localhost:8080/llm
+    model: demo
+    timeout: 10
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer $MY_KEY"
+    body: |
+      {"model": %MODEL%, "messages": [{"role": "user", "content": %MSG%}], "stream": false}

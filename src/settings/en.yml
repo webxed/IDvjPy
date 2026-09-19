@@ -1,0 +1,162 @@
+# IDvjPy_term — default settings (template, English).
+#
+# Templates live in src/settings/<lang>.yml. On the first run in a new data directory
+# the application copies here the file of the language chosen in auto mode (--lang /
+# $IDVJPY_LANG → system locale → en) — the comments will be in your language.
+# The `language` key is left as `auto`: the interface follows the system locale; to change it —
+# `:lang <code>`.
+#
+# Portable mode: if settings.yml is already present in the launch directory — it is used,
+# the template is not touched. A personal settings.yml does not go into git (.gitignore).
+#
+# All relative paths are from the data directory (settings next to the DB/history).
+
+# Maximum number of lines in the output buffer.
+max_lines: 100000
+
+# Input history: how many recent lines to keep and show.
+history_lines: 20
+# The history tail stays a sequence; old duplicates go away. 0 = off. :h compact
+history_keep: 500
+
+# Suggestions from history_*.txt while typing a regular command (including lines
+# starting with `@` and `>`): you can pick any, insertion — Tab/Enter.
+# false — only ↑ and :h /text.
+history_completion: true
+
+# Which `:`-command invocations to write to history_*.txt (↑ / `:h`), but not show
+# in suggestions: these are queries and navigation, not commands to repeat. Names — without
+# `:`; can be a comma-separated string (`history_queries: llm, run`). Empty (`[]`),
+# `false` or `null` — disabled: `:`-command invocations are not written to history.
+# Arguments are required: a lone `:llm` without a question will not stay in history.
+history_queries:
+  - llm
+  - cht
+  - rg
+  - md
+  - run
+  - send
+  - send!
+
+# Directory of documents for `:rg` — markdown search (e.g. an Obsidian vault).
+# Empty — the current directory; `~` is expanded. One-off: `:rg text ~/vault`.
+md_dir: ""
+
+# Threshold for formatted `:md`: longer files open as source (raw) in the
+# Line API viewer (search `/`, n/N, jump to line) — instantly.
+# Formatted Markdown is expensive on large files (13k lines ≈ 40 s).
+# Raise it if you need formatting and a large file (and are ready to wait).
+md_render_lines: 1000
+
+# DB file with tags (relative to the data directory).
+database_tags_file: mytags.db
+# Directory with DB snapshots (:backup, --seed).
+backup_dir: backups
+
+# Command execution timeout (seconds). 0 = no timeout (tsh login, long commands).
+command_timeout: 10
+
+# Mouse protocol in the TUI: true — a click selects a block, the wheel scrolls the log;
+# false — text selection with the mouse in the terminal (clicking a block does not focus it).
+# If the parameter is absent, true is used.
+terminal_mouse: true
+
+# TUI color theme. `d` switches textual-dark / textual-light and saves it here.
+# Other names: :theme  (nord, dracula, gruvbox, catppuccin-mocha, …).
+# matrix — the app's own theme: green phosphor on near-black (like in the screensaver),
+# along with it the input/suggestion/help frames become green.
+theme: textual-dark
+
+# Interface language (en, ru, zh): text catalogs in src/locales (en — source of truth,
+# ru/zh — translations; missing keys fall back to en). `:lang` shows and changes the language and
+# saves it here; `auto` — by $LANG/$LC_ALL. The --lang and $IDVJPY_LANG flags
+# override it one-off. Commands, tag names and settings keys are not translated.
+# Comments of an already-seeded library are changed by `:relang <code>` (DB snapshot in backups/).
+language: auto
+
+# Verify VERSION against GitHub main at startup. :update always checks.
+check_updates: true
+
+# Screensaver. Seconds of idle; 0 = off. :screensaver — immediately.
+screensaver_idle: 120
+# Screensaver canvas: true — "matrix rain" (falling columns of glyphs, like in "The Matrix"),
+# false — a starfield (then screensaver_stars applies). The feed on top, the help and
+# load/RAM at the bottom remain in both cases. Switch once in the TUI:
+# `:screensaver matrix` / `:screensaver stars`.
+screensaver_matrix: true
+# Flying stars of the starfield (dust + k8s/git/…). false — black canvas; the clock, feed and
+# load remain. Does not affect the matrix canvas. There is also `:screensaver stars`.
+screensaver_stars: true
+
+# Suggestions of k8s resource names from the live cluster (`kubectl get pod <Tab>`).
+k8s_completion: false
+
+# File suggestions in autocompletion:
+#   auto  — explicit paths (`./`, `/`, `~/`) plus a bare file name for commands
+#           that work with files (cat/vim/…); for grep/sed/awk/jq — only from
+#           the second argument, since the first is a pattern (`grep ot` does not
+#           list cwd); for kubectl/docker/git and the like — also without the
+#           clutter from cwd; the context is computed from the current segment:
+#           in `cat f | grep ot` files are suggested by grep, not cat;
+#   paths — only explicit paths and cd/pushd;
+#   off   — file suggestions are disabled.
+file_completion: auto
+
+# "Cluster log" variables (:kctx, file kctx.json): assigning any
+# of them remembers the set for the current cluster, and they are shown in the
+# :kctx lists and returned by :kctx N (`:kctx <cluster> [N]`).
+# The list of names — as here or a comma-separated string (`kctx_vars: NS, RELEASE`);
+# `[]` / `false` / `null` — the log is fully disabled (no snapshots are written).
+# The order of names is also the order in the `:kctx` lists and in the `$NS=…` line.
+# By default — the stack of bundled templates: kubectl (NS…QUOTA) and helm
+# (RELEASE, CHART, VALUES — the `hvars` tag).
+# NB: only non-empty values go into the snapshot — `:kctx N` will return them.
+kctx_vars:
+  - NS
+  - POD
+  - DEPLOY
+  - SVC
+  - ING
+  - APP
+  - CTR
+  - QUOTA
+  - RELEASE
+  - CHART
+  - VALUES
+
+# Render log blocks via the Textual Line API (render_line) instead of one
+# big Static. The markup is parsed once, redrawing depends on the number of
+# visible lines — faster on large blocks and with a line-by-line cursor.
+# true (default) — Line API; false — the previous rendering. Switch without editing
+# the file: IDVJPY_LINE_BLOCKS=0 / =1 in the environment.
+line_api_blocks: true
+
+# `:cht` — cheat.sh cheatsheets. The service base URL and request options (by default
+# T — no ANSI colors; you can add Q — no comments, e.g. "QT").
+cheat_sh_url: https://cht.sh
+cheat_sh_options: T
+
+# Draw the `:llm` response as formatted markdown (Rich Markdown) instead of plain
+# text. true (default) — headings/lists/code/tables; false — monospaced
+# text, like a regular command. F6 (simple mode) disables markdown one-off.
+# Simple mode F6 disables colors one-off (the mode's promise — plain text).
+llm_render_markdown: true
+
+# ANSI/ESC in command output: true (default) — SGR codes (`\x1b[..m`) become
+# block colors, like in the terminal (curl wttr.in, ls --color=always, colored grep).
+# Other sequences (cursor, erase, OSC/hyperlinks) and control
+# characters are always stripped, `\r` redraw (progress bars) is collapsed to
+# the final line — otherwise the terminal would execute them inside the TUI frame and break the output.
+# false — all output is plain. F6 disables colors one-off.
+# Plain text (`:w`, F3, `|`, `$OUT`/`$BLOCK`, `:log`, `@key`) does not depend on the key.
+ansi_colors: true
+
+# Clear the clipboard if a secret value was extracted into it on the `$$NAME=…` line.
+# true — after such an insertion CLIPBOARD/PRIMARY are cleared (the secret does not stay in the buffer);
+# false (default) — the buffer is left untouched.
+clear_clipboard_after_secret: false
+
+# External editor for `:ed <file>|$OUT|$BLOCK` (launched in a TTY, the TUI paused).
+# May contain arguments: `editor: code --wait`, `editor: nvim`. Empty/absent —
+# $VISUAL / $EDITOR is taken, then the system editor (sensible-editor, nano, vi).
+editor: nano

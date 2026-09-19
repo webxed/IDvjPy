@@ -28,6 +28,13 @@ def test_readme_names_version():
     assert f"**IDvjPy_term** {CURRENT} —" in text
 
 
+def test_localized_readmes_name_version():
+    """Локализованные README (docs/<lang>/) носят тот же маркер версии."""
+    for rel in ("docs/en/README.md", "docs/zh/README.md"):
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        assert f"**IDvjPy_term** {CURRENT} —" in text, rel
+
+
 def test_compact_summary_names_version():
     text = (ROOT / "COMPACT_SUMMARY.md").read_text(encoding="utf-8")
     assert f"Версия: **{CURRENT}**." in text

@@ -3,10 +3,9 @@
 # Самопроверка в рабочей копии: `git status --porcelain -uall` должен быть пустым.
 
 # --- Личные данные приложения ---
-# Шаблоны: src/settings.example.yml, src/llm_providers.example.yml, .bashrc_term.example
+# Шаблоны: src/settings/<lang>.yml, src/llm_providers/<lang>.yml, .bashrc_term.example
 /settings.yml
 llm_providers.yml
-!src/llm_providers.example.yml
 *.db
 .bashrc_term
 .bashrc_term_*

@@ -1,6 +1,6 @@
 # Сценарий демонстрации IDvjPy_term
 
-Версия приложения: **v1.141**. Длительность живого рассказа: **12–15 минут**.
+Версия приложения: **v1.143**. Длительность живого рассказа: **12–15 минут**.
 
 Тезис для зрителя: теги — переменные с шаблонами команд; приложение собирает их в строку. `!` / `!!` только подставляют текст во ввод, запуск — отдельным Enter.
 
@@ -54,8 +54,8 @@ python3 /path/to/Idivjopy/app.py --demo --demo-quit
 ```bash
 # 0. Изолированный data-каталог (из корня репозитория)
 mkdir -p /tmp/idvj-demo
-cp src/settings.example.yml      /tmp/idvj-demo/settings.yml
-cp src/llm_providers.example.yml /tmp/idvj-demo/llm_providers.yml
+cp src/settings/ru.yml           /tmp/idvj-demo/settings.yml
+cp src/llm_providers/ru.yml      /tmp/idvj-demo/llm_providers.yml
 
 # 1. Запись: env -C меняет cwd процесса (без cd) — в кадре будет /tmp/idvj-demo
 asciinema rec -q --overwrite --cols 120 --rows 34 \
@@ -106,7 +106,7 @@ python3 app.py --demo all --demo-quit
 
 ```bash
 mkdir -p /tmp/idvj-all && cd /tmp/idvj-all
-cp /path/to/Idivjopy/src/llm_providers.example.yml llm_providers.yml
+cp /path/to/Idivjopy/src/llm_providers/ru.yml llm_providers.yml
 python3 /path/to/Idivjopy/app.py --demo all --demo-quit
 ```
 

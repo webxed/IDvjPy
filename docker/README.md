@@ -14,7 +14,7 @@ docker compose run --rm idvjpy        # образ соберётся при п�
 Из корня репозитория то же самое: `docker compose -f docker/compose.yaml run --rm idvjpy`.
 
 При первом запуске стенд сам:
-1. создаёт `/data/settings.yml` и `/data/llm_providers.yml` из шаблонов `src/*.example.yml`;
+1. создаёт `/data/settings.yml` и `/data/llm_providers.yml` из шаблонов языка (`src/settings/<lang>.yml`, `src/llm_providers/<lang>.yml`, режим `auto`);
 2. наполняет библиотеку тегов (`linux`, `k8s`, `git`, `ops` — 849 команд, ~5 с);
 3. запускает TUI.
 

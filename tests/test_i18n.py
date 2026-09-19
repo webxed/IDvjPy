@@ -139,6 +139,15 @@ def test_resolve_language_auto_follows_system_locale(monkeypatch):
     assert i18n.resolve_language(None, "auto") == "en"
 
 
+def test_explicit_language_beats_auto(monkeypatch):
+    """Явный код выше приоритетом бьёт `auto` ниже: --lang ru > language: auto."""
+    monkeypatch.delenv("IDVJPY_LANG", raising=False)
+    monkeypatch.setenv("LC_ALL", "ru_RU.UTF-8")
+    assert i18n.resolve_language("en", "auto") == "en"  # CLI бьёт settings
+    assert i18n.resolve_language(None, "auto") == "ru"  # без явного — локаль
+    assert i18n.resolve_language(None, None) == "en"
+
+
 async def test_lang_command_lists_and_switches(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 30)) as pilot:

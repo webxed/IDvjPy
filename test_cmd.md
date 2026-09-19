@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.141
+# План тестирования IDvjPy_term v1.143
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -953,9 +953,10 @@ x
 ### Data-каталог (`--data-dir` / `$IDVJPY_DATA_DIR`)
 
 1. `python3 app.py --data-dir /tmp/idvj-dir` — settings/БД/history создаются в `/tmp/idvj-dir`.
-2. Без флага, из каталога с `settings.yml` — данные остаются в нём (portable).
-3. Без флага из пустого каталога (и без env) — системный каталог ОС (см. `src/data_dirs.py`).
-4. `IDVJPY_DATA_DIR=/tmp/idvj-env python3 app.py` — каталог из переменной.
+2. Первый старт кладёт **шаблон языка в режиме auto**: `LC_ALL=ru_RU.UTF-8 python3 app.py --data-dir /tmp/idvj-ru` → `settings.yml` = `src/settings/ru.yml` (русские комментарии); `LC_ALL=en_US.UTF-8` → `en.yml`; неизвестная локаль — тоже `en`. Явный `--lang` / `$IDVJPY_LANG` бьёт локаль.
+3. Без флага, из каталога с `settings.yml` — данные остаются в нём (portable).
+4. Без флага из пустого каталога (и без env) — системный каталог ОС (см. `src/data_dirs.py`).
+5. `IDVJPY_DATA_DIR=/tmp/idvj-env python3 app.py` — каталог из переменной.
 
 Автотест: `tests/test_data_dirs.py`.
 
@@ -963,7 +964,7 @@ x
 
 1. Из репозитория: `packaging/build_wheel.sh` → `packaging/dist/idvjpy_term-*.whl`.
 2. В чистом venv (`pip install --no-deps <wheel>` без зависимостей не запустится — нужны deps; обычный `pip install <wheel>` ставит их из PyPI).
-3. `idvjpy --data-dir /tmp/idvj-pip` — первый запуск создаёт settings/БД/history + шаблоны `settings.yml`, `llm_providers.yml`, `.bashrc_term_default` в `/tmp/idvj-pip`; `:q` — выход.
+3. `idvjpy --data-dir /tmp/idvj-pip` — первый запуск создаёт settings/БД/history + шаблоны `settings.yml` (файл языка из `src/settings/<lang>.yml`), `llm_providers.yml`, `.bashrc_term_default` в `/tmp/idvj-pip`; `:q` — выход.
 4. `idvjpy --demo short --demo-quit` — автотур из установленного пакета, корректный выход.
 5. `python3 -m idvjpy_boot --demo short --demo-quit` — тот же запуск через `python -m`.
 6. Ресурсы (CSS/demos/примеры) берутся из пакета: демо и темы работают без каталога репозитория рядом.
@@ -1458,7 +1459,7 @@ steps:
 
 ---
 
-**Версия документа**: v1.85
-**Версия приложения**: v1.141
+**Версия документа**: v1.87
+**Версия приложения**: v1.143
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

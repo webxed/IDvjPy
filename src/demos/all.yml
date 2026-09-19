@@ -6,7 +6,7 @@
 # (акт E использует встроенного офлайн-провайдера `offline` — без ключа и сети).
 # Для чистой записи:
 #   mkdir -p /tmp/idvj-all && cd /tmp/idvj-all
-#   cp /path/to/Idivjopy/src/llm_providers.example.yml llm_providers.yml
+#   cp /path/to/Idivjopy/src/llm_providers/ru.yml llm_providers.yml
 #   python3 /path/to/Idivjopy/app.py --demo all --demo-quit
 
 title: IDvjPy — всё подряд

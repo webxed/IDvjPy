@@ -176,7 +176,9 @@ def test_offline_provider_is_builtin(tmp_path):
 
 
 def test_default_body_is_openai_compatible_json():
-    body = json.loads(build_body(DS_CFG, 'hi "quoted" \n', {"DEEPSEEK_API_KEY": "k"}))
+    # `answer_language: off` — проверяем само тело, а не правило языка в system.
+    provider = dict(DS_CFG, answer_language="off")
+    body = json.loads(build_body(provider, 'hi "quoted" \n', {"DEEPSEEK_API_KEY": "k"}))
     assert body["model"] == "deepseek-chat"
     assert body["stream"] is False
     assert body["messages"][0] == {"role": "system", "content": "You are helpful."}
@@ -184,7 +186,12 @@ def test_default_body_is_openai_compatible_json():
 
 
 def test_custom_body_placeholders_json_escaped():
-    provider = {"model": "m1", "system": "sys", "body": '{"c": %MSG%, "m": %MODEL%, "s": %SYSTEM%}'}
+    provider = {
+        "model": "m1",
+        "system": "sys",
+        "answer_language": "off",
+        "body": '{"c": %MSG%, "m": %MODEL%, "s": %SYSTEM%}',
+    }
     raw = build_body(provider, 'a "b"', {})
     payload = json.loads(raw)
     assert payload == {"c": 'a "b"', "m": "m1", "s": "sys"}
@@ -215,9 +222,20 @@ def test_extract_text_heuristics_and_path():
 
 
 def test_answer_language_rule_appended_to_system():
+    import i18n
+
+    i18n.set_language("en")
     base = {"model": "m", "system": "You are a helpful assistant."}
-    no_lang = json.loads(build_body(base, "hi", {}))
-    assert no_lang["messages"][0]["content"] == "You are a helpful assistant."
+
+    # Ключа нет / `auto` — правило языка интерфейса (v1.137): en → English.
+    default = json.loads(build_body(base, "hi", {}))
+    default_system = default["messages"][0]["content"]
+    assert "You are a helpful assistant." in default_system
+    assert "always answer in english" in default_system.lower()
+
+    # `off` — правило выключено, system как есть (поведение до v1.137).
+    off = json.loads(build_body(dict(base, answer_language="off"), "hi", {}))
+    assert off["messages"][0]["content"] == "You are a helpful assistant."
 
     with_lang = dict(base, answer_language="Russian")
     body = json.loads(build_body(with_lang, "hi", {}))
@@ -639,7 +657,7 @@ async def test_colon_llm_missing_config_hint(isolated_home):
         await submit(pilot, ":llm ds hi")
         text = last_info(app).text_content
         assert "Config not found" in text
-        assert "llm_providers.example.yml" in text
+        assert "src/llm_providers/" in text
 
 
 # --- app_context / :llm ask -------------------------------------------------

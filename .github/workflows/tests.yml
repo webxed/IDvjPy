@@ -44,8 +44,8 @@ jobs:
         run: |
           docker run --rm -v idvjpy-ci:/data idvjpy-demo:ci --help > /tmp/first.log 2>&1
           cat /tmp/first.log
-          grep -q "settings.yml ← src/settings.example.yml" /tmp/first.log
-          grep -q "llm_providers.yml ← src/llm_providers.example.yml" /tmp/first.log
+          grep -q "settings.yml ← src/settings/" /tmp/first.log
+          grep -q "llm_providers.yml ← src/llm_providers/" /tmp/first.log
           grep -q "наполняю библиотеку тегов" /tmp/first.log
           grep -q "^usage: app.py" /tmp/first.log  # аргументы дошли до приложения
 

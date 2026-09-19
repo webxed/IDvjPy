@@ -28,6 +28,8 @@ FIXTURES = {
         "        pass\n"
     ),
     "README.md": "# IDvjPy\n\n**IDvjPy_term** v1.10 — умный терминал.\n",
+    "docs/en/README.md": "# IDvjPy\n\n**IDvjPy_term** v1.10 — a smart terminal.\n",
+    "docs/zh/README.md": "# IDvjPy\n\n**IDvjPy_term** v1.10 — 智能终端.\n",
     "COMPACT_SUMMARY.md": (
         "Версия: **v1.10**.\n\n"
         "| File | Coverage |\n"
@@ -98,6 +100,9 @@ def test_bump_updates_every_marker(tmp_path):
 
     assert 'VERSION = "v1.11"' in (root / "src/app.py").read_text(encoding="utf-8")
     assert "**IDvjPy_term** v1.11 —" in (root / "README.md").read_text(encoding="utf-8")
+    # Локализованные README носят тот же маркер и обновляются вместе с корневым.
+    for rel in ("docs/en/README.md", "docs/zh/README.md"):
+        assert "**IDvjPy_term** v1.11 —" in (root / rel).read_text(encoding="utf-8")
 
     compact = (root / "COMPACT_SUMMARY.md").read_text(encoding="utf-8")
     assert "Версия: **v1.11**." in compact

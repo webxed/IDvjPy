@@ -10,14 +10,23 @@ DATA_DIR="${IDVJPY_DATA_DIR:-/data}"
 cd "$DATA_DIR"
 
 # Первый запуск в пустом томе: личные файлы создаются из шаблонов — ровно так,
-# как приложение делает это в обычном data-каталоге (см. src/settings.example.yml).
+# как приложение делает это в обычном data-каталоге. Шаблоны локализованы по
+# каталогам src/settings/<lang>.yml и src/llm_providers/<lang>.yml; язык —
+# в режиме auto ($IDVJPY_LANG → $LC_ALL/$LC_MESSAGES/$LANG → en).
+lang="${IDVJPY_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}}"
+lang="$(printf '%s' "$lang" | tr 'A-Z' 'a-z' | cut -d. -f1 | cut -d_ -f1 | cut -d- -f1)"
+case "$lang" in
+    en|ru|zh) : ;;
+    *)        lang="en" ;;
+esac
+
 if [ ! -f settings.yml ]; then
-    cp "$APP_DIR/src/settings.example.yml" settings.yml
-    echo "[demo] settings.yml ← src/settings.example.yml"
+    cp "$APP_DIR/src/settings/$lang.yml" settings.yml
+    echo "[demo] settings.yml ← src/settings/$lang.yml"
 fi
 if [ ! -f llm_providers.yml ]; then
-    cp "$APP_DIR/src/llm_providers.example.yml" llm_providers.yml
-    echo "[demo] llm_providers.yml ← src/llm_providers.example.yml"
+    cp "$APP_DIR/src/llm_providers/$lang.yml" llm_providers.yml
+    echo "[demo] llm_providers.yml ← src/llm_providers/$lang.yml"
 fi
 
 has_live_commands() {

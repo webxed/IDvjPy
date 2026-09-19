@@ -8,7 +8,9 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.141 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.143 — умный терминал для создания командных строк из тегов.
+
+Переводы: [English](docs/en/README.md) · [中文](docs/zh/README.md).
 
 ## Что это?
 
@@ -151,7 +153,7 @@ uv tool install git+https://github.com/webxed/IDvjPy
 python3 app.py [--data-dir PATH]
 ```
 
-Данные (settings/БД/history): `--data-dir` → `$IDVJPY_DATA_DIR` → текущий каталог (если в нём уже есть `settings.yml`) → системный каталог (`~/.config/idvjpy`, macOS `~/Library/Application Support/IDvjPy`, Windows `%APPDATA%\IDvjPy`). При первом запуске в новом каталоге создаются `settings.yml` (копия [`src/settings.example.yml`](src/settings.example.yml)) и `llm_providers.yml` (копия примера). Личный `settings.yml` в git **не входит** — настройки не утекают в репозиторий.
+Данные (settings/БД/history): `--data-dir` → `$IDVJPY_DATA_DIR` → текущий каталог (если в нём уже есть `settings.yml`) → системный каталог (`~/.config/idvjpy`, macOS `~/Library/Application Support/IDvjPy`, Windows `%APPDATA%\IDvjPy`). При первом запуске в новом каталоге создаются `settings.yml` (копия шаблона языка, выбранного в режиме `auto`: `--lang` → `$IDVJPY_LANG` → системная локаль → `en`, файлы [`src/settings/<lang>.yml`](src/settings)) и `llm_providers.yml` (копия примера). Личный `settings.yml` в git **не входит** — настройки не утекают в репозиторий.
 
 ```bash
 python3 app.py
@@ -169,7 +171,7 @@ python3 app.py --demo full --demo-quit
 |------|------------|
 | `src/` | TUI, CSS, seed-скрипты, шаблон `.bashrc_term.example` |
 | `app.py` / `backup_db.py` | лаунчеры (не правят данные) |
-| `settings.yml` | личные настройки — **не в git** (`.gitignore`); копия `src/settings.example.yml`, создаётся при первом запуске |
+| `settings.yml` | личные настройки — **не в git** (`.gitignore`); копия `src/settings/<lang>.yml` (язык `auto`), создаётся при первом запуске |
 | `*.db`, `.bashrc_term*`, `history_*.txt`, `inbox_*.jsonl`, `session_*.pid` | теги, переменные, история, ящики `:send` и реестр сессий — тоже вне git |
 
 ## Демостенд в Docker
@@ -378,7 +380,7 @@ curl -H "Bearer $TOKEN" https://api.example   # обычная подстано�
 
 ## Конфигурация
 
-Шаблон — [`src/settings.example.yml`](src/settings.example.yml) (он же копируется как `settings.yml` при первом запуске в новом data-каталоге; личный `settings.yml` в git не попадает):
+Шаблоны — [`src/settings/<lang>.yml`](src/settings) (`en`, `ru`, `zh`; ключи и значения одинаковы, различаются только комментарии; копируется файл языка, выбранного в режиме `auto`; личный `settings.yml` в git не попадает):
 
 ```yaml
 max_lines: 100000

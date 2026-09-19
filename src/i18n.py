@@ -6,7 +6,8 @@
 
 Язык выбирается в порядке: ``--lang`` → ``$IDVJPY_LANG`` → ``settings.yml:
 language`` → ``en``. Значение ``auto`` в любом из этих мест разворачивается из
-системной локали (``$LC_ALL`` → ``$LC_MESSAGES`` → ``$LANG``).
+системной локали (``$LC_ALL`` → ``$LC_MESSAGES`` → ``$LANG``), но только если до
+него нет явного кода: ``--lang ru`` перебивает ``language: auto`` в settings.
 
 Значения — строки с разметкой Textual (``[bold]…[/]``) там, где она нужна
 шаблону; подстановки — через ``str.format`` (``{name}``). Команды приложения,
@@ -79,13 +80,18 @@ def _from_system_locale() -> str:
 
 
 def resolve_language(cli: Any = None, settings: Any = None) -> str:
-    """Выбранный язык: CLI → ``$IDVJPY_LANG`` → settings → системная локаль (auto)."""
-    candidates = [cli, os.environ.get("IDVJPY_LANG"), settings]
-    for raw in candidates:
-        if str(raw or "").strip().lower() == AUTO_LANG:
+    """Выбранный язык: CLI → ``$IDVJPY_LANG`` → settings → системная локаль (auto).
+
+    ``auto`` разворачивается из системной локали, но с учётом приоритета: явный
+    код выше перебивает ``auto`` ниже (``--lang ru`` > ``language: auto``).
+    """
+    for raw in (cli, os.environ.get("IDVJPY_LANG"), settings):
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        if text.lower() == AUTO_LANG:
             return _from_system_locale()
-    for raw in candidates:
-        lang = normalize_language(raw)
+        lang = normalize_language(text)
         if lang:
             return lang
     return DEFAULT_LANG

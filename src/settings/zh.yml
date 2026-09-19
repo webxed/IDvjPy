@@ -1,0 +1,162 @@
+# IDvjPy_term — 默认设置（模板，简体中文）。
+#
+# 模板位于 src/settings/<lang>.yml。首次在新的数据目录中启动时，
+# 应用会把 auto 模式下所选语言的文件复制到这里（--lang /
+# $IDVJPY_LANG → 系统区域设置 → en）——注释会是你的语言。
+# `language` 键保留为 `auto`：界面跟随系统区域设置；要更改——
+# `:lang <代码>`。
+#
+# 便携模式：如果启动目录中已有 settings.yml —— 就用它，
+# 模板不动。个人的 settings.yml 不会进入 git（.gitignore）。
+#
+# 所有相对路径都相对数据目录（settings 与数据库/history 放在一起）。
+
+# 输出缓冲区中的最大行数。
+max_lines: 100000
+
+# 输入历史：保留并显示最近多少行。
+history_lines: 20
+# 历史尾部保持为序列；旧的重复项会被移除。0 = 关闭。:h compact
+history_keep: 500
+
+# 输入普通命令时来自 history_*.txt 的提示（包括以
+# `@` 和 `>` 开头的行）：可以选择任意一条，插入用 Tab/Enter。
+# false —— 只有 ↑ 和 :h /text。
+history_completion: true
+
+# 哪些 `:` 命令的调用要写入 history_*.txt（↑ / `:h`），但不显示
+# 在提示中：它们是查询和导航，而不是用于重复执行的命令。名称不带
+# `:`；也可以写成逗号分隔的字符串（`history_queries: llm, run`）。空（`[]`）、
+# `false` 或 `null` —— 关闭：`:` 命令的调用不会写入历史。
+# 参数是必需的：单独一个 `:llm` 没有提问不会留在历史中。
+history_queries:
+  - llm
+  - cht
+  - rg
+  - md
+  - run
+  - send
+  - send!
+
+# `:rg` 的文档目录 —— 用于 markdown 搜索（例如 Obsidian-vault）。
+# 空 —— 当前目录；`~` 会展开。一次性：`:rg 文本 ~/vault`。
+md_dir: ""
+
+# 格式化 `:md` 的阈值：更长的文件以源文件（raw）方式在
+# Line-API 查看器中打开（搜索 `/`、n/N、跳转到行）—— 瞬间完成。
+# 格式化 Markdown 在大文件上开销很大（13k 行 ≈ 40 秒）。
+# 如果需要格式化且文件很大（并愿意等待），请调高。
+md_render_lines: 1000
+
+# 标签数据库文件（相对于数据目录）。
+database_tags_file: mytags.db
+# 数据库快照目录（:backup、--seed）。
+backup_dir: backups
+
+# 命令执行超时（秒）。0 = 无超时（tsh login、长时间命令）。
+command_timeout: 10
+
+# TUI 中的鼠标协议：true —— 点击选中块，滚轮滚动日志；
+# false —— 在终端中用鼠标选择文本（点击块不会聚焦）。
+# 如果该参数缺失，则使用 true。
+terminal_mouse: true
+
+# TUI 颜色主题。`d` 在 textual-dark / textual-light 之间切换并保存到此处。
+# 其他名称：:theme  （nord、dracula、gruvbox、catppuccin-mocha，…）。
+# matrix —— 应用自带主题：近乎黑色上的绿色荧光（像屏保中那样），
+# 与它一起，输入/提示/帮助的边框也会变成绿色。
+theme: textual-dark
+
+# 界面语言（en、ru、zh）：文本目录在 src/locales（en —— 事实来源，
+# ru/zh —— 翻译；缺失的键回退到 en）。`:lang` 显示并更改语言，
+# 并把它保存到此处；`auto` —— 依据 $LANG/$LC_ALL。--lang 和 $IDVJPY_LANG 标志
+# 可一次性覆盖。命令、标签名和设置键不翻译。
+# 已播种库的注释由 `:relang <代码>` 更改（数据库快照保存到 backups/）。
+language: auto
+
+# 启动时将 VERSION 与 GitHub main 比对。:update 始终检查。
+check_updates: true
+
+# 屏保。空闲秒数；0 = 关闭。:screensaver —— 立即显示。
+screensaver_idle: 120
+# 屏保画布：true —— “矩阵雨”（下落的字形列，像《黑客帝国》中那样），
+# false —— 星空（此时 screensaver_stars 生效）。顶部的滚动条、帮助和
+# 底部的 load/RAM 在两种情况下都保留。要在 TUI 中一次性切换：
+# `:screensaver matrix` / `:screensaver stars`。
+screensaver_matrix: true
+# 星空的飞星（尘埃 + k8s/git/…）。false —— 黑色画布；时钟、滚动条和
+# load 保留。不影响矩阵画布。也有 `:screensaver stars`。
+screensaver_stars: true
+
+# 来自活动集群的 k8s 资源名称提示（`kubectl get pod <Tab>`）。
+k8s_completion: false
+
+# 自动补全中的文件提示：
+#   auto  —— 显式路径（`./`、`/`、`~/`）加上处理文件的命令的裸文件名
+#           （cat/vim/…）；对于 grep/sed/awk/jq —— 只从
+#           第二个参数开始，因为第一个是模板（`grep ot` 不会列出
+#           cwd）；对于 kubectl/docker/git 等 —— 同样没有来自 cwd 的杂物；
+#           上下文按当前段计算：在 `cat f | grep ot` 中
+#           文件由 grep 提示，而不是 cat；
+#   paths —— 只有显式路径和 cd/pushd；
+#   off   —— 文件提示已关闭。
+file_completion: auto
+
+# “集群日志”的变量（:kctx、文件 kctx.json）：对其中任意一个的赋值
+# 会为当前集群记住这一组，它们也会显示在
+# :kctx 的列表中，并通过 :kctx N 恢复（`:kctx <cluster> [N]`）。
+# 名称列表 —— 就像这里这样，或写成逗号分隔的字符串（`kctx_vars: NS, RELEASE`）；
+# `[]` / `false` / `null` —— 日志完全关闭（不写快照）。
+# 名称的顺序 —— 也是 `:kctx` 列表和 `$NS=…` 行中的顺序。
+# 默认 —— bundled 模板栈：kubectl (NS…QUOTA) 和 helm
+# (RELEASE, CHART, VALUES —— 标签 `hvars`）。
+# NB：快照中只包含非空值 —— `:kctx N` 会返回同样的值。
+kctx_vars:
+  - NS
+  - POD
+  - DEPLOY
+  - SVC
+  - ING
+  - APP
+  - CTR
+  - QUOTA
+  - RELEASE
+  - CHART
+  - VALUES
+
+# 通过 Textual Line API (render_line) 渲染日志块，而不是一个
+# 大的 Static。标记只解析一次，重绘取决于可见
+# 行数 —— 在大块和按行光标下更快。
+# true（默认）—— Line API；false —— 旧渲染。无需修改
+# 文件即可切换：环境变量中的 IDVJPY_LINE_BLOCKS=0 / =1。
+line_api_blocks: true
+
+# `:cht` —— cheat.sh 速查表。服务的基础 URL 和请求选项（默认
+# T —— 不带 ANSI 颜色；可以加上 Q —— 不带注释，例如 "QT"）。
+cheat_sh_url: https://cht.sh
+cheat_sh_options: T
+
+# `:llm` 的回答渲染为格式化 markdown（Rich Markdown），而不是纯
+# 文本。true（默认）—— 标题/列表/代码/表格；false —— 等宽
+# 文本，就像普通命令那样。F6（简单模式）会一次性关闭 markdown。
+# 简单模式 F6 会一次性关闭颜色（该模式的承诺是纯文本）。
+llm_render_markdown: true
+
+# 命令输出中的 ANSI/ESC：true（默认）—— SGR 代码（`\x1b[..m`）会变成
+# 块的颜色，就像终端中那样（curl wttr.in、ls --color=always、彩色 grep）。
+# 其他序列（光标、擦除、OSC/超链接）和控制字符
+# 始终会被剔除，`\r` 重绘（进度条）会折叠为
+# 最终一行 —— 否则终端会在 TUI 帧内执行它们并破坏输出。
+# false —— 所有输出都是纯文本。F6 会一次性关闭颜色。
+# 纯文本（`:w`、F3、`|`、`$OUT`/`$BLOCK`、`:log`、`@key`）不取决于该键。
+ansi_colors: true
+
+# 如果将秘密值提取到 `$$NAME=…` 行后，清空剪贴板。
+# true —— 这样的插入之后 CLIPBOARD/PRIMARY 会被清空（秘密不会留在缓冲区中）；
+# false（默认）—— 不动缓冲区。
+clear_clipboard_after_secret: false
+
+# `:ed <文件>|$OUT|$BLOCK` 的外部编辑器（在 TTY 中启动，TUI 暂停）。
+# 可以包含参数：`editor: code --wait`、`editor: nvim`。空/无 ——
+# 则使用 $VISUAL / $EDITOR，然后是系统编辑器（sensible-editor、nano、vi）。
+editor: nano

@@ -33,8 +33,9 @@ def test_entrypoint_seeds_existing_scripts():
     for name in names:
         assert (ROOT / "src" / f"{name}.py").is_file(), f"нет src/{name}.py"
     # Шаблоны копируются из src/, а посев идёт только при пустой библиотеке.
-    assert "settings.example.yml" in text
-    assert "llm_providers.example.yml" in text
+    # settings.yml и llm_providers.yml — из локализованных каталогов (язык auto).
+    assert "src/settings/" in text
+    assert "src/llm_providers/" in text
     assert "has_live_commands" in text
 
 

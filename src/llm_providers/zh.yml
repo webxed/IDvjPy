@@ -1,0 +1,109 @@
+# LLM 提供方，用于命令 `:llm <name> <message>` — 模板（简体中文）。
+#
+# 模板位于 src/llm_providers/<lang>.yml。首次在新的
+# data 目录中启动时，应用会复制在 auto 模式下所选语言的
+# 模板文件（--lang / $IDVJPY_LANG → 系统区域设置 → en）。手动复制：
+#   cp src/llm_providers/zh.yml llm_providers.yml
+#
+# 此处不保存密钥：headers/body 中的 `$VAR` 值会在每次请求时从
+# 环境变量中代入（export、TUI 里的 `$VAR=val`、.bashrc_term）。
+#
+# 提供方字段：
+#   url            — endpoint（POST）
+#   model          — 模型名（占位符 %MODEL% 和自动请求体）
+#   system         — 系统提示（占位符 %SYSTEM%，可选）
+#   answer_language — 回答语言：硬性规则会追加到 system
+#                    （DeepSeek 这类双语模型有时不按用户语言回答，
+#                    比如用中文）；留空 = 不加规则
+#   headers        — 请求头；$VAR 从环境变量解析
+#   body           — 请求体模板。占位符：%MSG%（JSON 转义）、
+#                    %MSG_RAW%（原样）、%SYSTEM% / %MODEL%（JSON 转义）。
+#                    若没有 body — 自动使用 OpenAI 兼容的 chat/completions。
+#   response_path  — 响应中模型文本的位置（点号：choices.0.message.content）；
+#                    没有它 — 按已知字段做启发式判断
+#   timeout        — 等待响应的秒数（默认 60）
+#   mock           — true：不走网络，直接返回 `answer`（离线桩）
+#   answer         — `mock: true` 时的回答文本
+#   history_turns  — 在 :llm 上下文中保留最近多少对 user/assistant
+#                    （当前会话的记忆；0/否 = 不带上下文；重置 — :llm reset）
+#   max_attachment_bytes — 消息中 `@path` 的文件大小上限（默认 200000）
+#   app_context    — 在系统提示中附上 IDvjPy_term 速查表和
+#                    标签库摘要（标签/tid/命令/注释），
+#                    让模型用现成的 `!tag[tid]` 链接回答。
+#                    false/否 — 关闭；true — 预算 6000 字符；
+#                    数字 — 自定义字符预算。不影响 `:llm ask`
+#                    （那里总是附加上下文）。
+# 可以在消息中附加文件内容：`:llm ds explain @app.log`（UTF-8，
+# 可以连续多个文件；字面量 @ 用 @@）。
+# `:llm ask <task>` — 单独模式：应用上下文 + 以
+# `!tag[tid]` / `!! tag[tid] && other[tid]` 组合给出的回答。提供方：第一个参数，
+# 若它与 providers 中的名称匹配；否则用 `default:`。
+# providers.* — 名称 → 上述描述的字典。
+# default — 默认提供方名称（对不带名称的 `:llm <msg>` — 非必需）。
+
+default: ds
+
+providers:
+  ds:
+    url: https://api.deepseek.com/chat/completions
+    model: deepseek-chat
+    system: "You are a helpful assistant."
+    answer_language: Chinese
+    timeout: 60
+    # 在 system 中附加应用速查表 + 标签库（对不带 `ask` 的 `:llm`）。
+    # app_context: true
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer $DEEPSEEK_API_KEY"
+    response_path: choices.0.message.content
+
+  openai:
+    url: https://api.openai.com/v1/chat/completions
+    model: gpt-4o-mini
+    system: "You are a helpful assistant."
+    answer_language: Chinese
+    timeout: 60
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer $OPENAI_API_KEY"
+    response_path: choices.0.message.content
+
+  grok:
+    url: https://api.x.ai/v1/chat/completions
+    model: grok-2-latest
+    system: "You are a helpful assistant."
+    answer_language: Chinese
+    timeout: 60
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer $XAI_API_KEY"
+    response_path: choices.0.message.content
+
+  # 本地运行，无需密钥（OpenAI 兼容的 Ollama endpoint）。
+  ollama:
+    url: http://localhost:11434/v1/chat/completions
+    model: llama3.2
+    answer_language: Chinese
+    timeout: 120
+    headers:
+      Content-Type: application/json
+    response_path: choices.0.message.content
+
+  # 内置离线桩：不带 HTTP 和密钥的 mock 回答。
+  # 始终存在，即使删除此块也一样（见 llm_client.OFFLINE_PROVIDER）。
+  # 适合在无网络时做演示和验证 `:llm` / `:llm ask`。
+  offline:
+    model: stub
+    mock: true
+    answer: "[offline] IDvjPy_term 桩：未发出网络请求。"
+
+  # 手动请求体模板且不解析 JSON 响应的示例。
+  echo-demo:
+    url: http://localhost:8080/llm
+    model: demo
+    timeout: 10
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer $MY_KEY"
+    body: |
+      {"model": %MODEL%, "messages": [{"role": "user", "content": %MSG%}], "stream": false}

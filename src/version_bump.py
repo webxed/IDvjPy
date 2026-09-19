@@ -7,7 +7,9 @@
     src/app.py, README.md, COMPACT_SUMMARY.md, CLAUDE.md, AGENTS.md,
     test_cmd.md, tests/test_cmd_scenarios.py, DEMO.md
 
-Плюс файлы-справочники ``DATABASE.md`` / ``backup_db.md``: у них версия —
+Плюс локализованные README (``docs/<lang>/README.md`` — та же первая строка-маркер
+``**IDvjPy_term** vX.YY — …``) и файлы-справочники ``DATABASE.md`` / ``backup_db.md``:
+у них версия —
 единственный маркер состояния ``**vX.YY**``, он заменяется на текущую. Кроме
 того обновляются номер версии документа в ``test_cmd.md`` (+1) и строка плана
 (``Manual plan vNN (app vX.YY)``) в ``COMPACT_SUMMARY.md``. Секция changelog
@@ -32,10 +34,13 @@ APP_VERSION_RE = re.compile(r'^(\s*VERSION = ")(v\d+\.\d+)(")', re.M)
 # Справочники, где версия — единственный маркер состояния «состояние на **vX.YY**».
 BOLD_VERSION_DOCS = ("DATABASE.md", "backup_db.md")
 
+# README и его локализации: маркер — первая строка `**IDvjPy_term** vX.YY — …`.
+README_TARGETS = ("README.md", "docs/en/README.md", "docs/zh/README.md")
+
 # Файлы релиза в порядке обхода (docs рядом с кодом).
 TARGETS = (
     "src/app.py",
-    "README.md",
+    *README_TARGETS,
     "COMPACT_SUMMARY.md",
     "CLAUDE.md",
     "AGENTS.md",
@@ -135,18 +140,18 @@ def plan_changes(root: Path, new: str, *, bump_doc: bool = True) -> dict[str, st
         ),
     )
 
-    rel = "README.md"
-    text = load(rel)
-    note(
-        rel,
-        text,
-        re.sub(
-            r"(\*\*IDvjPy_term\*\* )v\d+\.\d+( —)",
-            lambda m: f"{m.group(1)}{new}{m.group(2)}",
+    for rel in README_TARGETS:
+        text = load(rel)
+        note(
+            rel,
             text,
-            count=1,
-        ),
-    )
+            re.sub(
+                r"(\*\*IDvjPy_term\*\* )v\d+\.\d+( —)",
+                lambda m: f"{m.group(1)}{new}{m.group(2)}",
+                text,
+                count=1,
+            ),
+        )
 
     # test_cmd.md — версия приложения и версия документа (+1).
     rel = "test_cmd.md"
@@ -279,7 +284,6 @@ def check(root: Path) -> list[tuple[str, str]]:
     nxt = next_minor(current)
     required: list[tuple[str, str]] = [
         ("src/app.py", f'VERSION = "{current}"'),
-        ("README.md", f"**IDvjPy_term** {current} —"),
         ("COMPACT_SUMMARY.md", f"Версия: **{current}**."),
         ("COMPACT_SUMMARY.md", f"| `src/app.py` | TUI (`CommandRunner`), {current} |"),
         ("COMPACT_SUMMARY.md", f"## {current}"),
@@ -290,7 +294,9 @@ def check(root: Path) -> list[tuple[str, str]]:
         ("test_cmd.md", f"**Версия приложения**: {current}"),
         ("tests/test_cmd_scenarios.py", f"(IDvjPy_term {current})"),
         ("DEMO.md", f"Версия приложения: **{current}**"),
-    ] + [(rel, f"**{current}**") for rel in BOLD_VERSION_DOCS]
+    ] + [(rel, f"**IDvjPy_term** {current} —") for rel in README_TARGETS] + [
+        (rel, f"**{current}**") for rel in BOLD_VERSION_DOCS
+    ]
     missing: list[tuple[str, str]] = []
     for rel, needle in required:
         try:
