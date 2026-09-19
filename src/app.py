@@ -114,6 +114,7 @@ try:
     import db_transfer
     import history_import
     import ipcalc
+    import remote_source
     import runbook
     from ansi_output import to_markup, to_plain
     from block_label import BlockLabelScreen
@@ -2272,7 +2273,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.149"
+    VERSION = "v1.150"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2434,6 +2435,8 @@ class CommandRunner(App):
     KEY_CHEAT_SH_URL = "cheat_sh_url"
     KEY_CHEAT_SH_OPTIONS = "cheat_sh_options"
     KEY_CLEAR_CLIP_AFTER_SECRET = "clear_clipboard_after_secret"
+    # Статичная ссылка для `:import` без аргументов (командная библиотека тегов).
+    KEY_LIBRARY_URL = "library_url"
     # ANSI-цвета в выводе команд: true — SGR-коды становятся цветами (как в
     # терминале), false — весь вывод плоский. Прочие escape-последовательности
     # вырезаются всегда.
@@ -2521,6 +2524,8 @@ class CommandRunner(App):
         # Подсказки из history_*.txt при наборе (в т.ч. `@`/`>`): см. get_history_completions.
         self.history_completion: bool = True
         self.check_updates: bool = False
+        # `:import` без аргументов берёт источник отсюда (settings.yml).
+        self.library_url: str = ""
         self.db_file = self.FILE_DATABASE
         self.active_pipe_source: CommandBlock | None = None
         # Метки буферов (`:name`): label -> CommandBlock. Только сессия, в память;
@@ -3613,6 +3618,9 @@ class CommandRunner(App):
                     self.clear_clipboard_after_secret = bool(
                         settings.get(self.KEY_CLEAR_CLIP_AFTER_SECRET, False)
                     )
+                    self.library_url = str(
+                        settings.get(self.KEY_LIBRARY_URL) or ""
+                    ).strip()
                     self.ansi_colors = bool(settings.get(self.KEY_ANSI_COLORS, True))
                     self.editor = str(settings.get(self.KEY_EDITOR) or "").strip()
         except (FileNotFoundError, KeyError, yaml.YAMLError):
@@ -5312,8 +5320,152 @@ class CommandRunner(App):
         self._export_tag(args)
 
     def _handle_import_args(self, args: list[str]) -> None:
-        """`:import <file>` — команды из JSON."""
-        self._import_tag(args)
+        """`:import [--dry] [--yes] [--insecure] <file.json|https://…>`.
+
+        Без аргумента берётся статичная ссылка `library_url` из settings.yml.
+        Локальный файл импортируется сразу (`--dry` — только показать план);
+        внешний — сначала всегда показывает план, а импорт делает Enter по
+        подставленной команде `:import … --yes` (принцип «собрал — потом запустил»:
+        ничего не пишется в библиотеку без второго явного Enter).
+        """
+        dry = "--dry" in args
+        yes = "--yes" in args
+        insecure = "--insecure" in args
+        known_flags = {"--dry", "--yes", "--insecure"}
+        rest = [arg for arg in args if not arg.startswith("--")]
+        unknown = [arg for arg in args if arg.startswith("--") and arg not in known_flags]
+        if unknown or len(rest) > 1:
+            self.add_block(InfoBlock(t("transfer.usage")))
+            return
+        source = (rest[0] if rest else self.library_url).strip()
+        if not source:
+            self.add_block(InfoBlock(t("transfer.no_source")))
+            return
+        if remote_source.looks_remote(source):
+            self._import_remote(source, dry=dry, yes=yes, insecure=insecure)
+            return
+        self._import_local_file(source, dry=dry)
+
+    def _import_local_file(self, path: str, *, dry: bool) -> None:
+        """Импорт локального файла переноса (`--dry` — только план)."""
+        try:
+            payload = db_transfer.read_json(path)
+        except FileNotFoundError:
+            self.add_block(InfoBlock(t("transfer.error", error=f"file '{path}' not found")))
+            return
+        except (OSError, ValueError) as exc:
+            self.add_block(InfoBlock(t("transfer.error", error=str(exc))))
+            return
+        self._import_payload(path, payload, dry=dry, yes=True)
+
+    def _import_remote(
+        self, source: str, *, dry: bool, yes: bool, insecure: bool = False
+    ) -> None:
+        """Скачать библиотеку по ссылке в фоне (UI не блокируем) и показать план."""
+        url = remote_source.safe_url(source)
+        self.sub_title = t("transfer.fetching", source=url)
+        self.set_timer(3, self.clear_subtitle)
+        thread = threading.Thread(
+            target=self._remote_import_worker,
+            args=(source, dry, yes, insecure),
+            daemon=True,
+            name="import-fetch",
+        )
+        thread.start()
+
+    def _remote_import_worker(
+        self, source: str, dry: bool, yes: bool, insecure: bool
+    ) -> None:
+        """Фоновый поток: сеть не должна занимать UI."""
+        try:
+            result = remote_source.fetch_text(
+                source,
+                environ={**os.environ, **self.local_env},
+                allow_insecure=insecure,
+            )
+        except remote_source.RemoteError as exc:
+            self.call_from_thread(
+                self.add_block, InfoBlock(t("transfer.error", error=str(exc)))
+            )
+            return
+        try:
+            payload = db_transfer.loads_payload(result.text)
+        except ValueError as exc:
+            self.call_from_thread(
+                self.add_block, InfoBlock(t("transfer.error", error=str(exc)))
+            )
+            return
+        self.call_from_thread(self._remote_import_ready, result.url, payload, dry, yes)
+
+    def _remote_import_ready(
+        self, url: str, payload: dict, dry: bool, yes: bool
+    ) -> None:
+        """UI-поток: показать план импорта и (если попросили) применить."""
+        if not yes and not dry:
+            # Внешний источник меняется молча только по явному подтверждению.
+            self.set_input_draft(f":{self.CMD_IMPORT} {url} --yes")
+        self._import_payload(url, payload, dry=dry, yes=yes)
+
+    def _import_payload(
+        self, source: str, payload: dict, *, dry: bool, yes: bool
+    ) -> None:
+        """Общий путь: проверка секретов → план → (при `yes`) импорт. См. `--dry`."""
+        if self._secret_names and self._mask_secrets(json.dumps(payload, default=str)) != (
+            json.dumps(payload, default=str)
+        ):
+            self.add_block(InfoBlock(t("transfer.secret_refused")))
+            return
+        only_tag = db_transfer.payload_only_tag(payload)
+        # Файл всей библиотеки — это «обновить» (дубликаты пропускаем); файл одного
+        # тега — «добавить» (как раньше: новые tid).
+        skip_existing = only_tag is None
+        try:
+            plan = db_transfer.plan_import(
+                self.db_file,
+                payload,
+                only_tag=only_tag,
+                skip_existing=skip_existing,
+                source=remote_source.safe_url(source),
+            )
+        except Exception as exc:
+            self.add_block(InfoBlock(t("transfer.error", error=str(exc))))
+            return
+        self.add_block(InfoBlock(self._format_import_plan(plan)))
+        if dry or not yes:
+            if not dry:
+                self.add_block(InfoBlock(t("transfer.confirm_hint")))
+            return
+        try:
+            result = db_transfer.import_payload(
+                self.db_file, payload, only_tag=only_tag, skip_existing=skip_existing
+            )
+        except Exception as exc:
+            self.add_block(InfoBlock(t("transfer.error", error=str(exc))))
+            return
+        self._invalidate_library()
+        self.add_block(InfoBlock(t(
+            "transfer.applied",
+            added=result.imported,
+            skipped=result.skipped,
+            tags=", ".join(result.tags) or "—",
+        )))
+
+    def _format_import_plan(self, plan: db_transfer.ImportPlan) -> str:
+        """Текст плана импорта для журнала (`--dry` и подтверждение)."""
+        lines = [t("transfer.preview_header", source=plan.source or "—")]
+        lines.append(t(
+            "transfer.preview_counts",
+            new=plan.new_commands,
+            skipped=plan.skipped,
+            total=plan.commands,
+        ))
+        if plan.new_tags:
+            lines.append(t("transfer.preview_new_tags", tags=", ".join(plan.new_tags)))
+        if plan.has_run_steps:
+            lines.append(t(
+                "transfer.run_warning", auto=plan.run_auto, manual=plan.run_manual
+            ))
+        return "\n".join(lines)
 
     def _handle_md_args(self, args: list[str]) -> None:
         """`:md <файл|справочник>[#L<n>]` — markdown с форматированием."""
@@ -6759,44 +6911,27 @@ class CommandRunner(App):
     def _export_tag(self, args: list[str]) -> None:
         """`:export <tag> [file.json]`; `:export * [file.md]` — весь каталог в Markdown."""
         if not args:
-            self.add_block(InfoBlock("Usage: :export <tag> [file.json]  |  :export * [library.md]"))
+            self.add_block(InfoBlock(t("transfer.export_usage")))
             return
         if args[0] == "*":
             path = args[1] if len(args) > 1 else "library.md"
             try:
                 n = db_transfer.export_markdown(self.db_file, path)
-                self.add_block(
-                    InfoBlock(f"Exported {n} command(s) to {path} (Markdown catalog)")
-                )
+                self.add_block(InfoBlock(t(
+                    "transfer.export_library_done", count=n, path=path
+                )))
             except Exception as e:
-                self.add_block(InfoBlock(f"Export error: {e}"))
+                self.add_block(InfoBlock(t("transfer.error", error=str(e))))
             return
         tag = args[0]
         path = args[1] if len(args) > 1 else f"{tag}.json"
         try:
             n = db_transfer.export_json(self.db_file, path, tag=tag)
-            self.add_block(InfoBlock(f"Exported {n} command(s) of '{tag}' to {path}"))
+            self.add_block(InfoBlock(t(
+                "transfer.export_done", count=n, tag=tag, path=path
+            )))
         except Exception as e:
-            self.add_block(InfoBlock(f"Export error: {e}"))
-
-    def _import_tag(self, args: list[str]) -> None:
-        """`:import <file.json>` — команды из JSON одним тегом (новые tid)."""
-        if not args:
-            self.add_block(InfoBlock("Usage: :import <file.json>"))
-            return
-        path = args[0]
-        try:
-            payload = db_transfer.read_json(path)
-            tag = db_transfer.payload_tag(payload)
-            result = db_transfer.import_json(self.db_file, path, only_tag=tag)
-            self._invalidate_library()
-            self.add_block(InfoBlock(
-                f"Imported {result.imported} command(s) into tag '{tag}'"
-            ))
-        except FileNotFoundError:
-            self.add_block(InfoBlock(f"Error: file '{path}' not found."))
-        except Exception as e:
-            self.add_block(InfoBlock(f"Import error: {e}"))
+            self.add_block(InfoBlock(t("transfer.error", error=str(e))))
 
     def handle_ingress_command(self, args: str) -> None:
         """

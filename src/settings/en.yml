@@ -131,6 +131,12 @@ kctx_vars:
 # the file: IDVJPY_LINE_BLOCKS=0 / =1 in the environment.
 line_api_blocks: true
 
+# Static source for `:import` without arguments — a shared/team tag library
+# (JSON made by `:export *`? no: by `backup_db.py export` — the whole library).
+# Only https:// is accepted; the file is previewed (`--dry`) before import.
+# Empty — off: `:import` then requires an explicit file or URL.
+library_url: ""
+
 # `:cht` — cheat.sh cheatsheets. The service base URL and request options (by default
 # T — no ANSI colors; you can add Q — no comments, e.g. "QT").
 cheat_sh_url: https://cht.sh

@@ -93,7 +93,9 @@
   :o /text      - 在保存的输出（stdout/stderr）中 grep；能挺过 :c
   :o clear      - 忘记保存的输出（仅内存，非数据库）
   :kctx [cluster] [N] - 集群日志：登录与已保存的变量集合（:? kctx）
-  :import file       - 从该 JSON 插入命令（新 tid）
+  :import <文件|url> - 从 JSON 文件插入命令（新 tid），或通过 https:// 获取
+                共享库 — 先显示变更计划，再用 `--yes` 确认；`--dry`、
+                `--insecure`、`library_url` — 详见 :? import
   :theme [name] - 显示或设置 TUI 主题（保存在 settings.yml 中）
                `matrix` — 应用自带主题：近乎黑色上的绿色荧光
                （如同屏保）；它的边框也会变绿。
@@ -178,6 +180,7 @@
   :? kctx    - 集群日志：登录与已保存的变量集合
   :? send    - 将命令转发到另一个会话（`:send` / `:send!`）
   :? session - 应用实例与窗口（`:session`、`:new`）
+  :? import  - JSON / 通过链接的共享库（`:import`、`:export`、`:backup`）
 
 [bold]导航[/bold]
   ↑/↓        - 翻看输入历史：本会话中输入的一切

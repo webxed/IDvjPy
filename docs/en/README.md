@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.149 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.150 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -309,19 +309,24 @@ Aliases with `$1` / `$2` / `$@` substitute arguments (`alias klogin="tsh kube lo
 - `:name [<label>|<label>-|-]` — a buffer label: labels the focused (otherwise the last finished) block so that you can pipe from it without re-running the source (`:name buff` → `|@buff awk '{...}'`). Without an argument — a list of labels, `<label>-` — remove one, `-` — all. Also a dialog via `F8`. The label is visible in the block header (`[buff]`); in history the pipe is written as a full invocation `<source> | <command>`
 - `:/text` / `:g` / `:n` / `:N` — search across journal lines (from a block `/` opens `:/`; `n`/`N` — next / previous)
 - `:export tag [file.json]` / `:import file.json` — one tag to JSON and back (import always assigns new `tid`; the schema is shared with the CLI, `src/db_transfer.py`); `:export * [library.md]` — the whole library as a Markdown catalog
+- `:import <https://…>` — fetch a shared library by URL: the journal shows a **change plan** first and the ready `:import <url> --yes` line goes into the input — the import starts on the second Enter (nothing is written without it). `--dry` — the plan only, `--yes` — no confirmation, `--insecure` — allow `http://` (by default `https://` only), a bare `:import` uses `library_url` from `settings.yml`. Limit 2 MB, timeout 10 s, a proxy with a login is the same `$PROXY_USER` / `$PROXY_PASS` as for `:update`. A payload carrying the value of a live `$$`-secret is refused, and rows with `run:auto` directives are called out in the plan. Full reference — `:? import`
 
 **Export/import: what to use when** (one implementation of the formats — `src/db_transfer.py`, the CLI is a thin shell):
 
 | Task | TUI | CLI (`python3 backup_db.py …`) |
 |------|-----|--------------------------------|
 | Move tags to another instance / machine | `:export tag file.json`, then `:import file.json` there | `export` / `import [--mode merge\|replace] [--keep-tids]` |
+| Pull a shared library from a URL | `:import https://… --dry`, then `:import <url> --yes` (bare `:import` — `library_url` from `settings.yml`) | — |
+| Publish your library for the team | the file comes from the CLI: `python3 backup_db.py export library.json` (goes to `backups/`); put it on an https host and set the link in `library_url` | `export library.json` |
 | An exact snapshot of the DB (roll back "as it was") | `:backup` | `backup` (SQLite snapshot + JSON + CSV); return with `restore <file>` |
 | Edit commands and comments in a spreadsheet | — | `export-csv` / `import-csv` (addressable by `tid`), `export-tags-csv` / `import-tags-csv` |
 | Look at the tags without the TUI | `:stats`, `??` | `list [--show-comments]` |
 | The library catalog as Markdown | `:export * library.md` | — |
 | Commands as bash functions | `:alias tag\|* [file.sh]` | — |
 
-JSON is transfer and merging (global `id`s from the file are never taken: a foreign `id` used to be able to overwrite another row; by default every row gets a new `tid`). An **exact snapshot** is only the SQLite copy. Details — [`backup_db.md`](backup_db.md).
+JSON is transfer and merging (global `id`s from the file are never taken: a foreign `id` used to be able to overwrite another row; by default every row gets a new `tid`). An **exact snapshot** is only the SQLite copy. Details — [`backup_db.md`](../../backup_db.md).
+
+The two kinds of file are told apart: a single-tag file (`tag_filter`) means "add" (new `tid`s, nothing is overwritten), a whole-library file (no `tag_filter` — produced by `backup_db.py export` and `backup`) means "update": an already taken `(tag, tid)` pair is skipped (`skip_existing`), a free one is added. A remote import runs nothing by itself, but `:run <tag>` will execute `auto` steps without confirmation — that is why the plan warns about `run:` directives. The download runs in a background thread (the UI stays responsive) and only over `https://`: the content goes straight into the tag library.
 - `:playbook [file.yml]` — record the commands of this session (Enter) as YAML for `--demo` / `:run` (default `playbook.yml`). `:playbook -` — preview in the journal; `:playbook clear` — forget what was recorded. Keys (Tab/F5) and the mouse are not recorded. In the YAML: `loop: true` / `loop: N` — loop the steps (Esc — stop); see [DEMO.md](../../DEMO.md).
 - `:run <tag|file.yml> [--step] [--dry]` — run a chain (runbook): `auto` steps run in a row and wait for completion, `manual` inserts the line into the input and waits for Enter (you can edit it), `prompt` waits for a typed line. A step error stops the run, `Esc` / `:run stop` too. Step modes of a tag — by directives in comments (`run:manual`, `run:prompt`, `run:pause=2`, `run:continue`); if the tag has no such directive at all, the plan warns: all steps will go `auto` (this is what an outdated seed or your own tag saved before v1.124 looks like). `--step` — every step with Enter, `--dry` — plan only. Full help — `:? run`, a ready chain — `:run vapprole`. A relative path to YAML is resolved from the process cwd (when launched via an alias from `~` — from `~`): it is more reliable to keep the chain as a tag — the DB lives in the data directory
 - `:update` — compare `VERSION` with GitHub [`webxed/IDvjPy`](https://github.com/webxed/IDvjPy) `main`. At startup the same happens if `check_updates: true` (it writes to the journal only if GitHub is newer). Proxy with a login: `$PROXY_USER` / `$PROXY_PASS` in `.bashrc_term` (plus `HTTPS_PROXY` / `HTTP_PROXY`).
@@ -413,6 +418,7 @@ terminal_mouse: true         # true — the mouse belongs to the app (click/whee
 theme: textual-dark          # `d` / `:theme`; saved on change (matrix — green phosphor on black)
 language: en                 # interface language (en, ru, zh): :lang / --lang / $IDVJPY_LANG; `auto` — by $LANG; texts in src/locales (parts <lang>/*.yml, help in help/<lang>/)
 check_updates: true          # at startup: compare VERSION with GitHub main; :update always
+library_url: ""              # static source for a bare `:import` — a shared library JSON over https; empty — off
 screensaver_idle: 120        # idle (keys/click/scroll/mouse) → screensaver; 0 = off. :screensaver — right away
 screensaver_matrix: true     # screensaver canvas: true — "matrix rain", false — starfield (:screensaver matrix|stars — one-off)
 screensaver_stars: true      # starfield: flying stars; false — black canvas (the clock/ribbon/load remain)

@@ -1,0 +1,33 @@
+[bold]:? import — moving the library: JSON, a URL, Markdown[/bold]
+
+  :export <tag> [file] - Write one tag to JSON; the first path argument is the
+                target file (`:export kube kube.json`)
+  :export * [file.md] - Write the whole library as a Markdown catalog (grouped
+                by tag; tag and command comments included)
+  :import <file.json> - Insert commands from that JSON. One tag → [bold]new[/bold] tids
+                (nothing is overwritten); a whole-library file → update: an
+                already taken (tag, tid) pair is skipped (`skip_existing`)
+  :import [--dry] [--yes] [--insecure] <https://…> - Fetch a shared library.
+                https only; `--insecure` allows plain http:// (the payload goes
+                straight into the library — not for an untrusted host). Limit
+                2 MB, timeout 10 s; a proxy with login — `$PROXY_USER` /
+                `$PROXY_PASS` (the layer is shared with `:update` and `:llm`)
+  :import - Bare command takes the static URL from `library_url` in settings.yml
+                (empty — off: an explicit file or URL is then required)
+
+  A remote import never writes silently: the journal first shows the change plan
+  and the ready `:import <url> --yes` line goes to the input — Enter imports it
+  (nothing is written without that second Enter). `--dry` shows the plan only.
+  A payload carrying the value of a live `$$`-secret is refused (`:? vars`).
+
+  What to read in the plan:
+    - "N step(s) run without confirmation in :run" — the file brings `run:auto`
+      (`run:pause=…`) directives: `:run <tag>` would execute those steps itself
+    - "skip N" — those rows are already in the library and are not overwritten
+
+  JSON is the same schema as the CLI (`src/db_transfer.py`): `python3
+  backup_db.py export f.json` / `import f.json [--mode replace] [--keep-tids]`,
+  plus addressable CSV by (tag, tid). A byte-exact copy is a SQLite snapshot
+  (`:backup` / `backup_db.py backup`), not JSON. Details — backup_db.md.
+
+  Other topics and the full command list — :?

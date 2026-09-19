@@ -19,6 +19,7 @@ import csv
 import datetime
 import json
 import os
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,6 +46,30 @@ class ImportResult:
     def total(self) -> int:
         """Сколько строк реально записано (новые + обновлённые)."""
         return self.imported + self.updated
+
+
+@dataclass(frozen=True)
+class ImportPlan:
+    """Что изменит импорт — считается без записи (для `--dry` и подтверждения).
+
+    Отдельно считаются строки с `run:`-директивами: `:run <тег>` выполняет
+    шаги режима `auto` без подтверждения, поэтому чужой файл об этом должен
+    предупреждать до записи в библиотеку.
+    """
+
+    source: str = ""
+    commands: int = 0
+    new_commands: int = 0
+    skipped: int = 0
+    new_tags: tuple[str, ...] = field(default_factory=tuple)
+    existing_tags: tuple[str, ...] = field(default_factory=tuple)
+    run_auto: int = 0
+    run_manual: int = 0
+    replace: bool = False
+
+    @property
+    def has_run_steps(self) -> bool:
+        return bool(self.run_auto or self.run_manual)
 
 
 # --- чтение из БД ------------------------------------------------------------
@@ -157,7 +182,15 @@ def export_json(
 def read_json(path: str) -> dict[str, Any]:
     """Прочитать файл переноса (любой из исторических видов)."""
     with open(path, encoding="utf-8") as handle:
-        payload = json.load(handle)
+        return loads_payload(handle.read())
+
+
+def loads_payload(text: str) -> dict[str, Any]:
+    """Разобрать содержимое файла переноса (для локального файла и `:import <url>`)."""
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"not a JSON transfer file: {exc}") from None
     if not isinstance(payload, dict):
         raise ValueError("JSON root must be an object")
     return payload
@@ -173,6 +206,17 @@ def payload_tag(payload: dict[str, Any]) -> str:
         if row_tag:
             return row_tag
     raise ValueError("JSON has no tag_filter / commands[].tag")
+
+
+def payload_only_tag(payload: dict[str, Any]) -> str | None:
+    """Тег, к которому адресован файл: `tag_filter` или None (вся библиотека).
+
+    Так различаются два сценария: файл одного тега (`:export <tag>` → новые tid,
+    «добавить») и файл всей библиотеки (командная библиотека по ссылке →
+    `skip_existing`, «обновить»).
+    """
+    tag = (payload.get("tag_filter") or "").strip()
+    return tag or None
 
 
 def _clear_library(conn) -> None:
@@ -215,7 +259,130 @@ def import_json(
     include_deleted: bool = False,
     only_tag: str | None = None,
 ) -> ImportResult:
-    """Импортировать команды из JSON.
+    """Импортировать команды из файла переноса (см. `import_payload`)."""
+    return import_payload(
+        db_file,
+        read_json(path),
+        mode=mode,
+        preserve_tid=preserve_tid,
+        skip_existing=skip_existing,
+        include_deleted=include_deleted,
+        only_tag=only_tag,
+    )
+
+
+# Грамматика `run:`-директив (`run:auto`, `run:manual`, `run:prompt`, `run:pause=…`)
+# живёт в `src/runbook.py`; здесь — только её разбор для отчёта, потому что runbook
+# тянет за собой Textual (`from demo import …`), а db_transfer нужен и CLI.
+# Согласованность стережёт `tests/test_remote_import.py::test_run_mode_matches_runbook`
+# (там есть Textual — как и в runbook; сам db_transfer остаётся без него).
+_RE_RUN_DIRECTIVE = re.compile(r"^run:([A-Za-z]+)")
+_RUN_MODES = ("auto", "manual", "prompt")
+
+
+def run_mode(comment: str | None) -> str | None:
+    """Режим шага по комментарию строки: `auto`/`manual`/`prompt` или None.
+
+    None — директив нет вообще (тогда `:run` предупреждает, что все шаги пойдут
+    `auto`); дефолт при наличии директив — `auto`, как в `runbook.RunSpec`.
+    """
+    tokens = (comment or "").strip().split()
+    if not tokens:
+        return None
+    found = False
+    mode = "auto"
+    for token in tokens:
+        match = _RE_RUN_DIRECTIVE.match(token)
+        if not match:
+            continue
+        found = True
+        name = match.group(1).lower()
+        if name in _RUN_MODES:
+            mode = name
+    return mode if found else None
+
+
+def plan_import(
+    db_file: str,
+    payload: dict[str, Any],
+    *,
+    skip_existing: bool = False,
+    only_tag: str | None = None,
+    include_deleted: bool = False,
+    source: str = "",
+) -> ImportPlan:
+    """Что изменит импорт — без записи в базу (для `--dry` и подтверждения).
+
+    Строки считаются тем же способом, что в `import_payload`, поэтому отчёт
+    совпадает с результатом. Директивы `run:` показываются отдельно: режим `auto`
+    выполняется `:run` без подтверждения — чужой файл об этом предупреждает.
+    """
+    commands = payload.get("commands") or []
+    tag_override = (only_tag or "").strip() or None
+    existing_tags: set[str] = set()
+    conn = None
+    if os.path.exists(db_file):
+        existing_tags = set(database.get_all_tags(db_file))
+        conn = database.get_db_connection(db_file)
+    new_tags: set[str] = set()
+    seen_tags: set[str] = set()
+    new_commands = skipped = run_auto = run_manual = 0
+    try:
+        for item in commands:
+            if not isinstance(item, dict):
+                skipped += 1
+                continue
+            if item.get("deleted") and not include_deleted:
+                skipped += 1
+                continue
+            tag = tag_override or (item.get("tag") or "").strip()
+            command = (item.get("command") or "").strip()
+            if not tag or not command:
+                skipped += 1
+                continue
+            seen_tags.add(tag)
+            if tag not in existing_tags:
+                new_tags.add(tag)
+            raw_tid = item.get("tid")
+            source_tid = raw_tid if isinstance(raw_tid, int) else 0
+            taken = False
+            if conn is not None and source_tid > 0:
+                taken = _tid_taken(conn, tag, source_tid)
+            if skip_existing and taken:
+                skipped += 1
+                continue
+            new_commands += 1
+            mode = run_mode(item.get("comment") or "")
+            if mode == "auto":
+                run_auto += 1
+            elif mode in ("manual", "prompt"):
+                run_manual += 1
+    finally:
+        if conn is not None:
+            conn.close()
+    return ImportPlan(
+        source=source,
+        commands=sum(1 for item in commands if isinstance(item, dict)),
+        new_commands=new_commands,
+        skipped=skipped,
+        new_tags=tuple(sorted(new_tags)),
+        existing_tags=tuple(sorted(seen_tags & existing_tags)),
+        run_auto=run_auto,
+        run_manual=run_manual,
+    )
+
+
+def import_payload(
+    db_file: str,
+    payload: dict[str, Any],
+    *,
+    mode: str = "merge",
+    preserve_tid: bool = False,
+    skip_existing: bool = False,
+    include_deleted: bool = False,
+    only_tag: str | None = None,
+) -> ImportResult:
+    """Импортировать команды из уже разобранного payload.
 
     ``mode="replace"`` сначала очищает библиотеку (команды и комментарии тегов).
     ``skip_existing`` пропускает строки, у которых пара (тег, tid) уже занята живой
@@ -223,7 +390,6 @@ def import_json(
     каждая строка вставляется с новым tid — так работает `:import` в TUI, где
     импорт — это «добавить команды», а не «восстановить базу».
     """
-    payload = read_json(path)
     commands: Sequence[Any] = payload.get("commands") or []
     tag_override = (only_tag or "").strip() or None
     comments = payload.get("tag_comments") or {}

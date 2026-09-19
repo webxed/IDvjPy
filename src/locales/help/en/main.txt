@@ -90,7 +90,9 @@
   :o /text      - grep the stored outputs (stdout/stderr); survives :c
   :o clear      - Forget the stored outputs (memory only, not the DB)
   :kctx [cluster] [N] - Cluster journal: login and saved variable sets (:? kctx)
-  :import file       - Insert commands from that JSON (new tids)
+  :import <file|url> - Insert commands from a JSON file (new tids), or fetch a
+                shared library by https:// — a change plan comes first, then
+                `--yes`; `--dry`, `--insecure`, `library_url` — in full: :? import
   :theme [name] - Show or set TUI theme (saved in settings.yml)
                `matrix` is the app's own theme: green phosphor on near-black
                (like the screensaver); its borders go green too.
@@ -175,6 +177,7 @@
   :? kctx    - Cluster journal: login and saved variable sets
   :? send    - Forwarding commands to another session (`:send` / `:send!`)
   :? session - App instances and windows (`:session`, `:new`)
+  :? import  - JSON / a shared library by URL (`:import`, `:export`, `:backup`)
 
 [bold]Navigation[/bold]
   ↑/↓        - Input history walk: everything typed in this session (`:`-commands,

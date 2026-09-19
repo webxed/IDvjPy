@@ -1,0 +1,33 @@
+[bold]:? import — 搬运标签库：JSON、链接、Markdown[/bold]
+
+  :export <tag> [file] - 把一个标签写入 JSON；第一个路径参数即目标文件
+                （`:export kube kube.json`）
+  :export * [file.md] - 把整个库写成 Markdown 目录（按标签分组；
+                包含标签与命令的注释）
+  :import <file.json> - 从该 JSON 插入命令。单标签文件 → [bold]新的[/bold] tid
+                （不会覆盖任何内容）；整库文件 → 更新：已占用的
+                （标签, tid）对被跳过（`skip_existing`）
+  :import [--dry] [--yes] [--insecure] <https://…> - 下载共享库。
+                仅 https；`--insecure` 允许明文 http://（内容会直接进入库——
+                不要用于不可信的来源）。上限 2 MB，超时 10 秒；
+                带登录的代理 — `$PROXY_USER` / `$PROXY_PASS`
+                （与 `:update`、`:llm` 共用同一层）
+  :import - 不带参数时使用 settings.yml 中的静态链接 `library_url`
+                （留空即关闭：此时必须给出文件或链接）
+
+  外部导入绝不静默写入：日志中先显示变更计划，并把现成的
+  `:import <url> --yes` 放入输入行——按 Enter 才会导入
+  （没有第二次 Enter 就不会写入库）。`--dry` 只显示计划。
+  若 payload 含仍有效的 `$$` 密钥值，则拒绝导入（`:? vars`）。
+
+  计划中要看什么：
+    - “N step(s) run without confirmation in :run” — 文件带有 `run:auto`
+      （`run:pause=…`）指令：`:run <标签>` 会自动执行这些步骤
+    - “skip N” — 这些行已在库中，不会被覆盖
+
+  JSON 与 CLI 使用同一格式（`src/db_transfer.py`）：`python3
+  backup_db.py export f.json` / `import f.json [--mode replace] [--keep-tids]`，
+  另有按（标签, tid）定位的 CSV。逐字节的副本是 SQLite 快照
+  （`:backup` / `backup_db.py backup`），不是 JSON。详见 backup_db.md。
+
+  其他主题与完整命令列表 — :?

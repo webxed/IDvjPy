@@ -26,6 +26,7 @@ HELP_TEXTS = (
     "kctx",
     "send",
     "session",
+    "import",
 )
 
 # Темы `:? <тема>` в порядке оглавления: каноническое имя → имя текста.
@@ -40,6 +41,7 @@ HELP_TOPICS: tuple[tuple[str, str], ...] = (
     ("kctx", "kctx"),
     ("send", "send"),
     ("session", "session"),
+    ("import", "import"),
 )
 
 # Алиасы тем (лишние имена и русские слова). Ключ — то, что набрал человек,
@@ -69,6 +71,11 @@ _HELP_TOPIC_ALIASES: dict[str, str] = {
     "sessions": "session",
     "new": "session",
     "сессии": "session",
+    "export": "import",
+    "transfer": "import",
+    "экспорт": "import",
+    "импорт": "import",
+    "библиотека": "import",
 }
 
 

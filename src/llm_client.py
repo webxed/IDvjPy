@@ -31,7 +31,7 @@ import urllib.request
 from typing import Any
 
 from i18n import t
-from update_check import (
+from net import (
     looks_like_proxy_auth_error,
     proxy_handler_map,
     redact_proxy_secrets,

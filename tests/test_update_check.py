@@ -1,20 +1,17 @@
 """GitHub version check for :update."""
 import urllib.request
 
+from net import PROXY_AUTH_HINT
 from update_check import (
     KIND_AHEAD,
     KIND_AVAILABLE,
     KIND_CURRENT,
-    PROXY_AUTH_HINT,
     compare_versions,
     fetch_remote_version,
     format_update_fetch_error,
     format_update_status,
-    inject_proxy_userinfo,
     parse_version_from_source,
     parse_version_tuple,
-    proxy_handler_map,
-    redact_proxy_secrets,
 )
 
 
@@ -63,56 +60,6 @@ def test_fetch_remote_version(monkeypatch):
 
     monkeypatch.setattr("update_check.urllib.request.urlopen", lambda *a, **k: _Resp())
     assert fetch_remote_version() == "v9.9"
-
-
-def test_inject_proxy_userinfo():
-    assert inject_proxy_userinfo("http://proxy.corp:8080", "alice", "s3cret") == (
-        "http://alice:s3cret@proxy.corp:8080"
-    )
-    assert inject_proxy_userinfo("http://proxy.corp:8080", "alice", "p@ss:word") == (
-        "http://alice:p%40ss%3Aword@proxy.corp:8080"
-    )
-    assert inject_proxy_userinfo("http://old:pw@proxy.corp:8080", "alice", "x") == (
-        "http://old:pw@proxy.corp:8080"
-    )
-    assert inject_proxy_userinfo("http://proxy.corp:8080", "", "x") == "http://proxy.corp:8080"
-    assert inject_proxy_userinfo("proxy.corp:8080", "alice", "x") == (
-        "http://alice:x@proxy.corp:8080"
-    )
-
-
-def test_proxy_handler_map_injects_when_user_set():
-    env = {
-        "HTTPS_PROXY": "http://proxy.example:3128",
-        "PROXY_USER": "alice",
-        "PROXY_PASS": "s3cret",
-    }
-    mapping = proxy_handler_map(env)
-    assert mapping is not None
-    assert mapping["https"] == "http://alice:s3cret@proxy.example:3128"
-    assert "http" not in mapping
-    only_http = proxy_handler_map(
-        {
-            "HTTP_PROXY": "http://proxy.example:3128",
-            "PROXY_USER": "alice",
-            "PROXY_PASS": "s3cret",
-        }
-    )
-    assert only_http is not None
-    assert only_http["https"] == "http://alice:s3cret@proxy.example:3128"
-    assert only_http["http"] == "http://alice:s3cret@proxy.example:3128"
-    assert proxy_handler_map({"HTTPS_PROXY": "http://proxy.example:3128"}) is None
-    assert proxy_handler_map({"PROXY_USER": "alice"}) is None
-
-
-def test_redact_proxy_secrets():
-    env = {"PROXY_PASS": "s3cret"}
-    assert "***" in redact_proxy_secrets("tunnel s3cret failed", env)
-    assert "s3cret" not in redact_proxy_secrets("tunnel s3cret failed", env)
-    env = {"PROXY_PASS": "p@ss"}
-    text = redact_proxy_secrets("http://alice:p%40ss@proxy:1 407", env)
-    assert "p@ss" not in text
-    assert "p%40ss" not in text
 
 
 def test_format_update_fetch_error_hints_when_407_without_user():

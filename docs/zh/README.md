@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.149 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.150 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -300,19 +300,24 @@ curl -H "Bearer $TOKEN" https://api.example   # 普通的 $TOKEN 替换
 - `:name [<label>|<label>-|-]` —— 缓冲区标记：为聚焦（否则最后一个已完成）块打标记，以便从中管道而无需重新运行来源（`:name buff` → `|@buff awk '{...}'`）。不带参数时列出标记，`<label>-` —— 取消一个，`-` —— 全部。也可通过 `F8` 打开对话框。标记显示在块的头部（`[buff]`）；写入历史时管道记录为完整调用 `<来源> | <命令>`
 - `:/text` / `:g` / `:n` / `:N` —— 按日志行搜索（在块上按 `/` 会打开 `:/`；`n`/`N` —— 下一个 / 上一个）
 - `:export tag [file.json]` / `:import file.json` —— 单个标签与 JSON 互转（导入总是分配新的 `tid`；格式与 CLI 共用，`src/db_transfer.py`）；`:export * [library.md]` —— 整个库导出为 Markdown 目录
+- `:import <https://…>` —— 按链接获取共享库：日志中先显示**变更计划**，并把现成的 `:import <url> --yes` 放入输入行——第二次 Enter 才开始导入（没有它则不会写入任何内容）。`--dry` —— 只显示计划，`--yes` —— 不再确认，`--insecure` —— 允许 `http://`（默认仅 `https://`），不带参数的 `:import` 使用 `settings.yml` 中的 `library_url`。上限 2 MB、超时 10 秒、带登录的代理与 `:update` 相同：`$PROXY_USER` / `$PROXY_PASS`。payload 含仍有效的 `$$` 密钥值会被拒绝；带 `run:auto` 指令的行会在计划中单独提示。完整参考 —— `:? import`
 
 **导出/导入：什么场景用什么**（格式只有一份实现 —— `src/db_transfer.py`，CLI 只是薄壳）：
 
 | 任务 | TUI | CLI（`python3 backup_db.py …`） |
 |------|-----|--------------------------------|
 | 把标签搬到另一个实例/机器 | `:export tag file.json`，在那里 `:import file.json` | `export` / `import [--mode merge\|replace] [--keep-tids]` |
+| 按链接获取共享库 | `:import https://… --dry`，然后 `:import <url> --yes`（不带参数时用 `settings.yml` 的 `library_url`） | — |
+| 发布自己的库给团队 | 文件由 CLI 生成：`python3 backup_db.py export library.json`（写入 `backups/`）；放到 https 主机上，并把链接写进 `library_url` | `export library.json` |
 | 数据库的精确快照（回滚到「原样」） | `:backup` | `backup`（SQLite 快照 + JSON + CSV），用 `restore <文件>` 还原 |
 | 在表格里改命令和注释 | — | `export-csv` / `import-csv`（按 `tid` 定位），`export-tags-csv` / `import-tags-csv` |
 | 不开 TUI 看标签 | `:stats`、`??` | `list [--show-comments]` |
 | 库目录导出为 Markdown | `:export * library.md` | — |
 | 命令导出为 bash 函数 | `:alias tag\|* [file.sh]` | — |
 
-JSON 用于搬运和合并（**绝不用**文件里的全局 `id`：以前外来的 `id` 可能覆盖另一行；默认每行都会拿到新的 `tid`）。**精确快照**只有 SQLite 副本。详见 [`backup_db.md`](backup_db.md)。
+JSON 用于搬运和合并（**绝不用**文件里的全局 `id`：以前外来的 `id` 可能覆盖另一行；默认每行都会拿到新的 `tid`）。**精确快照**只有 SQLite 副本。详见 [`backup_db.md`](../../backup_db.md)。
+
+两种文件要分清：单标签文件（带 `tag_filter`）是「添加」（新的 `tid`，不覆盖任何内容），整库文件（无 `tag_filter`——由 `backup_db.py export` 和 `backup` 生成）是「更新」：已占用的 `(标签, tid)` 对会被跳过（`skip_existing`），空闲的则加入。外部导入本身不会执行任何命令，但 `:run <标签>` 会无确认地执行 `auto` 步骤——所以计划会提示 `run:` 指令。下载在后台线程中完成（不阻塞 UI），且只允许 `https://`：内容会直接进入标签库。
 - `:playbook [file.yml]` —— 把本会话的命令（Enter）记录为供 `--demo` / `:run` 使用的 YAML（默认 `playbook.yml`）。`:playbook -` —— 在日志中预览；`:playbook clear` —— 遗忘已记录的内容。按键（Tab/F5）和鼠标不会被记录。YAML 中：`loop: true` / `loop: N` —— 循环步骤（Esc —— 停止）；见 [DEMO.md](../../DEMO.md)。
 - `:run <tag|文件.yml> [--step] [--dry]` —— 运行命令链（runbook）：`auto` 步骤依次执行并等待完成，`manual` 把命令插入输入行并等待 Enter（可以修改），`prompt` 等待你输入的字符串。某步出错会停止运行，`Esc` / `:run stop` 也会。标签的步骤模式由注释中的指令决定（`run:manual`、`run:prompt`、`run:pause=2`、`run:continue`）；如果标签中没有任何这类指令，计划会警告：所有步骤都将以 `auto` 执行（过期的种子或 v1.124 之前保存的自有标签就是这样）。`--step` —— 每步都等 Enter，`--dry` —— 只显示计划。完整帮助 —— `:? run`，现成命令链 —— `:run vapprole`。YAML 的相对路径按进程的 cwd 计算（用别名从 `~` 启动时则从 `~` 算）：命令链更稳妥的做法是保存在标签里——数据库位于数据目录中
 - `:update` —— 把 `VERSION` 与 GitHub [`webxed/IDvjPy`](https://github.com/webxed/IDvjPy) `main` 比较。启动时如果 `check_updates: true` 也会做同样的事（仅当 GitHub 上更新时才写入日志）。带认证的代理：`.bashrc_term` 中的 `$PROXY_USER` / `$PROXY_PASS`（外加 `HTTPS_PROXY` / `HTTP_PROXY`）。
@@ -404,6 +409,7 @@ terminal_mouse: true         # true —— 鼠标由应用处理（点击/滚轮
 theme: textual-dark          # `d` / `:theme`；切换时保存（matrix —— 黑底绿色荧光）
 language: en                 # 界面语言（en、ru、zh）：:lang / --lang / $IDVJPY_LANG；`auto` —— 按 $LANG；文本在 src/locales（分片 <lang>/*.yml，帮助在 help/<lang>/）
 check_updates: true          # 启动时：把 VERSION 与 GitHub main 比较；:update 则总是比较
+library_url: ""              # 不带参数的 `:import` 的静态来源 —— 通过 https 的共享库 JSON；留空即关闭
 screensaver_idle: 120        # 空闲（按键/点击/滚动/鼠标）→ 屏保；0 = 关闭。:screensaver —— 立即显示
 screensaver_matrix: true     # 屏保画布：true —— 「矩阵雨」，false —— 星空（:screensaver matrix|stars —— 临时切换）
 screensaver_stars: true      # 星空：飞舞的星星；false —— 黑色画布（时钟/条带/load 仍保留）

@@ -26,7 +26,7 @@ import urllib.request
 from collections.abc import Mapping
 
 from ansi_output import strip_escapes
-from update_check import (
+from net import (
     looks_like_proxy_auth_error,
     proxy_handler_map,
     redact_proxy_secrets,

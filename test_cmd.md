@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.149
+# План тестирования IDvjPy_term v1.150
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1457,6 +1457,32 @@ steps:
 
 ---
 
+## Секция 52: Импорт библиотеки по ссылке (`:import <url>`)
+
+Стенд: файл всей библиотеки и локальный сервер (в другом терминале).
+
+```text
+python3 backup_db.py export library.json      # в backups/ (канонический JSON, tag_filter пуст)
+cd backups && python3 -m http.server 8000     # отдача по http://127.0.0.1:8000/
+```
+
+В TUI:
+
+```text
+:import http://127.0.0.1:8000/library.json --dry             # отказ: http:// не шифрован
+:import http://127.0.0.1:8000/library.json --dry --insecure # план (явно разрешён http://)
+:import https://host/library.json                           # план + драфт подтверждения
+:import https://host/library.json --yes                     # импорт сразу
+:import                                                     # берёт library_url из settings.yml
+:import --nope                                              # Usage: :import …
+```
+
+**Ожидание:** ссылка распознаётся по схеме (`https://` / `http://`), имя без схемы — по-прежнему локальный файл. По умолчанию разрешён только `https://` (`Refusing …: http:// is not encrypted. Use https:// or pass --insecure if you trust the source.`); `--insecure` снимает запрет, и это видно в сообщении. Загрузка идёт в фоне (UI не блокируется, в подзаголовке `Fetching …`), лимит 2 МБ, таймаут 10 с, прокси с логином — те же `$PROXY_USER` / `$PROXY_PASS`, что у `:update` и `:llm` (при «407» — подсказка). Внешний импорт **всегда** сначала показывает план (`Import preview — <url>`: сколько строк добавится/пропустится, какие теги новые; отдельной строкой — предупреждение, если в файле есть `run:`-директивы: `:run <тег>` выполнит шаги `auto` без подтверждения), а во ввод подставляется готовая строка `:import <url> --yes` — импорт начинается только по второму Enter (принцип «собрал — потом запустил»). `--dry` показывает только план и ничего не подставляет; `--yes` импортирует сразу. Файл всей библиотеки (`tag_filter` пуст) — «обновить»: занятая пара `(тег, tid)` пропускается; файл одного тега — «добавить» с новыми `tid`. Payload со значением живого `$$`-секрета отклоняется (`Refused: …`) — значение секрета не должно приезжать извне и попадать в БД/журнал. `:import` без аргумента берёт `library_url` из `settings.yml` (пусто — `No import source: …`). Ошибка сети — явный текст в журнале, без пароля прокси и без userinfo из URL.
+
+Автотесты: `tests/test_remote_import.py` (транспорт на фейковом `net.open_url`: только https, `--insecure`, чтение чанками и лимит размера, подсказка при 407, `safe_url` без userinfo; план импорта и сверка `run_mode` с `runbook`; Pilot: preview + драфт `--yes`, `--yes` применяет, `--dry` без драфта, `library_url` из settings, отказ при живом секрете, предупреждение про `run:`, локальный файл с `--dry`), `tests/test_net.py` (прокси-хелперы: `inject_proxy_userinfo`, `proxy_handler_map`, `redact_proxy_secrets`, `format_fetch_error`).
+
+---
+
 ## Секция 51: Язык интерфейса (`:lang`, `:relang`, ключ `language`)
 
 ```text
@@ -1477,7 +1503,7 @@ steps:
 
 Разово при запуске: `python3 app.py --lang ru`, `$IDVJPY_LANG=ru python3 app.py`.
 
-**Ожидание:** язык влияет только на текст — сообщения (`:kctx`, `:watch`, `:run`, `:llm offline`, стартовый блок), подсказки `:`-команд, каталог `:welcome`, строки справки заставки и сама справка `:?` / `:? <тема>` (`calc`, `run`, `i`, `md`, `llm`, `tags`, `vars`, `kctx`, `send`, `session`). `en` — источник правды: `src/locales/en.yml` + части `src/locales/en/*.yml` (`screensaver`, `seed`) + `src/locales/help/en/*.txt`; `ru` и `zh` — перевод всего того же (204 ключа; тест сторожит паритет ключ-в-ключ). Отсутствующий ключ отдаёт английский текст, неизвестный ключ печатается как есть (пустоты нет). Команды, имена тегов, ключи настроек, имена файлов и слоган «Define your variables…» не переводятся. Смена языка применяется к тексту, напечатанному **после** неё — уже показанные блоки не перерисовываются. `:relang <код>` переводит не UI, а **комментарии библиотеки в БД**: трогает только канонические теги/команды сидов (матч по тегу и тексту команды; linux-дополнения `logs` / `file[12]` / `net[10..11]` — по позиции `tid-1`), пользовательские теги, команды и правленые руками комментарии остаются, перед записью — снимок БД в `backups/`. Проверка: `python3 -m pytest tests/test_i18n.py tests/test_seed_i18n.py tests/test_relang.py -q`.
+**Ожидание:** язык влияет только на текст — сообщения (`:kctx`, `:watch`, `:run`, `:llm offline`, стартовый блок), подсказки `:`-команд, каталог `:welcome`, строки справки заставки и сама справка `:?` / `:? <тема>` (`calc`, `run`, `i`, `md`, `llm`, `tags`, `vars`, `kctx`, `send`, `session`, `import`). `en` — источник правды: `src/locales/en.yml` + части `src/locales/en/*.yml` (`screensaver`, `seed`) + `src/locales/help/en/*.txt`; `ru` и `zh` — перевод всего того же (204 ключа; тест сторожит паритет ключ-в-ключ). Отсутствующий ключ отдаёт английский текст, неизвестный ключ печатается как есть (пустоты нет). Команды, имена тегов, ключи настроек, имена файлов и слоган «Define your variables…» не переводятся. Смена языка применяется к тексту, напечатанному **после** неё — уже показанные блоки не перерисовываются. `:relang <код>` переводит не UI, а **комментарии библиотеки в БД**: трогает только канонические теги/команды сидов (матч по тегу и тексту команды; linux-дополнения `logs` / `file[12]` / `net[10..11]` — по позиции `tid-1`), пользовательские теги, команды и правленые руками комментарии остаются, перед записью — снимок БД в `backups/`. Проверка: `python3 -m pytest tests/test_i18n.py tests/test_seed_i18n.py tests/test_relang.py -q`.
 
 **Контент по языкам.** Демо-туры: базовый `src/demos/<tour>.yml` хранит шаги, текст — в `src/demos/text/<lang>/<tour>.yml` (`title`, `captions`/`types` по номеру шага), так что `--demo short` говорит на языке интерфейса (слои `en` и `zh`). Комментарии сидов: `src/seed_text/<lang>/<handbook>.yml` (ключ — тег + позиция), язык берётся из `language` в `settings.yml` / `$IDVJPY_LANG`; поэтому `python3 src/seed_git.py --seed` при `language: en` кладёт английские подписи, при `language: zh` — китайские, а при `language: ru` — базовые русские (встроенные в `seed_*.py`). Уже посеянную БД переводит `:relang <код>` (или `python3 src/relang.py --lang zh`): переписываются только комментарии канонических строк сидов, пользовательские теги/команды и правленые руками комментарии остаются, снимок — в `backups/`. Полный повторный `--seed` тоже сменит язык, но заменит свои теги (`:backup` перед этим). Справочники: `handbook_md_path` сначала ищет `docs/<lang>/NAME` (есть `docs/en/` и `docs/zh/`). `:llm` без `answer_language` у провайдера отвечает на языке интерфейса (`off`/`none` выключают правило).
 
@@ -1485,7 +1511,7 @@ steps:
 
 ---
 
-**Версия документа**: v1.95
-**Версия приложения**: v1.149
-**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
+**Версия документа**: v1.96
+**Версия приложения**: v1.150
+**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

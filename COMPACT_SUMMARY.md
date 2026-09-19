@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.149**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.150**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -27,7 +27,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no such tag) searches command text + comments across tags |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:?` `:? <тема>` (`calc` `run` `i` `md` `llm` `tags` `vars` `kctx` `send` `session`) `:q` `:w` `:h` `:c` `:json` `:md` `:rg` `:i` `:cd` `:fm` `:term` `:ed` `:env` `:r` `:cmd` `:log` `:o` `:diff` `:name` `:kill` `:watch` `:llm` `:cht` `:g` `:/` `:n` `:N` `:stats` `:mv` `:export` `:import` `:alias` `:kctx` `:session` `:new` `:send` `:send!` `:backup` `:welcome` `:screensaver` `:theme` `:lang` `:relang` `:playbook` `:run` `:update` |
+| `:` | `:?` `:? <тема>` (`calc` `run` `i` `md` `llm` `tags` `vars` `kctx` `send` `session` `import`) `:q` `:w` `:h` `:c` `:json` `:md` `:rg` `:i` `:cd` `:fm` `:term` `:ed` `:env` `:r` `:cmd` `:log` `:o` `:diff` `:name` `:kill` `:watch` `:llm` `:cht` `:g` `:/` `:n` `:N` `:stats` `:mv` `:export` `:import` `:alias` `:kctx` `:session` `:new` `:send` `:send!` `:backup` `:welcome` `:screensaver` `:theme` `:lang` `:relang` `:playbook` `:run` `:update` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.95 (app v1.149) |
+| `test_cmd.md` | Manual plan v1.96 (app v1.150) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -185,12 +185,14 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.149 |
+| `src/app.py` | TUI (`CommandRunner`), v1.150 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
 | `src/database_v2.py` | SQLite tagged history — только примитивы БД (чтение/запись строк, теги, комментарии, `usage_stats`); перенос — в `src/db_transfer.py` |
-| `src/db_transfer.py` | Единственная реализация переноса библиотеки: JSON (`export_json`/`import_json` — каноническая схема, терпимое чтение обоих исторических видов, глобальные `id` из файла не берутся, `skip_existing`/`preserve_tid`/`mode=replace`), CSV команд (адресно по тег+tid) и комментариев тегов, Markdown-каталог, `library_overview` для `list`. Один код для TUI (`:export`/`:import`) и CLI |
+| `src/db_transfer.py` | Единственная реализация переноса библиотеки: JSON (`export_json`/`import_json` — каноническая схема, терпимое чтение обоих исторических видов, глобальные `id` из файла не берутся, `skip_existing`/`preserve_tid`/`mode=replace`), CSV команд (адресно по тег+tid) и комментариев тегов, Markdown-каталог, `library_overview` для `list`. Для внешнего импорта: `loads_payload`, `payload_only_tag`, `run_mode` (разбор `run:`-директив для плана) и `plan_import`/`ImportPlan` — что изменит импорт, без записи (`--dry`, подтверждение `:import <url>`). Один код для TUI (`:export`/`:import`) и CLI |
+| `src/net.py` | Общий сетевой слой (без Textual): HTTP(S) через stdlib + прокси с логином (`$PROXY_USER` / `$PROXY_PASS` → URL прокси), `open_url`, чистка пароля из текста ошибки, подсказка при «407». Для `:update`, `:llm`/`:cht` и `:import <url>` |
+| `src/remote_source.py` | Внешний источник для `:import <url>`: только `https://` (иначе явный `--insecure`), лимит 2 МБ, таймаут 10 с, `safe_url` без userinfo, `looks_remote` (ссылка или локальный файл), `RemoteError` с готовым текстом для журнала |
 | `src/backup_db.py` | Тонкий CLI над `db_transfer` (`backup_db.py` + обёртка `backup_db.sh`): `export`/`import`, `export-csv`/`import-csv`, `export-tags-csv`/`import-tags-csv`, `list`, `backup` (снимок SQLite + JSON + CSV), `restore` (со снимком до операции). Своей SQL-обвязки и своей JSON-схемы больше нет |
 | `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
 | `src/seed_catalog.py` | Empty-DB welcome catalog (click `--seed` / `.md`); texts from `catalog.*` (`locales/<lang>/seed.yml`), commands/scripts never translated |
@@ -212,7 +214,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/history_import.py` | Импорт истории оболочки (`:h import`): поиск файлов по ОС и `$HISTFILE` (fish/pwsh — XDG-каталог на всех ОС, nushell — системный, на win32 только Windows-пути), разбор по содержимому (zsh extended + континуация `\`+newline, bash-метки, fish `\`/`\n` однопроходно, PSReadLine/nushell), хвост 4 МБ у больших файлов, BOM/бинарь, `sh` → `ksh` |
 | `src/session_mailbox.py` | Пересылка команд между сессиями (`:send`): `inbox_<instance>.jsonl` 0600, append под lock / drain |
 | `src/session_registry.py` | Реестр активных сессий — `session_<instance>.pid` 0600: автоимя `:new` = наименьшее свободное `sN` среди работающих окон (устаревшие pid-файлы подчищаются) |
-| `src/help_texts.py` | Реестр справки `:?`: `HELP_TEXTS` + `HELP_TOPICS` (канонические имена тем → текст: `calc`, `run`, `i`, `md`, `llm`, `tags`, `vars`, `kctx`, `send`, `session`), `help_topic()` (имена и алиасы → `i18n.text()`) — файлы `src/locales/help/<lang>/{main,runbook,calc,ingress,llm,tags,vars,md,kctx,send,session}.txt` (`en` — источник правды) |
+| `src/help_texts.py` | Реестр справки `:?`: `HELP_TEXTS` + `HELP_TOPICS` (канонические имена тем → текст: `calc`, `run`, `i`, `md`, `llm`, `tags`, `vars`, `kctx`, `send`, `session`, `import`), `help_topic()` (имена и алиасы → `i18n.text()`) — файлы `src/locales/help/<lang>/{main,runbook,calc,ingress,llm,tags,vars,md,kctx,send,session,import}.txt` (`en` — источник правды) |
 | `src/relang.py` | `:relang [code]` — перевод комментариев **уже засеянной** библиотеки (подписи тегов и подсказки команд) после смены языка, без повторного `--seed`: `_collect()` собирает канонический индекс из `seed_linux_commands` / `seed_k8s_chains` / `seed_git` / `seed_ops`, строка матчится по `(тег, команда)` (linux-дополнения — по `tid - 1`), правленый руками комментарий не трогается, снимок БД в `backups/` до записи; CLI `python3 src/relang.py --lang ru`. Тесты: `tests/test_relang.py` |
 | `src/i18n.py` | UI-language core: catalogue lookup (`t`/`tlist`) and long texts (`text("main")` → `locales/help/<lang>/*.txt`), language resolution (`--lang` → `$IDVJPY_LANG` → `settings.yml: language` → `en`; `auto` follows `$LANG`). Catalogues: `src/locales/<lang>.yml` plus parts in `src/locales/<lang>/*.yml` (`screensaver`, `seed`), deep-merged; `en` is the source of truth; missing keys fall back to `en`, unknown keys return themselves. Tests: `tests/test_i18n.py` (keys are strings — YAML reads bare `off`/`n`/`N` as bool; every language has all help texts and all `catalog.desc.*`) |
 | `src/example_config.py` | Локализованные шаблоны личных файлов: `available_settings_languages`/`available_llm_providers_languages`, `settings_example_path(lang)`, `llm_providers_example_path(lang)` (откат на `en`), `detect_language(explicit)` — `--lang` → `$IDVJPY_LANG` → системная локаль (auto) → `en`; шаблоны — `src/settings/<lang>.yml` и `src/llm_providers/<lang>.yml` |
@@ -229,6 +231,13 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.150
+
+- **Внешний импорт библиотеки по ссылке: `:import <url>`.** Библиотеку тегов можно взять с общего https-хоста: `:import https://…` скачивает канонический JSON (его делает `backup_db.py export` или `backup`), показывает **план изменений** — сколько строк добавится, что пропустится, какие теги новые, и отдельно предупреждает про `run:`-директивы (шаги `run:auto` выполнит `:run` без подтверждения) — и подставляет во ввод готовую строку `:import <url> --yes`: импорт начинается только по второму Enter (принцип «собрал — потом запустил», без модалки Y/n). Флаги: `--dry` — только план, `--yes` — без подтверждения, `--insecure` — разрешить `http://` (по умолчанию только `https://`). `:import` без аргумента берёт статичную ссылку `library_url` из `settings.yml` (новый ключ, пусто — выключено). Файл всей библиотеки импортируется как «обновить» (занятая пара `(тег, tid)` пропускается), файл одного тега — как «добавить» с новыми `tid`.
+- **Общий сетевой слой `src/net.py`.** Прокси с логином (`$PROXY_USER` / `$PROXY_PASS`, `inject_proxy_userinfo`, `proxy_handler_map`), чистка пароля из текста ошибки (`redact_proxy_secrets`) и подсказка при «407» жили в `update_check.py` — теперь один модуль для `:update`, `:llm` / `:cht` и `:import <url>` (`format_fetch_error`). Сеть в тестах не трогается: транспорт `:import` проверяется на фейковом `net.open_url` (`tests/test_net.py` + `tests/test_remote_import.py`, 19).
+- **Предохранители внешнего источника (`src/remote_source.py`).** Только `https://` (иначе явный `--insecure`), лимит 2 МБ с проверкой в цикле чтения, таймаут 10 с, `safe_url` не пускает userinfo из URL в журнал, `looks_remote` отличает ссылку от локального файла. Загрузка — в фоновом потоке (UI не блокируется), payload со значением живого `$$`-секрета отклоняется, локальный `--dry` работает так же, как для ссылки. План считается без записи: `db_transfer.plan_import` / `ImportPlan` + `loads_payload` / `payload_only_tag` / `run_mode` (грамматика `run:` — из `runbook`, сверяется тестом).
+- **Тема справки `:? import`** (en/ru/zh) + псевдонимы `export` / `экспорт` / `импорт` / `библиотека`; в `:?` — короткая строка про `:import <file|url>` и ссылка на тему. Доки: README (ru/en/zh — команда, строки таблицы «что чем делать» и ключ `library_url`), `backup_db.md` (раздел про импорт по ссылке + таблица «Связь с TUI»), `CLAUDE.md` (модули `net` / `remote_source`, `plan_import`), `AGENTS.md` (принцип про сеть и `:import <url>`), `test_cmd.md` (секция 52 — локальный стенд и все флаги), `src/settings/<lang>.yml`.
 
 ## v1.149
 
