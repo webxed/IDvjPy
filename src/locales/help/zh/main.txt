@@ -14,6 +14,10 @@
                 列表为 settings.yml 中的 `history_queries`（留空 — 不记录）
   :h /text    - 在该文件的提示中搜索（唯一行，新的在上）；Enter 输出块
   :h compact  - 去重的旧历史；最后 history_keep 行保持为序列
+  :h import [shell] - 追加你的 shell 历史（bash/zsh/fish/ksh/nu/pwsh；`$HISTFILE`
+                优先；Linux/macOS/Windows 的路径）到 history_<instance>.txt —— ↑、
+                `:h /text` 和提示会立即看到它们。每个文件取最后 5000 行；
+                不会执行任何内容。不带名称 —— 所有找到的 shell。
   :c          - 清空所有输出块
   :json       - 打开 JSON 查看器（来自最后一个块）
   :json <file>- 在查看器中打开 JSON 文件

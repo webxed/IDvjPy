@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.144 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.145 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -273,6 +273,7 @@ Aliases with `$1` / `$2` / `$@` substitute arguments (`alias klogin="tsh kube lo
 - `:h [N]` — the last N lines of `history_<instance>.txt` as one block (by default from `settings.yml`; the lines can be taken with line mode). The file holds only what was saved: `:` commands (except the `history_queries` list), `#tag` saves, `?`/`!` lines and `$VAR=…` are not written to it; with ↑ you flip through **everything** typed in this session (`:` commands and so on — from the session feed), in typing order — the last typed line comes back first
 - `:h /text` — search within that file in the hints (case-insensitive, newest first, identical lines once). Esc+Enter — the same search into the journal
 - `:h compact` — compact the old history (unique lines); the last `history_keep` lines are not touched. At startup — only if the file is longer than `2 × history_keep`
+- `:h import [shell]` — append the user's shell history to `history_<instance>.txt`: `~/.bash_history`, `~/.zsh_history`, fish (`~/.local/share/fish/fish_history`), ksh (`~/.sh_history`), nushell and PowerShell PSReadLine (`%APPDATA%\Microsoft\PowerShell\PSReadLine\ConsoleHost_history.txt` on Windows, the XDG path on Linux/macOS) are searched; a set `$HISTFILE` comes first. The last 5000 lines of each file are taken, lines that are already there are not duplicated (a repeated import adds nothing), nothing is executed. With no name — every shell found, `:h import zsh` — that one only. After the import, ↑, `:h /text` and the hints see these commands right away
 - `:c` — clear the journal blocks
 - `:json` / `:json <file>` — JSON viewer (the last block or a file)
 - `:md <file.md>[#L<n>]` — Markdown handbook with formatting (click the name in the welcome message; Esc closes). It also accepts a path — absolute or relative to `md_dir`/cwd; that is how files from `:rg` and an Obsidian vault are opened; `#L<n>` opens right at line n (like on GitHub). `:md` is written to history (↑ / `:h`). Files longer than `md_render_lines` (1000 lines by default) are opened as source in the Line-API viewer — fast, with `/` search and `#L` jumps (formatted rendering of large files takes tens of seconds). `y` copies the full file path to the clipboard — in the formatted view you can also click the name in the header (in the raw view only `y`)
