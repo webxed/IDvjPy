@@ -2,7 +2,41 @@
 import pyperclip
 
 from app import CommandBlock, CommandRunner
-from tests.conftest import input_widget, submit, type_keys, wait_command_done
+from tests.conftest import (
+    completion_click_spans,
+    completion_underline_spans,
+    input_widget,
+    submit,
+    type_keys,
+    wait_command_done,
+)
+
+
+async def test_path_hints_underline_dirs_not_files(isolated_home):
+    """Каталог в подсказках пути — ссылка (подчёркнут), файл — обычный текст.
+
+    Иначе при наборе `cd` каталоги и файлы выглядят одинаково и путаются.
+    """
+    (isolated_home / "alpha.txt").write_text("x\n", encoding="utf-8")
+    (isolated_home / "beta-dir").mkdir()
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.press("escape")
+        await type_keys(pilot, "cd ./")
+        await pilot.pause()
+        clist = app._completion_list
+        assert clist.is_visible()
+        assert "./alpha.txt" in clist.all_candidates
+        assert "./beta-dir/" in clist.all_candidates
+
+        # Ссылка (и подчёркивание) — только у каталога.
+        links = " ".join(completion_click_spans(clist).values())
+        underlined = " ".join(completion_underline_spans(clist).values())
+        assert "./beta-dir/" in links
+        assert "alpha.txt" not in links
+        assert "./beta-dir/" in underlined
+        assert "alpha.txt" not in underlined
 
 
 async def test_dir_slash_shows_files_after_many_dirs(isolated_home):

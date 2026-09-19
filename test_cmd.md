@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.152
+# План тестирования IDvjPy_term v1.153
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1175,9 +1175,9 @@ cat ./po
 cd po
 ```
 
-**Ожидание:** при `file_completion: auto` (по умолчанию) `cat po` показывает файлы (`podfile.txt`), а `kubectl get po` — **не** листит cwd (нет мусора от `kubectl`/`docker`/`git`). У `grep`/`sed`/`awk`/`jq` первый аргумент — шаблон: `grep ot` файлов не листит, а `grep -n x po` — листит. Контекст считается по текущему сегменту строки: в `cat podfile.txt | grep ot` подсказки относятся к `grep`, а не к `cat`. Список, оставшийся от ранее набранного текста, скрывается сам (Esc жать не нужно), и Enter больше не затирает набранное исчезнувшим кандидатом. Явные пути (`./po`, `/…`, `~/…`) и `cd`/`pushd` работают во всех режимах. `file_completion: paths` — только явные пути и `cd`/`pushd` (голое `cat po` — без файлов). `file_completion: off` — файловых подсказок нет. Неизвестное значение — как `auto`.
+**Ожидание:** при `file_completion: auto` (по умолчанию) `cat po` показывает файлы (`podfile.txt`), а `kubectl get po` — **не** листит cwd (нет мусора от `kubectl`/`docker`/`git`). В списке каталог виден ссылкой с подчёркиванием (`./beta-dir/`), файл — обычным текстом (`./alpha.txt`): при `cd` их больше не спутать; клик вставляет и каталог, и файл (файл — не ссылка, клик по нему ловит сам список). У `grep`/`sed`/`awk`/`jq` первый аргумент — шаблон: `grep ot` файлов не листит, а `grep -n x po` — листит. Контекст считается по текущему сегменту строки: в `cat podfile.txt | grep ot` подсказки относятся к `grep`, а не к `cat`. Список, оставшийся от ранее набранного текста, скрывается сам (Esc жать не нужно), и Enter больше не затирает набранное исчезнувшим кандидатом. Явные пути (`./po`, `/…`, `~/…`) и `cd`/`pushd` работают во всех режимах. `file_completion: paths` — только явные пути и `cd`/`pushd` (голое `cat po` — без файлов). `file_completion: off` — файловых подсказок нет. Неизвестное значение — как `auto`.
 
-Автотест: `tests/test_file_completion.py`.
+Автотест: `tests/test_file_completion.py`, `tests/test_completion.py::test_path_hints_underline_dirs_not_files` (каталог — ссылка с подчёркиванием, файл — нет), `tests/test_tag_query_hints.py::test_completion_click_without_run_only_inserts` (клик по файлу вставляет).
 
 ---
 
@@ -1516,7 +1516,7 @@ cd <каталог с library.json> && python3 -m http.server 8000
 
 ---
 
-**Версия документа**: v1.98
-**Версия приложения**: v1.152
+**Версия документа**: v1.99
+**Версия приложения**: v1.153
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

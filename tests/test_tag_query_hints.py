@@ -102,17 +102,27 @@ async def test_tag_query_click_line_runs_query(isolated_home):
 
 
 async def test_completion_click_without_run_only_inserts(isolated_home):
-    """Пункты без `run` (пути): клик только вставляет — как Tab."""
+    """Пункты без `run` (пути-файлы): клик только вставляет — как Tab."""
     app = CommandRunner()
     async with app.run_test(size=(100, 30)) as pilot:
         (isolated_home / "alpha.txt").write_text("x\n", encoding="utf-8")
         await _type(app, pilot, "ls ./alp")
         clist = app._completion_list
         assert clist.is_visible()
+        # Файл намеренно не ссылка: `@click`-span в Textual всегда получает
+        # подчёркивание, а оно в подсказках пути обещано каталогам.
+        assert completion_click_spans(clist) == {}
 
-        assert await _click_first_row(app, pilot, clist)
+        assert await _click_row(app, pilot, clist, 0)
         assert "./alpha.txt" in input_widget(app).value
         assert not app.query("CommandBlock")  # не выполнено
+
+
+async def _click_row(app, pilot, clist, row: int) -> bool:
+    """Клик мышью по строке пункта (без поиска `@click` — так кликаются файлы)."""
+    y = clist.region.y + 1 + (1 if clist.preview else 0) + row
+    x = clist.region.x + 3
+    return await pilot.click(clist, offset=(x - clist.region.x, y - clist.region.y))
 
 
 async def _click_first_row(app, pilot, clist) -> str:

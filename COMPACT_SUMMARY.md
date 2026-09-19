@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.152**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.153**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.98 (app v1.152) |
+| `test_cmd.md` | Manual plan v1.99 (app v1.153) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -186,7 +186,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.152 |
+| `src/app.py` | TUI (`CommandRunner`), v1.153 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -232,6 +232,12 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.153
+
+- **В подсказках пути каталог и файл больше не выглядят одинаково.** Каталог рисуется ссылкой — с подчёркиванием, как команды и теги, — а файл остаётся обычным текстом: при наборе `cd` видно, куда можно войти, а где уже файл. Это упиралось в ограничение Textual: любой `@click`-span получает стиль ссылки темы (`link-style`, подчёркивание), и по-span его не убрать. Поэтому `CompletionItem` получил флаги `is_path` / `is_dir` (`is_link`), файловые строки рисуются без `@click`, а их клик ловит новый `CompletionList.on_click` → `index_at_y(event.y)` (рамка + строка `preview` учитываются) → `action_pick_completion`. Клик по файлу по-прежнему только вставляет, Tab/Enter — как раньше.
+- **Один источник пунктов подсказок.** `CommandRunner.get_input_completion_items` отдаёт `CompletionItem` (его использует список), `get_completion_candidates` остался строковой обёрткой (его читают тесты и внешние вызовы), `_get_file_completion_candidates` теперь возвращает пункты с тем же `isdir`, который и раньше вычислял по каждому имени, — дублирующего `stat`/`listdir` нет.
+- Тесты: `test_completion.py::test_path_hints_underline_dirs_not_files` (каталог — ссылка и подчёркнут, файл — нет), `test_tag_query_hints.py::test_completion_click_without_run_only_inserts` (клик по файлу вставляет) + helper `completion_underline_spans` в `conftest.py`. Доки: README (ru/en/zh), `test_cmd.md` (секция 37), `CLAUDE.md`.
 
 ## v1.152
 

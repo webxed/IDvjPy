@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.152 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.153 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -46,7 +46,7 @@ Launch: `python3 app.py` (launcher; code in `src/`). Tests: `python3 -m pytest t
 - Comparing outputs: `:diff` — unified diff of the focused block against the previous one
 - Session output history: `:o [N]`, `:o /text`, `:o clear` — grep over past outputs after `:c`
 - k8s autocompletion: `kubectl get pod <Tab>` — names from the cluster (`k8s_completion: true`)
-- File hints — `file_completion: auto|paths|off`: by default explicit paths (`./`, `/`, `~/`) and file names after `cat`/`vim`/…, for `grep`/`sed`/`awk`/`jq` — from the second argument (the first is the pattern), without cwd noise when typing `kubectl`/`docker`/`git`; the context is computed per current segment (`cat f | grep ot` does not list cwd) (`paths` — explicit paths only, `off` — disabled)
+- File hints — `file_completion: auto|paths|off`: by default explicit paths (`./`, `/`, `~/`) and file names after `cat`/`vim`/…, for `grep`/`sed`/`awk`/`jq` — from the second argument (the first is the pattern), without cwd noise when typing `kubectl`/`docker`/`git`; the context is computed per current segment (`cat f | grep ot` does not list cwd) (`paths` — explicit paths only, `off` — disabled). In the list **a directory is underlined like a link, a file stays plain text** (plain for `cd`, where they were easy to confuse); a click inserts either of them
 - Markdown search (`:rg <pattern> [directory]`) — ripgrep over an Obsidian vault or any directory with `.md` (otherwise the built-in scanner): snippets with clickable `path:line`, opened in the built-in md viewer; `:rg <N>` — open the N-th result
 - UX: `:r N` — the command of the block N back; `:cmd [N] [show]` — the block's command with values substituted (secrets included) to the clipboard; `:send <session|*> <command>` — forward a command to another window (insert into the input; `:send!` — run immediately); the `N running` counter in the header; `:alias <tag>` — commands as bash functions
 - LLM from the TUI: `:llm [provider] message` (without a name — `default:`; `$OUT`/`$BLOCK` insert the block's output; `@file` embeds the file text (UTF-8, ≤200 KB; several allowed); conversation context — `history_turns: N` on the provider (`:llm reset [<provider>|*]`); queries are written to `history_*.txt` but not into the hints — which exact `:` queries are stored that way is set by `history_queries` in settings.yml). The answer is markdown and is shown formatted (`llm_render_markdown`, see settings). While the request is in flight, a spinner `⠋ thinking… 3s / 60s` spins in the block (you can see that we are waiting for an answer and how long is allowed)

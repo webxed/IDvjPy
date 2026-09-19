@@ -154,6 +154,25 @@ def completion_click_spans(clist) -> dict[int, str]:
     return spans
 
 
+def completion_underline_spans(clist) -> dict[int, str]:
+    """{строка списка: текст, нарисованный с подчёркиванием} — «вид ссылки» в кадре.
+
+    Ссылка в Textual (`@click`-span) получает `link-style` темы — подчёркивание;
+    по нему и видно, что строка выглядит ссылкой, а не обычным текстом.
+    """
+    spans: dict[int, str] = {}
+    for row in range(int(clist.size.height)):
+        parts = [
+            segment.text
+            for segment in clist.render_line(row)
+            if segment.style is not None and segment.style.underline
+        ]
+        text = "".join(parts).strip()
+        if text:
+            spans[row] = text
+    return spans
+
+
 async def confirm_input(pilot, app: CommandRunner, timeout: float = 8.0) -> CommandBlock:
     """Enter по уже вставленной в input команде (! / !!)."""
     await pilot.press("escape")

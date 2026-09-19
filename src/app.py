@@ -1582,6 +1582,8 @@ class CompletionItem:
         reopen: bool = False,
         run: bool = False,
         click: str = "",
+        is_path: bool = False,
+        is_dir: bool = False,
     ) -> None:
         self.insert = insert
         self.display = insert if display is None else display
@@ -1595,6 +1597,19 @@ class CompletionItem:
         # ссылкой; счётчик/комментарий/описание остаются обычным текстом).
         # Пусто — берём `insert`, если он виден в показе (см. `_link_span`).
         self.click = click
+        # `is_path`/`is_dir` — пункт пришёл из подсказок путей. Каталог рисуется
+        # ссылкой (подчёркнут, как и команды), файл — обычным текстом: иначе
+        # при наборе `cd` каталоги и файлы не отличить друг от друга.
+        self.is_path = is_path
+        self.is_dir = is_dir
+
+    @property
+    def is_link(self) -> bool:
+        """Рисуется ли пункт ссылкой (`@click`-span даёт подчёркивание).
+
+        Файлы в подсказках пути — нет: их клик ловит `CompletionList.on_click`.
+        """
+        return not (self.is_path and not self.is_dir)
 
 
 class CompletionList(Static):
@@ -1631,6 +1646,11 @@ class CompletionList(Static):
         self.total_candidates: int = 0
         self.preview: str = ""
         self.replace_token: bool = False
+
+    @property
+    def app(self) -> "CommandRunner":
+        """Textual типизирует Widget.app как базовый App; отдаём реальный подкласс."""
+        return cast("CommandRunner", super().app)
 
     @property
     def all_candidates(self) -> list[str]:
@@ -1718,14 +1738,50 @@ class CompletionList(Static):
         return 0, len(display)
 
     def _item_markup(self, item: CompletionItem, global_index: int) -> str:
-        """Разметка строки пункта: ссылка только на команду, остальное — текст."""
+        """Разметка строки пункта: ссылка только на команде, остальное — текст.
+
+        Файл из подсказок пути (`is_path` без `is_dir`) — обычный текст, без
+        подчёркивания: клик по такой строке ловит `on_click` по координате,
+        потому что `@click`-span в Textual всегда получает стиль ссылки.
+        Каталог же выглядит ссылкой — как команды и теги.
+        """
         start, end = self._link_span(item)
         display = item.display
         head = escape(display[:start])
         link = escape(display[start:end])
         tail = escape(display[end:])
+        if not item.is_link:
+            return f"{head}{link}{tail}"
         click = f"[@click=app.pick_completion({global_index})]"
         return f"{head}{click}{link}[/]{tail}"
+
+    def index_at_y(self, y: int) -> int | None:
+        """Глобальный индекс пункта по строке кадра (`y` — от кромки виджета).
+
+        Раскладка `_render_list`: рамка (1 строка), при `preview` — строка
+        расшифровки, видимые пункты, строка-счётчик. Счётчик и пустые строки
+        индекса не дают.
+        """
+        row = y - 1 - (1 if self.preview else 0)
+        if 0 <= row < len(self.candidates):
+            return self.window_start + row
+        return None
+
+    def on_click(self, event: events.Click) -> None:
+        """Клик по строке — вставить пункт.
+
+        Строки-ссылки кликаются сами (`@click`-span); здесь добираем те, что
+        намеренно нарисованы обычным текстом (файлы в подсказках пути) — иначе
+        клик по ним пропадал бы совсем.
+        """
+        index = self.index_at_y(event.y)
+        if index is None:
+            return
+        item = self.item_at(index)
+        if item is None or item.is_link:
+            return  # ссылка обработает клик сама
+        event.stop()
+        self.app.action_pick_completion(index)
 
     def _render_list(self) -> None:
         """Отрисовать список; высота окна = число видимых строк."""
@@ -2113,7 +2169,7 @@ class CommandLineInput(Input):
         if not self._completion_list:
             return
         app = self.app
-        if not hasattr(app, "get_completion_candidates"):
+        if not hasattr(app, "get_input_completion_items"):
             return
 
         raw_value = self.value
@@ -2173,25 +2229,24 @@ class CommandLineInput(Input):
             self._completion_list.hide()
             return
 
-        candidates = app.get_completion_candidates(raw_value)
+        candidates = app.get_input_completion_items(raw_value)
         history_items: list[CompletionItem] = []
         if hasattr(app, "get_history_completions"):
-            history_items = app.get_history_completions(raw_value, exclude=candidates)
+            history_items = app.get_history_completions(
+                raw_value, exclude=[item.insert for item in candidates]
+            )
         if candidates or history_items:
             # Точная команда уже набрана — не перехватывать Enter повторным apply.
             # Для каталога с / список оставляем, чтобы можно было углубиться.
             if (
                 candidates
-                and candidates[0] == prefix
+                and candidates[0].insert == prefix
                 and not prefix.endswith(("/", "\\"))
             ):
                 self._completion_list.hide()
                 return
-            items: list[CompletionItem] = [
-                CompletionItem(insert=cand, display=cand) for cand in candidates
-            ]
-            items.extend(history_items)
-            self._completion_list.update_candidates(items)
+            candidates.extend(history_items)
+            self._completion_list.update_candidates(candidates)
         else:
             self._completion_list.hide()
 
@@ -2303,7 +2358,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.152"
+    VERSION = "v1.153"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2724,8 +2779,12 @@ class CommandRunner(App):
             return len(args) >= 2
         return False
 
-    def _get_file_completion_candidates(self, text: str) -> list[str]:
-        """Подсказки файлов/директорий для текущей директории (включая скрытые)."""
+    def _get_file_completion_candidates(self, text: str) -> list[CompletionItem]:
+        """Подсказки файлов/директорий для текущей директории (включая скрытые).
+
+        Возвращает пункты: каталог отмечен `is_dir` (в списке он рисуется
+        ссылкой с подчёркиванием, файл — обычным текстом).
+        """
         if not self._is_path_context(text):
             return []
 
@@ -2768,7 +2827,7 @@ class CommandRunner(App):
             if not resolved:
                 return []
 
-        suggestions: list[str] = []
+        suggestions: list[tuple[str, bool]] = []
         for name in entries:
             if list_base_prefix and not name.startswith(list_base_prefix):
                 continue
@@ -2785,19 +2844,23 @@ class CommandRunner(App):
                 candidate_path = f"../{candidate_path}"
             elif token.startswith("/"):
                 candidate_path = full_path
-            if os.path.isdir(full_path):
+            is_dir = os.path.isdir(full_path)
+            if is_dir:
                 candidate_path += "/"
-            suggestions.append(candidate_path)
+            suggestions.append((candidate_path, is_dir))
 
-        suggestions = sorted(suggestions)
+        suggestions.sort(key=lambda pair: pair[0])
         # Токен уже заканчивается на / — это готовый каталог (`~/`, `./`, `/usr/`).
         # Ставим его первым, чтобы Enter выполнил именно его, а не первого ребёнка.
         if token.endswith("/") or token.endswith("\\"):
             dir_path = os.path.expanduser(token) if token.startswith("~") else token
             if os.path.isdir(dir_path):
-                suggestions = [c for c in suggestions if c != token]
-                suggestions.insert(0, token)
-        return suggestions
+                suggestions = [pair for pair in suggestions if pair[0] != token]
+                suggestions.insert(0, (token, True))
+        return [
+            CompletionItem(insert=path, display=path, is_path=True, is_dir=is_dir)
+            for path, is_dir in suggestions
+        ]
 
     def _bang_token_at_cursor(self, text: str, pos: int) -> str | None:
         """Текущий токен, если это !tag / !tag[ / !tag[tid], но не !!."""
@@ -3302,8 +3365,16 @@ class CommandRunner(App):
         return shown, preview
 
     def get_completion_candidates(self, prefix: str) -> list[str]:
+        """Строковые кандидаты для списка подсказок (см. `get_input_completion_items`).
+
+        Оставлено как строковый вход: так его читают тесты и внешние вызовы;
+        список пунктов (с пометкой «каталог/файл») — `get_input_completion_items`.
         """
-        Возвращает список команд из БД и истории сессии по префиксу.
+        return [item.insert for item in self.get_input_completion_items(prefix)]
+
+    def get_input_completion_items(self, prefix: str) -> list[CompletionItem]:
+        """
+        Пункты подсказок по префиксу: пути, команды из БД и истории сессии.
         Для выпадающего списка подсказок.
         """
         raw_prefix = prefix
@@ -3318,23 +3389,23 @@ class CommandRunner(App):
                 for name in self._kctx_cluster_names()
                 if name.casefold().startswith(tail.casefold())
             ]
-            return matched[:20]
+            return [CompletionItem(insert=name) for name in matched[:20]]
         # k8s: имена ресурсов из живого кластера (флаг k8s_completion).
         # Перехватываем до path-дополнения, чтобы `kubectl get pod te`
         # не превратилось в список файлов. None = контекст не kubectl get.
         if self.k8s_completion:
             k8s_cands = kubectl_resource_candidates(raw_prefix)
             if k8s_cands is not None:
-                return k8s_cands[:20]
-        file_cands = self._get_file_completion_candidates(raw_prefix)
-        if file_cands:
+                return [CompletionItem(insert=name) for name in k8s_cands[:20]]
+        file_items = self._get_file_completion_candidates(raw_prefix)
+        if file_items:
             # Не смешивать полные команды из БД/истории с путями:
             # иначе Enter подставляет `cat json.file` вместо токена файла.
             # И не резать список: в каталоге легко набирается больше 20 записей,
             # и файлы, сортирующиеся после каталогов, иначе не видны вообще
             # (`./` показывал только каталоги). Список умеет окно и прокрутку,
             # в счётчике — полное число (`1–N / M ↓more`).
-            return file_cands
+            return file_items
 
         candidates: list[str] = []
         try:
@@ -3355,7 +3426,7 @@ class CommandRunner(App):
                 continue
             if not self._is_history_only_query(line):
                 candidates.append(line)
-        return sorted(set(candidates))[:20]
+        return [CompletionItem(insert=cmd) for cmd in sorted(set(candidates))[:20]]
 
     def on_key(self, event: events.Key) -> None:
         """Перехват клавиш для автофокуса на поле ввода."""
