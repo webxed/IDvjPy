@@ -164,6 +164,7 @@ try:
     from i18n import (
         available_languages,
         current_language,
+        normalize_language,
         resolve_language,
         set_language,
         t,
@@ -2234,7 +2235,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.138"
+    VERSION = "v1.139"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2353,6 +2354,7 @@ class CommandRunner(App):
     CMD_IMPORT = "import"
     CMD_THEME = "theme"
     CMD_LANG = "lang"  # язык интерфейса (settings.yml: language)
+    CMD_RELANG = "relang"  # перевести комментарии засеянной библиотеки (БД)
     CMD_MD = "md"
     CMD_PLAYBOOK = "playbook"
     CMD_RUN = "run"  # полуавтоматический прогон цепочки (runbook)
@@ -5100,6 +5102,8 @@ class CommandRunner(App):
             self._handle_theme_command(parts[1:])
         elif command == self.CMD_LANG:
             self._handle_lang_command(parts[1:])
+        elif command == self.CMD_RELANG:
+            self._handle_relang_command(parts[1:])
         elif command == self.CMD_MD:
             self.action_open_handbook_md(" ".join(parts[1:]))
         elif command == self.CMD_PLAYBOOK:
@@ -9882,6 +9886,51 @@ class CommandRunner(App):
         self.language = set_language(code)
         self._save_settings_language(self.language)
         self.add_block(InfoBlock(t("lang.saved", name=self.language)))
+
+    def _handle_relang_command(self, args: list[str]) -> None:
+        """`:relang [code]` — перевести комментарии засеянной библиотеки на язык.
+
+        Без аргумента — справка (как `:lang`); с кодом — переписать комментарии
+        канонических сидов в БД, не удаляя теги и не трогая ручные правки. Работа
+        идёт в потоке: импорт всех сид-модулей не должен морозить UI.
+        """
+        if not args:
+            self.add_block(InfoBlock(t(
+                "relang.usage",
+                current=current_language(),
+                available=", ".join(available_languages()),
+            )))
+            return
+        raw = args[0].strip()
+        code = resolve_language("auto", None) if raw.lower() == "auto" else normalize_language(raw)
+        if not code:
+            self.add_block(InfoBlock(t("relang.unknown", name=args[0])))
+            return
+        threading.Thread(target=self._relang_worker, args=(code,), daemon=True).start()
+
+    def _relang_worker(self, lang: str) -> None:
+        """Фоновый прогон `relang_db` (импорт сидов + запись в БД)."""
+        try:
+            from relang import relang_db
+
+            commands_changed, tags_changed = relang_db(self.db_file, lang)
+        except Exception as e:  # не ронять TUI из-за БД/импорта
+            self.call_from_thread(
+                self.add_block,
+                InfoBlock(t("relang.error", name=lang, error=str(e))),
+            )
+            return
+        self.call_from_thread(
+            self._show_relang_result, lang, commands_changed, tags_changed
+        )
+
+    def _show_relang_result(self, lang: str, commands: int, tags: int) -> None:
+        if not commands and not tags:
+            self.add_block(InfoBlock(t("relang.nothing", name=lang)))
+        else:
+            self.add_block(InfoBlock(t(
+                "relang.done", name=lang, commands=commands, tags=tags
+            )))
 
     def _save_settings_theme(self, name: str) -> None:
         """Пишет ключ theme: в settings.yml, сохраняя остальные строки и комментарии."""

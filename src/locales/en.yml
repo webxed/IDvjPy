@@ -79,6 +79,13 @@ lang:
   saved: "Language: {name} (saved in settings.yml)"
   session_only: "Language: {name} (this session)"
 
+relang:
+  usage: "Rewrite the seeded library comments into another language.\nCurrent UI: {current}\nAvailable: {available}\nUse: :relang <code>  (auto — follow $LANG / $LC_ALL)\nOnly canonical seed tags and commands are touched; your own tags, commands and edited comments stay as they are. A DB snapshot is written to backups/ first."
+  unknown: "Unknown language: {name}. Type :relang for the list."
+  done: "Library comments → {name}: {commands} command(s), {tags} tag(s) updated."
+  nothing: "Library comments already match {name} (nothing to change)."
+  error: "Could not re-translate library comments: {error}"
+
 cmd:
   "?": "command help (:? calc — calculator reference)"
   q: "quit the application"
@@ -122,6 +129,7 @@ cmd:
   screensaver: "overlay now — matrix rain (default) / stars; idle: screensaver_idle"
   theme: "TUI theme (:theme nord / dark / light)"
   lang: "UI language (:lang ru / en; auto follows $LANG)"
+  relang: "re-translate seeded DB comments (:relang ru)"
   playbook: "dump this session as a --demo YAML"
   run: "run a command chain (runbook): tag or YAML, wait for you where told"
   update: "compare VERSION with GitHub main"

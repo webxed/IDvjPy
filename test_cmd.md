@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.138
+# План тестирования IDvjPy_term v1.139
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1430,13 +1430,17 @@ steps:
 
 ---
 
-## Секция 51: Язык интерфейса (`:lang`, ключ `language`)
+## Секция 51: Язык интерфейса (`:lang`, `:relang`, ключ `language`)
 
 ```text
 :lang                 # текущий и список: Language: en / Available: en, ru
 :lang ru              # выбрать и сохранить в settings.yml
 :lang de              # Unknown language: de. Type :lang for the list.
 :lang auto            # следовать $LANG / $LC_ALL
+:relang               # справка: Current UI: en / Available: en, ru / Use: :relang <code>
+:relang ru            # перевести комментарии засеянной БД на русский (снимок в backups/)
+:relang de            # Unknown language: de. Type :relang for the list.
+:relang auto          # по $LANG / $LC_ALL
 :?                    # справка — на выбранном языке (ru: «Справка по командам»)
 :welcome              # каталог seed («Пустая база команд»)
 :screensaver          # подсказки внизу — из locales/<lang>/screensaver.yml
@@ -1444,15 +1448,15 @@ steps:
 
 Разово при запуске: `python3 app.py --lang ru`, `$IDVJPY_LANG=ru python3 app.py`.
 
-**Ожидание:** язык влияет только на текст — сообщения (`:kctx`, `:watch`, `:run`, `:llm offline`, стартовый блок), подсказки `:`-команд, каталог `:welcome`, строки справки заставки и сама справка `:?` / `:? run` / `:? calc` / `:i`. `en` — источник правды: `src/locales/en.yml` + части `src/locales/en/*.yml` (`screensaver`, `seed`) + `src/locales/help/en/*.txt`; `ru` — перевод всего того же. Отсутствующий ключ отдаёт английский текст, неизвестный ключ печатается как есть (пустоты нет). Команды, имена тегов, ключи настроек, имена файлов и слоган «Define your variables…» не переводятся. Смена языка применяется к тексту, напечатанному **после** неё — уже показанные блоки не перерисовываются. Проверка: `python3 -m pytest tests/test_i18n.py tests/test_seed_i18n.py -q`.
+**Ожидание:** язык влияет только на текст — сообщения (`:kctx`, `:watch`, `:run`, `:llm offline`, стартовый блок), подсказки `:`-команд, каталог `:welcome`, строки справки заставки и сама справка `:?` / `:? run` / `:? calc` / `:i`. `en` — источник правды: `src/locales/en.yml` + части `src/locales/en/*.yml` (`screensaver`, `seed`) + `src/locales/help/en/*.txt`; `ru` — перевод всего того же. Отсутствующий ключ отдаёт английский текст, неизвестный ключ печатается как есть (пустоты нет). Команды, имена тегов, ключи настроек, имена файлов и слоган «Define your variables…» не переводятся. Смена языка применяется к тексту, напечатанному **после** неё — уже показанные блоки не перерисовываются. `:relang <код>` переводит не UI, а **комментарии библиотеки в БД**: трогает только канонические теги/команды сидов (матч по тегу и тексту команды; linux-дополнения `logs` / `file[12]` / `net[10..11]` — по позиции `tid-1`), пользовательские теги, команды и правленые руками комментарии остаются, перед записью — снимок БД в `backups/`. Проверка: `python3 -m pytest tests/test_i18n.py tests/test_seed_i18n.py tests/test_relang.py -q`.
 
-**Контент по языкам.** Демо-туры: базовый `src/demos/<tour>.yml` хранит шаги, текст — в `src/demos/text/<lang>/<tour>.yml` (`title`, `captions`/`types` по номеру шага), так что `--demo short` говорит на языке интерфейса. Комментарии сидов: `src/seed_text/<lang>/<handbook>.yml` (ключ — тег + позиция), язык берётся из `language` в `settings.yml` / `$IDVJPY_LANG`; поэтому `python3 src/seed_git.py --seed` при `language: en` кладёт английские подписи, а при `language: ru` — базовые русские. Уже посеянная БД язык не меняет — нужен повторный `--seed` (`:backup` перед этим). Справочники: `handbook_md_path` сначала ищет `docs/<lang>/NAME`. `:llm` без `answer_language` у провайдера отвечает на языке интерфейса (`off`/`none` выключают правило).
+**Контент по языкам.** Демо-туры: базовый `src/demos/<tour>.yml` хранит шаги, текст — в `src/demos/text/<lang>/<tour>.yml` (`title`, `captions`/`types` по номеру шага), так что `--demo short` говорит на языке интерфейса. Комментарии сидов: `src/seed_text/<lang>/<handbook>.yml` (ключ — тег + позиция), язык берётся из `language` в `settings.yml` / `$IDVJPY_LANG`; поэтому `python3 src/seed_git.py --seed` при `language: en` кладёт английские подписи, а при `language: ru` — базовые русские. Уже посеянную БД переводит `:relang <код>` (или `python3 src/relang.py --lang ru`): переписываются только комментарии канонических строк сидов, пользовательские теги/команды и правленые руками комментарии остаются, снимок — в `backups/`. Полный повторный `--seed` тоже сменит язык, но заменит свои теги (`:backup` перед этим). Справочники: `handbook_md_path` сначала ищет `docs/<lang>/NAME`. `:llm` без `answer_language` у провайдера отвечает на языке интерфейса (`off`/`none` выключают правило).
 
-**Автотесты:** `tests/test_i18n.py` (24: сверка каталогов en↔ru (ключа и частей), отсутствие кириллицы в `en`, ловушка YAML-ключей `off`/`n`/`N`, нормализация кода языка (`ru_RU.UTF-8` → `ru`), приоритет CLI → env → settings, `auto` по `$LC_ALL`, `:lang` — список/смена/сохранение/неизвестный код, язык из settings применяется при старте, все справки и все `catalog.desc.*` есть в каждой локали, каталог заставки сходится с встроенным набором), `tests/test_seed_catalog.py` / `tests/test_commands.py` (каталог из локалей), `tests/test_screensaver.py` (строки из каталога), `tests/test_colon_commands.py` (подсказки из локали).
+**Автотесты:** `tests/test_i18n.py` (24: сверка каталогов en↔ru (ключа и частей), отсутствие кириллицы в `en`, ловушка YAML-ключей `off`/`n`/`N`, нормализация кода языка (`ru_RU.UTF-8` → `ru`), приоритет CLI → env → settings, `auto` по `$LC_ALL`, `:lang` — список/смена/сохранение/неизвестный код, язык из settings применяется при старте, все справки и все `catalog.desc.*` есть в каждой локали, каталог заставки сходится с встроенным набором), `tests/test_relang.py` (11: en↔ru для команд и тегов, правленые и пользовательские строки не трогаются, снимок БД, linux-extra по tid, повторный прогон — no-op, CLI, `:relang` в TUI), `tests/test_seed_catalog.py` / `tests/test_commands.py` (каталог из локалей), `tests/test_screensaver.py` (строки из каталога), `tests/test_colon_commands.py` (подсказки из локали).
 
 ---
 
-**Версия документа**: v1.82
-**Версия приложения**: v1.138
-**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
+**Версия документа**: v1.83
+**Версия приложения**: v1.139
+**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_relang.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

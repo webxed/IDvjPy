@@ -163,6 +163,10 @@
                Saved in settings.yml (key `language`); text printed after the
                switch uses it. Startup: --lang / $IDVJPY_LANG. Commands, tag
                names and settings keys are never translated.
+  :relang [code] - Re-translate the seeded library comments (tag labels and command
+               hints) in the database. Only canonical seed tags and commands are
+               touched: your own tags, commands and edited comments stay as they
+               are. A DB snapshot goes to backups/ first.
   :playbook [file] - Write this session's commands as a --demo YAML (default playbook.yml)
   :playbook - / clear - Preview YAML in the journal / forget recorded lines
   :run <tag|file.yml> - Run a command chain (runbook): auto steps run and are
@@ -202,7 +206,8 @@
   @ <cmd>    - Run without command_timeout (long non-TTY jobs; stdout captured,
                stdin is /dev/null). Timeout message also points here and at `> cmd`
   Output     - ANSI colors from a command are drawn as colors (ansi_colors: true);
-               cursor/OSC escapes and control chars are stripped,  progress
+               cursor/OSC escapes and control chars are stripped, 
+ progress
                redraws collapse to the final line — like a real terminal. Plain
                text (F3, |, $OUT/$BLOCK, :log, @key) never contains escapes
   #<tag>     - Save command to database with tag (`#tag cmd`, no space after #)

@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.138**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.139**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -27,7 +27,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no such tag) searches command text + comments across tags |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:?` `:q` `:w` `:h` `:c` `:json` `:md` `:rg` `:i` `:cd` `:fm` `:term` `:ed` `:env` `:r` `:cmd` `:log` `:o` `:diff` `:name` `:kill` `:watch` `:llm` `:cht` `:g` `:/` `:n` `:N` `:stats` `:mv` `:export` `:import` `:alias` `:kctx` `:session` `:new` `:send` `:send!` `:backup` `:welcome` `:screensaver` `:theme` `:lang` `:playbook` `:run` `:update` |
+| `:` | `:?` `:q` `:w` `:h` `:c` `:json` `:md` `:rg` `:i` `:cd` `:fm` `:term` `:ed` `:env` `:r` `:cmd` `:log` `:o` `:diff` `:name` `:kill` `:watch` `:llm` `:cht` `:g` `:/` `:n` `:N` `:stats` `:mv` `:export` `:import` `:alias` `:kctx` `:session` `:new` `:send` `:send!` `:backup` `:welcome` `:screensaver` `:theme` `:lang` `:relang` `:playbook` `:run` `:update` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.82 (app v1.138) |
+| `test_cmd.md` | Manual plan v1.83 (app v1.139) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.138 |
+| `src/app.py` | TUI (`CommandRunner`), v1.139 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -205,6 +205,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/session_mailbox.py` | Пересылка команд между сессиями (`:send`): `inbox_<instance>.jsonl` 0600, append под lock / drain |
 | `src/session_registry.py` | Реестр активных сессий — `session_<instance>.pid` 0600: автоимя `:new` = наименьшее свободное `sN` среди работающих окон (устаревшие pid-файлы подчищаются) |
 | `src/help_texts.py` | Accessors for the `:?` / `:? run` / `:? calc` / `:i` help texts — files `src/locales/help/<lang>/{main,runbook,calc,ingress}.txt` via `i18n.text()` (`en` is the source of truth) |
+| `src/relang.py` | `:relang [code]` — перевод комментариев **уже засеянной** библиотеки (подписи тегов и подсказки команд) после смены языка, без повторного `--seed`: `_collect()` собирает канонический индекс из `seed_linux_commands` / `seed_k8s_chains` / `seed_git` / `seed_ops`, строка матчится по `(тег, команда)` (linux-дополнения — по `tid - 1`), правленый руками комментарий не трогается, снимок БД в `backups/` до записи; CLI `python3 src/relang.py --lang ru`. Тесты: `tests/test_relang.py` |
 | `src/i18n.py` | UI-language core: catalogue lookup (`t`/`tlist`) and long texts (`text("main")` → `locales/help/<lang>/*.txt`), language resolution (`--lang` → `$IDVJPY_LANG` → `settings.yml: language` → `en`; `auto` follows `$LANG`). Catalogues: `src/locales/<lang>.yml` plus parts in `src/locales/<lang>/*.yml` (`screensaver`, `seed`), deep-merged; `en` is the source of truth; missing keys fall back to `en`, unknown keys return themselves. Tests: `tests/test_i18n.py` (keys are strings — YAML reads bare `off`/`n`/`N` as bool; every language has all help texts and all `catalog.desc.*`) |
 | `src/ansi_output.py` | ANSI/ESC в выводе команд: SGR → цвета (`to_markup`), плоский текст без кодов (`to_plain`), терминальный `\r` (`collapse_carriage_returns`); ключ `ansi_colors` |
 | `src/runbook.py` | `:run` — полуавтоматический прогон цепочки: шаги `auto`/`manual`/`prompt`, директивы `run:` в комментариях тега, план из YAML (`note:` для тега без единой директивы) |
@@ -218,6 +219,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.139
+
+- **`:relang [code]` — перевод комментариев уже засеянной библиотеки.** Пробел между `--seed` и сменой языка: `--seed` пишет комментарии на языке `settings.yml: language`, но библиотека, посеянная вчера на `en`, оставалась на `en` и после `:lang ru` (повторный `--seed` стёр бы пользовательские теги). Новая команда `:relang <code>` (без аргумента — справка, как `:lang`; `:lang ru` → `:relang ru`) переписывает **только** комментарии канонических строк сидов — подписи тегов и подсказки команд, совпавшие по тегу и **тексту команды** (linux-дополнения `logs` / `file[12]` / `net[10..11]`, у которых нет канонической команды, — по позиции `tid-1`), ничего не удаляя и не добавляя. Комментарий, **правленый руками** (не пустой и не совпадающий ни с одним известным переводом), остаётся: `--seed` такого различения не делает. Перед записью снимается снимок БД в `backups/` (`mytags-pre-relang-….db`). Ядро — `src/relang.py` (`relang_db`, `seed_index` собирается из `seed_linux_commands` / `seed_k8s_chains` / `seed_git` / `seed_ops`); работа идёт в фоновом потоке (импорт сид-модулей не морозит UI), ошибка печатается блоком. Локали: секция `relang.*` + `cmd.relang` (en/ru), строка в справке `:?`. Тот же перевод из терминала: `python3 src/relang.py --lang ru [--db …]`. Тесты: `tests/test_relang.py` (11: en↔ru для команд и тегов, правленые/пользовательские строки не трогаются, снимок БД, linux-extra по tid, повторный прогон — no-op, CLI, `:relang` в TUI).
 
 ## v1.138
 
