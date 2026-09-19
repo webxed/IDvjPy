@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.150 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.151 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -299,7 +299,7 @@ curl -H "Bearer $TOKEN" https://api.example   # 普通的 $TOKEN 替换
 - `:log [N]`（F7）—— 在可滚动的 **Line-API** 查看器中显示块的完整输出（不再截断到 300 行）：方向键/PgUp/PgDn、Esc/q；文本搜索 —— `/`（Enter —— 向前，`n`/`N` —— 下一个/上一个匹配，Esc —— 关闭搜索框），匹配行整行高亮（强调色背景 + bold）；`f` —— 只保留有匹配的行（再次 `f` 或 Esc 恢复全部输出，副标题中的行号会恢复为原始行号）。`N` —— 倒数第几个块（0 = 聚焦/最后一个）。行是真实的（如同 F3），如有 `STDERR` 也会包含。`y` 会复制来源文件的路径（raw 视图 `:md`）；对块输出则明确显示 `No file path to copy`
 - `:name [<label>|<label>-|-]` —— 缓冲区标记：为聚焦（否则最后一个已完成）块打标记，以便从中管道而无需重新运行来源（`:name buff` → `|@buff awk '{...}'`）。不带参数时列出标记，`<label>-` —— 取消一个，`-` —— 全部。也可通过 `F8` 打开对话框。标记显示在块的头部（`[buff]`）；写入历史时管道记录为完整调用 `<来源> | <命令>`
 - `:/text` / `:g` / `:n` / `:N` —— 按日志行搜索（在块上按 `/` 会打开 `:/`；`n`/`N` —— 下一个 / 上一个）
-- `:export tag [file.json]` / `:import file.json` —— 单个标签与 JSON 互转（导入总是分配新的 `tid`；格式与 CLI 共用，`src/db_transfer.py`）；`:export * [library.md]` —— 整个库导出为 Markdown 目录
+- `:export tag [file.json]` / `:import file.json` —— 单个标签与 JSON 互转（导入总是分配新的 `tid`；格式与 CLI 共用，`src/db_transfer.py`）；`:export * [library.md]` —— 整个库导出为 Markdown 目录，`:export * library.json` —— 整个库的规范 JSON（`tag_filter` 为空 —— 这正是 `library_url` 需要的文件；等同于不带 `--tag` 的 `backup_db.py export`）
 - `:import <https://…>` —— 按链接获取共享库：日志中先显示**变更计划**，并把现成的 `:import <url> --yes` 放入输入行——第二次 Enter 才开始导入（没有它则不会写入任何内容）。`--dry` —— 只显示计划，`--yes` —— 不再确认，`--insecure` —— 允许 `http://`（默认仅 `https://`），不带参数的 `:import` 使用 `settings.yml` 中的 `library_url`。上限 2 MB、超时 10 秒、带登录的代理与 `:update` 相同：`$PROXY_USER` / `$PROXY_PASS`。payload 含仍有效的 `$$` 密钥值会被拒绝；带 `run:auto` 指令的行会在计划中单独提示。完整参考 —— `:? import`
 
 **导出/导入：什么场景用什么**（格式只有一份实现 —— `src/db_transfer.py`，CLI 只是薄壳）：
@@ -308,7 +308,7 @@ curl -H "Bearer $TOKEN" https://api.example   # 普通的 $TOKEN 替换
 |------|-----|--------------------------------|
 | 把标签搬到另一个实例/机器 | `:export tag file.json`，在那里 `:import file.json` | `export` / `import [--mode merge\|replace] [--keep-tids]` |
 | 按链接获取共享库 | `:import https://… --dry`，然后 `:import <url> --yes`（不带参数时用 `settings.yml` 的 `library_url`） | — |
-| 发布自己的库给团队 | 文件由 CLI 生成：`python3 backup_db.py export library.json`（写入 `backups/`）；放到 https 主机上，并把链接写进 `library_url` | `export library.json` |
+| 发布自己的库给团队 | `:export * library.json`（文件写到应用的 cwd），放到 https 主机上，并把链接写进 `library_url` | `export library.json` —— 文件写入 `backups/`；`backup_db.py` 启动脚本位于仓库目录，因此在数据目录下请用路径调用：`python3 /path/to/IDvjPy/backup_db.py …` |
 | 数据库的精确快照（回滚到「原样」） | `:backup` | `backup`（SQLite 快照 + JSON + CSV），用 `restore <文件>` 还原 |
 | 在表格里改命令和注释 | — | `export-csv` / `import-csv`（按 `tid` 定位），`export-tags-csv` / `import-tags-csv` |
 | 不开 TUI 看标签 | `:stats`、`??` | `list [--show-comments]` |

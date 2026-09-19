@@ -2,8 +2,10 @@
 
   :export <tag> [file] - 把一个标签写入 JSON；第一个路径参数即目标文件
                 （`:export kube kube.json`）
-  :export * [file.md] - 把整个库写成 Markdown 目录（按标签分组；
-                包含标签与命令的注释）
+  :export * [file] - 整个库：`.json` —— 整个库的规范 JSON
+                （共享 `library_url` 需要的文件；等同于不带 `--tag` 的
+                `backup_db.py export`），否则为 Markdown 目录（按标签分组；
+                包含标签与命令的注释）。默认 —— `library.md`
   :import <file.json> - 从该 JSON 插入命令。单标签文件 → [bold]新的[/bold] tid
                 （不会覆盖任何内容）；整库文件 → 更新：已占用的
                 （标签, tid）对被跳过（`skip_existing`）
@@ -25,9 +27,11 @@
       （`run:pause=…`）指令：`:run <标签>` 会自动执行这些步骤
     - “skip N” — 这些行已在库中，不会被覆盖
 
-  JSON 与 CLI 使用同一格式（`src/db_transfer.py`）：`python3
-  backup_db.py export f.json` / `import f.json [--mode replace] [--keep-tids]`，
-  另有按（标签, tid）定位的 CSV。逐字节的副本是 SQLite 快照
-  （`:backup` / `backup_db.py backup`），不是 JSON。详见 backup_db.md。
+  JSON 与 CLI 使用同一格式（`src/db_transfer.py`）。`backup_db.py` 是仓库目录中的
+  独立启动脚本：在数据目录下请用路径调用
+  （`python3 /path/to/IDvjPy/backup_db.py export library.json`）—— 直接写
+  `python3 backup_db.py …` 只在仓库目录中有效。文件会写入其 `backups/`；
+  逐字节的副本是 SQLite 快照（`:backup`），不是 JSON。
+  另有按（标签, tid）定位的 CSV。详见 backup_db.md。
 
   其他主题与完整命令列表 — :?

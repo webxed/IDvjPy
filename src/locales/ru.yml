@@ -154,6 +154,7 @@ transfer:
   applied: "Импортировано {added} строк (пропущено {skipped}); теги: {tags}"
   error: "Ошибка импорта/экспорта: {error}"
   secret_refused: "Отказ: в файле есть значение живого секрета ($$NAME)."
-  export_usage: "Использование: :export <тег> [файл.json]  |  :export * [library.md]"
+  export_usage: "Использование: :export <тег> [файл.json]  |  :export * [library.md|library.json]"
   export_done: "Экспортировано {count} команд тега '{tag}' в {path}"
   export_library_done: "Экспортировано {count} команд в {path} (каталог Markdown)"
+  export_library_json_done: "Экспортировано {count} команд в {path} (JSON всей библиотеки)"

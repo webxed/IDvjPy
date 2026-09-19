@@ -2,8 +2,10 @@
 
   :export <tag> [file] - Write one tag to JSON; the first path argument is the
                 target file (`:export kube kube.json`)
-  :export * [file.md] - Write the whole library as a Markdown catalog (grouped
-                by tag; tag and command comments included)
+  :export * [file] - The whole library: `.json` — canonical whole-library JSON
+                (the file a shared `library_url` needs; same as `backup_db.py
+                export` without `--tag`), otherwise a Markdown catalog (grouped
+                by tag; tag and command comments included). Default — `library.md`
   :import <file.json> - Insert commands from that JSON. One tag → [bold]new[/bold] tids
                 (nothing is overwritten); a whole-library file → update: an
                 already taken (tag, tid) pair is skipped (`skip_existing`)
@@ -25,9 +27,11 @@
       (`run:pause=…`) directives: `:run <tag>` would execute those steps itself
     - "skip N" — those rows are already in the library and are not overwritten
 
-  JSON is the same schema as the CLI (`src/db_transfer.py`): `python3
-  backup_db.py export f.json` / `import f.json [--mode replace] [--keep-tids]`,
-  plus addressable CSV by (tag, tid). A byte-exact copy is a SQLite snapshot
-  (`:backup` / `backup_db.py backup`), not JSON. Details — backup_db.md.
+  JSON is the same schema as the CLI (`src/db_transfer.py`). `backup_db.py` is a
+  separate launcher that lives in the repository directory: from the data
+  directory run it by path (`python3 /path/to/IDvjPy/backup_db.py export
+  library.json`) — a bare `python3 backup_db.py …` only works from the repo.
+  The file lands in its `backups/`; a byte-exact copy is a SQLite snapshot
+  (`:backup`), not JSON. Details — backup_db.md.
 
   Other topics and the full command list — :?

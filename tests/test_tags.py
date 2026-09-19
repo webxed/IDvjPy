@@ -1,5 +1,8 @@
 """Теги: сохранение, запрос, удаление. Команды с '-', '=', '+' не должны ломать парсер."""
+import json
+
 import database_v2 as database
+import db_transfer
 from app import CommandBlock, CommandRunner
 from tests.conftest import info_texts, input_widget, last_info, submit, wait_command_done
 
@@ -160,3 +163,31 @@ async def test_export_and_import_tag(isolated_home):
         assert "Imported 1" in last_info(app).text_content
         rows = database.get_commands_by_tag(app.db_file, "ship")
         assert any("cargo-one" in row["command"] for row in rows)
+
+
+async def test_export_star_json_is_whole_library(isolated_home):
+    """`:export * file.json` — вся библиотека: то же, что `backup_db.py export` без `--tag`.
+
+    Такой файл (`tag_filter` пуст) нужен для `library_url`: при импорте он идёт
+    как «обновить», а не как файл одного тега с новыми `tid`.
+    """
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "#ship echo cargo-one")
+        await submit(pilot, "#port echo berth")
+        await submit(pilot, ":export * library.json")
+        text = last_info(app).text_content
+        assert "Exported 2 command(s) to library.json (whole-library JSON)" in text
+        payload = json.loads((isolated_home / "library.json").read_text(encoding="utf-8"))
+        assert payload["tag_filter"] is None
+        assert payload["total_commands"] == 2
+        assert {row["tag"] for row in payload["commands"]} == {"ship", "port"}
+        assert payload["tag_comments"] == {}
+        assert db_transfer.payload_only_tag(payload) is None
+
+
+async def test_export_usage_lists_both_library_formats(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":export")
+        assert ":export * [library.md|library.json]" in last_info(app).text_content

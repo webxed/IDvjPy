@@ -159,6 +159,7 @@ transfer:
   applied: "Imported {added} command(s) (skipped {skipped}); tags: {tags}"
   error: "Import/export error: {error}"
   secret_refused: "Refused: the payload contains a value of a live secret ($$NAME)."
-  export_usage: "Usage: :export <tag> [file.json]  |  :export * [library.md]"
+  export_usage: "Usage: :export <tag> [file.json]  |  :export * [library.md|library.json]"
   export_done: "Exported {count} command(s) of '{tag}' to {path}"
   export_library_done: "Exported {count} command(s) to {path} (Markdown catalog)"
+  export_library_json_done: "Exported {count} command(s) to {path} (whole-library JSON)"

@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.150 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.151 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -308,7 +308,7 @@ Aliases with `$1` / `$2` / `$@` substitute arguments (`alias klogin="tsh kube lo
 - `:log [N]` (F7) — the full block output in a scrollable **Line-API** viewer (no 300-line truncation): arrows/PgUp/PgDn, Esc/q; text search — `/` (Enter — forward, `n`/`N` — next/previous match, Esc — close the search field), the matching line is highlighted entirely (accent background + bold); `f` — keep only lines with matches (a repeated `f` or Esc restores the whole output, the line number in the subtitle is the original one). `N` — blocks back (0 = the focused/last one). The lines are real (like F3), plus `STDERR`, if there was any. `y` copies the source file path (raw `:md` view); for block output — an explicit `No file path to copy`
 - `:name [<label>|<label>-|-]` — a buffer label: labels the focused (otherwise the last finished) block so that you can pipe from it without re-running the source (`:name buff` → `|@buff awk '{...}'`). Without an argument — a list of labels, `<label>-` — remove one, `-` — all. Also a dialog via `F8`. The label is visible in the block header (`[buff]`); in history the pipe is written as a full invocation `<source> | <command>`
 - `:/text` / `:g` / `:n` / `:N` — search across journal lines (from a block `/` opens `:/`; `n`/`N` — next / previous)
-- `:export tag [file.json]` / `:import file.json` — one tag to JSON and back (import always assigns new `tid`; the schema is shared with the CLI, `src/db_transfer.py`); `:export * [library.md]` — the whole library as a Markdown catalog
+- `:export tag [file.json]` / `:import file.json` — one tag to JSON and back (import always assigns new `tid`; the schema is shared with the CLI, `src/db_transfer.py`); `:export * [library.md]` — the whole library as a Markdown catalog, `:export * library.json` — the whole library as canonical JSON (empty `tag_filter` — exactly the file `library_url` needs; same as `backup_db.py export` without `--tag`)
 - `:import <https://…>` — fetch a shared library by URL: the journal shows a **change plan** first and the ready `:import <url> --yes` line goes into the input — the import starts on the second Enter (nothing is written without it). `--dry` — the plan only, `--yes` — no confirmation, `--insecure` — allow `http://` (by default `https://` only), a bare `:import` uses `library_url` from `settings.yml`. Limit 2 MB, timeout 10 s, a proxy with a login is the same `$PROXY_USER` / `$PROXY_PASS` as for `:update`. A payload carrying the value of a live `$$`-secret is refused, and rows with `run:auto` directives are called out in the plan. Full reference — `:? import`
 
 **Export/import: what to use when** (one implementation of the formats — `src/db_transfer.py`, the CLI is a thin shell):
@@ -317,7 +317,7 @@ Aliases with `$1` / `$2` / `$@` substitute arguments (`alias klogin="tsh kube lo
 |------|-----|--------------------------------|
 | Move tags to another instance / machine | `:export tag file.json`, then `:import file.json` there | `export` / `import [--mode merge\|replace] [--keep-tids]` |
 | Pull a shared library from a URL | `:import https://… --dry`, then `:import <url> --yes` (bare `:import` — `library_url` from `settings.yml`) | — |
-| Publish your library for the team | the file comes from the CLI: `python3 backup_db.py export library.json` (goes to `backups/`); put it on an https host and set the link in `library_url` | `export library.json` |
+| Publish your library for the team | `:export * library.json` (the file goes to the app's cwd), put it on an https host and set the link in `library_url` | `export library.json` — the file lands in `backups/`; the `backup_db.py` launcher lives in the repository directory, so from the data directory call it by path: `python3 /path/to/IDvjPy/backup_db.py …` |
 | An exact snapshot of the DB (roll back "as it was") | `:backup` | `backup` (SQLite snapshot + JSON + CSV); return with `restore <file>` |
 | Edit commands and comments in a spreadsheet | — | `export-csv` / `import-csv` (addressable by `tid`), `export-tags-csv` / `import-tags-csv` |
 | Look at the tags without the TUI | `:stats`, `??` | `list [--show-comments]` |

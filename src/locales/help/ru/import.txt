@@ -2,8 +2,10 @@
 
   :export <tag> [file] - Записать один тег в JSON; первый путь — файл назначения
                 (`:export kube kube.json`)
-  :export * [file.md] - Записать всю библиотеку как Markdown-каталог (с группировкой
-                по тегам; комментарии тегов и команд включены)
+  :export * [file] - Вся библиотека: `.json` — канонический JSON всей библиотеки
+                (файл для общей ссылки `library_url`; то же, что `backup_db.py
+                export` без `--tag`), иначе — Markdown-каталог (с группировкой
+                по тегам; комментарии тегов и команд включены). По умолчанию — `library.md`
   :import <file.json> - Вставить команды из этого JSON. Один тег → [bold]новые[/bold] tid
                 (ничего не затирается); файл всей библиотеки → обновление: занятая
                 пара (тег, tid) пропускается (`skip_existing`)
@@ -25,9 +27,11 @@
       `run:auto` (`run:pause=…`): `:run <тег>` выполнит эти шаги сам
     - «skip N» — эти строки уже есть в библиотеке и не перезаписываются
 
-  JSON — та же схема, что у CLI (`src/db_transfer.py`): `python3
-  backup_db.py export f.json` / `import f.json [--mode replace] [--keep-tids]`,
-  плюс адресный CSV по паре (тег, tid). Точный слепок — снимок SQLite
-  (`:backup` / `backup_db.py backup`), не JSON. Подробности — backup_db.md.
+  JSON — та же схема, что у CLI (`src/db_transfer.py`). `backup_db.py` — отдельный
+  лаунчер в каталоге репозитория: из каталога данных запускайте его по пути
+  (`python3 /path/to/IDvjPy/backup_db.py export library.json`) — голое
+  `python3 backup_db.py …` работает только из репозитория. Файл ложится в его
+  `backups/`; точный слепок — снимок SQLite (`:backup`), не JSON.
+  Плюс адресный CSV по паре (тег, tid). Подробности — backup_db.md.
 
   Остальные темы и полный список команд — :?

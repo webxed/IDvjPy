@@ -2273,7 +2273,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.150"
+    VERSION = "v1.151"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -6909,19 +6909,32 @@ class CommandRunner(App):
         self.add_block(InfoBlock(text))
 
     def _export_tag(self, args: list[str]) -> None:
-        """`:export <tag> [file.json]`; `:export * [file.md]` — весь каталог в Markdown."""
+        """`:export <tag> [file.json]`; `:export * [file.md|file.json]` — вся библиотека.
+
+        Формат `*` — по расширению: `.json` — канонический JSON всей библиотеки
+        (`tag_filter` пуст — то же, что `backup_db.py export` без `--tag»;
+        именно такой файл нужен для `library_url`), иначе — Markdown-каталог.
+        """
         if not args:
             self.add_block(InfoBlock(t("transfer.export_usage")))
             return
         if args[0] == "*":
             path = args[1] if len(args) > 1 else "library.md"
+            as_json = path.lower().endswith(".json")
             try:
-                n = db_transfer.export_markdown(self.db_file, path)
-                self.add_block(InfoBlock(t(
-                    "transfer.export_library_done", count=n, path=path
-                )))
+                if as_json:
+                    n = db_transfer.export_json(self.db_file, path)
+                else:
+                    n = db_transfer.export_markdown(self.db_file, path)
             except Exception as e:
                 self.add_block(InfoBlock(t("transfer.error", error=str(e))))
+                return
+            key = (
+                "transfer.export_library_json_done"
+                if as_json
+                else "transfer.export_library_done"
+            )
+            self.add_block(InfoBlock(t(key, count=n, path=path)))
             return
         tag = args[0]
         path = args[1] if len(args) > 1 else f"{tag}.json"
