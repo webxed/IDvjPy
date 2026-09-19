@@ -1,0 +1,43 @@
+[bold]:llm — LLM providers[/bold]
+
+  Config — llm_providers.yml in the data dir (example: src/llm_providers/en.yml; the
+  template is deployed on first start). The default provider is `default:`.
+
+  :llm          - List LLM providers from llm_providers.yml (see example in src/)
+               While the answer is on its way the block spins `⠋ thinking… 3s / 60s`
+               (second number = provider timeout), so a slow call is not a hang
+  :llm offline <message> - Built-in offline stub (mock: no network, no key);
+                present in every config unless you define your own `offline:`
+  :llm <provider> <message> - Ask the given LLM via its API (headers/body from config;
+                secrets come from the environment, e.g. $DEEPSEEK_API_KEY)
+  :llm <message> - Ask the default provider (`default:` in llm_providers.yml)
+                $OUT — last non-empty line of the focused/last CommandBlock
+                $BLOCK — full stdout of that block (also ${OUT} / ${BLOCK})
+                @file — attach a text file (UTF-8, ≤200 KB; several: @a.py @b.log;
+                literal @ — @@). Size limit: provider key max_attachment_bytes
+                Context: provider key history_turns: N keeps the last N user/assistant
+                pairs in memory for this session; :llm reset [<provider>|*] clears it
+                Placeholders: %MSG% (JSON-safe), %MSG_RAW%, %SYSTEM%, %MODEL%, %HISTORY%
+                Tab completes provider names and `ask` after `:llm `
+                Proxy 407: set $PROXY_USER / $PROXY_PASS (as with :update)
+                Answers are markdown and are rendered formatted (`llm_render_markdown:
+                true`; plain text still is what F3/|/$BLOCK/:w copy).
+  :llm ask <task> - Task + app cheat-sheet + the saved tag library go to the
+                provider, so the answer can be ready refs like `!kpod[1]`
+                or `!! kpod[1] && klog[1]`. Only existing tag[tid] are offered
+                (a clickable ref line is added; terminal_mouse needed to click).
+  :llm ask <provider> <task> - Same, but ask that provider instead of the
+                default one (`default:` in llm_providers.yml).
+                Same context for a plain `:llm` with provider key app_context:
+                true|N (N = char budget; absent/false = off).
+
+[bold]:cht — cheat.sh cheat sheets[/bold]
+
+  :cht <query>  - cheat.sh (cht.sh) cheat sheets in the journal: `:cht tar`,
+                `:cht python read file` (spaces → +), `:cht ~snapshot` (search),
+                `:cht go/:learn` / `:list` (special pages). Options after `?`:
+                `Q` no comments, `T` no colors (default `?T`). Base URL and options —
+                `cheat_sh_url` / `cheat_sh_options` in settings.yml. The output is a
+                normal block ($OUT, |, F3, F7, search).
+
+  Other topics and the full command list — :?

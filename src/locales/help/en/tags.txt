@@ -1,0 +1,19 @@
+[bold]:? tags — database queries and references[/bold]
+
+  ?          - Query database (? tags, ?<tag>, ?? grouped; ?? lists hidden tags)
+               Typing `?` lists tags with a hint (commands count + tag comment):
+               letters filter, Tab/Enter insert `?tag` (Enter again runs it),
+               a click on the row runs the query at once. `??` is left as is.
+               ?text (2+ chars, no such tag) = search commands/comments across all tags;
+               rows: <id> tag[tid]; Esc → input, then Enter runs via !ID
+               In ?? click a tag → insert `!tag ` / `!tag[tid] ` at the cursor
+               (does not replace the line; terminal_mouse). Ctrl+click or
+               double-click on `!tag[tid]` inserts it AND runs it right away
+               (exactly as typing the ref and pressing Enter twice; a
+               tid-less `!tag ` is only inserted). Esc → input, then Enter.
+  !tag / !tag[tid] - Type ! to list tags [file, kube, log]; Tab picks a tag
+               Then commands show as `<id> tag[tid]  full command`; Tab inserts `!tag[tid]`
+               Compose pipes/saves: `#file !file[1] | !file[2]` (preview expands refs)
+  !N         - Execute command by ID from last query
+
+  Other topics and the full command list — :?

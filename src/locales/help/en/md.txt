@@ -1,0 +1,17 @@
+[bold]:? md — markdown handbooks and search[/bold]
+
+  :md <file|path>[#L<n>] - Open markdown with formatting: repo handbook name, or
+                an explicit path (e.g. an Obsidian-vault file); `#L<n>` opens at
+                source line n (like GitHub). Esc closes. Recorded in history (↑ / `:h`)
+                `y` copies the full path (in the formatted view also a click on
+                the name in the header). Files over `md_render_lines` (default
+                1000) open as raw source in the Line-API viewer (fast; `/` search,
+                `n`/`N`) — the formatted widget takes tens of seconds on big files
+  :rg <pat> [dir] - Search markdown files for a regex (ripgrep, or the built-in
+                scanner with an install hint). Smart case; results are clickable
+                `path:line` fragments — open them in the md viewer at that line;
+                `:rg <N>` opens result N (1-based). Base: [dir] → settings `md_dir`
+                → cwd. `:rg` / `:md` are recorded in history (↑ / `:h`)
+  Settings: `md_dir` (search base) and `md_render_lines` in settings.yml.
+
+  Other topics and the full command list — :?

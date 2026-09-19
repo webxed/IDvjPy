@@ -1,0 +1,44 @@
+[bold]:llm — LLM 提供方[/bold]
+
+  配置 — 数据目录中的 llm_providers.yml（示例：src/llm_providers/en.yml；
+  首次启动时部署模板）。默认提供方为 `default:`。
+
+  :llm          - 列出 llm_providers.yml 中的 LLM 提供方（示例见 src/）
+               在响应返回期间，块会旋转显示 `⠋ thinking… 3s / 60s`
+               （第二个数字 = 提供方超时），所以慢调用并非卡死
+  :llm offline <message> - 内置离线桩（mock：无网络、无密钥）；
+                在你定义自己的 `offline:` 之前，任何配置中都有
+  :llm <provider> <message> - 通过其 API 询问指定的 LLM（请求头/请求体来自
+                配置；密钥取自环境，例如 $DEEPSEEK_API_KEY）
+  :llm <message> - 询问默认提供方（llm_providers.yml 中的 `default:`）
+                $OUT — 聚焦/最后一个 CommandBlock 的最后一行非空内容
+                $BLOCK — 该块的完整 stdout（也可用 ${OUT} / ${BLOCK}）
+                @file — 附加文本文件（UTF-8，≤200 KB；多个：@a.py @b.log；
+                字面量 @ — @@）。大小限制：提供方的 max_attachment_bytes 键
+                上下文：提供方的 history_turns: N 键会在内存中为该会话
+                保留最近 N 对 user/assistant；:llm reset [<provider>|*] 清除它
+                占位符：%MSG%（JSON-safe）、%MSG_RAW%、%SYSTEM%、%MODEL%、%HISTORY%
+                在 `:llm ` 之后，Tab 会补全提供方名和 `ask`
+                代理 407：设置 $PROXY_USER / $PROXY_PASS（如同 :update）
+                回答为 markdown 并以格式化方式显示（`llm_render_markdown:
+                true`；纯文本仍然是 F3/|/$BLOCK/:w 复制的内容）。
+  :llm ask <task> - 任务 + 应用速查表 + 保存的标签
+                库会发送给提供方，因此回答可能是现成的
+                引用，如 `!kpod[1]` 或 `!! kpod[1] && klog[1]`。
+                只会建议存在的 tag[tid]（会添加
+                可点击的引用行；点击需要 terminal_mouse）。
+  :llm ask <provider> <task> - 同上，但询问该提供方而非
+                默认提供方（llm_providers.yml 中的 `default:`）。
+                普通 `:llm` 加提供方的 app_context 键时上下文相同：
+                app_context: true|N（N = 字符预算；无/false = 关闭）。
+
+[bold]:cht — cheat.sh 速查表[/bold]
+
+  :cht <query>  - 日志中的 cheat.sh (cht.sh) 速查表：`:cht tar`、
+                `:cht python read file`（空格 → +）、`:cht ~snapshot`（搜索）、
+                `:cht go/:learn` / `:list`（特殊页面）。`?` 后的选项：
+                `Q` 不带注释，`T` 不带颜色（默认 `?T`）。基础
+                URL 和选项 — settings.yml 中的 `cheat_sh_url` / `cheat_sh_options`。
+                输出为普通块（$OUT、|、F3、F7、搜索）。
+
+  其他主题与完整命令列表 — :?

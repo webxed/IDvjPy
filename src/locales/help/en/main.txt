@@ -4,7 +4,8 @@
   Type `:` to list every command with a one-line hint (letters filter the list,
   Tab/Enter insert the command; Enter again runs it). Click a name below to
   insert its call into the input — nothing runs. `:/text` is journal search.
-  :? [calc]   - Show this help; `:? calc` — full calculator reference
+  Command groups are covered in detail by topics — `:? <topic>` (list under "Help topics").
+  :? [topic]   - Show this help; `:? llm`, `:? tags`, `:? calc` … — a topic in full
   :q          - Quit application
   :w <file>   - Write output to file
   :h [N]      - Last N lines of history_<instance>.txt (default: 20)
@@ -20,19 +21,9 @@
   :c          - Clear all output blocks
   :json       - Open JSON viewer (from last block)
   :json <file>- Open JSON file in viewer
-  :md <file|path>[#L<n>] - Open markdown with formatting: repo handbook name, or
-                an explicit path (e.g. an Obsidian-vault file); `#L<n>` opens at
-                source line n (like GitHub). Esc closes. Recorded in history (↑ / `:h`)
-                `y` copies the full path (in the formatted view also a click on
-                the name in the header). Files over `md_render_lines` (default
-                1000) open as raw source in the Line-API viewer (fast; `/` search,
-                `n`/`N`) — the formatted widget takes tens of seconds on big files
-  :rg <pat> [dir] - Search markdown files for a regex (ripgrep, or the built-in
-                scanner with an install hint). Smart case; results are clickable
-                `path:line` fragments — open them in the md viewer at that line;
-                `:rg <N>` opens result N (1-based). Base: [dir] → settings `md_dir`
-                → cwd. `:rg` / `:md` are recorded in history (↑ / `:h`)
-  :i          - Kubernetes Ingress Analyzer (see :i for details)
+  :md <file|path>[#L<n>] - Markdown handbook with formatting, `#L<n>` — at source line n (:? md)
+  :rg <pat> [dir] - Search markdown files by regex, clickable results (:? md)
+  :i          - Kubernetes Ingress Analyzer (:i — commands, :? i — in detail)
   :cd [path]  - Show or change the shell cwd (tags DB / history stay at launch dir)
   :fm [path]  - Open the OS file manager in a new window (cwd or path)
   :term [path] - Open a system terminal in a new window (cwd or path)
@@ -48,28 +39,10 @@
                 `:ed $TMPDIR/pod-$OUT.json`); an unresolved `$NAME` is an
                 explicit error, not a file named `$NAME`.
   :env        - Re-read .bashrc_term* (and ~/.bashrc aliases) into this process
-  :session    - Show the current instance (history + .bashrc_term files)
-  :session NAME - Switch to that instance or create it (tags DB stays shared).
-                The current session name is shown in the app header and in the
-                terminal window/tab title (IDvjPy_term · NAME).
-  :new [NAME|-] [DIR] - Open another app instance in a NEW terminal window: own
-                .bashrc_term_<NAME> / history_<NAME>.txt, same data dir and tags DB;
-                DIR — working dir (default: data dir); `-`/no name — auto `sN`,
-                the lowest one free among RUNNING windows (session_<NAME>.pid
-                registry): files of closed sessions do not occupy a name.
-                Secrets are not passed. Also `:session new …`. Footer: Ctrl+N.
-  :send <session|*> <cmd> - Forward a command to another app session (its own
-                window): it is inserted into that session's input (Enter there
-                runs it). `:send!` runs it at once. `*` = every other session.
-                The command is materialized here ($VAR/$OUT, aliases). Secrets
-                `$$` travel by NAME (`$TOKEN`): a value the target lacks is
-                written to its secrets file (secrets_<session>.json, 0600,
-                cleared when that session exits), the target's own value is
-                never overwritten — so the command really runs there, while the
-                inbox, history and journal never see the value. The inbox is
-                inbox_<session>.jsonl (0600) in the data dir; a message for a
-                stopped session waits for its start. Tab completes session names
-                after `:send `. Recorded in history (↑ / `:h`), never suggested
+  :session    - Show or switch app instance (tags DB stays shared; :? session)
+  :new [NAME|-] [DIR] - Another app instance in a NEW terminal window (Ctrl+N; :? session)
+  :send <session|*> <cmd> - Forward a command to another session (`:send!` — at once;
+                secrets by name, the value goes to the target's store; :? send)
   :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
   :screensaver  - Idle overlay: matrix digital rain (screensaver_matrix, default) or the
@@ -110,55 +83,13 @@
                 CommandBlock (no focus: the last two blocks)
   :alias <tag> [file.sh] / :alias * [library.sh] - export commands as
                 bash functions tag_tid() { ...; }
-  :llm          - List LLM providers from llm_providers.yml (see example in src/)
-               While the answer is on its way the block spins `⠋ thinking… 3s / 60s`
-               (second number = provider timeout), so a slow call is not a hang
-  :llm offline <message> - Built-in offline stub (mock: no network, no key);
-                present in every config unless you define your own `offline:`
-  :llm <provider> <message> - Ask the given LLM via its API (headers/body from config;
-                secrets come from the environment, e.g. $DEEPSEEK_API_KEY)
-  :llm <message> - Ask the default provider (`default:` in llm_providers.yml)
-                $OUT — last non-empty line of the focused/last CommandBlock
-                $BLOCK — full stdout of that block (also ${OUT} / ${BLOCK})
-                @file — attach a text file (UTF-8, ≤200 KB; several: @a.py @b.log;
-                literal @ — @@). Size limit: provider key max_attachment_bytes
-                Context: provider key history_turns: N keeps the last N user/assistant
-                pairs in memory for this session; :llm reset [<provider>|*] clears it
-                Placeholders: %MSG% (JSON-safe), %MSG_RAW%, %SYSTEM%, %MODEL%, %HISTORY%
-                Tab completes provider names and `ask` after `:llm `
-                Proxy 407: set $PROXY_USER / $PROXY_PASS (as with :update)
-                Answers are markdown and are rendered formatted (`llm_render_markdown:
-                true`; plain text still is what F3/|/$BLOCK/:w copy).
-  :llm ask <task> - Task + app cheat-sheet + the saved tag library go to the
-                provider, so the answer can be ready refs like `!kpod[1]`
-                or `!! kpod[1] && klog[1]`. Only existing tag[tid] are offered
-                (a clickable ref line is added; terminal_mouse needed to click).
-  :llm ask <provider> <task> - Same, but ask that provider instead of the
-                default one (`default:` in llm_providers.yml).
-                Same context for a plain `:llm` with provider key app_context:
-                true|N (N = char budget; absent/false = off).
-  :cht <query>  - cheat.sh (cht.sh) cheat sheets in the journal: `:cht tar`,
-                `:cht python read file` (spaces → +), `:cht ~snapshot` (search),
-                `:cht go/:learn` / `:list` (special pages). Options after `?`:
-                `Q` no comments, `T` no colors (default `?T`). Base URL and options —
-                `cheat_sh_url` / `cheat_sh_options` in settings.yml. The output is a
-                normal block ($OUT, |, F3, F7, search).
+  :llm [provider] <message> - Ask an LLM (providers from llm_providers.yml, `ask`,
+                `offline`, `@file`, context; Tab — names) — in full: :? llm
+  :cht <query>  - cheat.sh cheat sheets in the journal (`:cht tar`; options) — :? llm
   :o [N]        - Last N finished command outputs of this session (default 5)
   :o /text      - grep the stored outputs (stdout/stderr); survives :c
   :o clear      - Forget the stored outputs (memory only, not the DB)
-  :kctx         - Cluster journal (kctx.json): list clusters; the variables from
-                `kctx_vars` in settings.yml are saved per cluster when set after
-                login. Default — the bundled stack: kubectl (NS POD DEPLOY SVC ING
-                APP CTR QUOTA) plus helm (RELEASE CHART VALUES); the order of the
-                names is the order in the :kctx lists. `kctx_vars: []` turns the
-                journal off and `:kctx` says so
-  :kctx <cluster> - Log in (klogin <c> || kubectl config use-context <c>) and
-                show previously used variable sets of that cluster; with exactly
-                one saved set it is applied right away (nothing to pick from).
-                The login runs WITHOUT command_timeout (tsh goes to the network;
-                a hung login is visible in the block and stops with F4 / :kill)
-  :kctx <cluster> N - Log in and apply saved set N
-  :kctx N       - Apply set N from the last shown list (:kctx N sets vars only)
+  :kctx [cluster] [N] - Cluster journal: login and saved variable sets (:? kctx)
   :import file       - Insert commands from that JSON (new tids)
   :theme [name] - Show or set TUI theme (saved in settings.yml)
                `matrix` is the app's own theme: green phosphor on near-black
@@ -210,29 +141,16 @@
   @ <cmd>    - Run without command_timeout (long non-TTY jobs; stdout captured,
                stdin is /dev/null). Timeout message also points here and at `> cmd`
   Output     - ANSI colors from a command are drawn as colors (ansi_colors: true);
-               cursor/OSC escapes and control chars are stripped, 
- progress
+               cursor/OSC escapes and control chars are stripped, progress
                redraws collapse to the final line — like a real terminal. Plain
                text (F3, |, $OUT/$BLOCK, :log, @key) never contains escapes
   #<tag>     - Save command to database with tag (`#tag cmd`, no space after #)
   # command  - Park a line in history without running (bash-style; space after #)
   #tag! / #tag!tid - Restore soft-deleted tag / command
   #name-- / #name!! - Hide / restore a handbook's tags (ansible, linux, k8s, …)
-  ?          - Query database (? tags, ?<tag>, ?? grouped; ?? lists hidden tags)
-               Typing `?` lists tags with a hint (commands count + tag comment):
-               letters filter, Tab/Enter insert `?tag` (Enter again runs it),
-               a click on the row runs the query at once. `??` is left as is.
-               ?text (2+ chars, no such tag) = search commands/comments across all tags;
-               rows: <id> tag[tid]; Esc → input, then Enter runs via !ID
-               In ?? click a tag → insert `!tag ` / `!tag[tid] ` at the cursor
-               (does not replace the line; terminal_mouse). Ctrl+click or
-               double-click on `!tag[tid]` inserts it AND runs it right away
-               (exactly as typing the ref and pressing Enter twice; a
-               tid-less `!tag ` is only inserted). Esc → input, then Enter.
-  !tag / !tag[tid] - Type ! to list tags [file, kube, log]; Tab picks a tag
-               Then commands show as `<id> tag[tid]  full command`; Tab inserts `!tag[tid]`
-               Compose pipes/saves: `#file !file[1] | !file[2]` (preview expands refs)
-  !N         - Execute command by ID from last query
+  ?          - Query database (? tags, ?<tag>, ?? grouped, ?text — search) — :? tags
+  !tag / !tag[tid] - Insert a database command into the input (Tab picks) — :? tags
+  !N         - Execute command by ID from last query (:? tags)
   |<cmd>     - Pipe focused (else last) block output to a command
   |@<label> <cmd> - Pipe from the block labelled with `:name <label>`
   |@N <cmd>  - Pipe from N blocks back (0 = last). The source is NOT re-run;
@@ -241,28 +159,22 @@
                `<label>-`: drop one; `-`: drop all). F8 opens a dialog for the
                label. Then reuse its buffer cheaply: `:name buff` …
                `|@buff awk '{...}'` (no re-run of cat/kubectl).
-  $OUT       - On demand: last non-empty line of the focused (or last) command block.
-               Not stored in .bashrc_term. Type $OUT alone to peek. `$OUT=` is rejected.
-  $VAR=val   - Set environment variable
-  $VAR=@key  - Take the value from the focused/last finished block: the line whose
-               first token is `key` (vault `key  value` tables); `@last` — last line.
-               With `$$` it stores a secret: `$$VAULT_TOKEN=@token`.
-  $$VAR=val  - Set a SECRET variable: value is hidden in the input line and in the
-               journal (shown as ****); stored in secrets_<instance>.json (0600),
-               deleted on exit (session only); never sent to :llm (masked to ****).
-               Use it as $VAR. `$$VAR` — status, `$$VAR-` — remove.
-               The whole input line is masked (name shows in the subtitle); in a
-               real `> cmd` TTY the value is visible; F3 copies the real output.
-               settings key `clear_clipboard_after_secret: true` clears the
-               clipboard after pasting a value into `$$NAME=…`.
-  aliases    - From ~/.bashrc. If the body has $1 / $2 / $@, args are substituted
-               (klogin cluster → tsh kube login cluster). Else the rest of the line
-               is appended as in a classic alias. Arguments end at the first shell
-               operator: `klogin prod || kubectl config use-context prod` keeps `||`
-               an operator (it does not become an argument of the alias body).
+  $OUT       - Last non-empty line of the focused/last block (:? vars)
+  $VAR=val / $VAR=@key - Set a variable (also from a block's output) (:? vars)
+  $$VAR=val  - Secret variable: secrets_<instance>.json, 0600 (:? vars)
+  aliases    - From ~/.bashrc; arguments follow the alias rules (:? vars)
 
-[bold]Help topics[/bold]
-  :? calc    - Calculator + ipcalc reference (syntax, units, percent, IPv4 subnets)
+[bold]Help topics (:? <topic>)[/bold]
+  :? calc    - Calculator + ipcalc: syntax, units, percent, IPv4 subnets
+  :? run     - Command chains (runbook): auto/manual/prompt steps, YAML, :playbook
+  :? i       - Kubernetes Ingress Analyzer: list / ns / analyze / check
+  :? md      - Markdown handbooks (`:md`) and search over them (`:rg`)
+  :? llm     - LLM providers (`:llm …`, `:llm ask`), attached files, :cht
+  :? tags    - Database queries: `?`, `?tag`, `??`, `?text` and `!tag[tid]` refs
+  :? vars    - `$OUT`, `$VAR`, `$$` secrets, ~/.bashrc aliases
+  :? kctx    - Cluster journal: login and saved variable sets
+  :? send    - Forwarding commands to another session (`:send` / `:send!`)
+  :? session - App instances and windows (`:session`, `:new`)
 
 [bold]Navigation[/bold]
   ↑/↓        - Input history walk: everything typed in this session (`:`-commands,

@@ -1,0 +1,16 @@
+[bold]:? session — 应用实例与窗口[/bold]
+
+  :session    - 显示当前实例（历史 + .bashrc_term 文件）
+  :session NAME - 切换到该实例或创建它（标签数据库共享）。
+                当前会话名可见于应用顶部和
+                终端窗口/标签页标题（IDvjPy_term · NAME）。
+  :new [NAME|-] [DIR] - 在新的终端窗口中打开另一个应用实例：
+                各自独立的 .bashrc_term_<NAME> / history_<NAME>.txt，相同的
+                数据目录和标签数据库；DIR — 工作目录（默认
+                为数据目录）；`-`/不写名称 — 自动 `sN`，取正在
+                运行的窗口中最小可用的编号（注册表 session_<NAME>.pid）：已关闭
+                会话的文件不占用名称。不传递密钥。也可用
+                `:session new …`。在底部：Ctrl+N。
+
+  将命令转发到另一个会话 — :? send
+  其他主题与完整命令列表 — :?

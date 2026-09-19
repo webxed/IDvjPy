@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.145 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.146 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -31,6 +31,7 @@ IDvjPy 是一个用 Python（Textual）编写、以键盘操作的终端应用�
 - 阅读模式：如果你把日志向上翻（滚轮/PgUp）或聚焦在块上，新输出会追加到底部，但视图和焦点不会移动——无论 `:watch`、`:llm` 的回答，还是到来的 `:send`。当滚动到底部或运行命令（Enter）时恢复跟随
 - 路径、数据库中的命令和 `history_*.txt` 行（包括 `@`/`>`；开关——`history_completion`）以及本会话命令的补全。`:` 请求的调用（`:llm`、`:cht`、`:rg`、`:md`、`:run`、`:send`）会留在历史中供 ↑/`:h` 使用，但不作为提示——名单在 `history_queries`
 - 应用命令的快速提示：输入 `:` 后列出所有带简短说明的 `:` 命令（按字母过滤，`Tab`/`Enter` 插入 `:命令 `，运行则另按 Enter）；`:/text` 仍用于搜索日志。在帮助 `:?` 中命令名是可点击链接：点击会把调用插入输入行（就像 `??` 中的 `!tag` 和 `:welcome` 中的 `--seed`）
+- 帮助主题：总览在 `:?`，各命令组的细节在 `:? <主题>`（`:? llm`、`:? tags`、`:? calc`、`:? run`、`:? i`、`:? md`、`:? vars`、`:? kctx`、`:? send`、`:? session`；主题列表见帮助中的「帮助主题」一节和 `:? ` 之后的提示）。未知主题会明确报错并列出主题；粘连写法 `:?calc` 会提示加空格
 - 输入 `?` 时的标签提示：标签名、命令数和标签注释（`?vault  (2)  HashiCorp Vault`），按字母过滤；点击某行会插入 `?tag` 并立即执行查询。只有命令本身 `?vault` 会成为链接（并高亮）——计数和注释仍是普通文本
 - 块输出中的逐行模式（复制并追加到输入行）
 - JSON viewer（F5），带 `jq` 草稿和 `$JSON`
@@ -306,7 +307,7 @@ curl -H "Bearer $TOKEN" https://api.example   # 普通的 $TOKEN 替换
 - `:relang [code]` —— 把**已播种**库的注释（数据库中的标签说明和命令提示）翻译为另一种语言，而无需重新 `--seed`：不带参数时显示帮助，`:relang ru` —— 翻译，`:relang auto` —— 按 `$LANG`。只处理种子的规范标签和命令；你自己的标签、命令以及**手工修改过**的注释保持不变。写入前会先把数据库快照保存到 `backups/`。在终端中也是如此：`python3 src/relang.py --lang ru [--db …]`
 - 聚焦块的高亮很柔和：在块背景上叠加主题主色的 25%（以前实心的 `$primary-darken-1` 很刺眼，尤其是在很大的 `:?` 上）；在任何主题中都有效
 - `:kctx` —— 集群日志（`kctx.json`）：集群列表；`:kctx <cluster>` —— 登录（`klogin <c>` 或 `kubectl config use-context <c>`）并显示以前用过的 `NS`/`POD`/… 集合（只有一个集合时立即应用：别无选择）；`:kctx N` —— 应用集合 N；`:kctx <cluster> N` —— 一行完成登录并应用。哪些变量算作日志 —— settings.yml 中的 `kctx_vars` 键
-- `:?` —— TUI 内的这份帮助
+- `:?` —— TUI 内的这份帮助；`:? <主题>` —— 某组命令的详细说明（`:? llm`、`:? tags`、`:? calc`、`:? run`、`:? i`、`:? md`、`:? vars`、`:? kctx`、`:? send`、`:? session`；主题列表见帮助中的「帮助主题」一节以及 `:? ` 之后的提示）。未知主题会明确报错并列出主题；粘连写法 `:?calc` 会提示加空格
 
 ## 快捷键
 

@@ -94,7 +94,7 @@ hist:
   import_failed: "未读取: {paths}。"
 
 cmd:
-  "?": "命令帮助（:? calc — 计算器参考）"
+  "?": "命令帮助（:? —— 全部；:? calc / run / i / md / llm / tags / vars / kctx / send / session —— 主题）"
   q: "退出应用"
   w: "将上一个块的输出写入文件"
   h: "历史: :h [N]、:h /文本、:h compact"
@@ -140,3 +140,7 @@ cmd:
   playbook: "将会话导出为 --demo YAML"
   run: "运行命令链（运行手册）: 标签或 YAML，按提示等待"
   update: "将 VERSION 与 GitHub main 比较"
+
+help:
+  unknown_topic: "没有该帮助主题：'{topic}'。主题：{topics}"
+  topic_needs_space: "帮助主题前要有空格：`{example}`，而不是 `{glued}`"

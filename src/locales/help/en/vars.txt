@@ -1,0 +1,23 @@
+[bold]:? vars — variables, block output and aliases[/bold]
+
+  $OUT       - On demand: last non-empty line of the focused (or last) command block.
+               Not stored in .bashrc_term. Type $OUT alone to peek. `$OUT=` is rejected.
+  $VAR=val   - Set environment variable
+  $VAR=@key  - Take the value from the focused/last finished block: the line whose
+               first token is `key` (vault `key  value` tables); `@last` — last line.
+               With `$$` it stores a secret: `$$VAULT_TOKEN=@token`.
+  $$VAR=val  - Set a SECRET variable: value is hidden in the input line and in the
+               journal (shown as ****); stored in secrets_<instance>.json (0600),
+               deleted on exit (session only); never sent to :llm (masked to ****).
+               Use it as $VAR. `$$VAR` — status, `$$VAR-` — remove.
+               The whole input line is masked (name shows in the subtitle); in a
+               real `> cmd` TTY the value is visible; F3 copies the real output.
+               settings key `clear_clipboard_after_secret: true` clears the
+               clipboard after pasting a value into `$$NAME=…`.
+  aliases    - From ~/.bashrc. If the body has $1 / $2 / $@, args are substituted
+               (klogin cluster → tsh kube login cluster). Else the rest of the line
+               is appended as in a classic alias. Arguments end at the first shell
+               operator: `klogin prod || kubectl config use-context prod` keeps `||`
+               an operator (it does not become an argument of the alias body).
+
+  Other topics and the full command list — :?

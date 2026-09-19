@@ -155,7 +155,14 @@ try:
         open_terminal_command,
         resolve_target_dir,
     )
-    from help_texts import calc_help, ingress_help, main_help, runbook_help
+    from help_texts import (
+        calc_help,
+        help_topic,
+        help_topic_names,
+        ingress_help,
+        main_help,
+        runbook_help,
+    )
     from history_store import (
         DEFAULT_HISTORY_KEEP,
         FileLockTimeoutError,
@@ -2097,6 +2104,12 @@ class CommandLineInput(Input):
             if send_items or send_preview:
                 self._completion_list.update_candidates(send_items, preview=send_preview)
                 return
+        if hasattr(app, "get_help_completions"):
+            # `:? ` — темы справки (вход в них: пробел после `:?`).
+            help_items, help_preview = app.get_help_completions(raw_value, self.cursor_position)
+            if help_items or help_preview:
+                self._completion_list.update_candidates(help_items, preview=help_preview)
+                return
         if self._typed_command_is_complete():
             # `ls   ` — выполнить ls, не держать список `ls -la`.
             self._completion_list.hide()
@@ -2242,7 +2255,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.145"
+    VERSION = "v1.146"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2991,6 +3004,39 @@ class CommandRunner(App):
                     add_space=True,
                 )
             )
+        return items, ""
+
+    def get_help_completions(
+        self, text: str, cursor_pos: int
+    ) -> tuple[list[CompletionItem], str]:
+        """Темы `:? <тема>`: список после пробела (`:? ` ), фильтр — буквами темы.
+
+        `:?` без пробела не трогаем: там работает общий список `:`-команд.
+        """
+        raw = (text or "")[:cursor_pos]
+        if not raw.startswith(f":{self.CMD_HELP} "):
+            return [], ""
+        words = raw.split()
+        if len(words) == 1:
+            # `:? ` — пробел набран, тема ещё не начата: показываем все темы.
+            needle = ""
+        elif len(words) == 2:
+            # Пробел за выбранной темой — тема набрана, список гасим.
+            if raw.endswith(" "):
+                return [], ""
+            needle = words[1].lower()
+        else:
+            return [], ""
+        items = [
+            CompletionItem(
+                insert=name,
+                display=f":{self.CMD_HELP} {name}",
+                replace_token=True,
+                add_space=True,
+            )
+            for name in help_topic_names()
+            if not needle or name.startswith(needle)
+        ]
         return items, ""
 
     def _tag_completion_items(self, tags: list[str]) -> list[CompletionItem]:
@@ -5123,12 +5169,13 @@ class CommandRunner(App):
             self.handle_ingress_command(user_input[2:].strip())
         elif command == self.CMD_HELP:
             topic = parts[1].strip().lower() if len(parts) > 1 else ""
-            if topic in ("calc", "calculator", "калькулятор"):
-                self._show_calc_help()
-            elif topic in ("run", "runbook"):
-                self._show_runbook_help()
+            if topic:
+                self._show_help_topic(topic)
             else:
                 self._show_main_help()
+        elif len(command) > 1 and command.startswith(self.CMD_HELP):
+            # `:?calc` — тема приклеена к команде; подсказываем пробел, а не гадаем.
+            self._show_glued_help_topic(command[len(self.CMD_HELP):])
         elif command == self.CMD_CD:
             if len(parts) == 1:
                 self.add_block(InfoBlock(f"cwd: {os.getcwd()}"))
@@ -6750,28 +6797,57 @@ class CommandRunner(App):
 
         Сначала экранируем разметку (`[bold]` — единственное, что остаётся),
         потом подставляем кликабельные `:команды` — иначе ссылки попали бы под
-        escape.
+        escape (см. `_add_help_block`).
         """
-        help_text = main_help()
-        body = escape_help_markup(
-            help_text.replace("IDvjPy_term VER", f"IDvjPy_term {self.VERSION}", 1)
+        help_text = main_help().replace(
+            "IDvjPy_term VER", f"IDvjPy_term {self.VERSION}", 1
         )
-        block = InfoBlock(linkify_colon_commands(body))
+        self._add_help_block(help_text)
+
+    def _add_help_block(self, body: str) -> None:
+        """Блок справки: сохраняем `[bold]`, линкуем `:команды` (общий путь для тем)."""
+        block = InfoBlock(linkify_colon_commands(escape_help_markup(body)))
         self.add_block(block, follow_end=False)
         self._schedule_journal_to_block(block)
 
+    def _show_help_topic(self, topic: str) -> None:
+        """`:`? <тема>` — справка по теме (`:? llm`, `:? tags`, …).
+
+        Неизвестная тема — явная ошибка со списком тем (никакого молчаливого
+        отката на общую справку).
+        """
+        body = help_topic(topic)
+        if body is None:
+            topics = ", ".join(f":? {name}" for name in help_topic_names())
+            self.add_block(InfoBlock(t(
+                "help.unknown_topic", topic=topic, topics=topics
+            )))
+            return
+        self._add_help_block(body)
+
+    def _show_glued_help_topic(self, name: str) -> None:
+        """`:?calc` — тема приклеена к команде: подсказываем пробел, если тема есть."""
+        topic = (name or "").strip().lstrip("/").lower()
+        if help_topic(topic) is not None:
+            self.add_block(InfoBlock(t(
+                "help.topic_needs_space",
+                example=f":{self.CMD_HELP} {topic}",
+                glued=f":{self.CMD_HELP}{topic}",
+            )))
+            return
+        self._show_help_topic(topic)
+
     def _show_ingress_help(self) -> None:
         """Show ingress command help."""
-        self.add_block(InfoBlock(ingress_help()))
+        self._add_help_block(ingress_help())
 
     def _show_calc_help(self) -> None:
         """Show the full calculator reference (`:? calc`)."""
-        self.add_block(InfoBlock(calc_help()))
+        self._add_help_block(calc_help())
 
     def _show_runbook_help(self) -> None:
         """Показать справку по прогону цепочек (`:? run`)."""
-        body = escape_help_markup(runbook_help())
-        self.add_block(InfoBlock(linkify_colon_commands(body)), follow_end=False)
+        self._add_help_block(runbook_help())
 
     def _list_ingresses(self, namespace: str | None = None) -> None:
         """List ingresses in namespace or all namespaces."""

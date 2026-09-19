@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.145
+# План тестирования IDvjPy_term v1.146
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -333,16 +333,20 @@ echo hist-line
 :h compact
 :w test_output.txt
 :?
+:? llm
+:? tags
+:? nope
+:?calc
 :i
 :md SEED_LINUX_COMMANDS.md
 :c
 ```
 
-**Ожидание:** `:h` показывает `hist-line` в одном блоке; `:h /hist` — уникальные совпадения в подсказках (свежие сверху); `:h compact` ужимает старые повторы, хвост `history_keep` не трогает; `test_output.txt` создан; `:?` — help (есть `:md`); `:i` — help ingress; `:md` — модалка Markdown (Esc / `q` закрывает, колесо не крутит журнал); `:c` — `All blocks cleared.`
+**Ожидание:** `:h` показывает `hist-line` в одном блоке; `:h /hist` — уникальные совпадения в подсказках (свежие сверху); `:h compact` ужимает старые повторы, хвост `history_keep` не трогает; `test_output.txt` создан; `:?` — общая справка (есть `:md` и раздел «Темы справки» с 10 темами); `:? llm` — справка про провайдеров и `@file` (не общая!); `:? tags` — про `?`/`!tag`; `:? nope` — явная ошибка со списком тем (`Нет такой темы справки: 'nope'. Темы: :? calc, …`), а не молчаливая общая справка; `:?calc` — подсказка про пробел («`:? calc`, а не `:?calc`»); после `:? ` Tab показывает 10 тем; `:i` — help ingress; `:md` — модалка Markdown (Esc / `q` закрывает, колесо не крутит журнал); `:c` — `All blocks cleared.`
 
 `:q` — выход (в конце сессии). `:cd`, `:r`, `:theme` — секция 25.
 
-Автотесты: `test_s12_colon_commands`, `test_colon_h_search_newest_first`, `test_colon_h_compact_uniques_old_keeps_tail`, `test_colon_md_opens_formatted_handbook`, `test_md_viewer_wheel_does_not_scroll_journal`.
+Автотесты: `test_s12_colon_commands`, `test_colon_h_search_newest_first`, `test_colon_h_compact_uniques_old_keeps_tail`, `test_colon_md_opens_formatted_handbook`, `test_md_viewer_wheel_does_not_scroll_journal`, `tests/test_help_topics.py` (11: алиасы, неизвестная тема, `:?calc`, оглавление против реестра, подсказки тем).
 
 ---
 
@@ -1465,7 +1469,7 @@ steps:
 
 Разово при запуске: `python3 app.py --lang ru`, `$IDVJPY_LANG=ru python3 app.py`.
 
-**Ожидание:** язык влияет только на текст — сообщения (`:kctx`, `:watch`, `:run`, `:llm offline`, стартовый блок), подсказки `:`-команд, каталог `:welcome`, строки справки заставки и сама справка `:?` / `:? run` / `:? calc` / `:i`. `en` — источник правды: `src/locales/en.yml` + части `src/locales/en/*.yml` (`screensaver`, `seed`) + `src/locales/help/en/*.txt`; `ru` и `zh` — перевод всего того же (204 ключа; тест сторожит паритет ключ-в-ключ). Отсутствующий ключ отдаёт английский текст, неизвестный ключ печатается как есть (пустоты нет). Команды, имена тегов, ключи настроек, имена файлов и слоган «Define your variables…» не переводятся. Смена языка применяется к тексту, напечатанному **после** неё — уже показанные блоки не перерисовываются. `:relang <код>` переводит не UI, а **комментарии библиотеки в БД**: трогает только канонические теги/команды сидов (матч по тегу и тексту команды; linux-дополнения `logs` / `file[12]` / `net[10..11]` — по позиции `tid-1`), пользовательские теги, команды и правленые руками комментарии остаются, перед записью — снимок БД в `backups/`. Проверка: `python3 -m pytest tests/test_i18n.py tests/test_seed_i18n.py tests/test_relang.py -q`.
+**Ожидание:** язык влияет только на текст — сообщения (`:kctx`, `:watch`, `:run`, `:llm offline`, стартовый блок), подсказки `:`-команд, каталог `:welcome`, строки справки заставки и сама справка `:?` / `:? <тема>` (`calc`, `run`, `i`, `md`, `llm`, `tags`, `vars`, `kctx`, `send`, `session`). `en` — источник правды: `src/locales/en.yml` + части `src/locales/en/*.yml` (`screensaver`, `seed`) + `src/locales/help/en/*.txt`; `ru` и `zh` — перевод всего того же (204 ключа; тест сторожит паритет ключ-в-ключ). Отсутствующий ключ отдаёт английский текст, неизвестный ключ печатается как есть (пустоты нет). Команды, имена тегов, ключи настроек, имена файлов и слоган «Define your variables…» не переводятся. Смена языка применяется к тексту, напечатанному **после** неё — уже показанные блоки не перерисовываются. `:relang <код>` переводит не UI, а **комментарии библиотеки в БД**: трогает только канонические теги/команды сидов (матч по тегу и тексту команды; linux-дополнения `logs` / `file[12]` / `net[10..11]` — по позиции `tid-1`), пользовательские теги, команды и правленые руками комментарии остаются, перед записью — снимок БД в `backups/`. Проверка: `python3 -m pytest tests/test_i18n.py tests/test_seed_i18n.py tests/test_relang.py -q`.
 
 **Контент по языкам.** Демо-туры: базовый `src/demos/<tour>.yml` хранит шаги, текст — в `src/demos/text/<lang>/<tour>.yml` (`title`, `captions`/`types` по номеру шага), так что `--demo short` говорит на языке интерфейса (слои `en` и `zh`). Комментарии сидов: `src/seed_text/<lang>/<handbook>.yml` (ключ — тег + позиция), язык берётся из `language` в `settings.yml` / `$IDVJPY_LANG`; поэтому `python3 src/seed_git.py --seed` при `language: en` кладёт английские подписи, при `language: zh` — китайские, а при `language: ru` — базовые русские (встроенные в `seed_*.py`). Уже посеянную БД переводит `:relang <код>` (или `python3 src/relang.py --lang zh`): переписываются только комментарии канонических строк сидов, пользовательские теги/команды и правленые руками комментарии остаются, снимок — в `backups/`. Полный повторный `--seed` тоже сменит язык, но заменит свои теги (`:backup` перед этим). Справочники: `handbook_md_path` сначала ищет `docs/<lang>/NAME` (есть `docs/en/` и `docs/zh/`). `:llm` без `answer_language` у провайдера отвечает на языке интерфейса (`off`/`none` выключают правило).
 
@@ -1473,7 +1477,7 @@ steps:
 
 ---
 
-**Версия документа**: v1.89
-**Версия приложения**: v1.145
-**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
+**Версия документа**: v1.91
+**Версия приложения**: v1.146
+**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

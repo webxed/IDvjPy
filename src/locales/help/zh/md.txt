@@ -1,0 +1,19 @@
+[bold]:? md — markdown 手册与搜索[/bold]
+
+  :md <file|path>[#L<n>] - 以格式化方式打开 markdown：仓库手册名
+                或显式路径（例如来自 Obsidian 仓库的文件）；
+                `#L<n>` 打开到源文件第 n 行（类似 GitHub）。Esc 关闭。
+                会记入历史（↑ / `:h`）。`y` 复制完整路径（在
+                格式化视图中也可点击标题中的名称）。大于
+                `md_render_lines`（默认 1000）的文件会作为源文件在
+                Line-API 查看器中打开（快速；搜索 `/`、`n`/`N`）—
+                格式化组件在大文件上要花数十秒
+  :rg <pat> [dir] - 在 markdown 文件中搜索 regex（ripgrep 或内置
+                扫描器，会提示安装）。Smart case；结果为
+                可点击的 `path:line` 片段 — 在 md 查看器中打开
+                到该行；`:rg <N>` 打开第 N 个结果（从 1 开始）。基准：
+                [dir] → `md_dir` 设置 → cwd。`:rg` / `:md` 会记入
+                历史（↑ / `:h`）
+  设置：`md_dir`（搜索基准）和 `md_render_lines` 在 settings.yml 中。
+
+  其他主题与完整命令列表 — :?

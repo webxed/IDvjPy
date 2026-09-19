@@ -1,0 +1,17 @@
+[bold]:? kctx — 集群日志[/bold]
+
+  :kctx         - 集群日志（kctx.json）：集群列表；settings.yml 中
+                `kctx_vars` 的变量若在登录后设置，则会按集群保存。
+                默认为内置栈：kubectl（NS POD
+                DEPLOY SVC ING APP CTR QUOTA）加上 helm（RELEASE CHART VALUES）；
+                名称顺序即 :kctx 列表中的顺序。`kctx_vars: []` 会关闭
+                日志，`:kctx` 会报告这一点
+  :kctx <cluster> - 登录（klogin <c> || kubectl config use-context <c>）并显示
+                该集群之前用过的变量集合；若恰好只有
+                一个已保存集合，则立即应用（无可选择）。
+                登录在无 command_timeout 下执行（tsh 会访问网络；卡住的
+                登录可见于块中，可通过 F4 / :kill 停止）
+  :kctx <cluster> N - 登录并应用已保存的集合 N
+  :kctx N       - 应用最近显示列表中的集合 N（:kctx N 只更改变量）
+
+  其他主题与完整命令列表 — :?

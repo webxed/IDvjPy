@@ -88,7 +88,7 @@ hist:
   import_failed: "Не прочитано: {paths}."
 
 cmd:
-  "?": "справка по командам (:? calc — справка калькулятора)"
+  "?": "справка по командам (:? — всё; :? calc / run / i / md / llm / tags / vars / kctx / send / session — темы)"
   q: "выход"
   w: "записать вывод последнего блока в файл"
   h: "история: :h [N], :h /текст, :h compact"
@@ -134,3 +134,7 @@ cmd:
   playbook: "записать сессию как YAML для --demo"
   run: "прогон цепочки (runbook): тег или YAML, остановки ждут вас"
   update: "сверить VERSION с GitHub main"
+
+help:
+  unknown_topic: "Нет такой темы справки: '{topic}'. Темы: {topics}"
+  topic_needs_space: "Тема справки отделяется пробелом: `{example}`, а не `{glued}`"

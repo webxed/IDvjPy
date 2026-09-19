@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.145**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.146**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -27,7 +27,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no such tag) searches command text + comments across tags |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:?` `:q` `:w` `:h` `:c` `:json` `:md` `:rg` `:i` `:cd` `:fm` `:term` `:ed` `:env` `:r` `:cmd` `:log` `:o` `:diff` `:name` `:kill` `:watch` `:llm` `:cht` `:g` `:/` `:n` `:N` `:stats` `:mv` `:export` `:import` `:alias` `:kctx` `:session` `:new` `:send` `:send!` `:backup` `:welcome` `:screensaver` `:theme` `:lang` `:relang` `:playbook` `:run` `:update` |
+| `:` | `:?` `:? <тема>` (`calc` `run` `i` `md` `llm` `tags` `vars` `kctx` `send` `session`) `:q` `:w` `:h` `:c` `:json` `:md` `:rg` `:i` `:cd` `:fm` `:term` `:ed` `:env` `:r` `:cmd` `:log` `:o` `:diff` `:name` `:kill` `:watch` `:llm` `:cht` `:g` `:/` `:n` `:N` `:stats` `:mv` `:export` `:import` `:alias` `:kctx` `:session` `:new` `:send` `:send!` `:backup` `:welcome` `:screensaver` `:theme` `:lang` `:relang` `:playbook` `:run` `:update` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.89 (app v1.145) |
+| `test_cmd.md` | Manual plan v1.91 (app v1.146) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -157,6 +157,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_line_api_block.py` | Line API: включение ключом/`IDVJPY_LINE_BLOCKS`, вывод/высота/свёртка/курсор, инфоблоки действительно рисуются (`render_line`), выделение мышью по строкам + подсветка, клетка→символ (`meta['offset']`) остаётся точной |
 | `tests/test_colon_commands.py` | Подсказки `:`-команд: покрытие всех `CMD_*`, фильтр по буквам, `:/` не перебивается, Tab вставляет без запуска, Enter на точном имени выполняет, ссылка — только на имени команды |
 | `tests/test_tag_ref_click.py` | Клик по `!tag[tid]` в `??`: обычный — только вставка; Ctrl+клик и двойной клик — вставить и выполнить (как «Enter, Enter», без дубля ссылки); `!tag ` без tid и чужие ссылки не выполняются |
+| `tests/test_help_topics.py` | Темы `:? <тема>`: уникальность и наличие текста на каждом языке, алиасы (в т.ч. русские слова), неизвестная тема — ошибка со списком тем, `:?calc` — подсказка пробела, оглавление `main` покрывает реестр, подсказки после `:? ` |
 | `tests/test_stylesheet.py` | Стили — `src/app.tcss`: путь и наличие файла, Textual-синтаксис (`$surface`, `dock`), отсутствие `app.css` в коде/упаковке, попадание в wheel |
 | `tests/test_tag_query_hints.py` | Подсказки `?`: список тегов с числом команд и комментарием, фильтр, `??`/пробел не перебиваются, Tab без запуска, клик по строке выполняет запрос (путь по клику только вставляется), ссылка — только на `?tag` |
 | `tests/test_themes.py` | Тема `matrix` (палитра, выбор из settings.yml/`:theme`, класс `matrix-mode` и зелёные рамки только у неё, сохранение между запусками) и мягкая подсветка блока в фокусе |
@@ -180,7 +181,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.145 |
+| `src/app.py` | TUI (`CommandRunner`), v1.146 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -204,7 +205,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/history_store.py` | `history_<instance>.txt` append/read/compact, file locks; `append_history_file_lines` — пачка под одним lock’ом без дублей (импорт) |
 | `src/session_mailbox.py` | Пересылка команд между сессиями (`:send`): `inbox_<instance>.jsonl` 0600, append под lock / drain |
 | `src/session_registry.py` | Реестр активных сессий — `session_<instance>.pid` 0600: автоимя `:new` = наименьшее свободное `sN` среди работающих окон (устаревшие pid-файлы подчищаются) |
-| `src/help_texts.py` | Accessors for the `:?` / `:? run` / `:? calc` / `:i` help texts — files `src/locales/help/<lang>/{main,runbook,calc,ingress}.txt` via `i18n.text()` (`en` is the source of truth) |
+| `src/help_texts.py` | Реестр справки `:?`: `HELP_TEXTS` + `HELP_TOPICS` (канонические имена тем → текст: `calc`, `run`, `i`, `md`, `llm`, `tags`, `vars`, `kctx`, `send`, `session`), `help_topic()` (имена и алиасы → `i18n.text()`) — файлы `src/locales/help/<lang>/{main,runbook,calc,ingress,llm,tags,vars,md,kctx,send,session}.txt` (`en` — источник правды) |
 | `src/relang.py` | `:relang [code]` — перевод комментариев **уже засеянной** библиотеки (подписи тегов и подсказки команд) после смены языка, без повторного `--seed`: `_collect()` собирает канонический индекс из `seed_linux_commands` / `seed_k8s_chains` / `seed_git` / `seed_ops`, строка матчится по `(тег, команда)` (linux-дополнения — по `tid - 1`), правленый руками комментарий не трогается, снимок БД в `backups/` до записи; CLI `python3 src/relang.py --lang ru`. Тесты: `tests/test_relang.py` |
 | `src/i18n.py` | UI-language core: catalogue lookup (`t`/`tlist`) and long texts (`text("main")` → `locales/help/<lang>/*.txt`), language resolution (`--lang` → `$IDVJPY_LANG` → `settings.yml: language` → `en`; `auto` follows `$LANG`). Catalogues: `src/locales/<lang>.yml` plus parts in `src/locales/<lang>/*.yml` (`screensaver`, `seed`), deep-merged; `en` is the source of truth; missing keys fall back to `en`, unknown keys return themselves. Tests: `tests/test_i18n.py` (keys are strings — YAML reads bare `off`/`n`/`N` as bool; every language has all help texts and all `catalog.desc.*`) |
 | `src/example_config.py` | Локализованные шаблоны личных файлов: `available_settings_languages`/`available_llm_providers_languages`, `settings_example_path(lang)`, `llm_providers_example_path(lang)` (откат на `en`), `detect_language(explicit)` — `--lang` → `$IDVJPY_LANG` → системная локаль (auto) → `en`; шаблоны — `src/settings/<lang>.yml` и `src/llm_providers/<lang>.yml` |
@@ -221,6 +222,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.146
+
+- **Темы справки `:? <тема>`.** Общая `:?` разрослась до 358–366 строк на язык — группы команд переехали в отдельные тексты: `calc`, `run`, `i`, `md`, `llm` (+ `:cht`), `tags` (`?`/`!tag`/`!N`), `vars` (`$OUT`/`$VAR`/`$$`/алиасы), `kctx`, `send`, `session`. `src/help_texts.py` теперь реестр: `HELP_TEXTS` + `HELP_TOPICS` (каноническое имя → текст) и `help_topic(name)` с алиасами, включая русские слова (`calculator` / `калькулятор`, `runbook` / `playbook`, `k8s` / `ingress`, `ai`, `теги`, `secrets`, `mailbox`, `new` …). Разбор `:?` в `app.py` — через реестр: **неизвестная тема — явная ошибка со списком тем** (раньше молча показывалась общая справка), склеенное `:?calc` подсказывает пробел («`:? calc`, а не `:?calc`»), `:i` и `:? run` остались прежними точками входа. Любая тема рисуется одним путём `_add_help_block` (`escape_help_markup` + `linkify_colon_commands`) — раньше `:? calc` / `:i` шли без экранирования и линковки. Новое: `CommandRunner.get_help_completions` — после `:? ` Tab предлагает имена тем (в `cmd.?` они же перечислены). В `main` каждой локали — раздел «Темы справки» с оглавлением (сторожит `tests/test_help_topics.py`), в первой строке — указатель на темы. Тексты: `src/locales/help/<lang>/*.txt` (7 новых файлов × en/ru/zh); `ru/main.txt` 366→274, `en/main.txt` 358→270, `zh/main.txt` 366→273. Попутно исправлен разорванный перенос строки в `en/main.txt` («stripped, / progress»). Локали: `help.unknown_topic` / `help.topic_needs_space` (en/ru/zh), уточнён `cmd.?`. Доки: `README.md` и `docs/<lang>/README.md`, `CLAUDE.md`, эта таблица; ручной сценарий — секция 12 `test_cmd.md`. Тесты: `tests/test_help_topics.py` (10: реестр без дублей и с текстом на каждом языке, алиасы, неизвестная тема, `:?calc`, оглавление против реестра, показ темы с сохранием разметки и экранированием литеральных скобок, подсказки тем).
 
 ## v1.145
 

@@ -1,0 +1,17 @@
+[bold]:? kctx — cluster journal[/bold]
+
+  :kctx         - Cluster journal (kctx.json): list clusters; the variables from
+                `kctx_vars` in settings.yml are saved per cluster when set after
+                login. Default — the bundled stack: kubectl (NS POD DEPLOY SVC ING
+                APP CTR QUOTA) plus helm (RELEASE CHART VALUES); the order of the
+                names is the order in the :kctx lists. `kctx_vars: []` turns the
+                journal off and `:kctx` says so
+  :kctx <cluster> - Log in (klogin <c> || kubectl config use-context <c>) and
+                show previously used variable sets of that cluster; with exactly
+                one saved set it is applied right away (nothing to pick from).
+                The login runs WITHOUT command_timeout (tsh goes to the network;
+                a hung login is visible in the block and stops with F4 / :kill)
+  :kctx <cluster> N - Log in and apply saved set N
+  :kctx N       - Apply set N from the last shown list (:kctx N sets vars only)
+
+  Other topics and the full command list — :?

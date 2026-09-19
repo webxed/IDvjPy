@@ -5,7 +5,8 @@
   （字母过滤列表，Tab/Enter 插入命令；再按一次 Enter 执行）。
   点击下面的名称会把调用插入输入框 — 不会运行任何东西。
   `:/text` — 在日志中搜索。
-  :? [calc]   - 显示本帮助；`:? calc` — 完整计算器参考
+  命令组由主题详细讲解 — `:? <主题>`（列表见「帮助主题」）。
+  :? [topic]   - 显示本帮助；`:? llm`、`:? tags`、`:? calc` … — 完整讲解该主题
   :q          - 退出应用
   :w <file>   - 将输出写入文件
   :h [N]      - history_<instance>.txt 的最后 N 行（默认：20）
@@ -21,21 +22,9 @@
   :c          - 清空所有输出块
   :json       - 打开 JSON 查看器（来自最后一个块）
   :json <file>- 在查看器中打开 JSON 文件
-  :md <file|path>[#L<n>] - 以格式化方式打开 markdown：仓库手册名
-                或显式路径（例如来自 Obsidian 仓库的文件）；
-                `#L<n>` 打开到源文件第 n 行（类似 GitHub）。Esc 关闭。
-                会记入历史（↑ / `:h`）。`y` 复制完整路径（在
-                格式化视图中也可点击标题中的名称）。大于
-                `md_render_lines`（默认 1000）的文件会作为源文件在
-                Line-API 查看器中打开（快速；搜索 `/`、`n`/`N`）—
-                格式化组件在大文件上要花数十秒
-  :rg <pat> [dir] - 在 markdown 文件中搜索 regex（ripgrep 或内置
-                扫描器，会提示安装）。Smart case；结果为
-                可点击的 `path:line` 片段 — 在 md 查看器中打开
-                到该行；`:rg <N>` 打开第 N 个结果（从 1 开始）。基准：
-                [dir] → `md_dir` 设置 → cwd。`:rg` / `:md` 会记入
-                历史（↑ / `:h`）
-  :i          - Kubernetes Ingress 分析器（详情见 :i）
+  :md <file|path>[#L<n>] - 以格式化方式打开的 markdown 手册，`#L<n>` — 源文件第 n 行（:? md）
+  :rg <pat> [dir] - 按 regex 搜索 markdown 文件，结果可点击（:? md）
+  :i          - Kubernetes Ingress 分析器（:i — 命令，:? i — 详细）
   :cd [path]  - 显示或更改 shell 的 cwd（标签数据库 / 历史仍留在启动目录）
   :fm [path]  - 在新窗口中打开系统文件管理器（cwd 或 path）
   :term [path] - 在新窗口中打开系统终端（cwd 或 path）
@@ -51,29 +40,10 @@
                 会代入路径（例如 `:ed $TMPDIR/pod-$OUT.json`）；
                 未解析的 `$NAME` — 明确报错，而不是名为 `$NAME` 的文件。
   :env        - 将 .bashrc_term*（以及 ~/.bashrc 别名）重新读入本进程
-  :session    - 显示当前实例（历史 + .bashrc_term 文件）
-  :session NAME - 切换到该实例或创建它（标签数据库
-                共享）。当前会话名可见于应用顶部和
-                终端窗口/标签页标题（IDvjPy_term · NAME）。
-  :new [NAME|-] [DIR] - 在新的终端窗口中打开另一个应用实例：
-                各自独立的 .bashrc_term_<NAME> / history_<NAME>.txt，相同的
-                数据目录和标签数据库；DIR — 工作目录（默认
-                为数据目录）；`-`/不写名称 — 自动 `sN`，取正在
-                运行的窗口中最小可用的编号（注册表 session_<NAME>.pid）：已关闭
-                会话的文件不占用名称。不传递密钥。也可用
-                `:session new …`。在底部：Ctrl+N。
-  :send <session|*> <cmd> - 将命令转发到另一个应用会话（它自己的
-                窗口）：会插入到该会话的输入框（在那里按 Enter
-                执行它）。`:send!` 立即执行。`*` = 所有其他
-                会话。命令在此处具体化（$VAR/$OUT、别名）。
-                密钥 `$$` 按名称传递（`$TOKEN`）：目标没有的
-                值会写入它的密钥文件（secrets_<session>.json，
-                0600，该会话退出时清除），目标自己的值
-                绝不会被覆盖 — 因此命令确实在那里执行，
-                而信箱、历史和日志看不到该值。信箱为
-                数据目录中的 inbox_<session>.jsonl（0600）；发给
-                已停止会话的消息会等待它启动。在 `:send ` 之后，
-                Tab 会补全会话名。会记入历史（↑ / `:h`），但不会被提示
+  :session    - 显示或切换应用实例（标签数据库共享；:? session）
+  :new [NAME|-] [DIR] - 在新的终端窗口中打开另一个应用实例（Ctrl+N；:? session）
+  :send <session|*> <cmd> - 将命令转发到另一个会话（`:send!` — 立即；
+                密钥按名称传递，值写入目标自己的存储；:? send）
   :welcome      - 种子目录（如同空数据库时的欢迎语；点击 --seed / .md）
   :backup       - 将命令数据库复制到 backups/（与 --seed 相同的快照）
   :screensaver  - 空闲覆盖层：矩阵数字雨（screensaver_matrix，
@@ -116,56 +86,13 @@
                 （无聚焦时：最后两个块）
   :alias <tag> [file.sh] / :alias * [library.sh] - 将命令导出为
                 bash 函数 tag_tid() { ...; }
-  :llm          - 列出 llm_providers.yml 中的 LLM 提供方（示例在 src/）
-               在响应返回期间，块会旋转显示 `⠋ thinking… 3s / 60s`
-               （第二个数字 = 提供方超时），所以慢调用并非卡死
-  :llm offline <message> - 内置离线桩（mock：无网络、无密钥）；
-                在你定义自己的 `offline:` 之前，任何配置中都有
-  :llm <provider> <message> - 通过其 API 询问指定的 LLM（请求头/请求体
-                来自配置；密钥取自环境，例如 $DEEPSEEK_API_KEY）
-  :llm <message> - 询问默认提供方（llm_providers.yml 中的 `default:`）
-                $OUT — 聚焦/最后一个 CommandBlock 的最后一行非空内容
-                $BLOCK — 该块的完整 stdout（也可用 ${OUT} / ${BLOCK}）
-                @file — 附加文本文件（UTF-8，≤200 KB；多个：@a.py @b.log；
-                字面量 @ — @@）。大小限制：提供方的 max_attachment_bytes 键
-                上下文：提供方的 history_turns: N 键会在内存中为该会话
-                保留最近 N 对 user/assistant；:llm reset [<provider>|*] 清除它
-                占位符：%MSG%（JSON-safe）、%MSG_RAW%、%SYSTEM%、%MODEL%、%HISTORY%
-                在 `:llm ` 之后，Tab 会补全提供方名和 `ask`
-                代理 407：设置 $PROXY_USER / $PROXY_PASS（如同 :update）
-                回答为 markdown 并以格式化方式显示（`llm_render_markdown:
-                true`；纯文本仍然是 F3/|/$BLOCK/:w 复制的内容）。
-  :llm ask <task> - 任务 + 应用速查表 + 保存的标签
-                库会发送给提供方，因此回答可能是现成的
-                引用，如 `!kpod[1]` 或 `!! kpod[1] && klog[1]`。
-                只会建议存在的 tag[tid]（会添加
-                可点击的引用行；点击需要 terminal_mouse）。
-  :llm ask <provider> <task> - 同上，但询问该提供方而非
-                默认提供方（llm_providers.yml 中的 `default:`）。
-                普通 `:llm` 加提供方的 app_context 键时上下文相同：
-                app_context: true|N（N = 字符预算；无/false = 关闭）。
-  :cht <query>  - 日志中的 cheat.sh (cht.sh) 速查表：`:cht tar`、
-                `:cht python read file`（空格 → +）、`:cht ~snapshot`（搜索）、
-                `:cht go/:learn` / `:list`（特殊页面）。`?` 后的选项：
-                `Q` 不带注释，`T` 不带颜色（默认 `?T`）。基础
-                URL 和选项 — settings.yml 中的 `cheat_sh_url` / `cheat_sh_options`。
-                输出为普通块（$OUT、|、F3、F7、搜索）。
+  :llm [provider] <message> - 询问 LLM（提供方来自 llm_providers.yml，`ask`、
+                `offline`、`@file`、上下文；Tab — 名称）— 详见 :? llm
+  :cht <query>  - 日志中的 cheat.sh 速查表（`:cht tar`；选项）— :? llm
   :o [N]        - 本会话最近 N 个已完成的命令输出（默认 5）
   :o /text      - 在保存的输出（stdout/stderr）中 grep；能挺过 :c
   :o clear      - 忘记保存的输出（仅内存，非数据库）
-  :kctx         - 集群日志（kctx.json）：集群列表；settings.yml 中
-                `kctx_vars` 的变量若在登录后设置，则会按集群保存。
-                默认为内置栈：kubectl（NS POD
-                DEPLOY SVC ING APP CTR QUOTA）加上 helm（RELEASE CHART VALUES）；
-                名称顺序即 :kctx 列表中的顺序。`kctx_vars: []` 会关闭
-                日志，`:kctx` 会报告这一点
-  :kctx <cluster> - 登录（klogin <c> || kubectl config use-context <c>）并显示
-                该集群之前用过的变量集合；若恰好只有
-                一个已保存集合，则立即应用（无可选择）。
-                登录在无 command_timeout 下执行（tsh 会访问网络；卡住的
-                登录可见于块中，可通过 F4 / :kill 停止）
-  :kctx <cluster> N - 登录并应用已保存的集合 N
-  :kctx N       - 应用最近显示列表中的集合 N（:kctx N 只更改变量）
+  :kctx [cluster] [N] - 集群日志：登录与已保存的变量集合（:? kctx）
   :import file       - 从该 JSON 插入命令（新 tid）
   :theme [name] - 显示或设置 TUI 主题（保存在 settings.yml 中）
                `matrix` — 应用自带主题：近乎黑色上的绿色荧光
@@ -218,28 +145,15 @@
                stdin — /dev/null）。超时消息也会指向这里和 `> cmd`
   输出      - 命令的 ANSI 颜色会按颜色渲染（ansi_colors: true）；
                光标/OSC 转义码和控制字符会被去除，进度
-               重绘会折叠到最后一行 — 如同真正的
-               终端。纯文本（F3、|、$OUT/$BLOCK、:log、@key）绝不
-               包含转义码
+               重绘会折叠到最后一行 — 如同真正的终端。纯
+               文本（F3、|、$OUT/$BLOCK、:log、@key）绝不包含转义码
   #<tag>     - 将命令以标签保存到数据库（`#tag cmd`，`#` 后无空格）
   # command  - 将该行暂存到历史而不执行（bash 风格；`#` 后有空格）
   #tag! / #tag!tid - 恢复被软删除的标签 / 命令
   #name-- / #name!! - 隐藏 / 恢复手册标签（ansible、linux、k8s、…）
-  ?          - 查询数据库（? 标签、?<tag>、?? 带分组；?? 显示隐藏标签）
-               输入 `?` 会显示带提示的标签（命令数 + 标签注释）：
-               字母过滤，Tab/Enter 插入 `?tag`（再按 Enter 执行），
-               点击某行立即执行查询。`??` 保持原样。
-               ?text（2 个及以上字符，且不是已有标签）= 在所有
-               标签中搜索命令/注释；行：<id> tag[tid]；Esc → 输入框，然后 Enter 通过 !ID 执行
-               在 ?? 中点击标签 → 将 `!tag ` / `!tag[tid] ` 插入光标位置
-               （不替换整行；terminal_mouse）。Ctrl+点击或双击
-               `!tag[tid]` 会插入并立即执行（就好比输入引用并
-               按两次 Enter；不带 tid 的 `!tag ` 只会插入）。Esc → 输入框，
-               然后 Enter。
-  !tag / !tag[tid] - 输入 ! 以获得标签列表 [file, kube, log]；Tab 选择标签
-               然后命令显示为 `<id> tag[tid]  完整命令`；Tab 插入 `!tag[tid]`
-               组合管道/保存：`#file !file[1] | !file[2]`（预览会展开引用）
-  !N         - 按上次查询中的 ID 执行命令
+  ?          - 查询数据库（? 标签、?<tag>、?? 分组、?text — 搜索）— :? tags
+  !tag / !tag[tid] - 将数据库命令插入输入框（Tab 选择）— :? tags
+  !N         - 按上次查询中的 ID 执行命令（:? tags）
   |<cmd>     - 将聚焦（否则最后一个）块的输出管道到命令
   |@<label> <cmd> - 从带 `:name <label>` 标记的块管道
   |@N <cmd>  - 从往前第 N 个块管道（0 = 最后一个）。源不会重新运行；
@@ -248,29 +162,22 @@
                列出；`<label>-`：移除一个；`-`：移除全部）。F8 打开
                标签对话框。之后可以低成本复用其缓冲区：`:name buff` …
                `|@buff awk '{...}'`（无需重新运行 cat/kubectl）。
-  $OUT       - 按需：聚焦（或最后一个）命令块的最后一行非空内容。
-               不保存在 .bashrc_term 中。单独输入 $OUT
-               可以查看它。`$OUT=` 被拒绝。
-  $VAR=val   - 设置环境变量
-  $VAR=@key  - 从聚焦/最后一个已完成的块中取值：
-               取第一个 token 为 `key` 的行（vault 表格 `key  value`）；
-               `@last` — 最后一行。配合 `$$` 保存密钥：`$$VAULT_TOKEN=@token`。
-  $$VAR=val  - 设置密钥变量：值在输入行和
-               日志中隐藏（显示为 ****）；保存在 secrets_<instance>.json (0600)，
-               退出时删除（仅会话）；绝不发送给 :llm
-               （会掩码为 ****）。像 $VAR 一样使用。`$$VAR` — 状态，
-               `$$VAR-` — 删除。整个输入行会被掩码（名称可见于
-               副标题）；在真正的 TTY 中，`> cmd` 的值可见；F3 复制
-               真实输出。设置键 `clear_clipboard_after_secret: true`
-               会在值插入 `$$NAME=…` 后清空剪贴板。
-  别名     - 来自 ~/.bashrc。如果函数体中有 $1 / $2 / $@，参数会被代入
-               （klogin cluster → tsh kube login cluster）。否则行的剩余部分
-               会像经典别名那样追加。参数在
-               第一个 shell 操作符处结束：`klogin prod || kubectl config use-context prod`
-               会让 `||` 保持为操作符（它不会成为别名函数体的参数）。
+  $OUT       - 聚焦/最后一个块的最后一行非空内容（:? vars）
+  $VAR=val / $VAR=@key - 设置变量（也可取自块的输出）（:? vars）
+  $$VAR=val  - 密钥变量：secrets_<instance>.json，0600（:? vars）
+  别名       - 来自 ~/.bashrc；参数遵循别名规则（:? vars）
 
-[bold]帮助主题[/bold]
-  :? calc    - 计算器 + ipcalc 参考（语法、单位、百分比、IPv4 子网）
+[bold]帮助主题 (:? <主题>)[/bold]
+  :? calc    - 计算器 + ipcalc：语法、单位、百分比、IPv4 子网
+  :? run     - 命令链（runbook）：auto/manual/prompt 步骤、YAML、:playbook
+  :? i       - Kubernetes Ingress 分析器：list / ns / analyze / check
+  :? md      - markdown 手册（`:md`）及其搜索（`:rg`）
+  :? llm     - LLM 提供方（`:llm …`、`:llm ask`）、附件、:cht
+  :? tags    - 数据库查询：`?`、`?tag`、`??`、`?text` 与 `!tag[tid]` 引用
+  :? vars    - `$OUT`、`$VAR`、`$$` 密钥、~/.bashrc 别名
+  :? kctx    - 集群日志：登录与已保存的变量集合
+  :? send    - 将命令转发到另一个会话（`:send` / `:send!`）
+  :? session - 应用实例与窗口（`:session`、`:new`）
 
 [bold]导航[/bold]
   ↑/↓        - 翻看输入历史：本会话中输入的一切

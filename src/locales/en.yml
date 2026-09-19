@@ -93,7 +93,7 @@ hist:
   import_failed: "Not read: {paths}."
 
 cmd:
-  "?": "command help (:? calc — calculator reference)"
+  "?": "command help (:? — all; :? calc / run / i / md / llm / tags / vars / kctx / send / session — topics)"
   q: "quit the application"
   w: "write the last block output to a file"
   h: "history: :h [N], :h /text, :h compact"
@@ -139,3 +139,7 @@ cmd:
   playbook: "dump this session as a --demo YAML"
   run: "run a command chain (runbook): tag or YAML, wait for you where told"
   update: "compare VERSION with GitHub main"
+
+help:
+  unknown_topic: "No help topic '{topic}'. Topics: {topics}"
+  topic_needs_space: "Help topics take a space: `{example}` (not `{glued}`)"

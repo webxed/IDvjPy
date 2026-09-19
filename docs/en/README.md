@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.145 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.146 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -31,6 +31,7 @@ Launch: `python3 app.py` (launcher; code in `src/`). Tests: `python3 -m pytest t
 - Reading mode: if you scroll the journal up (wheel/PgUp) or focus a block, new output is appended at the bottom, but the view and focus do not move — neither `:watch`, nor the `:llm` answer, nor an incoming `:send`. Follow mode returns once you scroll to the bottom or run a command (Enter)
 - Autocompletion of paths, commands from the DB and lines of `history_*.txt` (including `@`/`>`; on/off — `history_completion`), and commands from this session. Invocations of `:` queries (`:llm`, `:cht`, `:rg`, `:md`, `:run`, `:send`) stay in history for ↑/`:h`, but are not suggested — the list is in `history_queries`
 - Quick hints for app commands: type `:` — a list of all `:` commands with a short description (filter by letters, `Tab`/`Enter` inserts `:command `, launch — with a separate Enter); `:/text` remains a journal search. In the `:?` help, command names are clickable links: a click inserts the invocation into the input (like `!tag` in `??` and `--seed` in `:welcome`)
+- Help topics: the main `:?` is an overview, details per command group live in `:? <topic>` (`:? llm`, `:? tags`, `:? calc`, `:? run`, `:? i`, `:? md`, `:? vars`, `:? kctx`, `:? send`, `:? session`; the topic list is in the "Help topics" section and in the hints after `:? `). An unknown topic is an explicit error listing the topics; a glued `:?calc` tells you to add a space
 - Tag hints while typing `?`: tag name, number of commands and the tag comment (`?vault  (2)  HashiCorp Vault`), filter by letters; clicking a row inserts `?tag` and immediately runs the query. Only the `?vault` command itself becomes a link (and is highlighted) — the counter and comment remain plain text
 - Line mode in block output (copying and appending to the input)
 - JSON viewer (F5) with a `jq` draft and `$JSON`
@@ -315,7 +316,7 @@ Aliases with `$1` / `$2` / `$@` substitute arguments (`alias klogin="tsh kube lo
 - `:relang [code]` — translate the comments of an **already seeded** library (tag captions and command hints in the DB) into another language without re-running `--seed`: without an argument — help, `:relang ru` — translate, `:relang auto` — by `$LANG`. It touches only canonical seed tags and commands; your tags, commands and **hand-edited** comments remain. Before writing — a DB snapshot into `backups/`. The same from the terminal: `python3 src/relang.py --lang ru [--db …]`
 - Highlighting of the focused block is soft: 25% of the theme's primary color over the block background (previously a solid `$primary-darken-1` was blinding, especially on a large `:?`); it works in any theme
 - `:kctx` — the cluster journal (`kctx.json`): a list of clusters; `:kctx <cluster>` — login (`klogin <c>` or `kubectl config use-context <c>`) and previously used `NS`/`POD`/… sets (with a single set it is applied right away: there is nothing to choose from); `:kctx N` — apply set N; `:kctx <cluster> N` — login and apply in one line. Which variables count as the journal — the `kctx_vars` key in settings.yml
-- `:?` — this help inside the TUI
+- `:?` — this help inside the TUI; `:? <topic>` — details for a command group (`:? llm`, `:? tags`, `:? calc`, `:? run`, `:? i`, `:? md`, `:? vars`, `:? kctx`, `:? send`, `:? session`; the topic list is in the help's "Help topics" section and in the hints after `:? `). An unknown topic is an explicit error listing the topics; a glued `:?calc` tells you to add a space
 
 ## Hotkeys
 
