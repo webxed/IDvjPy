@@ -1,0 +1,59 @@
+tags:
+  svars:
+    comment: ssh/scp 变量
+    commands:
+      0: 检查 $REMOTE/$KEY/$CERT/…
+  ssh:
+    comment: 'ssh: 配置、密钥、登录'
+    commands:
+      0: $HOST 生效的 ssh_config
+      1: 主机是否可用密钥到达
+      2: 主机密钥（用于 known_hosts）
+      3: 密钥和配置
+      4: agent 中的密钥
+      5: $KEY 的指纹
+      6: 在端口 $PORT 上检查
+      7: 远程命令 $CMD（无 TTY）
+      8: 连接调试
+      9: 是否存在 ControlMaster
+      10: '交互式登录（更好: > ssh $REMOTE）'
+      11: '带 TTY 登录（更好: > ssh -t $REMOTE）'
+      12: 安装公钥（会改动 authorized_keys）
+      13: ~/.ssh 目录
+      14: 尚无 $KEY 时生成 ed25519（空口令）
+      15: 'ed25519 提示输入口令（更好: > ssh-keygen …）'
+      16: 尚无 $KEY 时生成 RSA 4096
+      17: 从私钥 $KEY 打印公钥
+      18: 将 $KEY 加入 agent
+      19: OpenSSH 客户端版本
+      20: 密钥类型
+      21: 密钥交换
+      22: 加密算法
+      23: MAC
+      24: 配置和主机密钥
+      25: OpenSSH 证书文件
+      26: 'sshd: 密钥、证书、认证方式（通常需要 root）'
+      27: 完整解析证书 $CERT
+      28: 类型、CA、Valid from/to、principals
+      29: 剩余天数（GNU date；$CERT 是 *-cert.pub）
+  scp:
+    comment: 'scp: 通过 ssh 复制'
+    commands:
+      0: 本地 → $REMOTE
+      1: $REMOTE → 本地
+      2: 到端口 $PORT
+      3: 递归到 $REMOTE
+      4: 保留 mtime/权限
+      5: 详细
+  schk:
+    comment: ssh 检查（不登录）
+    commands:
+      0: ssh -G → BatchMode true → keyscan
+  ossh:
+    comment: 'OpenSSH: 版本和算法'
+    commands:
+      0: ssh -V → ssh -Q key → ls *cert*
+  ocert:
+    comment: OpenSSH 证书到期
+    commands:
+      0: summary -L → days_left

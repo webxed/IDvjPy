@@ -1,0 +1,82 @@
+tags:
+  pvars:
+    comment: 管道变量
+    commands:
+      0: 检查 $FILE/$SEP/$JSON/…
+  sort:
+    comment: 'sort: 行顺序'
+    commands:
+      0: 按字典序
+      1: 去重
+      2: 按数值
+      3: 人类可读大小（1K 2M）
+      4: 逆序
+      5: 数值，降序
+      6: 第 $N 字段（空格分隔）
+      7: 第 $N 字段，FS=$SEP
+      8: 按第 $N 字段去重
+  uniq:
+    comment: 'uniq: 相邻重复'
+    commands:
+      0: 合并连续重复
+      1: 计数
+      2: 仅重复项
+      3: 仅唯一项
+      4: 频率降序
+  cut:
+    comment: 'cut: 列'
+    commands:
+      0: 第 $N 字段，FS=$SEP
+      1: 第 1 和第 $N 字段
+      2: 第 1–3 字段
+      3: 前 80 个字符
+      4: 除 $N 外的所有字段
+  tr:
+    comment: 'tr: 字符（stdin）'
+    commands:
+      0: 删除 CR
+      1: 合并空格
+      2: 转小写
+      3: 转大写
+      4: 删除空格
+      5: 分隔符 $SEP → 行
+  wc:
+    comment: 'wc: 计数'
+    commands:
+      0: 行
+      1: 词
+      2: 字节
+      3: 行、词、字符
+      4: 最长行长度
+  xargs:
+    comment: 'xargs: 从行生成参数'
+    commands:
+      0: 每次 $N 个参数
+      1: '{} 替换'
+      2: 一次一个，空输入 — 什么都不做
+      3: 最多 4 个并行
+  tee:
+    comment: 'tee: stdout 和文件'
+    commands:
+      0: 写入 $DEST（会改动磁盘）
+      1: 追加 $DEST
+  jq:
+    comment: 'jq: JSON（文件或管道）'
+    commands:
+      0: 美化输出
+      1: 每个对象一行
+      2: 原始字符串
+      3: 对象键 / 索引
+      4: 长度
+      5: 根类型
+      6: 路径 $JSON（来自 F5 Enter）
+      7: 路径 $JSON，原始
+      8: 是合法 JSON?
+  ucount:
+    comment: '行频率: sort | uniq -c'
+    commands:
+      0: sort | uniq -c | sort -nr
+  jprev:
+    comment: JSON 概览
+    commands:
+      0: 键 → 长度 → 类型

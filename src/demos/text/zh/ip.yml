@@ -1,0 +1,28 @@
+title: 我的 IP 与 Wiki 国家
+captions:
+  0: 注释 —— API 变量
+  1: API 变量
+  2: 注释 —— Wiki 基础
+  3: Wiki 基础 ISO 3166-1（片段
+  4: 注释 —— curl
+  5: 对 $MY_IP_SVC 执行 curl
+  6: 聚焦 curl 块（管道来源）
+  7: 注释 —— jq .cc
+  8: 从块管道 —— 国家代码
+  9: Tab —— 带国家代码的块
+  10: F2 —— 行光标
+  12: Enter —— 把代码复制到缓冲区
+  13: 注释 —— Wiki 链接
+  14: 输入 echo -e，把代码粘贴到 URL 末尾
+  17: 注释 —— hello[1]
+  18: 把 curl 保存进 hello 标签
+  19: 注释 —— hello[2]
+  20: jq —— 完整国家名称
+  21: 注释 —— hello[3]
+  22: 引用 hello[2] 的问候模板
+  23: 注释 —— hello 列表
+  24: hello 标签库
+  25: 注释 —— 由标签构建的管道
+  26: 由标签构建的管道
+  28: 注释 —— 通过 $OUT 的 Hello
+  29: echo Hello, $OUT

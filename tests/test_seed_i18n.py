@@ -63,8 +63,17 @@ def _en_files() -> list[pathlib.Path]:
     return sorted((SEED_TEXT_DIR / "en").glob("*.yml"))
 
 
-def test_en_seed_text_covers_every_inline_comment():
-    index = load_seed_text("en")
+def _seed_text_languages() -> list[str]:
+    """Языки слоя `seed_text/<lang>/` (en, zh, …)."""
+    if not SEED_TEXT_DIR.is_dir():
+        return []
+    return sorted(p.name for p in SEED_TEXT_DIR.iterdir() if p.is_dir())
+
+
+@pytest.mark.parametrize("lang", _seed_text_languages())
+def test_seed_text_covers_every_inline_comment(lang):
+    """У каждого языка слоя переведён **каждый** встроенный комментарий сида."""
+    index = load_seed_text(lang)
     missing: list[str] = []
     for (tag, position), _comment in _inline_comments().items():
         block = index.get(tag) or {}
@@ -75,7 +84,7 @@ def test_en_seed_text_covers_every_inline_comment():
         commands = block.get("commands") or {}
         if not str(commands.get(position) or "").strip():
             missing.append(f"{tag}[{position}]")
-    assert not missing, f"нет английского текста: {sorted(missing)}"
+    assert not missing, f"нет текста {lang}: {sorted(missing)}"
 
 
 def test_en_seed_text_has_no_cyrillic():
@@ -91,16 +100,18 @@ def test_en_seed_text_has_no_cyrillic():
     assert not bad, f"кириллица в seed_text/en: {bad}"
 
 
-def test_every_tag_lives_in_exactly_one_file():
+@pytest.mark.parametrize("lang", _seed_text_languages())
+def test_every_tag_lives_in_exactly_one_file(lang):
+    """Тег встречается ровно в одном файле языка (иначе индекс перезапишется)."""
     seen: dict[str, str] = {}
     clashes: list[str] = []
-    for path in _en_files():
+    for path in sorted((SEED_TEXT_DIR / lang).glob("*.yml")):
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         for tag in (data.get("tags") or {}):
             if tag in seen:
                 clashes.append(f"{tag}: {seen[tag]} + {path.name}")
             seen[tag] = path.name
-    assert not clashes, f"тег встречается дважды (индекс перезапишется): {clashes}"
+    assert not clashes, f"[{lang}] тег встречается дважды: {clashes}"
 
 
 def test_unknown_language_falls_back_to_inline_text():

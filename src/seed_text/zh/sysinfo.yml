@@ -1,0 +1,49 @@
+tags:
+  hivars:
+    comment: hostinfo / lsof / strace 变量
+    commands:
+      0: 检查 $PID/$PORT/$CMD/…
+  hinfo:
+    comment: 'host: 内核、时间、内存、CPU'
+    commands:
+      0: 内核和主机名
+      1: 发行版
+      2: hostname / machine-id
+      3: 时钟和 NTP
+      4: 运行时间和负载
+      5: RAM / swap
+      6: CPU
+      7: CPU 核数
+  lsof:
+    comment: 'lsof: 文件、端口、PID'
+    commands:
+      0: 谁监听 TCP $PORT
+      1: $PORT 上的套接字
+      2: 进程 $PID 的文件
+      3: 谁打开了 $FILE
+      4: 名为 $PROC 的进程
+      5: 前 40 个 TCP 监听
+      6: 用户 $USER 的文件
+  strace:
+    comment: 'strace: 系统调用'
+    commands:
+      0: strace 版本
+      1: $CMD 的系统调用摘要
+      2: 摘要，含子进程
+      3: 过滤器 $TRACE 的摘要
+      4: 跟踪 $CMD（短命令）
+      5: $PID 的摘要，8 秒（需要 ptrace）
+      6: 对 $PID 应用过滤器 $TRACE，8 秒
+      7: '跟随 $PID（更好: > strace -p $PID）'
+  hstat:
+    comment: 主机概览
+    commands:
+      0: uname → uptime → free
+  lport:
+    comment: 谁监听 $PORT
+    commands:
+      0: 监听 TCP → $PORT 上的所有套接字
+  pdbg:
+    comment: '进程: lsof + strace -c'
+    commands:
+      0: lsof -p → timeout strace -c -p

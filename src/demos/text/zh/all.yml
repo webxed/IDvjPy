@@ -1,0 +1,53 @@
+title: IDvjPy —— 一次跑完
+captions:
+  0: '第一幕。自行计算：计算器与 ipcalc，不启动 shell'
+  1: '算术：1024*3（块标记为 calc:）'
+  2: '数据单位：512Mi + 20% in Gi'
+  3: '百分比：20% of 512Mi'
+  4: 'ipcalc：192.168.1.0/24 —— 与 jodies.de/ipcalc 上的一样'
+  5: 'ipcalc：300 hosts —— 选择掩码'
+  6: '主机：8.8.8.8 —— 地址、掩码、反向名称'
+  7: 第二幕。日志是一组块，不是流水账
+  8: '从块管道：| grep 7'
+  9: '输出中的 JSON：Tab → F5 —— 树'
+  11: ↓ —— 选择节点
+  12: Enter —— $JSON 与 | jq 草稿进入输入
+  13: Enter —— 草稿已对块执行
+  14: '显式管道：| jq 作用于聚焦的块'
+  15: '输出记忆：:o /CrashLoop —— 在过往命令的 stdout 上 grep'
+  16: 第三幕。标签是带命令模板的变量
+  21: ?chain[1] —— 预览引用如何展开
+  22: ?? —— 带注释的整个库
+  23: '!api[1] —— 只插入，尚未执行'
+  24: Enter —— 执行组装的行
+  25: '!! —— 用两个标签组装一行'
+  27: '编辑模板：#api+1 把命令放进输入'
+  30: '#api=2=comment —— 针对某条命令的注释'
+  31: '软删除：#api-1，用 #api!1 恢复'
+  34: ':mv tmp[1] logs —— 在标签之间移动命令'
+  36: ':stats —— 库摘要'
+  37: ':export * library.md —— 目录导出为 Markdown'
+  38: ':alias api run.sh —— 把标签当作 bash 函数'
+  39: '第四幕。会话：变量、历史、diff、watch'
+  41: ':env —— 重新读取 .bashrc_term 与别名'
+  42: ':h 8 —— shell 历史合并到单个块'
+  43: ':c 清空日志……'
+  44: '……但 :o /CrashLoop 仍能找到旧的输出'
+  45: '比较输出：两个版本'
+  47: ':diff —— 统一 diff（-b / +B）'
+  48: ":r 1 —— 把块的命令送回输入"
+  49: ':watch 1 date +%s —— 在单个块中跳动'
+  50: ':watch stop —— 停止它'
+  51: '@ sleep 60 —— 不带超时的命令'
+  52: 'F4 —— 向进程组发送 SIGTERM'
+  53: ':backup —— 把 SQLite 快照到 backups/'
+  54: ':kctx —— 从日志取集群与变量快照'
+  55: ':screensaver 120 / 0 —— 屏保前的空闲时间'
+  57: '# comment —— 不执行，只把一行写入历史'
+  58: '第五幕。LLM：:llm —— 提供方（内置离线，无需密钥）'
+  59: ':llm <provider> <message> —— 无需密钥与网络的回复'
+  60: ':llm ask —— 任务 + 应用速查与标签摘要（app-ctx）'
+types:
+  58: :llm
+  59: :llm offline 你好！用一行回答。
+  60: :llm ask offline 找到 api 的 pod 并显示日志

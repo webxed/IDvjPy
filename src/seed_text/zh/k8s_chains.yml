@@ -1,0 +1,134 @@
+tags:
+  kvars:
+    comment: 事故排查变量
+    commands:
+      0: 检查 $NS/$POD/…/$QUOTA
+  kns:
+    comment: 集群 / 命名空间
+    commands:
+      0: 当前 context
+      1: 所有 context
+      2: 列出命名空间
+      3: 命名空间 $NS 的 yaml
+      4: 命名空间内 API
+      5: 节点 wide（版本/OS/地址）
+      6: 我在 $NS 中的权限
+  kpod:
+    comment: $NS 中的 pod
+    commands:
+      0: 所有 pod wide
+      1: 非 Running
+      2: pod $APP
+      3: describe $POD
+      4: json $POD → F5
+      5: 容器状态
+      6: pod 指标
+      7: node / podIP / hostIP
+      8: $POD 的 phase / reason / message
+      9: 重启 / node / IP（摘要）
+  klog:
+    comment: 日志 $POD（不跟随）
+    commands:
+      0: 日志 $POD
+      1: 容器日志 $CTR
+      2: 之前的日志
+      3: 日志 $APP
+      4: grep 错误
+  kev:
+    comment: 事件 $NS / $POD
+    commands:
+      0: 所有事件
+      1: 事件 $POD
+      2: 仅 Warning
+      3: 'kubectl events: Warning（1.23+）'
+      4: $POD 的 kubectl events
+  ksvc:
+    comment: service 和 endpoints
+    commands:
+      0: svc + endpoints
+      1: describe $SVC
+      2: endpoints yaml
+      3: endpointslice $SVC
+      4: NetworkPolicy
+  king:
+    comment: ingress（紧邻 :i）
+    commands:
+      0: 列出 ingress
+      1: describe $ING
+      2: json $ING → F5
+  kdep:
+    comment: deploy / rs / rollout
+    commands:
+      0: $NS 中的工作负载
+      1: describe $DEPLOY
+      2: json $DEPLOY → F5
+      3: rollout 状态
+      4: rollout 历史
+      5: ReplicaSet $APP
+  kres:
+    comment: 配额 / 限制 / 空闲资源
+    commands:
+      0: 列出 ResourceQuota
+      1: describe compute-resources
+      2: describe $QUOTA
+      3: 所有配额 json → F5 / kjq
+      4: compute-resources json
+      5: $NS 中的 LimitRange
+      6: LimitRange yaml
+      7: 节点指标（metrics-server）
+      8: 节点上可分配的 CPU/MEM/pod
+      9: 关于 quota/limit 的事件
+  kjq:
+    comment: 对块 stdout 用 jq
+    commands:
+      0: pod 列表 → name/phase/restarts
+      1: 容器状态
+      2: conditions
+      3: 镜像 / resources
+      4: 从 endpoints 取 IP
+      5: ingress 规则
+      6: 配额已用对比硬限制（列表或单个对象）
+  kavail:
+    comment: 'HPA / PDB: 扩缩容和中断'
+    commands:
+      0: 'HPA: 当前/目标指标'
+      1: describe $NS 中的 HPA
+      2: 'PDB: 允许的中断'
+      3: describe $NS 中的 PDB
+      4: json PDB → F5
+  kstore:
+    comment: 'PVC / PV: 卷'
+    commands:
+      0: $NS 中的 PVC
+      1: 'PVC: 卷 / storageclass'
+      2: describe PVC（Pending?）
+      3: json PVC → F5
+      4: 'PV: 状态/claim（集群）'
+  kcrash:
+    comment: 'pod 非 Running: describe → 之前的日志 → 事件'
+    commands:
+      0: CrashLoop / ImagePull / OOM
+  knet:
+    comment: svc / endpoints / 应用 pod
+    commands:
+      0: endpoints 为 0 / 无流量
+  kroll:
+    comment: deploy + 状态 + rs
+    commands:
+      0: rollout 卡住
+  kwatch:
+    comment: wide + 警告
+    commands:
+      0: $NS 中发生了什么
+  kquota:
+    comment: ResourceQuota + LimitRange + 节点
+    commands:
+      0: 配额 / 限制 / 可分配
+  kscale:
+    comment: 负载下的 HPA / PDB / 指标
+    commands:
+      0: 未扩缩 / 中断
+  kvolume:
+    comment: PVC / PV / 事件 — 卷未绑定
+    commands:
+      0: Pending / 无卷

@@ -1,0 +1,57 @@
+tags:
+  sysvars:
+    comment: systemd 变量
+    commands:
+      0: 检查 $UNIT/$SINCE/$BOOT
+  sctl:
+    comment: 'systemctl: unit、状态、启动/停止'
+    commands:
+      0: 失败的 unit
+      1: 失败的 service
+      2: $UNIT 状态
+      3: $UNIT 属性
+      4: $UNIT unit 文件
+      5: $UNIT 活动/非活动
+      6: $UNIT 已启用/已禁用
+      7: 运行中的 service
+      8: 定时器
+      9: 重新加载 unit 文件
+      10: 重新加载 $UNIT（会改动服务）
+      11: 重启 $UNIT（会改动服务）
+      12: 启动 $UNIT（会改动服务）
+      13: 停止 $UNIT（会改动服务）
+      14: 重置 $UNIT 的失败状态
+  jctl:
+    comment: 'journalctl: systemd 日志'
+    commands:
+      0: 最近 80 行
+      1: 错误
+      2: $UNIT 的日志
+      3: $UNIT 的错误
+      4: $UNIT 自 $SINCE 起的日志
+      5: 列出启动记录
+      6: 启动 $BOOT 的日志
+      7: 内核（类似 dmesg）
+      8: 日志磁盘占用
+      9: JSON $UNIT → F5
+      10: '跟随 $UNIT（更好: > journalctl -f -u $UNIT）'
+  dmesg:
+    comment: 'dmesg: 内核环形缓冲区'
+    commands:
+      0: 最近 80 行
+      1: 人类可读时间
+      2: err+warn
+      3: 仅 err
+      4: '跟随（更好: > dmesg -w）'
+  sfail:
+    comment: 失败的 systemd unit
+    commands:
+      0: --failed → list-units failed
+  sstat:
+    comment: 'unit 概览: 状态 + 日志'
+    commands:
+      0: 状态 → is-active → journal -u
+  kmsg:
+    comment: 内核消息
+    commands:
+      0: dmesg err/warn → journalctl -k

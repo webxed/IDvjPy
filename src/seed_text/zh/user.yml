@@ -1,0 +1,38 @@
+tags:
+  uvars:
+    comment: 用户和权限变量
+    commands:
+      0: 检查 $USER/$FILE/$MODE/…
+  ident:
+    comment: id、getent、last、sudo
+    commands:
+      0: 当前 uid/gid
+      1: 账户 $USER
+      2: 名称
+      3: $USER 的组
+      4: passwd $USER
+      5: 组 $GROUP
+      6: 最近登录
+      7: 失败登录（通常需要 root）
+      8: lastlog，tail
+      9: 无密码 sudo -l（可能失败）
+      10: 'sudo -l（更好: > sudo -l）'
+      11: 谁在系统上
+      12: 会话
+  perm:
+    comment: chmod / chown / stat
+    commands:
+      0: $FILE 的元数据
+      1: 权限和所有者
+      2: 路径链
+      3: ACL（如果存在）
+      4: 当前 umask
+      5: chmod $MODE（会改动文件）
+      6: 递归 chmod
+      7: 所有者 $OWNER
+      8: 所有者和组
+      9: 组 $GROUP
+  uidchk:
+    comment: '我是谁: id + groups + sudo'
+    commands:
+      0: id → groups → sudo -n -l

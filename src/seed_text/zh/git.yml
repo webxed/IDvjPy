@@ -1,0 +1,66 @@
+tags:
+  gvars:
+    comment: git 变量
+    commands:
+      0: 检查 $BRANCH/$COMMIT/…
+  git:
+    comment: 'git: 状态、差异、分支、远程、暂存'
+    commands:
+      0: 完整状态
+      1: 短状态
+      2: 未暂存差异
+      3: 已暂存差异
+      4: 全部本地改动对比 HEAD
+      5: 最近 20 次提交
+      6: 分支图
+      7: 最近提交及文件列表
+      8: 提交 $COMMIT
+      9: blame $FILE
+      10: 本地分支及跟踪
+      11: 本地和远程分支
+      12: 切换分支 $BRANCH
+      13: 创建并切换 $BRANCH
+      14: 将 $BRANCH 合并到当前分支
+      15: rebase 到 $BRANCH
+      16: 远程仓库
+      17: 拉取所有远程
+      18: 以 rebase 方式 pull
+      19: 推送当前分支
+      20: 推送并设置上游
+      21: force-with-lease（不用 --force）
+      22: 'index: 全部改动'
+      23: 'index: $FILE'
+      24: 丢弃 $FILE 中的改动（未暂存）
+      25: 取消暂存 $FILE
+      26: 以消息 $MSG 提交
+      27: 修正最近一次提交
+      28: 暂存包括未跟踪文件
+      29: 列出 stash
+      30: 应用最近的 stash
+      31: 最近 stash 的差异
+      32: 撤销提交，改动保持暂存
+      33: 回退提交 $COMMIT
+      34: cherry-pick $COMMIT
+      35: reflog
+      36: 列出标签
+      37: 谁提交了多少
+      38: clean 将删除什么（dry-run）
+      39: '交互式 add（更好: > git add -p）'
+      40: 取消暂存全部
+      41: '交互式 rebase（更好: > git rebase -i HEAD~5）'
+  gstat:
+    comment: 仓库概览
+    commands:
+      0: status -sb → 分支 → log
+  gdiff:
+    comment: 未暂存 + 已暂存差异
+    commands:
+      0: diff 和 diff --cached
+  gsync:
+    comment: fetch + status
+    commands:
+      0: fetch --all --prune → status → log
+  gundo:
+    comment: 撤销前检查（不 reset）
+    commands:
+      0: reflog + status；手动 reset

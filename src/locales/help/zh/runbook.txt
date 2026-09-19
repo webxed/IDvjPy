@@ -1,0 +1,60 @@
+[bold]运行手册 — 半自动命令链 (:run)[/bold]
+
+一个命令链条，多条命令：auto 步骤依次执行并等待，
+而命令链在需要取值或决策的地方停下并等待你。
+
+[bold]用法[/bold]
+  :run <tag>              - 按 tid 顺序执行该标签的步骤（模式来自 run: 指令）
+  :run <tag> --step       - 单步：每一步都等待你按 Enter
+  :run chain.yml          - 从 YAML 读取步骤（步骤中的 manual: / prompt:）
+  :run <tag|file> --dry   - 显示计划，不执行任何内容
+  :run stop               - 停止命令链（等同 Esc）
+  :run                    - 用法 + 带 run: 指令的标签
+
+[bold]步骤模式[/bold]
+  auto   - 该行插入到输入框，执行并等待；exit ≠ 0
+           会停止命令链（除非该步骤声明 run:continue）
+  manual - 该行插入后命令链等待：可按需修改再按
+           Enter（空 Enter 跳过该步骤；Esc 停止命令链）
+  prompt - 输入为空：请完整输入整行并按下 Enter（例如一个取值
+           或整行 `$$VAULT_TOKEN=…` — 密钥保持掩码显示）
+
+[bold]标签命令注释中的指令[/bold]（开头的词元；其余部分 —
+在 ?? 中显示的提示 — 例如 `#vapprole=5=run:manual issue secret_id`）：
+  run:auto | run:manual | run:prompt
+  run:pause=SEC      - 该步骤之后的暂停
+  run:continue       - 该步骤失败不会停止命令链
+  run:stop           - 失败时停止（默认）
+标签注释中的指令为该标签的所有步骤设定默认值（暂停、失败
+策略）；步骤模式始终取自命令自身的注释。
+完全没有 run: 指令的标签会在计划中得到警告 — 否则每一步
+都会以 auto 执行，包括变更操作；请把变更步骤标记为 run:manual。
+`--step` 会去掉这条提示（每一步本来都会等待你按 Enter）。
+
+[bold]YAML 源文件[/bold]（`:playbook` 会写出兼容文件）
+  title: vault approle
+  pause: 0.3                 # auto 步骤之间的暂停
+  steps:
+    - echo one               # 字符串 = auto 步骤
+    - type: vault read …     # 同上，展开写法
+      wait_command: true
+    - type: $ROLE=            # 前缀行：在 = 之后补写值
+      manual: true           # 等待 Enter（该行已预填）
+      caption: role name     # 计划与步骤标题中的提示
+    - prompt: AppRole name   # 等待从零输入的整行
+    - echo checked
+
+YAML 路径相对于进程的 cwd（用别名从家目录启动时 —
+家目录就是它）；标签存放在数据目录的数据库中，因此跨会话更可靠。
+`:playbook` 还会把 playbook.yml 写入 cwd。
+
+[bold]执行期间[/bold]
+  副标题显示 `RUN <chain> · 3/8 · manual · Esc stops`；计划
+（含各模式）会先打印到日志。Esc 停止命令链；正在执行的
+命令通过 F4 / :kill 停止。`:run` 的调用会记录到
+history_<instance>.txt（↑ / :h），但不进入提示，而运行手册插入的步骤
+不会被 `:playbook` 记录。
+
+命令链不是导览：步骤是真正执行的，在同一个会话和日志中，
+每一个都能看到自己的输出。交互式程序（`htop`、会询问密码的
+`vault login`）不是运行手册的步骤；请对它们使用 `> cmd`。

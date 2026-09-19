@@ -43,17 +43,19 @@ def _flatten(node, prefix: str = "") -> dict[str, str]:
     return flat
 
 
-def test_both_languages_are_available():
-    assert set(i18n.available_languages()) >= {"en", "ru"}
+def test_expected_languages_are_available():
+    assert set(i18n.available_languages()) >= {"en", "ru", "zh"}
 
 
-def test_ru_covers_every_en_key():
+@pytest.mark.parametrize("lang", [c for c in i18n.available_languages() if c != "en"])
+def test_every_language_covers_every_en_key(lang):
+    """Каждая поставляемая локаль покрывает `en` ровно (ключ в ключ, без лишних)."""
     en = _flatten(i18n._load_catalog("en"))
-    ru = _flatten(i18n._load_catalog("ru"))
-    missing = sorted(set(en) - set(ru))
-    unknown = sorted(set(ru) - set(en))
-    assert not missing, f"ru.yml не переводит: {missing}"
-    assert not unknown, f"ru.yml содержит лишние ключи: {unknown}"
+    other = _flatten(i18n._load_catalog(lang))
+    missing = sorted(set(en) - set(other))
+    unknown = sorted(set(other) - set(en))
+    assert not missing, f"{lang}.yml не переводит: {missing}"
+    assert not unknown, f"{lang}.yml содержит лишние ключи: {unknown}"
 
 
 def _bare_keys(node, prefix: str = "") -> list[str]:
@@ -172,13 +174,20 @@ def test_screensaver_locale_matches_builtin_fallback():
 
 
 def test_every_language_has_help_texts():
-    """Справка `:?` — файлами: у каждого языка есть все четыре текста."""
+    """Справка `:?` — файлами: у каждого языка есть все четыре **своих** текста.
+
+    Проверяем существование файла, а не `i18n.text()`: тот откатывается на `en`,
+    поэтому отсутствие перевода он бы не заметил.
+    """
     from help_texts import HELP_TEXTS
 
     for lang in i18n.available_languages():
-        i18n.set_language(lang)
         for name in HELP_TEXTS:
-            assert i18n.text(name).strip(), f"нет справки: {lang}/{name}.txt"
+            path = i18n.LOCALES_DIR / i18n.HELP_DIR_NAME / lang / f"{name}.txt"
+            assert path.is_file(), f"нет справки: {lang}/{name}.txt"
+            assert path.read_text(encoding="utf-8").strip(), (
+                f"пустая справка: {lang}/{name}.txt"
+            )
 
 
 def test_seed_catalog_descriptions_are_translated():

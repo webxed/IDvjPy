@@ -1,0 +1,50 @@
+tags:
+  vvars:
+    comment: vault 变量（不打印 token）
+    commands:
+      0: 检查 $VAULT_ADDR/$SECRET/…；token=set|unset
+  vault:
+    comment: 'vault: 状态、认证、kv 元数据'
+    commands:
+      0: sealed / HA / 版本
+      1: 状态 JSON → F5
+      2: health（需要地址）
+      3: 不用 CLI 的 health HTTP（通常无需 token）
+      4: 认证方式
+      5: 密钥引擎
+      6: 策略
+      7: 策略文本 $POLICY
+      8: 审计设备
+      9: '当前 token: ttl、策略（不是 token 本身）'
+      10: lookup JSON → F5
+      11: 挂载点 $MOUNT 上的键
+      12: $SECRET 中的键
+      13: KV 元数据（不含值）
+      14: 元数据 JSON → F5
+      15: 读取 secret（会进入日志）
+      16: 单个字段 $FIELD
+      17: Raft peers（HA）
+      18: autopilot
+      19: AppRole $ROLE
+      20: '登录（更好: > vault login）'
+      21: 写入字段（会改动 Vault）
+  vstat:
+    comment: Vault 概览
+    commands:
+      0: 状态 → health HTTP → 认证 → 引擎
+  vkv:
+    comment: 不含值的 KV 检查
+    commands:
+      0: kv list $SECRET → metadata get（不是 kv get）
+  vapprole:
+    comment: 'AppRole: 链式登录（值是 `$$…=@key`；用 `:run vapprole` 运行）'
+    commands:
+      0: 'run:manual 来自 vault.website 的 token: 在 = 后插入值'
+      1: 'run:manual AppRole 名称: 在 = 后输入（如 custom-role）'
+      2: run:auto 从表格输出取 role_id
+      3: 'run:auto 密钥: 取上一个块中的 role_id'
+      4: run:manual 签发 secret_id — 用 Enter 确认
+      5: 'run:auto 密钥: 取上一个块中的 secret_id'
+      6: run:auto login → token
+      7: 'run:auto 密钥: 将 `$VAULT_TOKEN` 更新为 approle token'
+      8: run:auto 用新 token 检查访问

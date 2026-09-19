@@ -1,0 +1,28 @@
+tags:
+  fvars:
+    comment: find 变量
+    commands:
+      0: 检查 $SRC/$PATTERN/…；pattern 是 glob（-name）
+  find:
+    comment: 'find: 文件、glob、时间、大小'
+    commands:
+      0: 文件
+      1: 目录
+      2: glob $PATTERN
+      3: 不区分大小写 glob
+      4: 按 glob 匹配文件
+      5: 最近 $DAYS 天内修改
+      6: 早于 $DAYS 天
+      7: 大于 $SIZE（如 100M）
+      8: 空文件和目录
+      9: 符号链接
+      10: 类似 ls -dils
+      11: 20 个最大文件
+      12: 前 50 个路径
+      13: 有多少文件
+      14: 搜索时排除 .git/.venv/node_modules
+      15: 删除找到的（不在 playbook 中）
+  fchk:
+    comment: 按 glob 搜索文件
+    commands:
+      0: type f -name → wc -l（不用 -delete）

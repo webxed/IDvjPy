@@ -1,0 +1,27 @@
+tags:
+  rvars:
+    comment: rsync 变量
+    commands:
+      0: 检查 $SRC/$DEST/$REMOTE/…
+  rsync:
+    comment: 'rsync: dry-run、复制、ssh'
+    commands:
+      0: 列出源，不复制
+      1: dry-run 归档
+      2: dry-run + itemize-changes
+      3: 带 --delete 的 dry-run
+      4: 带 exclude 的 dry-run
+      5: dry-run 到 $REMOTE
+      6: 从 $REMOTE dry-run
+      7: 本地复制
+      8: 带压缩的复制
+      9: 进度 + 断点续传
+      10: 带 exclude 的复制
+      11: 到 $REMOTE（ssh）
+      12: 从 $REMOTE（ssh）
+      13: 限速约 5 MB/s
+      14: 复制并在目标删除多余项（不在 playbook 中）
+  rchk:
+    comment: rsync 检查（dry-run）
+    commands:
+      0: 仅列出 → itemize dry-run（不带 --delete）

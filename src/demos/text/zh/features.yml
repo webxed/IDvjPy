@@ -1,0 +1,23 @@
+title: IDvjPy —— 新命令 v1.44
+captions:
+  0: 新内容 —— 以示例保存几条命令
+  3: '内容搜索：?text —— 没有宽泛的标签，于是搜索命令文本'
+  4: '精确标签仍和以前一样：?deploy'
+  5: '在标签之间移动命令：:mv deploy[1] kube'
+  6: 现在 kubectl get pods 存放在 kube 标签里
+  7: '库统计：:stats —— 还没有执行过任何命令'
+  8: 把保存的命令执行两次（使用计数）
+  10: ':stats —— echo run-me 以 2× 居首，mine 标签已更新'
+  11: '停止长命令：@ sleep 60（无超时），然后按 F4'
+  12: F4 向进程组发送 SIGTERM
+  13: '块被标记为：Process stopped by user.（exit 143）'
+  14: '监控：:watch 1 date +%s —— 在单个块中跳动'
+  15: '停止 watch：:watch stop（或 F4 / :c）'
+  16: '比较输出：:diff —— 输出的第一个版本'
+  18: ':diff —— 两个块的统一 diff（-b / +B）'
+  19: '往前第 N 个块的命令：:r 1 把 printf ''a\nb\nc\n'' 放进输入'
+  20: '会话输出历史：执行一条命令……'
+  21: ':c 清空日志…… 但不清理输出记忆'
+  22: ':o /needle-42 即使在 :c 之后也能找到旧的输出'
+  23: '整个目录导出为 Markdown：:export * library.md'
+  24: '把标签当作 bash 函数：:alias mine run.sh'

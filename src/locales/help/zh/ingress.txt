@@ -1,0 +1,24 @@
+[bold]Kubernetes Ingress 分析器[/bold]
+
+[bold]用法:[/bold]
+  :i list                   - 列出 ingress（若已设置则使用 $NS）
+  :i list -n <namespace>    - 列出 namespace 中的 ingress（保存到 $NS）
+  :i ns <namespace>         - 描述 namespace（JSON 查看器）
+  :i analyze <name>         - 分析 ingress（若已设置则使用 $NS）
+  :i analyze <name> -n <ns> - 在 namespace 中分析（保存到 $NS）
+  :i check <service>        - 检查服务端点（使用 $NS）
+  :i check <service> -n <ns>- 在 namespace 中检查（保存到 $NS）
+
+[bold]namespace 保存:[/bold]
+  指定 -n 时，namespace 会保存到 $NS 变量。
+  之后不带 -n 的命令会自动使用 $NS。
+
+[bold]分析内容包括:[/bold]
+  • Ingress 配置（主机、路径、TLS）
+  • 来自控制器的 Nginx 配置（通过 crossplane）
+  • 服务与端点的状态
+  • 路径与服务的匹配
+
+[bold]要求:[/bold]
+  • kubectl 已配置并可访问集群
+  • crossplane: pip install crossplane（可选，用于解析 nginx 配置）

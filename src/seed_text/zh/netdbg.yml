@@ -1,0 +1,45 @@
+tags:
+  ndvars:
+    comment: tcpdump/nc/tls 变量
+    commands:
+      0: 检查 $HOST/$PORT/$IFACE/…
+  pcap:
+    comment: 'tcpdump: 短抓包'
+    commands:
+      0: 在 $IFACE 上最多 $COUNT 个包，8 秒
+      1: 端口 $PORT
+      2: 主机 $HOST
+      3: SYN
+      4: '跟随（更好: > tcpdump -nn -i $IFACE）'
+  ncat:
+    comment: 'nc: 连接检查'
+    commands:
+      0: TCP $HOST:$PORT
+      1: TCP，3 秒超时
+      2: UDP（不可靠）
+      3: 多个端口
+  hops:
+    comment: traceroute / mtr
+    commands:
+      0: 跳数，不做 DNS
+      1: 对 $PORT 的 TCP SYN
+      2: tracepath
+      3: mtr 报告，$COUNT 轮
+      4: mtr TCP $PORT
+      5: 交互式 mtr
+  tls:
+    comment: openssl s_client / x509
+    commands:
+      0: 握手 $HOST:$PORT SNI $SNI
+      1: '证书: 日期/主体'
+      2: x509 文本，40 行
+      3: openssl 版本
+      4: 交互式 s_client
+  npath:
+    comment: 到 $HOST 的路径
+    commands:
+      0: nc -vz → traceroute → mtr -r
+  tlschk:
+    comment: TLS 握手 + 证书日期
+    commands:
+      0: s_client -brief → x509 日期

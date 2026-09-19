@@ -1,0 +1,40 @@
+tags:
+  qvars:
+    comment: dig/nmap 变量
+    commands:
+      0: 检查 $HOST/$PORT/…
+  dig:
+    comment: 'dig: A/AAAA/MX/NS/PTR'
+    commands:
+      0: 完整应答
+      1: 仅 A/AAAA
+      2: A
+      3: AAAA
+      4: MX
+      5: NS
+      6: SOA
+      7: TXT
+      8: CNAME
+      9: 经由解析器 $DNS
+      10: PTR（反向）
+      11: 委派跟踪
+      12: 仅 answer 段
+  nmap:
+    comment: 'nmap: ping 和短连接扫描'
+    commands:
+      0: ping 扫描（主机是否在线?）
+      1: TCP connect，前 20，不做 ping
+      2: 单个端口 $PORT
+      3: $PORT 上的服务版本
+      4: 网络 $CIDR 的 ping 扫描
+      5: 端口 $PORT + 原因
+      6: UDP $PORT（通常需要 root）
+      7: SYN 扫描（需要 root）
+  dchk:
+    comment: 'DNS: 简短 + NS'
+    commands:
+      0: +short → NS
+  nchk:
+    comment: 简短主机检查
+    commands:
+      0: ping 扫描 → 前 20 个 TCP（不用 -A/-p-）

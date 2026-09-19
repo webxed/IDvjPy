@@ -1,0 +1,61 @@
+tags:
+  cvars:
+    comment: HTTP 变量
+    commands:
+      0: 检查 $URL/$HOST/…
+  curl:
+    comment: 'curl: 头、耗时、Host'
+    commands:
+      0: 仅响应头
+      1: 详细（TLS、重定向）
+      2: 状态码和耗时
+      3: 响应体
+      4: 带头 Host
+      5: 带 Host 的响应体（vhost）
+      6: 跟随重定向
+      7: HTTP ≥400 时非零退出
+      8: 短超时
+      9: 耗时分解
+      10: POST，仅状态码
+      11: 响应头，不校验证书
+  ngx:
+    comment: 'nginx: 配置、状态、日志'
+    commands:
+      0: 配置检查
+      1: 完整配置转储
+      2: 版本和模块
+      3: nginx unit
+      4: journal unit
+      5: 配置目录
+      6: 主配置
+      7: 站点文件 $FILE
+      8: nginx 端口
+      9: error.log
+      10: access.log
+      11: nginx -t 成功后 reload
+  trf:
+    comment: 'traefik: API、路由、日志'
+    commands:
+      0: 二进制版本
+      1: 健康 ping API
+      2: 概览
+      3: HTTP 路由
+      4: HTTP 服务
+      5: 中间件
+      6: TCP 路由
+      7: 典型端口
+      8: journal unit
+      9: traefik 容器日志（$CTR）
+      10: 静态配置 $FILE
+  hchk:
+    comment: URL 检查
+    commands:
+      0: 响应头 + 耗时
+  ngxstat:
+    comment: nginx 概览
+    commands:
+      0: nginx -t → 状态 → error.log
+  trfstat:
+    comment: traefik 概览
+    commands:
+      0: ping → 路由 → 服务

@@ -1,0 +1,62 @@
+tags:
+  ansvars:
+    comment: ansible 变量
+    commands:
+      0: 检查 $INV/$PLAY/…
+  ansible:
+    comment: 'ansible: inventory、ad-hoc、文档'
+    commands:
+      0: ansible 版本
+      1: 非默认配置
+      2: inventory JSON
+      3: 分组图
+      4: 匹配模式 $HOST 的主机
+      5: ping $HOST
+      6: $HOST 的 facts
+      7: $HOST 的发行版
+      8: 在 $HOST 上执行命令 $ARGS
+      9: 模块 $MODULE 的检查模式
+      10: 模块 $MODULE（会改动主机）
+      11: $MODULE 文档
+      12: 'REPL（更好: > ansible-console -i $INV）'
+  aplay:
+    comment: 'ansible-playbook: 语法、检查、运行'
+    commands:
+      0: 语法检查 $PLAY
+      1: playbook 主机
+      2: playbook 任务
+      3: playbook 标签
+      4: 检查 + 差异
+      5: 检查，限制 $LIMIT
+      6: 检查，标签 $TAGS
+      7: 运行，限制 $LIMIT（会改动主机）
+      8: 运行，标签 $TAGS（会改动主机）
+      9: 运行 $PLAY（会改动主机）
+  avault:
+    comment: ansible-vault
+    commands:
+      0: 显示 $VAULTFILE
+      1: 加密到 stdout
+      2: 解密到 stdout
+      3: 加密文件（会改动 $VAULTFILE）
+      4: 解密文件（会改动 $VAULTFILE）
+      5: '创建 $VAULTFILE（更好: > ansible-vault create $VAULTFILE）'
+      6: '编辑（更好: > ansible-vault edit $VAULTFILE）'
+  agalaxy:
+    comment: 'ansible-galaxy: 角色、集合'
+    commands:
+      0: 已安装的集合
+      1: 已安装的角色
+      2: 搜索集合
+      3: 搜索角色
+      4: 安装集合
+      5: 安装角色
+      6: 角色骨架 $ROLE
+  aping:
+    comment: ping inventory 主机
+    commands:
+      0: list-hosts → ping
+  achk:
+    comment: 'ansible 概览: inventory → 语法 → 检查'
+    commands:
+      0: inventory --list → syntax-check → check --diff

@@ -1,0 +1,49 @@
+tags:
+  pgvars:
+    comment: postgres 变量（libpq）
+    commands:
+      0: 检查 libpq 变量
+  pg:
+    comment: 'postgres: 状态、会话、大小'
+    commands:
+      0: 服务器可用性
+      1: 连接参数
+      2: 版本
+      3: 是否副本?
+      4: 数据库
+      5: schema
+      6: 表
+      7: 角色
+      8: 活动查询
+      9: 每个数据库的负载
+      10: 复制
+      11: 当前 DB 大小
+      12: 锁等待
+      13: unit postgresql
+      14: unit 日志
+      15: '交互式 psql（更好: > psql）'
+  kfvars:
+    comment: kafka 变量
+    commands:
+      0: 检查 $BROKER/$TOPIC/…
+  kf:
+    comment: 'kafka: topic、group、kcat'
+    commands:
+      0: 集群元数据（kcat/kafkacat）
+      1: $TOPIC 的最近 10 条消息，然后退出
+      2: 列出 topic
+      3: 描述 $TOPIC
+      4: 所有 topic 详情
+      5: 消费者组
+      6: 组 $GROUP 的延迟
+      7: topic $TOPIC 的配置
+      8: broker API（可用性）
+      9: topic（Confluent .sh 脚本）
+  pgstat:
+    comment: postgres 概览
+    commands:
+      0: ready → 版本 → 是否副本? → 活动
+  kfstat:
+    comment: kafka 概览
+    commands:
+      0: kcat 元数据 → 列出 topic

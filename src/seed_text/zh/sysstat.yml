@@ -1,0 +1,38 @@
+tags:
+  stvars:
+    comment: sysstat 变量
+    commands:
+      0: 检查 $DELAY/$SAMPLES/…
+  vmstat:
+    comment: 'vmstat: 进程、内存、io、cpu'
+    commands:
+      0: 一次快照
+      1: 内存摘要
+      2: 磁盘
+      3: 每 $DELAY 秒，共 $SAMPLES 次
+      4: 宽列
+  iostat:
+    comment: 'iostat: CPU 和磁盘'
+    commands:
+      0: 一次快照（不含自启动以来的平均）
+      1: 扩展，共 $SAMPLES 次
+      2: 磁盘 $DISK
+      3: 带 LVM 名称
+  mpstat:
+    comment: 'mpstat: 每核 CPU'
+    commands:
+      0: 一次快照
+      1: 所有 CPU，共 $SAMPLES 次
+      2: 进程，CPU
+      3: PID $PID
+      4: 通过 sar 查看 CPU
+  monui:
+    comment: 交互式监视器（TTY）
+    commands:
+      0: htop
+      1: iotop（通常需要 root）
+      2: 在 $IFACE 上 iftop
+  oload:
+    comment: 'load: vmstat + iostat'
+    commands:
+      0: vmstat N → iostat -xz N

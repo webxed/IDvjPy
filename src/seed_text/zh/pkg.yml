@@ -1,0 +1,47 @@
+tags:
+  pkvars:
+    comment: 软件包变量
+    commands:
+      0: 检查 $PKG
+  apt:
+    comment: apt / dpkg（Debian/Ubuntu）
+    commands:
+      0: 候选版本和已安装版本
+      1: 软件包描述
+      2: 搜索
+      3: 已安装?
+      4: 更新
+      5: dpkg 状态
+      6: 软件包文件
+      7: 哪个软件包拥有某个路径/名称
+      8: 更新索引（会改动缓存）
+      9: 安装 $PKG（会改动系统）
+      10: 删除 $PKG
+  dnf:
+    comment: dnf / yum（RHEL/Fedora）
+    commands:
+      0: info $PKG
+      1: 已安装?
+      2: 搜索
+      3: 有更新?
+      4: 软件包文件
+      5: yum info（旧主机）
+      6: 安装 $PKG（会改动系统）
+      7: 删除 $PKG
+  rpm:
+    comment: 'rpm: 查询（RHEL 等）'
+    commands:
+      0: 已安装?
+      1: info
+      2: 文件
+      3: 配置
+      4: 将 $PKG 作为路径 → 软件包
+      5: 校验软件包文件
+  aptq:
+    comment: 'apt 概览: policy + 可升级'
+    commands:
+      0: policy → list --upgradable
+  rpmq:
+    comment: 'rpm 概览: query + info'
+    commands:
+      0: rpm -q → rpm -qi

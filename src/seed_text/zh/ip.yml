@@ -1,0 +1,43 @@
+tags:
+  ipvars:
+    comment: ip/ethtool 变量
+    commands:
+      0: 检查 $IFACE/$ADDR/$GW
+  ip:
+    comment: 'ip: link、addr、route、neigh'
+    commands:
+      0: 接口，简要
+      1: 地址，简要
+      2: link $IFACE
+      3: $IFACE 的地址
+      4: $IFACE 的计数器
+      5: 计数器，详细
+      6: IPv4 路由
+      7: IPv6 路由
+      8: 默认网关
+      9: ARP / NDISC
+      10: neigh $IFACE
+      11: 仅 IPv4
+      12: 仅 IPv6
+      13: 策略路由
+      14: 网络命名空间
+      15: 启用 $IFACE
+      16: 禁用 $IFACE
+      17: 添加 $ADDR
+      18: 默认经由 $GW
+  eth:
+    comment: 'ethtool: 网卡'
+    commands:
+      0: $IFACE 的速率 / 双工
+      1: 驱动
+      2: offload
+      3: 统计，40 行
+      4: 环形缓冲区
+  ilink:
+    comment: 'ip 概览: link + addr + route'
+    commands:
+      0: br link → br addr → route
+  iiface:
+    comment: '接口 $IFACE: link、统计、驱动'
+    commands:
+      0: link show → -s → ethtool -i

@@ -1,0 +1,81 @@
+tags:
+  nvars:
+    comment: 网络/防火墙变量
+    commands:
+      0: 检查 $PORT/$ZONE/…
+  ss:
+    comment: 'ss: 套接字和状态'
+    commands:
+      0: TCP/UDP 监听 + 进程
+      1: 仅 TCP 监听
+      2: 仅 UDP 监听
+      3: 套接字摘要
+      4: 已建立的 TCP
+      5: TIME-WAIT
+      6: 按本地端口 $PORT
+      7: 按远程端口 $PORT
+      8: UNIX 监听
+      9: 按 $PORT 过滤，不带进程
+  nst:
+    comment: netstat（旧主机）
+    commands:
+      0: 监听 TCP/UDP + 进程
+      1: TCP 监听
+      2: 协议栈统计
+      3: 接口
+      4: 路由表
+      5: 带 PID 的 TCP
+  ipt:
+    comment: 'iptables: 规则检查'
+    commands:
+      0: filter，计数器
+      1: nat
+      2: mangle
+      3: filter 显示为 -A/-P
+      4: nat 显示为 -A/-P
+      5: INPUT 链
+      6: FORWARD 链
+      7: 完整转储
+      8: IPv6 filter
+      9: $PORT 是否有 ACCEPT（退出码 1 = 无）
+  nft:
+    comment: 'nftables: 规则检查'
+    commands:
+      0: 表
+      1: 整个 ruleset
+      2: 带 handle
+      3: inet filter（如果存在）
+      4: ip nat（如果存在）
+      5: input 链
+  fwd:
+    comment: firewall-cmd（firewalld）
+    commands:
+      0: firewalld 是否在运行
+      1: 活动 zone
+      2: 默认 zone
+      3: 当前 zone 详情
+      4: 所有 zone
+      5: zone $ZONE
+      6: $ZONE 的端口
+      7: $ZONE 的服务
+      8: $PORT/tcp 是否开放
+      9: 当前 zone 的永久配置
+      10: 运行时开放 $PORT
+      11: 永久开放 $PORT
+      12: 应用永久配置
+  nstat:
+    comment: 套接字概览
+    commands:
+      0: 监听 + 摘要
+  iptstat:
+    comment: iptables 概览
+    commands:
+      0: filter + nat（不用 -F）
+  nftstat:
+    comment: nftables 概览
+    commands:
+      0: 表 → 列出 ruleset（不 flush）
+  fwstat:
+    comment: firewalld 概览
+    commands:
+      0: 状态 → zone → list-all

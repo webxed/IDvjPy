@@ -1,0 +1,72 @@
+tags:
+  dkvars:
+    comment: 磁盘和挂载点变量
+    commands:
+      0: 检查 $DISK/$MNT/$SRC
+  df:
+    comment: 'df: 文件系统空间'
+    commands:
+      0: 人类可读
+      1: 带 FS 类型
+      2: inode
+      3: $MNT 挂载点
+      4: source/fstype/… 列
+  du:
+    comment: 'du: 目录空间'
+    commands:
+      0: $SRC 总计
+      1: 一层深度
+      2: 同上，按大小排序
+      3: 不跨文件系统
+      4: 深度 2，最大在前
+  mount:
+    comment: 'mount / findmnt: 挂载了什么'
+    commands:
+      0: 挂载树
+      1: 全部包括 API FS
+      2: $MNT 挂载点
+      3: 挂载表
+      4: /proc/mounts
+      5: 包含路径 $MNT 的 FS
+      6: 挂载（会改动系统）
+      7: 卸载（会改动系统）
+  fdisk:
+    comment: 'fdisk: 分区表（检查）'
+    commands:
+      0: 所有磁盘
+      1: $DISK 分区
+      2: $DISK 表转储
+      3: $DISK 上的签名（无 -a）
+  lsblk:
+    comment: 'lsblk: 块设备'
+    commands:
+      0: 设备树
+      1: FS 和 UUID
+      2: 大小、FS、型号
+      3: 完整 /dev/… 路径
+      4: 仅 $DISK
+      5: 稳定名称
+  smart:
+    comment: 'smartctl: 磁盘健康'
+    commands:
+      0: SMART 设备
+      1: 识别 $DISK
+      2: 总体健康
+      3: SMART 属性
+      4: 完整报告
+      5: 错误日志
+      6: 自检历史
+      7: 扩展报告
+  ncdu:
+    comment: 'ncdu: 交互式 du'
+    commands:
+      0: '交互式（更好: > ncdu "$SRC"）'
+      1: 单一文件系统（`> ncdu -x …`）
+  dsk:
+    comment: 磁盘和空间概览
+    commands:
+      0: lsblk → df -h → smartctl --scan → -H $DISK
+  dustat:
+    comment: 目录空间
+    commands:
+      0: max-depth=1 → sort -h

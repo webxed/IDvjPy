@@ -1,0 +1,43 @@
+tags:
+  avars:
+    comment: 归档变量
+    commands:
+      0: 检查 $SRC/$ARCHIVE/$PATTERN
+  tar:
+    comment: 'tar: 列出和打包'
+    commands:
+      0: 列出归档中的文件
+      1: 列出 .tar.gz
+      2: 列出权限，前 50 个
+      3: 打包 $SRC → $DEST（.tar.gz）
+      4: 打包时排除 .git
+      5: 解压到 cwd
+      6: 解压到 $DEST
+      7: 比较归档与 $SRC
+  gz:
+    comment: gzip / gunzip / zcat
+    commands:
+      0: 大小和压缩比
+      1: 解压，保留 .gz
+      2: 不写盘查看前几行
+      3: 同样用 zcat
+      4: 压缩，保留源文件
+      5: 在 .gz 内 grep（$PATTERN）
+  zip:
+    comment: zip / unzip
+    commands:
+      0: 列出 .zip 内容及权限
+      1: 列出文件
+      2: 详细列表
+      3: 打包 $SRC → $DEST
+      4: 解压到 cwd
+      5: 解压到 $DEST
+      6: 在 .zip 内 grep
+  tstat:
+    comment: 归档检查
+    commands:
+      0: tar -tzf + gzip -l（不解压）
+  zstat:
+    comment: zip 检查
+    commands:
+      0: zipinfo + unzip -l（不解压）

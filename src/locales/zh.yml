@@ -1,0 +1,136 @@
+# UI text catalogue — Simplified Chinese (zh). Keys mirror src/locales/en.yml
+# (the source of truth); only the values are translated.
+#
+# * keys are dotted paths; `t("kctx.off")` reads `kctx: { off: ... }`
+# * `{name}` are str.format placeholders; `{interval:g}` keeps format specs
+# * Textual/Rich markup ([bold]…[/]) is part of a value wherever the template
+#   needs it — keep it when translating
+# * layout indentation is added by the code, not baked into values
+# * commands, tag names, settings keys and file names are never translated
+
+startup:
+  session_row: "[bold]会话:[/] [bold #67e8f9]{session}[/]   [dim]:session NAME — 切换  ·  :new — 新窗口[/]"
+  tagline: "标签 → 模板 → 命令行"
+  assemble: "[bold]{bang}[/] / [bold]!![/] 组装命令行，[bold]Enter[/] 执行。完整帮助：[bold]:?[/]"
+  keys:
+    - "[bold]:?[/] 帮助  [bold]:q[/] 退出  [bold]:h[/] 历史  [bold]:c[/] 清空  [bold]:welcome[/] 种子目录"
+    - "[bold]#tag cmd[/] 保存    [bold]?[/] / [bold]??[/] 数据库标签     [bold]{bang}[/] 插入"
+    - "[bold]$VAR=val[/] 变量   [bold]$OUT[/] 上一块最后一行   [bold]| cmd[/] 管道"
+    - "[bold]Tab[/] 日志  [bold]F2[/] 行  [bold]F3[/] 复制  [bold]F5[/] JSON  [bold]d[/] / [bold]:theme[/] 主题"
+
+session:
+  usage: "用法: :session NAME   |   :new [NAME|-] [DIR] — 在独立终端中打开窗口"
+
+kctx:
+  "off": "kctx 日志已关闭：settings.yml 中 kctx_vars: []。"
+  set_vars: "已设置的日志变量（{names}）——对它们的赋值会被记录。"
+  no_list: "kctx：没有打开快照列表。请先执行 ':kctx <cluster>' 或 ':kctx <cluster> N'。"
+  usage: "用法: :kctx [cluster [N]] — N 是列表中的快照编号"
+  clusters_title: "[bold]kctx — 日志中的集群:[/bold]"
+  empty: "（空）"
+  login_hint: "登录集群（klogin … / tsh kube login … / kubectl config use-context …）"
+  cluster_row: "{i}. {cluster}  （{n} 个快照）  {when}{marker}"
+  bullet_row: "• {cluster}  （0 个快照）{marker}"
+  current_marker: " ← 当前"
+  list_hint: ":kctx <cluster> — 登录并显示快照（只有一个集合时立即应用）；:kctx <cluster> N — 登录并应用 N"
+  snapshots_title: "[bold]kctx — {cluster}: 变量快照:[/bold]"
+  no_snapshots: "（无快照）"
+  apply_hint: ":kctx N — 应用快照 N"
+  no_set: "kctx：'{cluster}' 没有集合 {index}（日志中有 {rows} 个）。"
+  empty_vars: "（空）"
+  application: "kctx {cluster} #{index}: {text}"
+  single_set: "[dim]（只有一个集合 — 立即应用）[/dim]"
+  logged_cluster: "（已登录集群：{before} — 执行 ':kctx {cluster}' 切换）"
+
+watch:
+  usage: "用法: :watch <sec> <command>"
+  usage_stop: "用法: :watch <sec> <command>   （停止: :watch stop）"
+  usage_seconds: "用法: :watch <sec> <command>  （sec 为秒数）"
+  usage_positive: "用法: :watch <sec> <command>  （sec 必须 > 0）"
+  runbook_running: "运行手册正在运行 — 请先停止: :run stop（或 Esc）。"
+  running: "[dim]watch: {command} · 每 {interval} 秒 · F4 / :kill / :watch stop — 停止[/dim]"
+
+runbook:
+  modes: "auto — 执行并等待完成 · manual — 插入并等待 Enter（空 Enter — 跳过） · prompt — 手动输入该行"
+  no_directives: "该标签没有 run: 指令 — 所有步骤都会自动执行；会修改状态的步骤更安全地标记为 run:manual（见 :? run）"
+  plan_footer_stop: "Esc 停止"
+  plan_footer_dry: "[yellow]演练 — 未执行任何命令[/yellow]"
+  usage_header: "用法: :run <tag|file.yml> [--step] [--dry]   |   :run stop"
+  usage_notes:
+    - "  auto 步骤依次执行，manual/prompt 等待你操作，Esc 停止。"
+    - "  标签的步骤模式来自命令注释中的指令: run:manual、"
+    - "  run:prompt、run:pause=2、run:continue（见 :? run）。"
+  tags_title: "库中带运行手册的标签:"
+  no_tags: "还没有标签带有 run: 指令。"
+  tag_missing: "运行手册: 标签 '{name}' 未找到或没有可用命令。`?tag` — 库，`:run` — 用法。"
+  pause_warning: "{token}: pause 必须 > 0 秒 — 已跳过"
+  manual_hint: "Enter — 执行 · 空 Enter — 跳过该步骤 · Esc — 停止运行"
+  prompt_hint: "输入该行并按 Enter · Esc — 停止运行"
+  continue_hint: "[dim]{label} · 手动继续或 `:run {source} --step`[/dim]"
+  stopped: "运行手册 {title}: 在第 {index}/{total} 步停止。现在可以输入了。"
+  done: "运行手册 {title}: 已完成 {total} 个步骤。"
+
+llm:
+  offline: "[offline] 内置的 IDvjPy_term 桩：未发出网络请求。\n:llm 和 :llm ask 就是这样在没有密钥时验证的；真正的回答来自 llm_providers.yml 中的提供方。"
+  answer_language: "Chinese"
+
+lang:
+  usage: "语言: {current}\n可用: {available}\n设置: :lang <code>  （auto — 跟随 $LANG / $LC_ALL）\n保存在 settings.yml（键 `language`）；新语言应用于此后打印的文本。"
+  unknown: "未知语言: {name}。输入 :lang 查看列表。"
+  saved: "语言: {name}（已保存到 settings.yml）"
+  session_only: "语言: {name}（仅本次会话）"
+
+relang:
+  usage: "将已播种的库注释重新翻译为另一种语言。\n当前界面: {current}\n可用: {available}\n使用: :relang <code>  （auto — 跟随 $LANG / $LC_ALL）\n只处理规范的种子标签和命令；你自己的标签、命令和手改过的注释保持原样。写入前会先将数据库快照保存到 backups/。"
+  unknown: "未知语言: {name}。输入 :relang 查看列表。"
+  done: "库注释 → {name}: 已更新 {commands} 条命令、{tags} 个标签。"
+  nothing: "库注释已与 {name} 一致（无需更改）。"
+  error: "无法重新翻译库注释: {error}"
+
+cmd:
+  "?": "命令帮助（:? calc — 计算器参考）"
+  q: "退出应用"
+  w: "将上一个块的输出写入文件"
+  h: "历史: :h [N]、:h /文本、:h compact"
+  c: "清空所有日志块"
+  json: "JSON 查看器: 上一个块或文件"
+  md: "markdown 查看器; #L<n> — 源文件行号"
+  rg: "搜索 markdown 文件（Obsidian 仓库）"
+  i: "Kubernetes Ingress 分析器"
+  cd: "显示或更改 shell 的当前目录"
+  fm: "在新窗口中打开系统文件管理器"
+  term: "在新窗口中打开系统终端"
+  ed: "外部编辑器: 文件 / $OUT / $BLOCK"
+  env: "将 .bashrc_term* 重新读入本进程"
+  r: "将聚焦/上一个块的命令放入输入框"
+  cmd: "将带当前变量值的块命令复制到剪贴板"
+  log: "完整块输出: Line-API 查看器、/ 搜索、f — 仅匹配项（F7）"
+  o: "会话输出历史: :o /文本、:o clear"
+  diff: "两个块输出的 unified diff"
+  name: "为块缓冲区命名（|@label）"
+  kill: "停止正在运行的后台命令"
+  watch: "每 N 秒重新运行命令"
+  llm: "询问 LLM（ask / reset / offline）"
+  cht: "cheat.sh 速查表"
+  g: "搜索日志行"
+  "n": "下一个匹配项"
+  "N": "上一个匹配项"
+  stats: "库使用统计"
+  mv: "移动命令 / 重命名标签"
+  export: "标签或库 → JSON / Markdown"
+  import: "从 JSON 文件导入命令"
+  alias: "将命令导出为 bash 函数"
+  kctx: "集群日志: 按集群保存的变量（kctx_vars）"
+  session: "显示或切换实例"
+  new: "在新终端中打开应用窗口（会话）"
+  send: "将命令转发到另一个会话"
+  "send!": "转发并立即执行"
+  backup: "将标签数据库快照到 backups/"
+  welcome: "种子目录（与空数据库相同）"
+  screensaver: "立即显示屏保 — 矩阵雨（默认）/ 星空; 空闲: screensaver_idle"
+  theme: "TUI 主题（:theme nord / dark / light）"
+  lang: "界面语言（:lang zh / en / ru; auto 跟随 $LANG）"
+  relang: "重新翻译已播种的数据库注释（:relang zh）"
+  playbook: "将会话导出为 --demo YAML"
+  run: "运行命令链（运行手册）: 标签或 YAML，按提示等待"
+  update: "将 VERSION 与 GitHub main 比较"

@@ -1,0 +1,74 @@
+tags:
+  proc:
+    comment: 进程
+    commands:
+      0: 列出进程
+      1: 交互式进程监视器
+      2: 便捷监视器（如果已安装）
+      3: 按 PID 结束进程
+      4: 按名称结束进程
+      5: 按名称模式结束进程
+      6: 运行时不随会话断开
+      7: 列出 shell 后台任务
+      8: 将任务调到前台
+      9: 在后台恢复
+  file:
+    comment: 文件和目录
+    commands:
+      0: 详细列出文件
+      1: 递归复制
+      2: 移动或重命名
+      3: 删除并确认
+      4: 创建目录及其父目录
+      5: 删除空目录
+      6: 创建空文件 / 更新时间
+      7: 打印文件内容
+      8: 分页查看
+      9: 输出的前几行
+      10: 最后几行，跟随文件
+      11: 当前目录中的所有 json 文件
+  net:
+    comment: 网络
+    commands:
+      0: TCP/UDP 套接字（端口）
+      1: 检查主机可达性
+      2: HTTP 请求，仅响应头
+      3: 下载到 stdout
+      4: SSH 连接
+      5: 网络同步
+      6: 通过 SSH 复制
+      7: 接口地址
+      8: 路由表
+      9: 测试占位
+      10: 测试占位 3
+  kube:
+    comment: Kubernetes（kubectl + tsh）
+    commands:
+      0: Teleport 授权（:kctx 按集群记住 NS/POD）
+      1: 列出 kube context
+      2: 当前 context
+      3: 集群信息
+      4: 列出命名空间
+      5: 命名空间 $NS 中的所有资源
+      6: 命名空间 $NS 中的 pod
+      7: pod $POD 的详情
+      8: pod $POD 的日志
+      9: 'pod $POD 的日志（跟随，更好: > cmd）'
+      10: 'exec 进入 pod $POD（更好: > cmd）'
+      11: 命名空间 $NS 中的 deployment
+      12: deployment $DEPLOY 的详情
+      13: rollout 状态 $DEPLOY
+      14: rollout 重启 $DEPLOY
+      15: 命名空间 $NS 中的 service
+      16: 端口转发到 service $SVC
+      17: 在命名空间 $NS 中 apply manifest
+      18: 在命名空间 $NS 中删除 manifest
+  logs:
+    comment: 处理日志
+    commands:
+      0: 列出 /var/log 中的文件
+      1: 按 *.log 过滤
+      2: 最后一行
+      3: 打印 / 分隔符
+      4: 行数
+      5: '管道: ll /var/log → grep *.log → tail -n 1'

@@ -1,4 +1,6 @@
 """Empty-database welcome lists every handbook seed."""
+import pytest
+
 from i18n import t
 from seed_catalog import (
     SEED_HANDBOOKS_CORE,
@@ -100,32 +102,47 @@ def _catalog_docs() -> list[str]:
     return [doc for _script, doc in SEED_HANDBOOKS_CORE + SEED_HANDBOOKS_OPS if doc]
 
 
-def test_every_handbook_has_english_doc():
-    """У каждого справочника из каталога есть английский файл `docs/en/<NAME>.md`.
+def _doc_language_dirs() -> list[str]:
+    """Языковые каталоги справочников (`docs/<lang>/`); база — `docs/` без папки."""
+    from md_viewer import REPO_ROOT
+
+    docs = REPO_ROOT / "docs"
+    if not docs.is_dir():
+        return []
+    return sorted(path.name for path in docs.iterdir() if path.is_dir())
+
+
+@pytest.mark.parametrize("lang", _doc_language_dirs())
+def test_every_handbook_has_localized_doc(lang):
+    """У каждого справочника каталога есть файл языка: `docs/<lang>/<NAME>.md`.
 
     `handbook_md_path` умеет падать на базовый (русский) файл — этот тест требует
-    именно перевод, чтобы `:md <имя>` на языке `en` не показывал кириллицу.
+    именно перевод, чтобы `:md <имя>` на языке `lang` не показывал чужой язык.
     """
     from md_viewer import REPO_ROOT, handbook_md_path
 
     missing = [
-        doc for doc in _catalog_docs() if not (REPO_ROOT / "docs" / "en" / doc).is_file()
+        doc
+        for doc in _catalog_docs()
+        if not (REPO_ROOT / "docs" / lang / doc).is_file()
     ]
-    assert not missing, f"нет английского справочника: {missing}"
+    assert not missing, f"нет справочника {lang}: {missing}"
     for doc in _catalog_docs():
-        path = handbook_md_path(doc, "en")
-        assert path is not None and path.parent.name == "en", doc
+        path = handbook_md_path(doc, lang)
+        assert path is not None and path.parent.name == lang, doc
 
 
-def test_english_handbooks_have_no_cyrillic():
-    """`docs/en/` — перевод: кириллица там только ошибка (забыли перевести)."""
+@pytest.mark.parametrize("lang", _doc_language_dirs())
+def test_localized_handbooks_have_no_cyrillic(lang):
+    """`docs/<lang>/` — переводы: кириллица там только ошибка (база — `docs/`)."""
     import re
 
     from md_viewer import REPO_ROOT
 
     cyrillic = re.compile(r"[\u0400-\u04FF]")
-    bad: list[str] = []
-    for path in sorted((REPO_ROOT / "docs" / "en").glob("*.md")):
-        if cyrillic.search(path.read_text(encoding="utf-8")):
-            bad.append(path.name)
-    assert not bad, f"кириллица в docs/en: {bad}"
+    bad = [
+        path.name
+        for path in sorted((REPO_ROOT / "docs" / lang).glob("*.md"))
+        if cyrillic.search(path.read_text(encoding="utf-8"))
+    ]
+    assert not bad, f"кириллица в docs/{lang}: {bad}"

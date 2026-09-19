@@ -1,0 +1,55 @@
+tags:
+  dvars:
+    comment: docker 变量
+    commands:
+      0: 检查 $IMAGE/$CTR/…
+  dck:
+    comment: 'docker: 容器、镜像、日志'
+    commands:
+      0: 运行中的容器
+      1: 所有容器
+      2: 镜像
+      3: $CTR 的日志
+      4: 检查容器
+      5: CPU/RAM 不跟随
+      6: $CTR 中的进程
+      7: 容器内 ps（无 TTY）
+      8: 拉取 $IMAGE
+      9: 一次性运行 $IMAGE
+      10: 停止 $CTR
+      11: 启动 $CTR
+      12: 重启 $CTR
+      13: 日志中的错误
+      14: 网络
+      15: 卷
+      16: 检查镜像
+      17: 镜像/卷磁盘占用
+      18: 删除已停止的 $CTR
+      19: 删除镜像 $IMAGE
+      20: '在 $CTR 中开 shell（更好: > docker exec -it $CTR sh）'
+  dcmp:
+    comment: docker compose
+    commands:
+      0: compose 服务（cwd）
+      1: 服务，文件 $COMPOSE_FILE
+      2: 渲染配置
+      3: 所有服务的日志
+      4: 服务 $SVC 的日志
+      5: 更新镜像
+      6: 后台启动
+      7: 重启 $SVC
+      8: 停止并删除容器
+      9: '在 $SVC 中 exec（更好: > docker compose exec $SVC sh）'
+      10: 旧版 docker-compose 二进制
+  dps:
+    comment: docker 概览
+    commands:
+      0: ps → stats → images
+  dlog:
+    comment: 容器日志
+    commands:
+      0: 日志 + grep 错误
+  dcstat:
+    comment: compose 概览
+    commands:
+      0: ps → config → logs

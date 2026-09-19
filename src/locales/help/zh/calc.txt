@@ -1,0 +1,60 @@
+[bold]计算器 — 无需专用命令或前缀[/bold]
+
+以数字（或 '(' / '-'）开头的行会先尝试作为计算式。
+如果整行都能解析，就在本地计算，并作为一个
+标题为 `calc:` 的日志块显示（↑ 可重复它；`$OUT` / `|` 对结果生效）。
+任何无法解析的内容 — `7z …`、`(cd … && …)`、`-la`、`2>/dev/null …` —
+仍和往常一样送进 shell。
+
+[bold]算术[/bold]
+  1024*3 · (2+3)*4 · 10/3 · 2^10 · 1.5 + 0.25 · -5 + 8
+
+[bold]百分比 — % 缩放左侧的值[/bold]
+  512Mi + 20%   增加 20%    → = 614.4Mi
+  512Mi - 15%   减少 15%
+  512Mi * 20%   取其 20%   → = 102.4Mi
+  2 + 10%                  → = 2.2
+
+[bold]of — 值的一个比例（等同于 *）[/bold]
+  20% of 512Mi                    → = 102.4Mi
+  1/3 of 1Gi in Mi                → = 341.333333Mi
+  20% of (512Mi + 1Gi) in Mi      → = 307.2Mi
+
+[bold]单位换算 — in / to，或直接写带单位的值[/bold]
+  512Mi in Gi        → = 0.5Gi
+  512Mi in B         → = 536870912B
+  1Gi in MB          → = 1073.741824MB
+  524288 in Mi       → = 0.5Mi    （不带单位的数字按字节读取）
+  1Gi / 512Mi        → 2          （能容纳多少次）
+  512Mi              → = 512Mi (= 536870912B)   （不加 `in`：最大单位 + 字节）
+
+[bold]内存单位[/bold]（k8s 风格，可连写或带空格：`512Mi`、`1.5 Gi`）
+  B
+  十进制 (×1000):  K KB · M MB · G GB · T TB · P PB · E EB
+  二进制   (×1024):  Ki KiB · Mi MiB · Gi GiB · Ti TiB · Pi PiB · Ei EiB
+  小写别名: kb mb gb tb pb eb
+
+[bold]CPU — 毫核 / 核[/bold]
+  500m in cores      → = 0.5 cores
+  0.5 in m           → = 500m
+  100m * 4           → = 400m
+
+[bold]k8s 资源运算[/bold]
+  512Mi + 1Gi + 256Mi in Mi       → = 1792Mi
+  512Mi*30 in Gi                  → = 15Gi
+  512Mi + 20% in Gi               → = 0.6Gi  （预留余量的 limits）
+
+[bold]IP / 子网 — ipcalc（与 jodies.de/ipcalc 相同）[/bold]
+  192.168.1.0/24              → 该前缀的网络信息
+  10.1.2.3/255.255.255.0      → 由掩码得到的缀
+  8.8.8.8                     → 默认类掩码（A 类 → /8）
+  300 hosts                   → 容纳 300 台主机的最小前缀（/23，可用 510）
+  显示：Address · Netmask（= 前缀）· Wildcard · Network/前缀 · HostMin ·
+  HostMax · Broadcast · Hosts/Net，外加类 / RFC1918 私网判断以及每个值的
+  二进制形式。/31 = 点对点 (RFC 3021)，/32 = 主机路由。
+
+[bold]规则[/bold]
+  • 单位会被检查：`512Mi + 2` 是错误（内存与 cpu/普通数字混用）
+  • 内存 ÷ 内存得到普通比值（`1Gi / 512Mi` → 2）
+  • `^` 只对普通数字生效
+  • 真正的命令绝不会被拦截：任何含单词的行都送入 shell

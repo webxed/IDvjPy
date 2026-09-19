@@ -1,0 +1,29 @@
+tags:
+  hvars:
+    comment: helm 变量
+    commands:
+      0: 检查 $NS/$RELEASE/…
+  helm:
+    comment: 'helm: release、values、dry-run'
+    commands:
+      0: $NS 中的 release
+      1: 所有命名空间中的 release
+      2: $RELEASE 的状态
+      3: 版本历史
+      4: release values
+      5: release manifest
+      6: release 说明
+      7: chart 仓库
+      8: 搜索 chart $CHART
+      9: chart 元数据
+      10: chart 默认 values
+      11: 无需集群渲染
+      12: dry-run 升级
+      13: upgrade --install（会改动集群）
+      14: dry-run 回滚
+      15: dry-run 卸载
+      16: helm 环境
+  hls:
+    comment: helm release 概览
+    commands:
+      0: list → status → history → values

@@ -1,0 +1,61 @@
+tags:
+  tvars:
+    comment: grep/awk/sed 变量
+    commands:
+      0: 检查 $FILE/$PATTERN/…
+  grep:
+    comment: 'grep: 在文件和目录树中搜索'
+    commands:
+      0: 带行号输出
+      1: 不区分大小写
+      2: 反向过滤
+      3: 匹配计数
+      4: 扩展正则
+      5: 固定字符串
+      6: 上下文 ±3
+      7: 后 5 行
+      8: 前 5 行
+      9: 仅匹配内容
+      10: 带文件名
+      11: 仅文件名（有匹配时）
+      12: 从 cwd 递归
+      13: 在 .gz 中搜索
+  awk:
+    comment: 'awk: 字段、求和、去重'
+    commands:
+      0: 第一个字段（FS=空格）
+      1: 第一个字段，FS=$SEP
+      2: 第一个和最后一个字段
+      3: 行号
+      4: 第一行（表头）
+      5: 第 $N 行
+      6: 丢弃空行
+      7: 唯一行，保持文件顺序
+      8: 第一个字段求和
+      9: 匹配 $PATTERN 的行
+      10: 每行字段数
+      11: 行数
+  sed:
+    comment: 'sed: 打印和替换到 stdout'
+    commands:
+      0: 前 20 行
+      1: 第 $N 行
+      2: 按正则 $PATTERN 匹配的行
+      3: 每行第一次替换
+      4: 每行全部替换
+      5: 不区分大小写替换
+      6: 仅打印有改动的行
+      7: 丢弃空行
+      8: 去除行尾空格
+      9: 去掉 CR（CRLF→LF）到 stdout
+      10: 去掉第一行
+      11: 去掉最后一行
+      12: 编辑文件 + .bak（不在 playbook 中）
+  gchk:
+    comment: '搜索: 行 + 计数'
+    commands:
+      0: grep -n → grep -c
+  sprev:
+    comment: 替换到 stdout（不用 -i）
+    commands:
+      0: s///g → 按 $PATTERN 匹配行
