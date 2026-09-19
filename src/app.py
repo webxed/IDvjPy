@@ -111,6 +111,7 @@ try:
 
     import calc
     import database_v2 as database
+    import db_transfer
     import history_import
     import ipcalc
     import runbook
@@ -2271,7 +2272,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.147"
+    VERSION = "v1.148"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -6763,7 +6764,7 @@ class CommandRunner(App):
         if args[0] == "*":
             path = args[1] if len(args) > 1 else "library.md"
             try:
-                n = database.export_all_to_markdown(self.db_file, path)
+                n = db_transfer.export_markdown(self.db_file, path)
                 self.add_block(
                     InfoBlock(f"Exported {n} command(s) to {path} (Markdown catalog)")
                 )
@@ -6773,20 +6774,25 @@ class CommandRunner(App):
         tag = args[0]
         path = args[1] if len(args) > 1 else f"{tag}.json"
         try:
-            n = database.export_tag_to_file(self.db_file, tag, path)
+            n = db_transfer.export_json(self.db_file, path, tag=tag)
             self.add_block(InfoBlock(f"Exported {n} command(s) of '{tag}' to {path}"))
         except Exception as e:
             self.add_block(InfoBlock(f"Export error: {e}"))
 
     def _import_tag(self, args: list[str]) -> None:
+        """`:import <file.json>` — команды из JSON одним тегом (новые tid)."""
         if not args:
             self.add_block(InfoBlock("Usage: :import <file.json>"))
             return
         path = args[0]
         try:
-            tag, n = database.import_tag_from_file(self.db_file, path)
+            payload = db_transfer.read_json(path)
+            tag = db_transfer.payload_tag(payload)
+            result = db_transfer.import_json(self.db_file, path, only_tag=tag)
             self._invalidate_library()
-            self.add_block(InfoBlock(f"Imported {n} command(s) into tag '{tag}'"))
+            self.add_block(InfoBlock(
+                f"Imported {result.imported} command(s) into tag '{tag}'"
+            ))
         except FileNotFoundError:
             self.add_block(InfoBlock(f"Error: file '{path}' not found."))
         except Exception as e:

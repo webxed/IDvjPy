@@ -32,4 +32,4 @@ def _load_src_backup() -> Any:
 _real = _load_src_backup()
 
 if __name__ == "__main__":
-    _real.main()
+    sys.exit(_real.main())

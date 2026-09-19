@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.147 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.148 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -308,7 +308,20 @@ Aliases with `$1` / `$2` / `$@` substitute arguments (`alias klogin="tsh kube lo
 - `:log [N]` (F7) — the full block output in a scrollable **Line-API** viewer (no 300-line truncation): arrows/PgUp/PgDn, Esc/q; text search — `/` (Enter — forward, `n`/`N` — next/previous match, Esc — close the search field), the matching line is highlighted entirely (accent background + bold); `f` — keep only lines with matches (a repeated `f` or Esc restores the whole output, the line number in the subtitle is the original one). `N` — blocks back (0 = the focused/last one). The lines are real (like F3), plus `STDERR`, if there was any. `y` copies the source file path (raw `:md` view); for block output — an explicit `No file path to copy`
 - `:name [<label>|<label>-|-]` — a buffer label: labels the focused (otherwise the last finished) block so that you can pipe from it without re-running the source (`:name buff` → `|@buff awk '{...}'`). Without an argument — a list of labels, `<label>-` — remove one, `-` — all. Also a dialog via `F8`. The label is visible in the block header (`[buff]`); in history the pipe is written as a full invocation `<source> | <command>`
 - `:/text` / `:g` / `:n` / `:N` — search across journal lines (from a block `/` opens `:/`; `n`/`N` — next / previous)
-- `:export tag [file]` / `:import file` — a single tag to JSON and back
+- `:export tag [file.json]` / `:import file.json` — one tag to JSON and back (import always assigns new `tid`; the schema is shared with the CLI, `src/db_transfer.py`); `:export * [library.md]` — the whole library as a Markdown catalog
+
+**Export/import: what to use when** (one implementation of the formats — `src/db_transfer.py`, the CLI is a thin shell):
+
+| Task | TUI | CLI (`python3 backup_db.py …`) |
+|------|-----|--------------------------------|
+| Move tags to another instance / machine | `:export tag file.json`, then `:import file.json` there | `export` / `import [--mode merge\|replace] [--keep-tids]` |
+| An exact snapshot of the DB (roll back "as it was") | `:backup` | `backup` (SQLite snapshot + JSON + CSV); return with `restore <file>` |
+| Edit commands and comments in a spreadsheet | — | `export-csv` / `import-csv` (addressable by `tid`), `export-tags-csv` / `import-tags-csv` |
+| Look at the tags without the TUI | `:stats`, `??` | `list [--show-comments]` |
+| The library catalog as Markdown | `:export * library.md` | — |
+| Commands as bash functions | `:alias tag\|* [file.sh]` | — |
+
+JSON is transfer and merging (global `id`s from the file are never taken: a foreign `id` used to be able to overwrite another row; by default every row gets a new `tid`). An **exact snapshot** is only the SQLite copy. Details — [`backup_db.md`](backup_db.md).
 - `:playbook [file.yml]` — record the commands of this session (Enter) as YAML for `--demo` / `:run` (default `playbook.yml`). `:playbook -` — preview in the journal; `:playbook clear` — forget what was recorded. Keys (Tab/F5) and the mouse are not recorded. In the YAML: `loop: true` / `loop: N` — loop the steps (Esc — stop); see [DEMO.md](../../DEMO.md).
 - `:run <tag|file.yml> [--step] [--dry]` — run a chain (runbook): `auto` steps run in a row and wait for completion, `manual` inserts the line into the input and waits for Enter (you can edit it), `prompt` waits for a typed line. A step error stops the run, `Esc` / `:run stop` too. Step modes of a tag — by directives in comments (`run:manual`, `run:prompt`, `run:pause=2`, `run:continue`); if the tag has no such directive at all, the plan warns: all steps will go `auto` (this is what an outdated seed or your own tag saved before v1.124 looks like). `--step` — every step with Enter, `--dry` — plan only. Full help — `:? run`, a ready chain — `:run vapprole`. A relative path to YAML is resolved from the process cwd (when launched via an alias from `~` — from `~`): it is more reliable to keep the chain as a tag — the DB lives in the data directory
 - `:update` — compare `VERSION` with GitHub [`webxed/IDvjPy`](https://github.com/webxed/IDvjPy) `main`. At startup the same happens if `check_updates: true` (it writes to the journal only if GitHub is newer). Proxy with a login: `$PROXY_USER` / `$PROXY_PASS` in `.bashrc_term` (plus `HTTPS_PROXY` / `HTTP_PROXY`).

@@ -1,365 +1,154 @@
-# backup_db.py - Database Import/Export Tool
+# backup_db.py - перенос библиотеки тегов
 
-Скрипт для импорта и экспорта базы тегов IDvjPy_term (**v1.147**, `mytags.db`). Поддерживает форматы JSON и CSV для редактирования команд в табличных редакторах.
+CLI для импорта/экспорта базы тегов IDvjPy_term (**v1.148**, `mytags.db`).
+Форматы: JSON (перенос и слияние) и CSV (правка в таблицах).
 
-Корневой `python3 backup_db.py` — лаунчер; код в `src/backup_db.py`. `settings.yml` и каталог `backups/` читаются из **рабочей директории** (рядом с базой), не из `src/`.
+Корневой `python3 backup_db.py` — лаунчер; код в `src/backup_db.py`.
+`settings.yml` и каталог `backups/` читаются из **рабочей директории** (рядом с базой), не из `src/`.
+
+Вся работа с форматами живёт в **`src/db_transfer.py`** — это одна реализация и для CLI, и для TUI
+(`:export`, `:import`, `:backup`). Раньше у CLI была своя JSON-схема и своя SQL-обвязка: обе стороны
+писали `schema_version: "v2"` при разном наборе полей, а `id` из файла мог затереть чужую строку.
+Теперь схема одна (запись), чтение терпимо к обоим историческим видам, а глобальные `id` из файлов
+**не переносятся никогда**.
 
 ## Установка
 
-Скрипт использует стандартные библиотеки Python. Убедитесь, что установлен Python 3.12+:
-
-```bash
-python3 --version
-```
-
-Зависимости (уже установлены в проекте):
-- `yaml` (PyYAML)
+Скрипт использует стандартные библиотеки Python и PyYAML (уже в проекте). Нужен Python 3.12+.
 
 ## Конфигурация
 
-Настройки бэкапов хранятся в `settings.yml`:
+`settings.yml` в рабочей директории:
 
 ```yaml
-# Директория для бэкапов (по умолчанию: backups)
-backup_dir: backups
+database_tags_file: mytags.db   # файл базы
+backup_dir: backups             # каталог для файлов переноса и снимков
 ```
 
-Все бэкапы автоматически сохраняются в директорию `backups/`. При импорте файлы также автоматически ищутся в этой директории, если не указан абсолютный путь.
+Относительные имена файлов в командах пишутся в `backup_dir`; при импорте файл ищется сначала по
+указанному пути, потом по имени в `backup_dir`. Абсолютный путь и `./имя` — «как сказано».
 
-Каждый `--seed` (если в базе уже есть команды) дополнительно кладёт туда **копию SQLite** `*-pre-git-*.db` / `*-pre-ops-*.db` / … — полный снимок до замены тегов, не JSON. В TUI то же самое: `:backup` → `*-manual-*.db`. Вернуть: скопировать файл поверх рабочей БД.
+## Команды
 
-### Использование других директорий
+```
+python3 backup_db.py export <file.json> [--tag T] [--include-deleted]
+python3 backup_db.py import <file.json> [--mode merge|replace] [--keep-tids]
+python3 backup_db.py export-csv <file.csv> [--tag T] [--include-deleted]
+python3 backup_db.py import-csv <file.csv> [--mode merge|replace]
+python3 backup_db.py export-tags-csv <file.csv>
+python3 backup_db.py import-tags-csv <file.csv>
+python3 backup_db.py list [--show-comments]
+python3 backup_db.py backup
+python3 backup_db.py restore <file.json|file.csv> [--mode merge|replace]
+```
 
-Чтобы сохранить бэкап в другое место, используйте абсолютный путь или префикс `./`:
+У всех команд есть `--db <файл>` (по умолчанию — имя из `settings.yml`).
+
+### JSON: перенос и слияние
 
 ```bash
-# Абсолютный путь
-python3 backup_db.py export /tmp/my_backup.json
-
-# Текущая директория (с префиксом ./)
-python3 backup_db.py export ./my_backup.json
+python3 backup_db.py export backup.json                     # вся база
+python3 backup_db.py export python.json --tag python        # один тег
+python3 backup_db.py export all.json --include-deleted      # включая мягко удалённые
+python3 backup_db.py import backup.json                     # merge (по умолчанию)
+python3 backup_db.py import backup.json --mode replace      # очистить библиотеку и залить файл
 ```
 
-## Обзор команд
-
-```
-backup_db.py <command> [options]
-
-Команды:
-  export           Экспорт базы в JSON
-  import           Импорт базы из JSON
-  export-csv       Экспорт команд в CSV
-  import-csv       Импорт команд из CSV
-  export-tags-csv  Экспорт комментариев тегов в CSV
-  import-tags-csv  Импорт комментариев тегов из CSV
-  list             Просмотр всех тегов в базе
-```
-
----
-
-## Экспорт/импорт JSON
-
-### Экспорт в JSON
-
-Полный бэкап базы с метаданными:
-
-```bash
-# Экспорт всех команд
-python3 backup_db.py export backup.json
-
-# Экспорт только одного тега
-python3 backup_db.py export backup.json --tag python
-
-# Экспорт с удалёнными командами
-python3 backup_db.py export backup.json --include-deleted
-
-# Указать конкретную базу данных
-python3 backup_db.py export backup.json --db custom.db
-```
-
-**Формат JSON:**
+Формат (канонический вид; `id`/`timestamp`/`deleted` пишутся, но при импорте не используются как ключи):
 
 ```json
 {
   "version": "2.0",
   "schema_version": "v2",
-  "export_date": "2026-01-30T18:49:32.723003",
+  "export_date": "2026-09-19T21:00:00",
   "source_db": "mytags.db",
-  "tag_filter": null,
-  "total_commands": 8,
-  "total_tags": 2,
-  "tag_comments": {
-    "deploy": "Управление nginx",
-    "start": "Запуск приложения"
-  },
+  "tag_filter": "python",
+  "total_commands": 12,
+  "total_tags": 1,
+  "tag_comments": {"python": "про python"},
   "commands": [
-    {
-      "id": 2,
-      "tag": "deploy",
-      "tid": 1,
-      "command": "systemctl restart nginx",
-      "timestamp": "2026-01-29 17:03:20.276280",
-      "deleted": false,
-      "comment": ""
-    }
+    {"id": 42, "tag": "python", "tid": 1, "command": "python -V",
+     "timestamp": "…", "deleted": 0, "comment": "версия"}
   ]
 }
 ```
 
-### Импорт из JSON
+Импорт:
+
+- `merge` (по умолчанию) — строки, у которых пара `(тег, tid)` уже занята живой командой, пропускаются
+  (повторный импорт того же файла ничего не добавляет); остальные добавляются.
+- `replace` — сначала очищаются команды и комментарии тегов, затем импорт.
+- `--keep-tids` — сохранять `tid` из файла, если он свободен (по умолчанию каждой строке даётся новый `tid`).
+- Мягко удалённые строки (`deleted: 1`) при импорте пропускаются.
+- Комментарии тегов из `tag_comments` переносятся.
+
+**Точный слепок базы — это SQLite-снимок, а не JSON**: `backup`, `:backup` в TUI и авто-снимок перед
+`--seed`. JSON/CSV — перенос и правка, они не восстанавливают `id`, `use_count` и мягкие удаления.
+
+### CSV: правка в таблице
+
+CSV команд (`tag;tid;command;comment`) — единственный **адресный** импорт: строка ищется по паре
+`(тег, tid)`, существующая обновляется, отсутствующая добавляется. Комментарии тегов — отдельный файл
+(`tag;comment`).
 
 ```bash
-# Слияние с существующей базей (по умолчанию)
-python3 backup_db.py import backup.json
-
-# Замена всей базы
-python3 backup_db.py import backup.json --mode replace
-
-# Авто-назначение новых TID при конфликтах
-python3 backup_db.py import backup.json --no-preserve-tid
-```
-
-**Режимы импорта:**
-
-| Режим | Описание |
-|-------|----------|
-| `merge` (по умолчанию) | Обновление существующих команд + добавление новых |
-| `replace` | Очистка базы перед импортом |
-
----
-
-## Экспорт/импорт CSV
-
-CSV формат предназначен для редактирования в таблицах (Excel, LibreOffice Calc, Google Sheets).
-
-### Экспорт команд в CSV
-
-```bash
-# Экспорт всех команд
-python3 backup_db.py export-csv commands.csv
-
-# Экспорт одного тега
 python3 backup_db.py export-csv commands.csv --tag python
-
-# Экспорт с удалёнными командами
-python3 backup_db.py export-csv commands.csv --include-deleted
-```
-
-**Формат CSV (commands.csv):**
-
-```csv
-tag;tid;command;comment
-deploy;1;systemctl restart nginx;Перезапуск nginx
-deploy;2;nginx -t;Проверка конфигурации
-test;1;echo "test";Тестовая команда
-```
-
-**Структура:**
-- `tag` - имя тега
-- `tid` - локальный ID в пределах тега (число)
-- `command` - текст команды
-- `comment` - комментарий к команде (опционально)
-
-### Импорт команд из CSV
-
-```bash
-# Слияние с существующей базей
+$EDITOR backups/commands.csv
 python3 backup_db.py import-csv commands.csv
 
-# Замена всей базы
-python3 backup_db.py import-csv commands.csv --mode replace
-```
-
-**Правила импорта:**
-
-1. **Обновление**: Если пара `tag`+`tid` существует - команда и комментарий обновляются
-2. **Добавление**: Если пара `tag`+`tid` не существует - создаётся новая запись
-3. **Пустые поля**: Пустые `tag` или `command` пропускаются с предупреждением
-4. **Неверный TID**: Нечисловые `tid` пропускаются с предупреждением
-
----
-
-## Экспорт/импорт комментариев тегов
-
-### Экспорт комментариев тегов
-
-```bash
 python3 backup_db.py export-tags-csv tags.csv
-```
-
-**Формат CSV (tags.csv):**
-
-```csv
-tag;comment
-deploy;Управление nginx
-start;Запуск приложения
-test;Тестовые команды
-```
-
-### Импорт комментариев тегов
-
-```bash
 python3 backup_db.py import-tags-csv tags.csv
 ```
 
----
-
-## Просмотр базы данных
+### Прочее
 
 ```bash
-# Просмотр всех тегов
-python3 backup_db.py list
-
-# Просмотр с комментариями
-python3 backup_db.py list --show-comments
-
-# Указать конкретную базу
-python3 backup_db.py list --db custom.db
+python3 backup_db.py list --show-comments     # теги, число команд, комментарии (без TUI; в TUI — :stats / ??)
 ```
 
-**Пример вывода:**
-
-```
-Database: mytags.db
-------------------------------------------------------------
-  [deploy] 7 commands - Управление nginx
-  [start] 1 commands - Запуск приложения
-  [test] 1 commands
-------------------------------------------------------------
-  Total: 9 commands
-```
-
----
-
-## Типичные сценарии использования
-
-### Бэкап перед изменениями
+### backup и restore
 
 ```bash
-# Создать полный бэкап
-python3 backup_db.py export backup_$(date +%Y%m%d).json
+python3 backup_db.py backup                    # снимок SQLite + JSON + CSV в backups/
+python3 backup_db.py restore backup.json       # вернуть файл в базу
+./backup_db.sh backup                          # то же через обёртку
+./backup_db.sh restore backup.json
 ```
 
-### Редактирование команд в Excel
+`backup` делает три вещи сразу: копию SQLite (`<база>-manual-<штамп>.db` — точный слепок),
+`backup_<штамп>.json` (перенос) и `commands_<штамп>.csv` / `tags_<штамп>.csv` (правка).
+
+`restore` **сначала снимает копию текущей базы** (`<база>-pre-restore-<штамп>.db`), потом импортирует
+файл: `.json` — как `import`, `.csv` — по заголовку (с `tid` это команды, без — комментарии тегов).
+Откат — скопировать снимок поверх базы.
+
+`backup_db.sh` — тонкая обёртка над этими двумя командами (никакой своей логики разбора имён файлов).
+
+## Снимки SQLite и `backup_dir`
+
+Каждый `--seed` (если в базе уже есть команды), `:relang` и `:backup` кладут в `backup_dir` копию базы:
+`mytags-pre-git-YYYYMMDD-HHMMSS.db`, `mytags-manual-….db` и т.п. Это полный слепок (включая `id`,
+`use_count`, мягкие удаления) — вернуть его можно копированием файла поверх рабочей базы.
+
+## Связь с TUI
+
+| TUI | CLI | Что это |
+|-----|-----|---------|
+| `:export <tag> [f.json]` | `export --tag` | JSON одного тега |
+| `:export * [f.md]` | — | Markdown-каталог библиотеки |
+| `:import <f.json>` | `import` | JSON в базу (в TUI — всегда с новыми `tid`) |
+| `:backup` | `backup` (без JSON/CSV) | снимок SQLite |
+| — | `export-csv` / `import-csv` | адресная правка по `tid` |
+| — | `export-tags-csv` / `import-tags-csv` | правка комментариев тегов |
+| — | `restore` | импорт + снимок до операции |
+| `:stats`, `??` | `list` | теги и счётчики |
+
+## Тесты
 
 ```bash
-# 1. Экспортировать в CSV
-python3 backup_db.py export-csv commands.csv
-
-# 2. Открыть в Excel, отредактировать, сохранить
-
-# 3. Импортировать обратно
-python3 backup_db.py import-csv commands.csv
+python3 -m pytest tests/test_db_transfer.py tests/test_backup_cli.py -q
 ```
 
-### Перенос базы на другую машину
-
-```bash
-# На машине 1: экспортировать
-python3 backup_db.py export my_commands.json
-
-# Перенести файл my_commands.json
-
-# На машине 2: импортировать
-python3 backup_db.py import my_commands.json --mode replace
-```
-
-### Экспорт одного тега для обмена
-
-```bash
-# Экспортировать только тег python
-python3 backup_db.py export python_scripts.json --tag python
-
-# Импортировать в другую базу
-python3 backup_db.py import python_scripts.json
-```
-
-### Массовое редактирование комментариев
-
-```bash
-# 1. Экспортировать команды
-python3 backup_db.py export-csv commands.csv
-
-# 2. Отредактировать колонку comment в таблице
-
-# 3. Импортировать (обновятся существующие команды)
-python3 backup_db.py import-csv commands.csv
-```
-
----
-
-## Работа с базой данных
-
-### Файл базы данных
-
-По умолчанию используется файл из `settings.yml`:
-
-```yaml
-database_tags_file: mytags.db
-```
-
-Можно указать другой файл через параметр `--db`:
-
-```bash
-python3 backup_db.py export backup.json --db /path/to/custom.db
-```
-
-### Структура базы (database_v2.py)
-
-**Таблица `commands`:**
-- `id` - глобальный уникальный ID (auto-increment)
-- `tag` - имя тега
-- `tid` - локальный ID в пределах тега (auto-increment)
-- `command` - текст команды
-- `timestamp` - время создания
-- `deleted` - флаг мягкого удаления (0/1)
-- `comment` - комментарий к команде
-
-**Таблица `tags`:**
-- `tag` - имя тега (PRIMARY KEY)
-- `comment` - комментарий к тегу
-
----
-
-## Обработка ошибок
-
-### Экспорт
-
-Если файл не существует или база пуста - будет выведено сообщение об ошибке.
-
-### Импорт
-
-При импорте CSV возможны предупреждения:
-- `Row X has insufficient columns, skipping` - недостаточно колонок
-- `Row X has empty tag or command, skipping` - пустые обязательные поля
-- `Row X has invalid tid 'X', skipping` - неверный формат TID
-
-Ошибки не прерывают импорт - продолжается обработка остальных строк.
-
----
-
-## Советы
-
-1. **Перед импортом** делайте бэкап существующей базы
-2. **CSV кодировка**: UTF-8, корректно отображает кириллицу
-3. **TID уникальны**: В пределах одного тега не могут быть дубликаты
-4. **Режим merge**: Безопасен для обновления команд - существующие обновляются, новые добавляются
-5. **Режим replace**: Полностью заменяет базу - используйте с осторожностью
-
----
-
-## Примеры
-
-```bash
-# Полный цикл редактирования в таблице
-python3 backup_db.py export-csv edit.csv
-libreoffice edit.csv
-python3 backup_db.py import-csv edit.csv
-
-# Бэкап с датой
-python3 backup_db.py export "backup_$(date +%F).json"
-
-# Работаем с копией базы
-python3 backup_db.py list --db test_history.db
-python3 backup_db.py export test.json --db test_history.db
-```
+`tests/test_db_transfer.py` — форматы, терпимое чтение старого вида JSON, отказ от переноса `id`,
+merge/replace, адресный CSV, Markdown; `tests/test_backup_cli.py` — команды CLI, round-trip,
+`backup`/`restore`, обёртка `backup_db.sh`.

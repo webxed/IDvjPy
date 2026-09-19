@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.147) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.148) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.147` → `v1.148`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.148` → `v1.149`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -75,7 +75,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 
 ### Supporting Modules
 
-- **`src/database_v2.py`**: SQLite tagged history
+- **`src/database_v2.py`**: SQLite tagged history — только примитивы БД (чтение/запись строк, теги, комментарии, `usage_stats`); перенос (JSON/CSV/Markdown) живёт в `src/db_transfer.py`
 - **`src/command_parser_v2.py`**: `!tag[tid]` / `!ID` / `!!` assembly
 - **`src/history_store.py`**: `history_<instance>.txt` append/read/compact + portalocker file-lock helpers; `append_history_file_lines(path, commands)` appends a batch under **one** lock, skipping empty lines and lines already in the file (idempotent re-import) and returns `AppendResult(added, error)` — a locked file or a write failure is reported instead of looking like "0 new"
 - **`src/history_import.py`**: `:h import [shell]` — import the user's shell history (bash/zsh/fish/ksh/nu/pwsh; `$HISTFILE` first, per-OS paths) into `history_<instance>.txt`. Path rules: fish and PowerShell Core use the XDG data dir on every OS, nushell the system data dir (`Application Support` / `%APPDATA%`), Windows gets only Windows paths (no POSIX junk in the "looked in" message). Parsers: zsh extended (`: ts:dur;cmd`) incl. the real `\`+newline continuation, bash `#<epoch>`, fish (`- cmd:` with a **single-pass** `\`/`\n` unescape), plain PSReadLine/nushell — plus content sniffing, so an unusual `$HISTFILE` name (e.g. `~/.history`) with zsh records still parses; `sh` is an alias of `ksh` (`.sh_history`). Big files are read from the tail (`MAX_READ_BYTES`), BOM is stripped, a binary file is an error, not junk commands. Read-only, nothing is executed. Tests: `tests/test_history_import.py`
@@ -105,6 +105,8 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/seed_catalog.py`**: empty-DB welcome catalog (click `--seed` → input)
 - **`src/demo.py`**: `--demo` YAML player (`src/demos/*.yml`); `loop: true` / `loop: N` (Esc stops). `submit_line()` (type + Enter, no wait) and `_driving()` (playback in progress: `_demo_active` or `_run_active`) are shared with `:run`. The text of a bundled tour lives in the language layer `src/demos/text/<lang>/<tour>.yml` (`title`, `captions` and `types` by step number): the base YAML keeps the steps (commands, `keys`, `pause`, `loop`) and the base text, `load_scenario(path, lang)` applies `apply_text_overlay` after loading (only for scenarios inside `demos/`)
 - **`src/ingress_analyzer.py`**: `:i` Kubernetes helper
+- **`src/db_transfer.py`**: единственная реализация экспорта/импорта библиотеки: JSON (`export_json`/`import_json`, каноническая схема + терпимое чтение обоих исторических видов, глобальные `id` из файла не берутся, `skip_existing`/`preserve_tid`/`mode=replace`), CSV команд (`export_commands_csv`/`import_commands_csv` — адресно по паре тег+tid) и комментариев тегов, Markdown-каталог (`export_markdown`), `library_overview` для `list`. Импортируется и TUI (`:export`/`:import`), и CLI (`src/backup_db.py`); тесты `tests/test_db_transfer.py`
+- **`src/backup_db.py`** (launcher `backup_db.py`, обёртка `backup_db.sh`): тонкий CLI над `db_transfer` — `export`/`import`, `export-csv`/`import-csv`, `export-tags-csv`/`import-tags-csv`, `list`, `backup` (снимок SQLite + JSON + CSV) и `restore` (снимок до операции). Своей SQL-обвязки и своей JSON-схемы больше нет; тесты `tests/test_backup_cli.py`
 - **`src/version_bump.py`** (launcher `bump_version.py`): bump `CommandRunner.VERSION` minor and sync every release file in one run (`--set`, `--dry-run`, `--check`); `check()` mirrors `tests/test_release_meta.py` plus the bold state markers of `DATABASE.md` / `backup_db.md` (`BOLD_VERSION_DOCS`; `TARGETS` also covers them — `tests/test_version_bump.py` asserts `set(TARGETS) == set(FIXTURES)`)
 - **`src/app.tcss`**: Textual styling (`.tcss` — расширение Textual CSS; браузерный CSS-линтер редактора не должен его разбирать — иначе ложные `property value expected` на `$surface`/`dock`). Путь читается из `CommandRunner.CSS_PATH`; сторожит `tests/test_stylesheet.py`
   - Блок в фокусе подсвечивается смешением `background: $primary 25%` (сплошной `$primary-darken-1` слепил на больших блоках); правила `Screen.matrix-mode …` меняют рамки только у темы matrix

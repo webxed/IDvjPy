@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.147
+# План тестирования IDvjPy_term v1.148
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -641,11 +641,13 @@ cd /tmp
 ```
 #demo echo one
 :export demo
+:import demo.json
+:export
 ```
 
-**Ожидание:** JSON с тегом; `:import` создаёт новые tid (не затирает).
+**Ожидание:** `:export demo` → `demo.json` (каноническая схема: `export_date`, `total_commands`, `tag_comments`, `commands` с `id`/`timestamp`/`deleted`); `:export demo.json` без тега → `demo.json`; `:import demo.json` создаёт **новые** `tid` (не затирает); `:export` без аргументов — Usage. Глобальные `id` из файла импортом не берутся (чужой `id` не может затереть другую строку). То же и в CLI: `python3 backup_db.py export f.json` / `import f.json [--mode replace] [--keep-tids]` — одна реализация, `src/db_transfer.py`; адресная правка по `tid` — `export-csv` / `import-csv`; снимок и возврат — `backup` / `restore <file>` (со снимком до операции); обёртка `./backup_db.sh backup|restore <file>`.
 
-Автотесты: `test_replay_puts_command_in_input`, `test_cd_changes_app_cwd`, `test_colon_cd_and_missing_dir`, `test_colon_theme_sets_and_lists`, `test_toggle_dark_saves_theme`, `test_export_and_import_tag`.
+Автотесты: `test_replay_puts_command_in_input`, `test_cd_changes_app_cwd`, `test_colon_cd_and_missing_dir`, `test_colon_theme_sets_and_lists`, `test_toggle_dark_saves_theme`, `test_export_and_import_tag`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`.
 
 ---
 
@@ -1483,7 +1485,7 @@ steps:
 
 ---
 
-**Версия документа**: v1.92
-**Версия приложения**: v1.147
-**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
+**Версия документа**: v1.94
+**Версия приложения**: v1.148
+**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

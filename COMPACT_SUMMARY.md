@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.147**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.148**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,9 +145,11 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.92 (app v1.147) |
+| `test_cmd.md` | Manual plan v1.94 (app v1.148) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
+| `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
+| `tests/test_backup_cli.py` | CLI `backup_db.py`: round-trip export/import, `--tag`, `list`, `--mode replace`/`--keep-tids`, CSV-правка, `backup`/`restore` (со снимком до), отказ от чужих `id`, тонкость обёртки `backup_db.sh` |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
@@ -183,11 +185,13 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.147 |
+| `src/app.py` | TUI (`CommandRunner`), v1.148 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
-| `src/database_v2.py` | SQLite tagged history |
+| `src/database_v2.py` | SQLite tagged history — только примитивы БД (чтение/запись строк, теги, комментарии, `usage_stats`); перенос — в `src/db_transfer.py` |
+| `src/db_transfer.py` | Единственная реализация переноса библиотеки: JSON (`export_json`/`import_json` — каноническая схема, терпимое чтение обоих исторических видов, глобальные `id` из файла не берутся, `skip_existing`/`preserve_tid`/`mode=replace`), CSV команд (адресно по тег+tid) и комментариев тегов, Markdown-каталог, `library_overview` для `list`. Один код для TUI (`:export`/`:import`) и CLI |
+| `src/backup_db.py` | Тонкий CLI над `db_transfer` (`backup_db.py` + обёртка `backup_db.sh`): `export`/`import`, `export-csv`/`import-csv`, `export-tags-csv`/`import-tags-csv`, `list`, `backup` (снимок SQLite + JSON + CSV), `restore` (со снимком до операции). Своей SQL-обвязки и своей JSON-схемы больше нет |
 | `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
 | `src/seed_catalog.py` | Empty-DB welcome catalog (click `--seed` / `.md`); texts from `catalog.*` (`locales/<lang>/seed.yml`), commands/scripts never translated |
 | `src/md_viewer.py` | Modal Markdown viewer (`:md`, welcome links). Handbook lookup is language-aware: `handbook_md_path(name, lang)` prefers `docs/<lang>/NAME`, then `docs/NAME`, then `NAME` (repo root / cwd) — a language without its own copy gets the base handbook |
@@ -225,6 +229,13 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.148
+
+- **Один механизм переноса базы вместо трёх.** Анализ показал 12 точек входа для экспорта/импорта, из которых две были настоящими дублями: JSON-перенос был реализован и в TUI (`database_v2.export_tag_to_file`/`import_tag_from_file`), и в CLI (`backup_db.export_db`/`import_db` — со своей SQL-обвязкой, своим `CREATE TABLE` и своим набором полей при **том же** `schema_version: "v2"`), а `backup_db.sh` повторял команды CLI через `ls|grep|sed`. Теперь формат один — `src/db_transfer.py`: канонический JSON (`export_date`, `total_*`, `tag_comments`, `commands` с `id`/`timestamp`/`deleted`) с терпимым чтением обоих исторических видов, CSV команд (адресно по паре тег+tid) и комментариев тегов, Markdown-каталог, `library_overview` для `list`. TUI (`:export`/`:export *`/`:import`) и CLI импортируют его, `database_v2` вернулся к роли «только примитивы БД».
+- **Безопасный импорт.** Глобальные `id` из файла больше **никогда** не переносятся: раньше CLI-импорт вставлял их как есть и при конфликте делал UPDATE существующей строки — чужой `id` мог затереть другую команду. Теперь по умолчанию каждая строка получает новый `tid`, `preserve_tid` управляется `--keep-tids` только для `tid`, мягко удалённые строки при импорте пропускаются, а точный слепок делается SQLite-снимком. TUI-импорт сохранил прежнее поведение (новые `tid`, однoтеговый файл — `db_transfer.payload_tag`).
+- **CLI стал тонким (786 → ~380 строк) и получил `backup`/`restore`:** `backup` = снимок SQLite + JSON + CSV одной командой (то, что раньше делал `backup_db.sh`), `restore <файл>` = снимок **до** операции + импорт (тип файла — по расширению и заголовку CSV). `backup_db.sh` переписан в две строки-обёртки (никакой своей логики разбора имён), лаунчер `backup_db.py` теперь возвращает код возврата. Свой JSON-формат и своя SQL-запись в CLI удалены.
+- **Тесты на CLI, которых не было вовсе** (`tests/test_backup_cli.py`, 14: round-trip, `--tag`, `list`, `--mode replace`/`--keep-tids`, CSV-правка по tid, `backup`/`restore`, отсутствие graft'а `id`, тонкость обёртки) и на модуль переноса (`tests/test_db_transfer.py`, 13). Доки: `backup_db.md` переписан (два вида бэкапа, таблица «что чем делать»), README (+таблица механизмов в ru/en/zh), `CLAUDE.md`, `AGENTS.md` (конвенция про единый модуль), `test_cmd.md` (секция 25, версия документа v1.93).
 
 ## v1.147
 

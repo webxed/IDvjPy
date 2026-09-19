@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.147 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.148 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -299,7 +299,20 @@ curl -H "Bearer $TOKEN" https://api.example   # 普通的 $TOKEN 替换
 - `:log [N]`（F7）—— 在可滚动的 **Line-API** 查看器中显示块的完整输出（不再截断到 300 行）：方向键/PgUp/PgDn、Esc/q；文本搜索 —— `/`（Enter —— 向前，`n`/`N` —— 下一个/上一个匹配，Esc —— 关闭搜索框），匹配行整行高亮（强调色背景 + bold）；`f` —— 只保留有匹配的行（再次 `f` 或 Esc 恢复全部输出，副标题中的行号会恢复为原始行号）。`N` —— 倒数第几个块（0 = 聚焦/最后一个）。行是真实的（如同 F3），如有 `STDERR` 也会包含。`y` 会复制来源文件的路径（raw 视图 `:md`）；对块输出则明确显示 `No file path to copy`
 - `:name [<label>|<label>-|-]` —— 缓冲区标记：为聚焦（否则最后一个已完成）块打标记，以便从中管道而无需重新运行来源（`:name buff` → `|@buff awk '{...}'`）。不带参数时列出标记，`<label>-` —— 取消一个，`-` —— 全部。也可通过 `F8` 打开对话框。标记显示在块的头部（`[buff]`）；写入历史时管道记录为完整调用 `<来源> | <命令>`
 - `:/text` / `:g` / `:n` / `:N` —— 按日志行搜索（在块上按 `/` 会打开 `:/`；`n`/`N` —— 下一个 / 上一个）
-- `:export tag [file]` / `:import file` —— 单个标签与 JSON 互转
+- `:export tag [file.json]` / `:import file.json` —— 单个标签与 JSON 互转（导入总是分配新的 `tid`；格式与 CLI 共用，`src/db_transfer.py`）；`:export * [library.md]` —— 整个库导出为 Markdown 目录
+
+**导出/导入：什么场景用什么**（格式只有一份实现 —— `src/db_transfer.py`，CLI 只是薄壳）：
+
+| 任务 | TUI | CLI（`python3 backup_db.py …`） |
+|------|-----|--------------------------------|
+| 把标签搬到另一个实例/机器 | `:export tag file.json`，在那里 `:import file.json` | `export` / `import [--mode merge\|replace] [--keep-tids]` |
+| 数据库的精确快照（回滚到「原样」） | `:backup` | `backup`（SQLite 快照 + JSON + CSV），用 `restore <文件>` 还原 |
+| 在表格里改命令和注释 | — | `export-csv` / `import-csv`（按 `tid` 定位），`export-tags-csv` / `import-tags-csv` |
+| 不开 TUI 看标签 | `:stats`、`??` | `list [--show-comments]` |
+| 库目录导出为 Markdown | `:export * library.md` | — |
+| 命令导出为 bash 函数 | `:alias tag\|* [file.sh]` | — |
+
+JSON 用于搬运和合并（**绝不用**文件里的全局 `id`：以前外来的 `id` 可能覆盖另一行；默认每行都会拿到新的 `tid`）。**精确快照**只有 SQLite 副本。详见 [`backup_db.md`](backup_db.md)。
 - `:playbook [file.yml]` —— 把本会话的命令（Enter）记录为供 `--demo` / `:run` 使用的 YAML（默认 `playbook.yml`）。`:playbook -` —— 在日志中预览；`:playbook clear` —— 遗忘已记录的内容。按键（Tab/F5）和鼠标不会被记录。YAML 中：`loop: true` / `loop: N` —— 循环步骤（Esc —— 停止）；见 [DEMO.md](../../DEMO.md)。
 - `:run <tag|文件.yml> [--step] [--dry]` —— 运行命令链（runbook）：`auto` 步骤依次执行并等待完成，`manual` 把命令插入输入行并等待 Enter（可以修改），`prompt` 等待你输入的字符串。某步出错会停止运行，`Esc` / `:run stop` 也会。标签的步骤模式由注释中的指令决定（`run:manual`、`run:prompt`、`run:pause=2`、`run:continue`）；如果标签中没有任何这类指令，计划会警告：所有步骤都将以 `auto` 执行（过期的种子或 v1.124 之前保存的自有标签就是这样）。`--step` —— 每步都等 Enter，`--dry` —— 只显示计划。完整帮助 —— `:? run`，现成命令链 —— `:run vapprole`。YAML 的相对路径按进程的 cwd 计算（用别名从 `~` 启动时则从 `~` 算）：命令链更稳妥的做法是保存在标签里——数据库位于数据目录中
 - `:update` —— 把 `VERSION` 与 GitHub [`webxed/IDvjPy`](https://github.com/webxed/IDvjPy) `main` 比较。启动时如果 `check_updates: true` 也会做同样的事（仅当 GitHub 上更新时才写入日志）。带认证的代理：`.bashrc_term` 中的 `$PROXY_USER` / `$PROXY_PASS`（外加 `HTTPS_PROXY` / `HTTP_PROXY`）。

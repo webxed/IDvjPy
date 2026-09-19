@@ -4,6 +4,7 @@ import pytest
 pytestmark = pytest.mark.slow
 
 import database_v2 as database
+import db_transfer
 from app import CommandRunner
 from tests.conftest import last_info, submit
 
@@ -21,7 +22,7 @@ def test_db_markdown_catalog(isolated_home):
     db = isolated_home / "lib.db"
     _seed(db)
     out = isolated_home / "catalog.md"
-    n = database.export_all_to_markdown(str(db), str(out))
+    n = db_transfer.export_markdown(str(db), str(out))
     assert n == 3
     text = out.read_text(encoding="utf-8")
     assert text.startswith("# Command library")
@@ -35,7 +36,7 @@ def test_db_markdown_empty(isolated_home):
     db = isolated_home / "empty.db"
     database.init_db(str(db))
     out = isolated_home / "empty.md"
-    assert database.export_all_to_markdown(str(db), str(out)) == 0
+    assert db_transfer.export_markdown(str(db), str(out)) == 0
     assert "_Empty library" in out.read_text(encoding="utf-8")
 
 
