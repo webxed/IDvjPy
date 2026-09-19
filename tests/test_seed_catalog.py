@@ -94,3 +94,38 @@ def test_handbook_md_path_prefers_language_dir(tmp_path, monkeypatch):
     en_path = handbook_md_path("SEED_MINE.md", "en")
     assert en_path is not None
     assert en_path.read_text(encoding="utf-8") == "base"
+
+
+def _catalog_docs() -> list[str]:
+    return [doc for _script, doc in SEED_HANDBOOKS_CORE + SEED_HANDBOOKS_OPS if doc]
+
+
+def test_every_handbook_has_english_doc():
+    """У каждого справочника из каталога есть английский файл `docs/en/<NAME>.md`.
+
+    `handbook_md_path` умеет падать на базовый (русский) файл — этот тест требует
+    именно перевод, чтобы `:md <имя>` на языке `en` не показывал кириллицу.
+    """
+    from md_viewer import REPO_ROOT, handbook_md_path
+
+    missing = [
+        doc for doc in _catalog_docs() if not (REPO_ROOT / "docs" / "en" / doc).is_file()
+    ]
+    assert not missing, f"нет английского справочника: {missing}"
+    for doc in _catalog_docs():
+        path = handbook_md_path(doc, "en")
+        assert path is not None and path.parent.name == "en", doc
+
+
+def test_english_handbooks_have_no_cyrillic():
+    """`docs/en/` — перевод: кириллица там только ошибка (забыли перевести)."""
+    import re
+
+    from md_viewer import REPO_ROOT
+
+    cyrillic = re.compile(r"[\u0400-\u04FF]")
+    bad: list[str] = []
+    for path in sorted((REPO_ROOT / "docs" / "en").glob("*.md")):
+        if cyrillic.search(path.read_text(encoding="utf-8")):
+            bad.append(path.name)
+    assert not bad, f"кириллица в docs/en: {bad}"

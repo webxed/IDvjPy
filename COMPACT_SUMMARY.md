@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.139**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.140**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.83 (app v1.139) |
+| `test_cmd.md` | Manual plan v1.84 (app v1.140) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.139 |
+| `src/app.py` | TUI (`CommandRunner`), v1.140 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -219,6 +219,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.140
+
+- **Английские справочники команд (`docs/en/`).** 26 файлов — все `SEED_*_COMMANDS.md` и обзорный `K8S_CHAINS.md` — переведены на английский. `handbook_md_path(name, lang)` уже предпочитал `docs/<lang>/` с откатом на базу, так что `:md SEED_GIT_COMMANDS.md` на языке `en` открывает английский текст, а на `ru` — базовый русский (файлы в `docs/` и корне). Структура сверена построчно (заголовки, ряды таблиц, код-блоки, `---`), машинно-кодо-подобные токены оставлены как есть; ссылки внутри перевода — сиблинги (`SEED_DISK_COMMANDS.md`, `K8S_CHAINS.md`). Заодно исправлена опечатка в `src/seed_catalog.py`: справочник sysstat назывался `SEED_SYSTAT_COMMANDS.md` вместо фактического `SEED_SYSSTAT_COMMANDS.md`, из-за чего ссылка `:md` в `:welcome` вела в никуда. Тесты: `tests/test_seed_catalog.py` (+2: у каждого справочника каталога есть `docs/en/<NAME>.md` и `handbook_md_path` резолвит именно его; в `docs/en/` нет кириллицы).
 
 ## v1.139
 

@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.139 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.140 — умный терминал для создания командных строк из тегов.
 
 ## Что это?
 
@@ -434,6 +434,8 @@ python3 -m pytest tests/ -v
 Каждый сид перезаписывает **только свои** теги. Язык комментариев берётся из `language` в `settings.yml` (или `$IDVJPY_LANG`): базовый текст живёт в `src/seed_*.py`, переводы — в `src/seed_text/<lang>/<handbook>.yml` (см. `src/seed_text/README.md`), поэтому по умолчанию `--seed` кладёт английские подписи, а `language: ru` — прежние русские. Уже посеянная библиотека язык не меняет: сменить подписи без замены тегов можно командой `:relang <код>` (или `python3 src/relang.py --lang ru`), а полный повторный `--seed` заменит свои теги (пользовательские — нет); перед этим полезен `:backup`. Если в БД уже есть команды, перед заменой пишется снимок SQLite в `backups/` (`mytags-pre-git-YYYYMMDD-HHMMSS.db` и т.п.; каталог — `backup_dir` в `settings.yml`). То же вручную: `:backup` → `mytags-manual-….db`. Пустую базу не копирует. `seed_ops.py` делает **один** снимок на все модули. Вернуть: скопировать файл поверх `mytags.db`.
 
 Цепочки для расследования k8s: [`K8S_CHAINS.md`](K8S_CHAINS.md). `python3 src/seed_k8s_chains.py --seed` (не трогает `proc` / `file` / `net` / `kube`).
+
+Сами справочники тоже по языкам: базовые лежат в `docs/` (обзор k8s — в корне), английские переводы — в `docs/en/`. `:md SEED_GIT_COMMANDS.md` открывает текст выбранного языка (`handbook_md_path` сначала ищет `docs/<lang>/`, иначе — базу).
 
 | Скрипт | Документация | Теги |
 |--------|--------------|------|

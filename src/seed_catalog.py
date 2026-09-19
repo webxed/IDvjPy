@@ -57,7 +57,7 @@ SEED_HANDBOOKS_OPS = (
     ("seed_disk.py", "SEED_DISK_COMMANDS.md"),
     ("seed_systemd.py", "SEED_SYSTEMD_COMMANDS.md"),
     ("seed_sysinfo.py", "SEED_SYSINFO_COMMANDS.md"),
-    ("seed_sysstat.py", "SEED_SYSTAT_COMMANDS.md"),
+    ("seed_sysstat.py", "SEED_SYSSTAT_COMMANDS.md"),
     ("seed_vault.py", "SEED_VAULT_COMMANDS.md"),
     ("seed_text.py", "SEED_TEXT_COMMANDS.md"),
     ("seed_pipe.py", "SEED_PIPE_COMMANDS.md"),
