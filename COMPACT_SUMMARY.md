@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.137**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.138**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.81 (app v1.137) |
+| `test_cmd.md` | Manual plan v1.82 (app v1.138) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.137 |
+| `src/app.py` | TUI (`CommandRunner`), v1.138 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -218,6 +218,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.138
+
+- **Заставка (матрица, звёздное поле) больше не греет CPU.** Симптом: «матричный дождь» съедал процессор и подтормаживал, особенно на большом терминале и после долгого показа. Причина — самая дорогая часть кадра: `render_text()` собирал `rich.Text` **по ячейке** (200×50 — это ~9.6k вызовов `Text.append` на кадр, и каждый стилизованный — ещё и `Style.parse`, который Rich не кэширует), а `_paint` перерисовывал холст на каждом тике 20 fps — притом что дождь идёт 1.8–6 строк/с, то есть за тик сдвигается меньше чем на строку. Профиль (`cProfile`, 3 с, 200×50): 425k вызовов `Text.append` и 6.0M вызовов функций всего, `_tick` — 1.36 с из 3 с, ~15 fps вместо 20 (цикл событий занят). Что сделано: (1) `cells_to_text()` клеит соседние ячейки одного стиля в один `Text.append`, а `_style_object()` кэширует разобранный `Style` (палитры — константы); (2) `_paint` троттлится до `PAINT_INTERVAL` (10 fps) и пропускает кадры, у которых не менялся `field.version`; `resize` рисует принудительно, `TICK_SECONDS` для симуляции оставлен 20 fps (лента/справка/load живут по `dt`, картинка не меняется); (3) `MatrixRain.tick`/`StarField.tick` возвращают «что-то видимое изменилось» и ведут `version` — у дождя это пересечение целой строки головой и мерцание **только видимых** строк хвоста (`_visible_row`), у звёзд — смена клетки/стиля часов. Замер после правки (то же 200×50, 3 с): сборка кадра **24.7 → 4.5 мс**, перерисовок **14.7 → 7.3 в секунду**, CPU холста **1.09 → 0.10 с** (~11×), вызовов функций 6.0M → 1.9M, цикл событий в основном простаивает (таймер и раньше снимался в `on_unmount` — утечки таймеров не было, память и число объектов за 2000 кадров не растут). Тесты: `tests/test_screensaver.py` (+6: группировка стилей и кэш разобранных стилей в `cells_to_text`, `tick` сообщает только видимые изменения, мерцание только по видимым строкам, `StarField` при `dt=0` не меняется, троттлинг и пропуск неизменённого кадра в `_paint`; поправлено сравнение `span.style` — теперь там разобранный `Style`).
 
 ## v1.137
 

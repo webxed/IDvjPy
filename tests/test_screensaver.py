@@ -4,8 +4,10 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 
+from rich.style import Style
 from rich.text import Text
 from textual.app import App as TextualApp
+from textual.widgets import Static
 
 from app import CommandRunner
 from screensaver import (
@@ -14,6 +16,7 @@ from screensaver import (
     MATRIX_MAX_SPEED,
     MATRIX_MIN_SPEED,
     MATRIX_TAIL_STYLES,
+    PAINT_INTERVAL,
     TICK_SECONDS,
     TICKER_SEP,
     DevopsScreensaver,
@@ -23,6 +26,7 @@ from screensaver import (
     LibraryTicker,
     MatrixRain,
     StarField,
+    cells_to_text,
     clock_glyph,
     command_help_lines,
     flatten_command,
@@ -299,10 +303,11 @@ def test_matrix_rain_render_uses_glyphs_and_trail():
     assert glyphs  # дождь нарисован
     assert glyphs <= set(MATRIX_GLYPHS)
     # Голова — самым ярким стилем, хвост затухает в пределах палитры.
-    assert MATRIX_HEAD_STYLE in {span.style for span in text.spans}
+    # В `Text` стили лежат разобранными (`Style`), поэтому сравниваем парсы.
+    assert Style.parse(MATRIX_HEAD_STYLE) in {span.style for span in text.spans}
     assert {span.style for span in text.spans} <= {
-        MATRIX_HEAD_STYLE,
-        *MATRIX_TAIL_STYLES,
+        Style.parse(MATRIX_HEAD_STYLE),
+        *(Style.parse(style) for style in MATRIX_TAIL_STYLES),
     }
     assert rain._style_for(0) == MATRIX_HEAD_STYLE
     assert rain._style_for(1) == MATRIX_TAIL_STYLES[0]
@@ -678,4 +683,96 @@ async def test_mouse_move_resets_screensaver_idle(isolated_home):
         app.on_mouse_move(events.MouseMove(None, 0, 0, 0, 0, 0, False, False, False))
         await pilot.pause()
         assert app._ss_timer is not None and app._ss_timer is not first
+        app.screensaver_idle = 0
+
+
+# --- Стоимость кадра: сборка текста, троттлинг отрисовки ----------------------
+
+
+def test_cells_to_text_groups_style_runs():
+    """Кадр собирается кусками по стилю, а не по одной ячейке (было ~9.6k append)."""
+    cells = [
+        [("a", ""), ("b", ""), ("c", "bold"), ("d", "bold"), ("e", "")],
+        [("x", "")],
+    ]
+    canvas = cells_to_text(cells)
+    assert canvas.plain == "abcde\nx"
+    # Плейн-текст span'ов не создаёт, «cd» — один span на два одинаковых стиля
+    # (раньше был бы один `Text.append` на каждую из 5 ячеек).
+    assert len(canvas.spans) == 1
+    span = canvas.spans[0]
+    assert (span.start, span.end) == (2, 4)
+    assert span.style == Style.parse("bold")
+
+
+def test_cells_to_text_reuses_parsed_styles():
+    """Стили палитры парсятся один раз (Rich не кэширует `Style.parse`)."""
+    first = cells_to_text([[("a", "bold #00ff5f")]])
+    second = cells_to_text([[("b", "bold #00ff5f")]])
+    assert first.spans[0].style == second.spans[0].style
+
+
+def test_matrix_tick_reports_only_visible_changes():
+    rain = MatrixRain(20, 8, seed=3)
+    rain.columns = []
+    rain.version = 0
+    assert rain.tick(TICK_SECONDS) is False
+    assert rain.version == 0
+
+    rain = MatrixRain(20, 8, seed=3)
+    before = rain.version
+    assert rain.tick(5.0) is True  # большой шаг — головы пересекли строки
+    assert rain.version == before + 1
+
+
+def test_matrix_flicker_touches_only_visible_rows():
+    """Мерцание выбирает строку хвоста в пределах экрана (вне экрана мерцать нечему)."""
+    rain = MatrixRain(10, 6, seed=5)
+    column = rain.columns[0]
+    column.y, column.length = 3.4, 4
+    for _ in range(50):
+        row = rain._visible_row(column)
+        assert row is not None
+        assert 0 <= row <= 3
+
+    column.y = -20.0  # хвост целиком над экраном
+    assert rain._visible_row(column) is None
+
+
+def test_starfield_tick_reports_no_change_for_zero_dt():
+    field = StarField(60, 20, seed=7, now=lambda: datetime(2026, 1, 1, 12, 0, 0))
+    field.tick(0.0)  # первый тик мог досчитать часы
+    before = field.version
+    assert field.tick(0.0) is False
+    assert field.version == before
+
+
+async def test_paint_is_throttled_and_skips_unchanged_field(isolated_home):
+    """Холст перерисовывается не чаще `PAINT_INTERVAL` и только при изменениях поля."""
+    assert PAINT_INTERVAL > 0
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await submit(pilot, ":screensaver")
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, DevopsScreensaver)
+        canvas = screen.query_one("#ss-canvas", Static)
+        calls: list[int] = []
+        original = canvas.update
+        canvas.update = lambda *args, **kwargs: (
+            calls.append(1),
+            original(*args, **kwargs),
+        )[1]
+
+        screen._paint(force=True)
+        assert len(calls) == 1
+        screen._paint()  # только что рисовали — троттлинг
+        assert len(calls) == 1
+        screen._last_paint_at = 0.0  # время прошло, но поле не менялось
+        screen._paint()
+        assert len(calls) == 1
+        screen._field.version += 1  # поле изменилось — кадр пересобираем
+        screen._last_paint_at = 0.0
+        screen._paint()
+        assert len(calls) == 2
         app.screensaver_idle = 0

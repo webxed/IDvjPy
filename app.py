@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from typing import Any
 
 _SRC = Path(__file__).resolve().parent / "src"
 _APP_FILE = _SRC / "app.py"
@@ -29,6 +30,18 @@ def _load_src_app():
 
 _real = _load_src_app()
 globals().update({k: v for k, v in vars(_real).items() if k != "__name__"})
+
+
+def __getattr__(name: str) -> Any:
+    """PEP 562 hook so static checkers see the re-exports.
+
+    The real names are injected by ``globals().update`` above, so at runtime this
+    is only reached for genuinely missing attributes. Type checkers cannot follow
+    that update, and without this hook ``from app import CommandRunner`` in a
+    root-level script is reported as an unknown import symbol; delegating via
+    ``__getattr__`` resolves it to the ``src/app.py`` object instead.
+    """
+    return getattr(_real, name)
 
 if __name__ == "__main__":
     args = _real.parse_arguments()

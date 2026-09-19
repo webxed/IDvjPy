@@ -16,10 +16,12 @@ from __future__ import annotations
 
 import os
 import random
+import time
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
+from rich.style import Style
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.events import Click, Key, MouseDown, MouseScrollDown, MouseScrollUp
@@ -84,6 +86,10 @@ MATRIX_FLICKER_PER_SECOND = 2.0  # сколько раз в секунду в х
 # Кадр заставки: 20 fps. Все тики принимают `dt`, поэтому на скорости звёзд, ленты,
 # справки и load/RAM это не влияет — только на плавность движения.
 TICK_SECONDS = 0.05
+# Перерисовка холста реже, чем симуляция: дождь идёт 1.8–6 строк/с (за кадр
+# меньше строки), звёзды/лента/справка тоже живут по `dt`, так что 20 fps
+# симуляции при 10 fps отрисовки не меняют картинку — только вдвое меньше CPU.
+PAINT_INTERVAL = 0.1
 HELP_PAUSE_SEC = 2.2
 HELP_INDENT_RATIO = 0.2  # off the left edge, left of center
 HOST_POLL_SEC = 1.0  # /proc reads; not every starfield frame
@@ -160,6 +166,48 @@ def command_help_lines() -> tuple[str, ...]:
     запасным, если локалей нет. Совпадение наборов сторожит `tests/test_i18n.py`.
     """
     return tlist("screensaver.help") or COMMAND_HELP_LINES
+
+
+# Кэш разобранных стилей палитры (см. `_style_object`).
+_STYLE_CACHE: dict[str, Style] = {}
+
+
+def _style_object(spec: str) -> Style:
+    """Разобранный `Style` по строке — с кэшем.
+
+    Палитры заставки — константы, а `Style.parse` не кэширует: при поячеечной
+    сборке кадра он вызывался на каждую стилизованную ячейку (замер профиля:
+    13.8k раз за 3 с).
+    """
+    cached = _STYLE_CACHE.get(spec)
+    if cached is None:
+        cached = Style.parse(spec)
+        _STYLE_CACHE[spec] = cached
+    return cached
+
+
+def cells_to_text(cells: Sequence[Sequence[tuple[str, str]]]) -> Text:
+    """Собрать `Text` из сетки `(глиф, стиль)`, склеивая соседние одинаковые стили.
+
+    Поячеечный `Text.append` на 200×50 — это ~9.6k вызовов на кадр (столько же
+    span'ов потом разбирает Textual); куски уменьшают и то, и другое в разы.
+    """
+    canvas = Text()
+    for y, row in enumerate(cells):
+        if y:
+            canvas.append("\n")
+        if not row:
+            continue
+        start, style = 0, row[0][1]
+        for x in range(1, len(row) + 1):
+            current = row[x][1] if x < len(row) else None
+            if current != style or x == len(row):
+                canvas.append(
+                    "".join(cell[0] for cell in row[start:x]),
+                    style=_style_object(style) if style else None,
+                )
+                start, style = x, current
+    return canvas
 
 
 def clock_glyph(moment: datetime, label: str) -> str:
@@ -577,6 +625,7 @@ class StarField:
         self._now = now or datetime.now
         self.stars_enabled = bool(stars)
         self.stars: list[Star] = []
+        self.version = 0
         self._seed_stars()
 
     def resize(self, width: int, height: int) -> None:
@@ -596,13 +645,35 @@ class StarField:
                 clocks.append(self._spawn_clock(label))
         self.stars = others + clocks
 
-    def tick(self, dt: float = TICK_SECONDS) -> None:
+    def tick(self, dt: float = TICK_SECONDS) -> bool:
+        """Двинуть звёзды. True — изменилась хотя бы одна видимая ячейка.
+
+        Звёзды летят непрерывно, но проекция округляется до клетки (и до
+        ступени палитры), поэтому без изменений кадр не пересобираем впустую.
+        """
+        changed = False
         for star in self.stars:
+            before = self._cell_key(star)
             star.z -= star.speed * dt
             if star.kind == "clock":
-                star.glyph = clock_glyph(self._now(), star.label)
+                glyph = clock_glyph(self._now(), star.label)
+                if glyph != star.glyph:
+                    star.glyph = glyph
+                    changed = True
             if star.z <= 0.04:
                 self._respawn(star)
+                changed = True
+                continue
+            if self._cell_key(star) != before:
+                changed = True
+        if changed:
+            self.version += 1
+        return changed
+
+    def _cell_key(self, star: Star) -> tuple[int, int, str]:
+        """Ключ видимой клетки: (x, y, стиль) — критерий «кадр стоит перерисовки»."""
+        sx, sy = self._project(star)
+        return int(sx), int(sy), self._style_for(star, star.z)
 
     def render_text(self) -> Text:
         width, height = self.width, self.height
@@ -620,16 +691,7 @@ class StarField:
                 glyph = self._dust_for(z)
             style = self._style_for(star, z)
             self._blit(cells, int(sx), int(sy), glyph, style)
-        canvas = Text()
-        for y, row in enumerate(cells):
-            if y:
-                canvas.append("\n")
-            for ch, style in row:
-                if style:
-                    canvas.append(ch, style=style)
-                else:
-                    canvas.append(ch)
-        return canvas
+        return cells_to_text(cells)
 
     def _budget(self) -> int:
         if not self.stars_enabled:
@@ -640,6 +702,7 @@ class StarField:
     def _seed_stars(self) -> None:
         self.stars = [self._spawn(far=self.rng.random() > 0.35) for _ in range(self._budget())]
         self.stars.extend(self._spawn_clock(label) for label in CLOCK_LABELS)
+        self.version += 1
 
     def _spawn(self, *, far: bool) -> Star:
         roll = self.rng.random()
@@ -754,6 +817,7 @@ class MatrixRain:
         self.rng = random.Random(seed)
         self.glyphs = glyphs or MATRIX_GLYPHS
         self.columns: list[RainColumn] = []
+        self.version = 0
         self._seed_columns()
 
     def resize(self, width: int, height: int) -> None:
@@ -762,13 +826,39 @@ class MatrixRain:
         self.height = max(4, height)
         self._seed_columns()
 
-    def tick(self, dt: float = TICK_SECONDS) -> None:
+    def tick(self, dt: float = TICK_SECONDS) -> bool:
+        """Сдвинуть дождь. Возвращает True, если картинка изменилась.
+
+        Счётчик `version` растёт только на видимых изменениях: за тик голова
+        сдвигается меньше чем на строку, поэтому перерисовывать такой кадр
+        бессмысленно (`DevopsScreensaver._paint` это учитывает).
+        """
+        changed = False
         for column in self.columns:
+            before = int(column.y)
             column.y += column.speed * dt
+            if int(column.y) != before:
+                changed = True
             if self.rng.random() < MATRIX_FLICKER_PER_SECOND * dt:
-                column.glyphs[self.rng.randrange(self.height)] = self._glyph()
+                row = self._visible_row(column)
+                if row is not None:
+                    column.glyphs[row] = self._glyph()
+                    changed = True
             if column.y - column.length > self.height:
                 self._reset(column)
+                changed = True
+        if changed:
+            self.version += 1
+        return changed
+
+    def _visible_row(self, column: RainColumn) -> int | None:
+        """Случайная строка хвоста, реально видимая на экране (иначе мерцать нечему)."""
+        head = int(column.y)
+        top = max(0, head - column.length + 1)
+        bottom = min(self.height - 1, head)
+        if top > bottom:
+            return None
+        return self.rng.randint(top, bottom)
 
     def render_text(self) -> Text:
         cells: list[list[tuple[str, str]]] = [
@@ -781,16 +871,7 @@ class MatrixRain:
                 if not 0 <= row < self.height:
                     continue
                 cells[row][x] = (column.glyphs[row], self._style_for(i))
-        canvas = Text()
-        for y, row in enumerate(cells):
-            if y:
-                canvas.append("\n")
-            for ch, style in row:
-                if style:
-                    canvas.append(ch, style=style)
-                else:
-                    canvas.append(ch)
-        return canvas
+        return cells_to_text(cells)
 
     def head_rows(self) -> list[int]:
         """Строки голов всех столбцов (тесты/отладка)."""
@@ -798,6 +879,7 @@ class MatrixRain:
 
     def _seed_columns(self) -> None:
         self.columns = [self._new_column(stagger=True) for _ in range(self.width)]
+        self.version += 1
 
     def _new_column(self, *, stagger: bool) -> RainColumn:
         length = self.rng.randint(MATRIX_MIN_TRAIL, MATRIX_MAX_TRAIL)
@@ -894,6 +976,8 @@ class DevopsScreensaver(ModalScreen[None]):
         self._help = HelpTypewriter(help_lines, seed=seed)
         self._host = HostStats(reader=host_reader)
         self._timer = None
+        self._last_paint_at = 0.0
+        self._painted_version = -1
 
     def compose(self) -> ComposeResult:
         yield Static(id="ss-ticker", classes="-empty")
@@ -932,6 +1016,7 @@ class DevopsScreensaver(ModalScreen[None]):
 
     def on_resize(self) -> None:
         self._sync_size()
+        self._paint(force=True)  # новый размер — рисуем сразу, не ждём троттлинг
 
     def _make_field(self, width: int, height: int) -> StarField | MatrixRain:
         """Холст заставки: матричный дождь или звёздное поле.
@@ -958,19 +1043,33 @@ class DevopsScreensaver(ModalScreen[None]):
             width = max(8, self.size.width or 80)
             height = max(4, self.size.height or 24)
         self._field.resize(width, height)
+        self._painted_version = -1  # размер изменился — холст перерисовать сразу
 
     def _tick(self) -> None:
+        # Симуляция идёт на TICK_SECONDS (20 fps), а отрисовка — реже
+        # (PAINT_INTERVAL): холст — самый дорогой виджет, а картинка от
+        # прореженных кадров не меняется (дождь сдвигается меньше строки).
         self._field.tick(TICK_SECONDS)
         self._ticker.tick(TICK_SECONDS)
         self._help.tick(TICK_SECONDS)
         self._host.tick(TICK_SECONDS)
         self._paint()
 
-    def _paint(self) -> None:
-        try:
-            self.query_one("#ss-canvas", Static).update(self._field.render_text())
-        except Exception:
-            pass
+    def _paint(self, *, force: bool = False) -> None:
+        now = time.monotonic()
+        if not force and now - self._last_paint_at < PAINT_INTERVAL:
+            return
+        self._last_paint_at = now
+        # Холст пересобираем, только если поле реально изменилось: за тик
+        # (50 мс) дождь сдвигается меньше чем на строку, а сборка кадра на
+        # 200×50 — самая дорогая часть заставки.
+        version = getattr(self._field, "version", None)
+        if force or version != self._painted_version:
+            try:
+                self.query_one("#ss-canvas", Static).update(self._field.render_text())
+                self._painted_version = version
+            except Exception:
+                pass
         try:
             bar = self.query_one("#ss-ticker", Static)
             if self._ticker.items:

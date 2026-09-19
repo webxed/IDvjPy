@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.137) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.138) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.137` → `v1.138`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.138` → `v1.139`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -97,7 +97,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/cheat_sh.py`**: `:cht <query>` — cheat.sh (cht.sh) cheat sheets (query → URL with `+`, ANSI stripping, proxy-aware urllib fetch in a background thread). The service returns `text/plain` only to a curl-like User-Agent; settings `cheat_sh_url` / `cheat_sh_options`
 - **`src/gui_open.py`**: `:fm` / `:term` — detach a file manager or system terminal; `open_terminal_command` / `build_terminal_exec_argv` run a command inside a terminal (used by `:new` to launch another app window; Linux / macOS / Windows; `$FILEMAN` / `$TERMINAL` override)
 - **`src/editor_open.py`**: `:ed` — external editor for a file, `$OUT` or `$BLOCK` (settings `editor:` → `$VISUAL`/`$EDITOR` → system list; runs in a real TTY via `_run_in_tty`; temp copies for block output)
-- **`src/screensaver.py`**: idle overlay (`:screensaver`) — matrix digital rain (`MatrixRain`; `screensaver_matrix: true`, default) or the NC-style starfield (`StarField`); flying live clock/date (starfield only); full-width green library ticker; bottom-left command-help typewriter and bottom-right load/RAM (1s `/proc`; may overlap when the window is narrow); `screensaver_idle` seconds, `0` = off; `screensaver_stars: false` hides flying dust/tokens in the starfield; `:screensaver matrix|stars` picks the canvas once (no settings write)
+- **`src/screensaver.py`**: idle overlay (`:screensaver`) — matrix digital rain (`MatrixRain`; `screensaver_matrix: true`, default) or the NC-style starfield (`StarField`); flying live clock/date (starfield only); full-width green library ticker; bottom-left command-help typewriter and bottom-right load/RAM (1s `/proc`; may overlap when the window is narrow); `screensaver_idle` seconds, `0` = off; `screensaver_stars: false` hides flying dust/tokens in the starfield; `:screensaver matrix|stars` picks the canvas once (no settings write). Frame cost: the canvas is drawn from `cells_to_text()` (same-style neighbours in one `Text.append`, styles parsed once via `_style_object` — a per-cell build was ~9.6k appends/frame) and `_paint` is throttled to `PAINT_INTERVAL` (10 fps) while skipping frames whose `field.version` did not change; `tick()` returns whether anything visible changed (matrix counts only visible-row flicker and integer head shifts). Measured on 200×50: canvas 24.7 → 4.5 ms per built frame, 14.7 → 7.3 repaints/s, ~1.09 → 0.10 s CPU per 3 s; timer is stopped in `on_unmount`
 - **`src/seed_catalog.py`**: empty-DB welcome catalog (click `--seed` → input)
 - **`src/demo.py`**: `--demo` YAML player (`src/demos/*.yml`); `loop: true` / `loop: N` (Esc stops). `submit_line()` (type + Enter, no wait) and `_driving()` (playback in progress: `_demo_active` or `_run_active`) are shared with `:run`. The text of a bundled tour lives in the language layer `src/demos/text/<lang>/<tour>.yml` (`title`, `captions` and `types` by step number): the base YAML keeps the steps (commands, `keys`, `pause`, `loop`) and the base text, `load_scenario(path, lang)` applies `apply_text_overlay` after loading (only for scenarios inside `demos/`)
 - **`src/ingress_analyzer.py`**: `:i` Kubernetes helper
