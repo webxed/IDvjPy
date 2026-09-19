@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.143) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.144) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.143` → `v1.144`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.144` → `v1.145`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -75,7 +75,8 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 
 - **`src/database_v2.py`**: SQLite tagged history
 - **`src/command_parser_v2.py`**: `!tag[tid]` / `!ID` / `!!` assembly
-- **`src/history_store.py`**: `history_<instance>.txt` append/read/compact + portalocker file-lock helpers
+- **`src/history_store.py`**: `history_<instance>.txt` append/read/compact + portalocker file-lock helpers; `append_history_file_lines(path, commands)` appends a batch under **one** lock, skipping empty lines and lines already in the file (idempotent re-import)
+- **`src/history_import.py`**: `:h import [shell]` — import the user's shell history (bash/zsh/fish/ksh/nu/pwsh; OS paths + `$HISTFILE`, Linux/macOS/Windows) into `history_<instance>.txt`. Format parsers (zsh extended + multi-line entries, bash `#<epoch>` markers, fish `- cmd:`, plain PSReadLine/nushell), tail limit `DEFAULT_IMPORT_LIMIT` (5000) per file; read-only, nothing is executed. Tests: `tests/test_history_import.py`
 - **`src/session_mailbox.py`**: cross-session command relay (`:send` / `:send!`) — per-session `inbox_<instance>.jsonl` (JSON Lines, 0600, same portalocker pattern as `history_store`); `send_message` appends, `drain_inbox` reads-and-truncates, `pending_sessions` lists non-empty inboxes. **Secrets never travel in the inbox**: the sender keeps `$NAME` in the command (`_substitute_variables(..., keep_secrets=True)`) and writes the value into the target's `secrets_<target>.json` (0600) — only names the target lacks (`CommandRunner._pass_secrets_to`; its own value is never overwritten), and the target re-reads that file when it drains (`load_secrets` in `_poll_session_inbox`), so the forwarded command really runs while the inbox, history and journal only see the name
 - **`src/session_registry.py`**: active-session registry — per-session `session_<instance>.pid` (0600) in the data dir; `register` / `unregister` (with a `pid=` that no longer matches the file, someone else's record is left alone), `active_sessions` (pid files of dead processes are removed), `free_session_name` (lowest free `sN` among **live** sessions, plus `taken`). `:new` without a name uses it, so the counter follows running windows instead of leftover `history_*.txt` / `.bashrc_term_*`. **Not** the same question as `CommandRunner.list_session_names` (by files; `:send` / `:session` lists still show closed sessions)
 - **`src/kctx_store.py`**: cluster journal `kctx.json` (data dir): snapshots of the cluster var list per cluster, captured on `$VAR=` after a `klogin` / `tsh kube login` / `kubectl config use-context` line; UI `:kctx` lists clusters and applies saved sets (`:kctx <cluster>` = log in + show sets, and with exactly **one** set it applies it right away — nothing to pick from; `:kctx N` applies from the last shown list; `:kctx <cluster> N` = log in + apply in one go). Which vars count comes from the `kctx_vars` key (`parse_kctx_vars`); the default (`KUBE_STACK_VARS`) is the stack of the bundled templates — kubectl (`NS POD DEPLOY SVC ING APP CTR QUOTA`, `seed_k8s_chains.py`) plus helm (`RELEASE CHART VALUES`, `seed_helm.py`, tag `hvars`); an empty list disables the journal. `stack_vars` / `format_vars` / `add_snapshot` take the name list as an optional argument, and `format_vars` output order follows that list.
@@ -126,7 +127,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no exact tag) = substring search over command text + comments. Click tag in `??` inserts `!tag ` at the cursor (does not replace the line, does not run). |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble refs into the input line |
-| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:c`, `:json`, `:i`, `:?`, `:? run`, `:cd`, `:fm`, `:term`, `:env`, `:session`, `:new`, `:send`, `:send!`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:cmd`, `:log`, `:name`, `:rg`, `:/`, `:n`, `:N`, `:export`, `:import`, `:md`, `:playbook`, `:run`, `:run stop`, `:update`, `:kill`, `:watch`, `:mv`, `:stats`, `:diff`, `:o`, `:kctx`, `:alias`, `:theme`, `:lang`, `:relang`, `:llm`, `:cht`, `:ed`) |
+| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:h import`, `:c`, `:json`, `:i`, `:?`, `:? run`, `:cd`, `:fm`, `:term`, `:env`, `:session`, `:new`, `:send`, `:send!`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:cmd`, `:log`, `:name`, `:rg`, `:/`, `:n`, `:N`, `:export`, `:import`, `:md`, `:playbook`, `:run`, `:run stop`, `:update`, `:kill`, `:watch`, `:mv`, `:stats`, `:diff`, `:o`, `:kctx`, `:alias`, `:theme`, `:lang`, `:relang`, `:llm`, `:cht`, `:ed`) |
 | `\| cmd` | Pipe stdout from the focused (else last) block, add to history |
 | `\|@<label> cmd` / `\|@N cmd` | Pipe from the block labelled by `:name <label>`, or from N blocks back (0 = last). The source is not re-run; history stores the full `<source> \| <cmd>` |
 | `$OUT` | On demand: last line of focused/last block (not stored in `.bashrc_term`) |

@@ -111,6 +111,7 @@ try:
 
     import calc
     import database_v2 as database
+    import history_import
     import ipcalc
     import runbook
     from ansi_output import to_markup, to_plain
@@ -160,6 +161,7 @@ try:
         FileLockTimeoutError,
         acquire_file_lock,
         append_history_file_line,
+        append_history_file_lines,
         compact_history_file,
         history_file_stat_key,
         read_history_file_lines,
@@ -2240,7 +2242,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.143"
+    VERSION = "v1.144"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -3754,6 +3756,60 @@ class CommandRunner(App):
             f"(kept last {self.history_keep} verbatim)."
         ))
 
+    def _handle_history_import(self, args: list[str]) -> None:
+        """`:h import [оболочка]` — дописать историю оболочки пользователя.
+
+        Источники — файлы истории по ОС (`~/.bash_history`, `~/.zsh_history`,
+        fish, ksh, nushell, PowerShell PSReadLine; `$HISTFILE` — первым). Читаются
+        последние `history_import_limit` строк каждого и одним lock’ом
+        дописываются в `history_<instance>.txt` — ↑, `:h /текст` и подсказки видят
+        их сразу. Ничего не исполняется; подряд идущие дубликаты не пишутся.
+        """
+        name = args[0].strip() if args else ""
+        shell = name.strip().lower()
+        if shell and shell not in history_import.KNOWN_SHELLS:
+            self.add_block(InfoBlock(t(
+                "hist.import_unknown",
+                name=name,
+                shells=", ".join(history_import.KNOWN_SHELLS),
+            )))
+            return
+        results = history_import.read_sources(shell or None)
+        readable = [result for result in results if not result.error]
+        if not readable:
+            self.add_block(InfoBlock(t(
+                "hist.import_none",
+                paths=", ".join(history_import.searched_paths(shell or None)),
+            )))
+            return
+        commands = [cmd for result in readable for cmd in result.commands]
+        added = append_history_file_lines(
+            self.FILE_HISTORY,
+            commands,
+            encoding=self.ENCODING,
+            lock_timeout=self.FILE_LOCK_TIMEOUT,
+        )
+        self._history_file_stat = None
+        # Старый префикс уникализируем (уникальные строки остаются), хвост не трогаем.
+        self._maybe_compact_history()
+        self.add_block(InfoBlock(t(
+            "hist.import_done",
+            file=self.FILE_HISTORY,
+            total=len(commands),
+            added=added,
+            sources=", ".join(
+                f"{result.shell} {len(result.commands)}" for result in readable
+            ),
+        )))
+        failed = [result for result in results if result.error]
+        if failed:
+            self.add_block(InfoBlock(t(
+                "hist.import_failed",
+                paths=", ".join(
+                    f"{result.path} ({result.error})" for result in failed
+                ),
+            )))
+
     def _parse_bashrc_assignment(self, line: str) -> tuple | None:
         return parse_bashrc_assignment(line)
 
@@ -5014,9 +5070,13 @@ class CommandRunner(App):
             else:
                 self.add_block(InfoBlock("Error: Filename required for :w command."))
         elif command == self.CMD_HISTORY:
-            rest = " ".join(parts[1:]) if len(parts) > 1 else ""
-            if rest.strip().lower() == "compact":
+            hist_args = parts[1:]
+            sub = hist_args[0].strip().lower() if hist_args else ""
+            rest = " ".join(hist_args) if hist_args else ""
+            if sub == "compact" and len(hist_args) == 1:
                 self._handle_history_compact()
+            elif sub == "import":
+                self._handle_history_import(hist_args[1:])
             elif rest.startswith("/") and rest[1:].strip():
                 self._show_history_search(rest[1:], exclude=user_input)
             else:

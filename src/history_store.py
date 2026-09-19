@@ -159,6 +159,49 @@ def append_history_file_line(
         return False
 
 
+def append_history_file_lines(
+    path: str,
+    commands: list[str] | tuple[str, ...],
+    encoding: str = "utf-8",
+    lock_timeout: int = 5,
+) -> int:
+    """Дописать пачку команд одним exclusive flock; вернуть число добавленных.
+
+    Импорт чужой истории — это хвост из тысяч строк: блокировку берём **один раз**
+    (а не как `append_history_file_line` на каждую строку). Пустые строки и строки,
+    которые уже есть в файле, не пишутся — повторный импорт того же файла ничего не
+    добавит (порядок уже имеющихся строк не меняется).
+    """
+    try:
+        with open(path, "ab+") as f:
+            locked = False
+            try:
+                acquire_file_lock(f, lock_timeout)
+                locked = True
+            except FileLockTimeoutError:
+                locked = False
+            try:
+                f.seek(0)
+                data = f.read().decode(encoding, errors="replace")
+                existing = {line.strip() for line in data.splitlines() if line.strip()}
+                added = 0
+                for raw in commands:
+                    command = (raw or "").strip()
+                    if not command or command in existing:
+                        continue
+                    f.write(f"{command}\n".encode(encoding))
+                    existing.add(command)
+                    added += 1
+                if added:
+                    f.flush()
+                return added
+            finally:
+                if locked:
+                    release_file_lock(f)
+    except OSError:
+        return 0
+
+
 def remove_history_file_line(
     path: str,
     command: str,

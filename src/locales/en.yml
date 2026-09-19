@@ -86,6 +86,12 @@ relang:
   nothing: "Library comments already match {name} (nothing to change)."
   error: "Could not re-translate library comments: {error}"
 
+hist:
+  import_unknown: "Unknown shell: {name}. Known: {shells}."
+  import_none: "No shell history found. Looked in: {paths}."
+  import_done: "Shell history → {file}: {total} line(s) from {sources}, {added} new."
+  import_failed: "Not read: {paths}."
+
 cmd:
   "?": "command help (:? calc — calculator reference)"
   q: "quit the application"

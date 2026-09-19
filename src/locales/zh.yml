@@ -87,6 +87,12 @@ relang:
   nothing: "库注释已与 {name} 一致（无需更改）。"
   error: "无法重新翻译库注释: {error}"
 
+hist:
+  import_unknown: "未知的 shell: {name}。已知: {shells}。"
+  import_none: "未找到 shell 历史。查找位置: {paths}。"
+  import_done: "Shell 历史 → {file}: 来自 {sources} 的 {total} 行，新增 {added} 行。"
+  import_failed: "未读取: {paths}。"
+
 cmd:
   "?": "命令帮助（:? calc — 计算器参考）"
   q: "退出应用"

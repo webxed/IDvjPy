@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.143**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.144**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.87 (app v1.143) |
+| `test_cmd.md` | Manual plan v1.88 (app v1.144) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,7 +180,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.143 |
+| `src/app.py` | TUI (`CommandRunner`), v1.144 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -201,7 +201,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/json_viewer.py` | JSON tree modal |
 | `src/ingress_analyzer.py` | `:i` k8s |
 | `src/command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
-| `src/history_store.py` | `history_<instance>.txt` append/read/compact, file locks |
+| `src/history_store.py` | `history_<instance>.txt` append/read/compact, file locks; `append_history_file_lines` — пачка под одним lock’ом без дублей (импорт) |
 | `src/session_mailbox.py` | Пересылка команд между сессиями (`:send`): `inbox_<instance>.jsonl` 0600, append под lock / drain |
 | `src/session_registry.py` | Реестр активных сессий — `session_<instance>.pid` 0600: автоимя `:new` = наименьшее свободное `sN` среди работающих окон (устаревшие pid-файлы подчищаются) |
 | `src/help_texts.py` | Accessors for the `:?` / `:? run` / `:? calc` / `:i` help texts — files `src/locales/help/<lang>/{main,runbook,calc,ingress}.txt` via `i18n.text()` (`en` is the source of truth) |
@@ -221,6 +221,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.144
+
+- **`:h import [оболочка]` — импорт истории оболочки пользователя (кросс-ОС).** Новый модуль `src/history_import.py` (без Textual) находит файлы истории по ОС и `$HISTFILE` (`~/.bash_history`, `~/.zsh_history`, fish, ksh, nushell, PowerShell PSReadLine — `%APPDATA%` на Windows, XDG/`Application Support` на Linux/macOS), разбирает форматы (zsh extended `: ts:dur;cmd` и многострочные записи → одна строка через ` ; `, bash-метки `#<epoch>`, fish `- cmd: …` с кавычками и `\n`, plain PSReadLine/nushell) и берёт последние `DEFAULT_IMPORT_LIMIT` (5000) строк каждого. Записывает пачкой `history_store.append_history_file_lines`: **один** exclusive flock на весь импорт, пустые строки и уже имеющиеся в файле не дублируются (повторный импорт идемпотентен), после записи автоматическая компактизация уникализирует старый префикс. Ничего не исполняется, файлы только читаются (битые байты заменяются). Сообщения — локали `hist.*` (`import_done/import_none/import_unknown/import_failed`), строка в `:?` (en/ru). Тесты: `tests/test_history_import.py` (23: разбор всех форматов, пути и `$HISTFILE` по linux/darwin/win32 и XDG/APPDATA, `find_sources`/`read_sources` с лимитом, батч-запись без дублей, `:h import` в TUI — импорт/идемпотентность/неизвестная оболочка/«не найдено»).
 
 ## v1.143
 

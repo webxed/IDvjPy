@@ -13,6 +13,10 @@
                 list is `history_queries` in settings.yml (empty — do not record)
   :h /text    - Search that file in completions (unique lines, newest first); Enter dumps a block
   :h compact  - Unique old history; keep the last history_keep lines as a sequence
+  :h import [shell] - Append your shell history (bash/zsh/fish/ksh/nu/pwsh; `$HISTFILE`
+                first; paths for Linux/macOS/Windows) to history_<instance>.txt — Up,
+                `:h /text` and hints see it at once. Last 5000 lines of each file;
+                nothing is executed. No name — every shell found.
   :c          - Clear all output blocks
   :json       - Open JSON viewer (from last block)
   :json <file>- Open JSON file in viewer
