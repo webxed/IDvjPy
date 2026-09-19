@@ -1,0 +1,28 @@
+title: My IP and Wiki country
+captions:
+  0: Comment — API variable
+  1: API variable
+  2: Comment — Wiki base
+  3: Wiki base ISO 3166-1 (fragment
+  4: Comment — curl
+  5: curl against $MY_IP_SVC
+  6: Focus the curl block (the pipe source)
+  7: Comment — jq .cc
+  8: Pipe from the block — the country code
+  9: Tab — the block with the country code
+  10: F2 — line cursor
+  12: Enter — copy the code to the buffer
+  13: Comment — the Wiki link
+  14: Type echo -e, paste the code onto the end of the URL
+  17: Comment — hello[1]
+  18: Save curl into the hello tag
+  19: Comment — hello[2]
+  20: jq — the full country name
+  21: Comment — hello[3]
+  22: A greeting template referencing hello[2]
+  23: Comment — the hello list
+  24: The hello tag library
+  25: Comment — a pipe built from tags
+  26: Pipe built from tags
+  28: Comment — Hello via $OUT
+  29: echo Hello, $OUT

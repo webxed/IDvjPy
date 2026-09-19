@@ -1,0 +1,72 @@
+tags:
+  dkvars:
+    comment: disk and mount point variables
+    commands:
+      0: check $DISK/$MNT/$SRC
+  df:
+    comment: 'df: filesystem space'
+    commands:
+      0: human-readable
+      1: with FS type
+      2: inodes
+      3: $MNT mount point
+      4: source/fstype/… columns
+  du:
+    comment: 'du: directory space'
+    commands:
+      0: $SRC total
+      1: one level deep
+      2: same, sorted by size
+      3: stay on one FS
+      4: depth 2, largest first
+  mount:
+    comment: 'mount / findmnt: what is mounted'
+    commands:
+      0: mount tree
+      1: all including API FS
+      2: $MNT mount point
+      3: mount table
+      4: /proc/mounts
+      5: FS containing path $MNT
+      6: mount (changes the system)
+      7: unmount (changes the system)
+  fdisk:
+    comment: 'fdisk: partition table (inspect)'
+    commands:
+      0: all disks
+      1: $DISK partitions
+      2: $DISK table dump
+      3: signatures on $DISK (no -a)
+  lsblk:
+    comment: 'lsblk: block devices'
+    commands:
+      0: device tree
+      1: FS and UUID
+      2: size, FS, model
+      3: full /dev/… paths
+      4: $DISK only
+      5: stable names
+  smart:
+    comment: 'smartctl: disk health'
+    commands:
+      0: SMART devices
+      1: identify $DISK
+      2: overall health
+      3: SMART attributes
+      4: full report
+      5: error log
+      6: self-test history
+      7: extended report
+  ncdu:
+    comment: 'ncdu: interactive du'
+    commands:
+      0: 'interactive (better: > ncdu "$SRC")'
+      1: one filesystem (`> ncdu -x …`)
+  dsk:
+    comment: disks and space overview
+    commands:
+      0: lsblk → df -h → smartctl --scan → -H $DISK
+  dustat:
+    comment: directory space
+    commands:
+      0: max-depth=1 → sort -h

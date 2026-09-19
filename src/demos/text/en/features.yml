@@ -1,0 +1,23 @@
+title: IDvjPy — new commands v1.44
+captions:
+  0: What's new — save a couple of commands as an example
+  3: 'Content search: ?text — there is no wide tag, so we search the command text'
+  4: 'Exact tag still works as before: ?deploy'
+  5: 'Moving a command between tags: :mv deploy[1] kube'
+  6: Now kubectl get pods lives in the kube tag
+  7: 'Library stats: :stats — nothing has run yet'
+  8: Run the saved command twice (usage counter)
+  10: ':stats — echo run-me tops the list with 2×, the mine tag updated'
+  11: 'Stopping a long command: @ sleep 60 (no timeout), then F4'
+  12: F4 sends SIGTERM to the process group
+  13: 'The block is labeled: Process stopped by user. (exit 143)'
+  14: 'Monitoring: :watch 1 date +%s — ticks in a single block'
+  15: 'Stopping watch: :watch stop (or F4 / :c)'
+  16: 'Comparing outputs: :diff — the first version of the output'
+  18: ':diff — unified diff of the two blocks (-b / +B)'
+  19: 'A command from N blocks back: :r 1 puts printf ''a\nb\nc\n'' into the input'
+  20: 'Session output history: run a command…'
+  21: ':c clears the journal… but not the output memory'
+  22: ':o /needle-42 finds the old output even after :c'
+  23: 'The whole catalog as Markdown: :export * library.md'
+  24: 'Tags as bash functions: :alias mine run.sh'

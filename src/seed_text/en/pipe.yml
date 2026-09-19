@@ -1,0 +1,82 @@
+tags:
+  pvars:
+    comment: pipeline variables
+    commands:
+      0: check $FILE/$SEP/$JSON/…
+  sort:
+    comment: 'sort: line order'
+    commands:
+      0: lexicographic
+      1: unique
+      2: numerically
+      3: human-readable sizes (1K 2M)
+      4: reverse order
+      5: numbers, descending
+      6: field $N (space)
+      7: field $N, FS=$SEP
+      8: unique by field $N
+  uniq:
+    comment: 'uniq: adjacent duplicates'
+    commands:
+      0: squeeze consecutive
+      1: counter
+      2: duplicates only
+      3: unique only
+      4: frequencies descending
+  cut:
+    comment: 'cut: columns'
+    commands:
+      0: field $N, FS=$SEP
+      1: fields 1 and $N
+      2: fields 1–3
+      3: first 80 characters
+      4: all fields except $N
+  tr:
+    comment: 'tr: characters (stdin)'
+    commands:
+      0: remove CR
+      1: squeeze spaces
+      2: to lowercase
+      3: to uppercase
+      4: remove spaces
+      5: separator $SEP → lines
+  wc:
+    comment: 'wc: counters'
+    commands:
+      0: lines
+      1: words
+      2: bytes
+      3: lines, words, characters
+      4: longest line length
+  xargs:
+    comment: 'xargs: arguments from lines'
+    commands:
+      0: $N arguments each
+      1: '{} substitution'
+      2: one at a time, empty input — nothing
+      3: up to 4 in parallel
+  tee:
+    comment: 'tee: stdout and file'
+    commands:
+      0: write $DEST (changes disk)
+      1: append $DEST
+  jq:
+    comment: 'jq: JSON (file or pipe)'
+    commands:
+      0: pretty-print
+      1: one line per object
+      2: raw strings
+      3: object keys / indices
+      4: length
+      5: root type
+      6: path $JSON (from F5 Enter)
+      7: path $JSON, raw
+      8: valid JSON?
+  ucount:
+    comment: 'line frequencies: sort | uniq -c'
+    commands:
+      0: sort | uniq -c | sort -nr
+  jprev:
+    comment: JSON overview
+    commands:
+      0: keys → length → type

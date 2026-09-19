@@ -1,0 +1,43 @@
+tags:
+  ipvars:
+    comment: ip/ethtool variables
+    commands:
+      0: check $IFACE/$ADDR/$GW
+  ip:
+    comment: 'ip: link, addr, route, neigh'
+    commands:
+      0: interfaces, brief
+      1: addresses, brief
+      2: link $IFACE
+      3: addresses of $IFACE
+      4: counters of $IFACE
+      5: counters, detailed
+      6: IPv4 routes
+      7: IPv6 routes
+      8: default via
+      9: ARP / NDISC
+      10: neigh $IFACE
+      11: IPv4 only
+      12: IPv6 only
+      13: policy routing
+      14: network namespaces
+      15: bring up $IFACE
+      16: bring down $IFACE
+      17: add $ADDR
+      18: default via $GW
+  eth:
+    comment: 'ethtool: NIC'
+    commands:
+      0: speed / duplex of $IFACE
+      1: driver
+      2: offload
+      3: stats, 40 lines
+      4: ring buffers
+  ilink:
+    comment: 'ip overview: link + addr + route'
+    commands:
+      0: br link → br addr → route
+  iiface:
+    comment: 'interface $IFACE: link, stats, driver'
+    commands:
+      0: link show → -s → ethtool -i

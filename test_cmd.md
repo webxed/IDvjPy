@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.136
+# План тестирования IDvjPy_term v1.137
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -980,16 +980,16 @@ x
 
 1. Войти в кластер обычной строкой — `klogin prod` (alias → `tsh kube login`) или `kubectl config use-context prod` (когда tsh недоступен).
 2. Задать `$NS=team-a`, `$POD=api-7f` → в журнале появились снимки кластера `prod` (см. `kctx.json` рядом с `settings.yml`).
-3. `:kctx` — список кластеров: имя, число снимков, время последнего; у текущего — «← текущий».
+3. `:kctx` — список кластеров: имя, число снимков, время последнего; у текущего — «← current».
 4. `:kctx prod` — блок входа (`klogin prod || kubectl config use-context prod`) и список ранее использованных наборов переменных (`1. NS=… POD=… (дата)`).
-4.1. Если у кластера ровно один набор, `:kctx <cluster>` применяет его **сразу**: списка из одной строки нет, InfoBlock `kctx <cluster> #1: NS=…` с пометкой `(единственный набор — применился сразу)`. При двух и более наборах — прежний список, применение только по номеру.
+4.1. Если у кластера ровно один набор, `:kctx <cluster>` применяет его **сразу**: списка из одной строки нет, InfoBlock `kctx <cluster> #1: NS=…` с пометкой `(single set — applied at once)`. При двух и более наборах — прежний список, применение только по номеру.
 5. `:kctx 1` — применить свежайший набор: переменные в `.bashrc_term_<instance>`, InfoBlock `kctx prod #1: NS=…`. Проверить: `cat .bashrc_term_default`, `echo $NS` в новой команде.
 6. `:kctx staging 2` — вход в staging и применение его набора №2 одной строкой.
 7. `:kctx 99` без открытого списка — подсказка «нет открытого списка»; после `:kctx <cluster>` с одним снимком — «набора 99 нет».
 8. Ввод `:kctx ` + первые буквы кластера — подсказки имён из журнала (Tab/Enter).
 9. Не-списочные переменные (`$EDITOR=…`) в журнал кластеров не пишутся.
 10. `kctx_vars` в settings.yml: с `kctx_vars: [NS, RELEASE]` присваивание `$RELEASE=myapp` (после входа в кластер) пишет снимок, а `$POD=api-7f` — нет; `:kctx prod` показывает `RELEASE=myapp`.
-11. `kctx_vars: []` (или `false`) — журнал выключен: присваивания ничего не пишут, `:kctx` без журнала говорит «Журнал выключен: kctx_vars: [] в settings.yml».
+11. `kctx_vars: []` (или `false`) — журнал выключен: присваивания ничего не пишут, `:kctx` без журнала говорит `kctx journal is off: kctx_vars: [] in settings.yml`.
 12. Список можно писать строкой: `kctx_vars: NS, $RELEASE` (`$` и `:` отбрасываются, негодные имена — мимо).
 
 Автотесты: `tests/test_kctx_cmd.py`, `tests/test_kctx_store.py`.
@@ -1408,10 +1408,10 @@ python3 src/seed_vault.py --seed   # в data-каталоге: без него �
                          # (manual) → login → подмена токена → проверка
 :run vapprole --step     # полуавтомат: каждый шаг вставляется и ждёт Enter
 :run stop                # остановить между шагами (или Esc)
-:run <тег-без-директив> --dry   # в плане note: в теге нет run:-директив — все шаги auto
+:run <тег-без-директив> --dry   # в плане note: the tag has no run: directives — every step will run auto
 ```
 
-**Ожидание:** перед прогоном в журнал печатается план (шаги с режимами и подсказками), в подзаголовке — `RUN vapprole · 3/9 · auto · Esc stops`. Шаги `auto` идут сами и ждут завершения команды; `manual` вставляет строку в ввод и ждёт — её можно править и запустить Enter, а пустой Enter пропускает шаг; `prompt` оставляет ввод пустым и ждёт набранную строку. Шаги 1 и 2 в `vapprole` — префиксы (`$$VAULT_TOKEN=`, `$ROLE=`): значение надо **дописать** после `=`, иначе роль останется пустой. Если в теге нет ни одной `run:`-директивы (устаревший сид, свой тег до v1.124), план печатает `note: в теге нет run:-директив — все шаги пойдут auto` — это предупреждение, а не отказ; при `--step` оно снимается (все шаги и так ждут Enter). Ошибка auto-шага (`exit ≠ 0`) останавливает прогон с сообщением о номере шага (`run:continue` в комментарии отменяет остановку); Esc останавливает на любом шаге, сама команда — F4 / `:kill`. Пока прогон идёт, заставка не всплывает, `:send` откладывается, смена сессии отклоняется; `:run` пишется в `history_*.txt` (↑ / `:h`), но не в подсказки, а вставленные прогоном шаги не попадают в `:playbook`.
+**Ожидание:** перед прогоном в журнал печатается план (шаги с режимами и подсказками), в подзаголовке — `RUN vapprole · 3/9 · auto · Esc stops`. Шаги `auto` идут сами и ждут завершения команды; `manual` вставляет строку в ввод и ждёт — её можно править и запустить Enter, а пустой Enter пропускает шаг; `prompt` оставляет ввод пустым и ждёт набранную строку. Шаги 1 и 2 в `vapprole` — префиксы (`$$VAULT_TOKEN=`, `$ROLE=`): значение надо **дописать** после `=`, иначе роль останется пустой. Если в теге нет ни одной `run:`-директивы (устаревший сид, свой тег до v1.124), план печатает `note: the tag has no run: directives — every step will run auto` — это предупреждение, а не отказ; при `--step` оно снимается (все шаги и так ждут Enter). Ошибка auto-шага (`exit ≠ 0`) останавливает прогон с сообщением о номере шага (`run:continue` в комментарии отменяет остановку); Esc останавливает на любом шаге, сама команда — F4 / `:kill`. Пока прогон идёт, заставка не всплывает, `:send` откладывается, смена сессии отклоняется; `:run` пишется в `history_*.txt` (↑ / `:h`), но не в подсказки, а вставленные прогоном шаги не попадают в `:playbook`.
 
 Свой YAML (`:playbook`-файл тоже подойдёт):
 
@@ -1430,7 +1430,29 @@ steps:
 
 ---
 
-**Версия документа**: v1.80
-**Версия приложения**: v1.136
+## Секция 51: Язык интерфейса (`:lang`, ключ `language`)
+
+```text
+:lang                 # текущий и список: Language: en / Available: en, ru
+:lang ru              # выбрать и сохранить в settings.yml
+:lang de              # Unknown language: de. Type :lang for the list.
+:lang auto            # следовать $LANG / $LC_ALL
+:?                    # справка — на выбранном языке (ru: «Справка по командам»)
+:welcome              # каталог seed («Пустая база команд»)
+:screensaver          # подсказки внизу — из locales/<lang>/screensaver.yml
+```
+
+Разово при запуске: `python3 app.py --lang ru`, `$IDVJPY_LANG=ru python3 app.py`.
+
+**Ожидание:** язык влияет только на текст — сообщения (`:kctx`, `:watch`, `:run`, `:llm offline`, стартовый блок), подсказки `:`-команд, каталог `:welcome`, строки справки заставки и сама справка `:?` / `:? run` / `:? calc` / `:i`. `en` — источник правды: `src/locales/en.yml` + части `src/locales/en/*.yml` (`screensaver`, `seed`) + `src/locales/help/en/*.txt`; `ru` — перевод всего того же. Отсутствующий ключ отдаёт английский текст, неизвестный ключ печатается как есть (пустоты нет). Команды, имена тегов, ключи настроек, имена файлов и слоган «Define your variables…» не переводятся. Смена языка применяется к тексту, напечатанному **после** неё — уже показанные блоки не перерисовываются. Проверка: `python3 -m pytest tests/test_i18n.py tests/test_seed_i18n.py -q`.
+
+**Контент по языкам.** Демо-туры: базовый `src/demos/<tour>.yml` хранит шаги, текст — в `src/demos/text/<lang>/<tour>.yml` (`title`, `captions`/`types` по номеру шага), так что `--demo short` говорит на языке интерфейса. Комментарии сидов: `src/seed_text/<lang>/<handbook>.yml` (ключ — тег + позиция), язык берётся из `language` в `settings.yml` / `$IDVJPY_LANG`; поэтому `python3 src/seed_git.py --seed` при `language: en` кладёт английские подписи, а при `language: ru` — базовые русские. Уже посеянная БД язык не меняет — нужен повторный `--seed` (`:backup` перед этим). Справочники: `handbook_md_path` сначала ищет `docs/<lang>/NAME`. `:llm` без `answer_language` у провайдера отвечает на языке интерфейса (`off`/`none` выключают правило).
+
+**Автотесты:** `tests/test_i18n.py` (24: сверка каталогов en↔ru (ключа и частей), отсутствие кириллицы в `en`, ловушка YAML-ключей `off`/`n`/`N`, нормализация кода языка (`ru_RU.UTF-8` → `ru`), приоритет CLI → env → settings, `auto` по `$LC_ALL`, `:lang` — список/смена/сохранение/неизвестный код, язык из settings применяется при старте, все справки и все `catalog.desc.*` есть в каждой локали, каталог заставки сходится с встроенным набором), `tests/test_seed_catalog.py` / `tests/test_commands.py` (каталог из локалей), `tests/test_screensaver.py` (строки из каталога), `tests/test_colon_commands.py` (подсказки из локали).
+
+---
+
+**Версия документа**: v1.81
+**Версия приложения**: v1.137
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

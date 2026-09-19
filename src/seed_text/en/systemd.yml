@@ -1,0 +1,57 @@
+tags:
+  sysvars:
+    comment: systemd variables
+    commands:
+      0: check $UNIT/$SINCE/$BOOT
+  sctl:
+    comment: 'systemctl: units, status, start/stop'
+    commands:
+      0: failed units
+      1: failed services
+      2: $UNIT status
+      3: $UNIT properties
+      4: $UNIT unit file
+      5: active/inactive $UNIT
+      6: enabled/disabled $UNIT
+      7: running services
+      8: timers
+      9: reload unit files
+      10: reload $UNIT (changes service)
+      11: restart $UNIT (changes service)
+      12: start $UNIT (changes service)
+      13: stop $UNIT (changes service)
+      14: reset failed $UNIT
+  jctl:
+    comment: 'journalctl: systemd journal'
+    commands:
+      0: last 80 lines
+      1: errors
+      2: journal of $UNIT
+      3: errors of $UNIT
+      4: journal of $UNIT since $SINCE
+      5: list boots
+      6: journal of boot $BOOT
+      7: kernel (like dmesg)
+      8: journal disk usage
+      9: JSON $UNIT → F5
+      10: 'follow $UNIT (better: > journalctl -f -u $UNIT)'
+  dmesg:
+    comment: 'dmesg: kernel ring buffer'
+    commands:
+      0: last 80 lines
+      1: human-readable time
+      2: err+warn
+      3: only err
+      4: 'follow (better: > dmesg -w)'
+  sfail:
+    comment: failed systemd units
+    commands:
+      0: --failed → list-units failed
+  sstat:
+    comment: 'unit overview: status + journal'
+    commands:
+      0: status → is-active → journal -u
+  kmsg:
+    comment: kernel messages
+    commands:
+      0: dmesg err/warn → journalctl -k

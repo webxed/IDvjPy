@@ -1,0 +1,81 @@
+tags:
+  nvars:
+    comment: network/firewall variables
+    commands:
+      0: check $PORT/$ZONE/…
+  ss:
+    comment: 'ss: sockets and states'
+    commands:
+      0: TCP/UDP listen + processes
+      1: TCP listen only
+      2: UDP listen only
+      3: socket summary
+      4: established TCP
+      5: TIME-WAIT
+      6: by local port $PORT
+      7: by remote port $PORT
+      8: UNIX listen
+      9: filter $PORT without processes
+  nst:
+    comment: netstat (legacy hosts)
+    commands:
+      0: listen TCP/UDP + processes
+      1: TCP listen
+      2: stack statistics
+      3: interfaces
+      4: routing table
+      5: TCP with PID
+  ipt:
+    comment: 'iptables: rule inspection'
+    commands:
+      0: filter, counters
+      1: nat
+      2: mangle
+      3: filter as -A/-P
+      4: nat as -A/-P
+      5: INPUT chain
+      6: FORWARD chain
+      7: full dump
+      8: IPv6 filter
+      9: is there an ACCEPT for $PORT (exit 1 = no)
+  nft:
+    comment: 'nftables: rule inspection'
+    commands:
+      0: tables
+      1: whole ruleset
+      2: with handle
+      3: inet filter (if present)
+      4: ip nat (if present)
+      5: input chain
+  fwd:
+    comment: firewall-cmd (firewalld)
+    commands:
+      0: is firewalld running
+      1: active zones
+      2: default zone
+      3: current zone in detail
+      4: all zones
+      5: zone $ZONE
+      6: ports of $ZONE
+      7: services of $ZONE
+      8: is $PORT/tcp open
+      9: permanent of the current zone
+      10: open $PORT runtime
+      11: open $PORT permanent
+      12: apply permanent
+  nstat:
+    comment: socket overview
+    commands:
+      0: listen + summary
+  iptstat:
+    comment: iptables overview
+    commands:
+      0: filter + nat (no -F)
+  nftstat:
+    comment: nftables overview
+    commands:
+      0: tables → list ruleset (no flush)
+  fwstat:
+    comment: firewalld overview
+    commands:
+      0: state → zones → list-all

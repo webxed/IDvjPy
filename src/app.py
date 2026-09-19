@@ -39,6 +39,12 @@ Examples:
         help='Instance name for unique .bashrc_term and history files (default: default)'
     )
     parser.add_argument(
+        '--lang',
+        type=str,
+        default=None,
+        help='UI language (en, ru, …; auto = follow $LANG). Default: settings.yml `language`, else en'
+    )
+    parser.add_argument(
         '--data-dir',
         type=str,
         default=None,
@@ -68,6 +74,8 @@ Examples:
 # Default instance name. CLI --instance-name is applied only in __main__,
 # so the app module can be imported by tests without argparse fighting pytest.
 INSTANCE_NAME = "default"
+# CLI --lang (see src/i18n.py); None — language comes from settings/env.
+CLI_LANGUAGE: str | None = None
 RE_INSTANCE_NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$")
 
 # Check dependencies before importing
@@ -117,7 +125,12 @@ try:
         copy_text_to_clipboards,
         paste_text_from_clipboards,
     )
-    from colon_commands import COLON_COMMANDS, command_names, linkify_colon_commands
+    from colon_commands import (
+        COLON_COMMAND_NAMES,
+        colon_command_hint,
+        command_names,
+        linkify_colon_commands,
+    )
     from command_parser_v2 import CommandParser
     from data_dirs import ensure_data_dir, resolve_data_dir
     from demo import dump_playbook_yaml, load_demo_for_cli, play_demo, session_to_playbook
@@ -136,7 +149,7 @@ try:
         open_terminal_command,
         resolve_target_dir,
     )
-    from help_texts import CALC_HELP_TEXT, INGRESS_HELP_TEXT, MAIN_HELP_TEXT, RUNBOOK_HELP_TEXT
+    from help_texts import calc_help, ingress_help, main_help, runbook_help
     from history_store import (
         DEFAULT_HISTORY_KEEP,
         FileLockTimeoutError,
@@ -147,6 +160,14 @@ try:
         read_history_file_lines,
         release_file_lock,
         remove_history_file_line,
+    )
+    from i18n import (
+        available_languages,
+        current_language,
+        resolve_language,
+        set_language,
+        t,
+        tlist,
     )
     from ingress_analyzer import IngressAnalyzer
     from json_viewer import JSONViewer
@@ -2213,7 +2234,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.136"
+    VERSION = "v1.137"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2233,25 +2254,20 @@ class CommandRunner(App):
         """Короткая справка на один экран: логотип, суть, основные команды."""
         bang_ref = escape("!tag[tid]")
         session_rows = (
-            [f"  [bold]session:[/] [bold #67e8f9]{escape(session)}[/]   "
-             "[dim]:session NAME — switch  ·  :new — another window[/]" ]
-            if session
-            else []
+            [f"  {t('startup.session_row', session=escape(session))}"] if session else []
         )
+        key_lines = [line.format(bang=bang_ref) for line in tlist("startup.keys")]
         return "\n".join(
             [
                 f"[bold #b794f4]{cls.STARTUP_LOGO}[/]",
-                f"  [bold]{cls.TITLE}[/]  {cls.VERSION}   теги → шаблоны → командная строка",
+                f"  [bold]{cls.TITLE}[/]  {cls.VERSION}   {t('startup.tagline')}",
                 "  [dim]Define your variables, join your command.[/]",
                 *session_rows,
                 "",
-                f"  [bold]{bang_ref}[/] / [bold]!![/] собирают строку, [bold]Enter[/] запускает.  Полная справка: [bold]:?[/]",
+                f"  {t('startup.assemble', bang=bang_ref)}",
                 "  [dim]────────────────────────────────────────────────────────[/]",
                 "",
-                "  [bold]:?[/] справка  [bold]:q[/] выход  [bold]:h[/] история  [bold]:c[/] очистить  [bold]:welcome[/] seed",
-                f"  [bold]#tag cmd[/] сохранить    [bold]?[/] / [bold]??[/] теги БД     [bold]{bang_ref}[/] вставить",
-                "  [bold]$VAR=val[/] переменная   [bold]$OUT[/] последняя строка блока   [bold]| cmd[/] пайп",
-                "  [bold]Tab[/] журнал  [bold]F2[/] строки  [bold]F3[/] копия  [bold]F5[/] JSON  [bold]d[/] / [bold]:theme[/] тема",
+                *[f"  {line}" for line in key_lines],
             ]
         )
 
@@ -2336,6 +2352,7 @@ class CommandRunner(App):
     CMD_EXPORT = "export"
     CMD_IMPORT = "import"
     CMD_THEME = "theme"
+    CMD_LANG = "lang"  # язык интерфейса (settings.yml: language)
     CMD_MD = "md"
     CMD_PLAYBOOK = "playbook"
     CMD_RUN = "run"  # полуавтоматический прогон цепочки (runbook)
@@ -2366,6 +2383,7 @@ class CommandRunner(App):
     )
     KEY_CHECK_UPDATES = "check_updates"
     KEY_THEME = "theme"
+    KEY_LANGUAGE = "language"
     KEY_EDITOR = "editor"
     KEY_SCREENSAVER_IDLE = "screensaver_idle"
     KEY_SCREENSAVER_STARS = "screensaver_stars"
@@ -2442,6 +2460,7 @@ class CommandRunner(App):
         self.session_history: list[str] = []
         self._playbook_log: list[str] = []
         self.instance_name: str = INSTANCE_NAME
+        self.language: str = current_language()
         self.session_history_pos: int = 0
         self._history_walking: bool = False
         self._history_needle: str = ""
@@ -2894,14 +2913,14 @@ class CommandRunner(App):
             # `:/text` — поиск по журналу, не команда: список молчит.
             return [], ""
         items: list[CompletionItem] = []
-        for name, description in COLON_COMMANDS:
+        for name in COLON_COMMAND_NAMES:
             if needle and not name.startswith(needle):
                 continue
             command = f"{self.PREFIX_CMD}{name}"
             items.append(
                 CompletionItem(
                     insert=command,
-                    display=f"{command}  — {description}",
+                    display=f"{command}  — {colon_command_hint(name)}",
                     replace_token=True,
                     add_space=True,
                 )
@@ -3448,6 +3467,10 @@ class CommandRunner(App):
         # (`:theme matrix` работает через `available_themes`).
         self.register_theme(MATRIX_THEME)
 
+        # Язык интерфейса: CLI --lang / $IDVJPY_LANG / settings.yml: language.
+        # settings читаются ниже — здесь то, что известно до файла настроек.
+        self._apply_language(None)
+
         # 0. Привязать список подсказок к полю ввода
         cmd_input = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         cmd_input.set_completion_list(self._completion_list)
@@ -3481,6 +3504,7 @@ class CommandRunner(App):
                     self.db_file = settings.get("database_tags_file", self.FILE_DATABASE)
                     self.check_updates = bool(settings.get(self.KEY_CHECK_UPDATES, True))
                     self._apply_theme_name(settings.get(self.KEY_THEME))
+                    self._apply_language(settings.get(self.KEY_LANGUAGE))
                     try:
                         self.screensaver_idle = int(
                             settings.get(self.KEY_SCREENSAVER_IDLE, DEFAULT_SCREENSAVER_IDLE)
@@ -5074,6 +5098,8 @@ class CommandRunner(App):
             self._import_tag(parts[1:])
         elif command == self.CMD_THEME:
             self._handle_theme_command(parts[1:])
+        elif command == self.CMD_LANG:
+            self._handle_lang_command(parts[1:])
         elif command == self.CMD_MD:
             self.action_open_handbook_md(" ".join(parts[1:]))
         elif command == self.CMD_PLAYBOOK:
@@ -5945,7 +5971,7 @@ class CommandRunner(App):
         except Exception:
             pass
         self.add_block(InfoBlock(
-            message or f"Runbook {title}: stopped at step {index}/{total}. You can type now."
+            message or t("runbook.stopped", title=title, index=index, total=total)
         ))
 
     def _session_status_text(self) -> str:
@@ -5956,7 +5982,7 @@ class CommandRunner(App):
             f"  {os.path.basename(self.FILE_BASHRC)}  {os.path.basename(self.FILE_HISTORY)}\n"
             f"  Tags DB is shared ({os.path.basename(self.db_file)}).\n"
             f"Sessions: {names}\n"
-            "Usage: :session NAME   |   :new [NAME|-] [DIR] — окно в отдельном терминале"
+            + t("session.usage")
         )
 
     def _unload_session_env(self) -> None:
@@ -6660,7 +6686,7 @@ class CommandRunner(App):
         потом подставляем кликабельные `:команды` — иначе ссылки попали бы под
         escape.
         """
-        help_text = MAIN_HELP_TEXT
+        help_text = main_help()
         body = escape_help_markup(
             help_text.replace("IDvjPy_term VER", f"IDvjPy_term {self.VERSION}", 1)
         )
@@ -6670,15 +6696,15 @@ class CommandRunner(App):
 
     def _show_ingress_help(self) -> None:
         """Show ingress command help."""
-        self.add_block(InfoBlock(INGRESS_HELP_TEXT))
+        self.add_block(InfoBlock(ingress_help()))
 
     def _show_calc_help(self) -> None:
         """Show the full calculator reference (`:? calc`)."""
-        self.add_block(InfoBlock(CALC_HELP_TEXT))
+        self.add_block(InfoBlock(calc_help()))
 
     def _show_runbook_help(self) -> None:
         """Показать справку по прогону цепочек (`:? run`)."""
-        body = escape_help_markup(RUNBOOK_HELP_TEXT)
+        body = escape_help_markup(runbook_help())
         self.add_block(InfoBlock(linkify_colon_commands(body)), follow_end=False)
 
     def _list_ingresses(self, namespace: str | None = None) -> None:
@@ -7144,9 +7170,9 @@ class CommandRunner(App):
     def _kctx_vars_hint(self) -> str:
         """Подсказка про переменные журнала (`kctx_vars`) для InfoBlock'ов `:kctx`."""
         if not self.kctx_vars:
-            return "Журнал выключен: kctx_vars: [] в settings.yml."
+            return t("kctx.off")
         names = " ".join(f"${name}=…" for name in self.kctx_vars)
-        return f"Задайте переменные журнала ({names}) — они запишутся в журнал."
+        return t("kctx.set_vars", names=names)
 
     @staticmethod
     def _kctx_login_line(cluster: str) -> str:
@@ -7187,16 +7213,13 @@ class CommandRunner(App):
         first, rest = args[0], args[1:]
         if first.isdigit() and not rest:
             if not getattr(self, "_kctx_list_cluster", None):
-                self.add_block(InfoBlock(
-                    "kctx: нет открытого списка снимков. "
-                    "Сначала ':kctx <cluster>', или сразу ':kctx <cluster> N'."
-                ))
+                self.add_block(InfoBlock(t("kctx.no_list")))
                 return
             self._kctx_apply_index(int(first))
             return
         if rest and not rest[0].isdigit():
             self.add_block(InfoBlock(
-                "Usage: :kctx [cluster [N]] — N — номер снимка из списка"
+                t("kctx.usage")
             ))
             return
         index = int(rest[0]) if rest else None
@@ -7207,24 +7230,32 @@ class CommandRunner(App):
         items = self._kctx_load_items()
         summary = cluster_summary(items) if items else []
         current = self._current_kube_cluster
-        lines = ["[bold]kctx — кластеры из журнала:[/bold]"]
+        lines = [t("kctx.clusters_title")]
         if not summary and not current:
-            lines.append("  (пусто)")
-            lines.append("  Войдите в кластер (klogin … / tsh kube login … / kubectl config use-context …)")
+            lines.append(f"  {t('kctx.empty')}")
+            lines.append(f"  {t('kctx.login_hint')}")
             lines.append(f"  {self._kctx_vars_hint()}")
             self.add_block(InfoBlock("\n".join(lines)))
             return
         for i, row in enumerate(summary, start=1):
             when = datetime.datetime.fromtimestamp(row["last_ts"]).strftime("%d.%m %H:%M")
-            marker = " ← текущий" if row["cluster"] == current else ""
-            lines.append(f"  {i}. {escape(row['cluster'])}  ({row['count']} сн.)  {when}{marker}")
+            marker = t("kctx.current_marker") if row["cluster"] == current else ""
+            lines.append("  " + t(
+                "kctx.cluster_row",
+                i=i,
+                cluster=escape(row["cluster"]),
+                n=row["count"],
+                when=when,
+                marker=marker,
+            ))
         if current and current not in {row["cluster"] for row in summary}:
-            lines.append(f"  • {escape(current)}  (0 сн.) ← текущий")
+            lines.append("  " + t(
+                "kctx.bullet_row",
+                cluster=escape(current),
+                marker=t("kctx.current_marker"),
+            ))
         lines.append("")
-        lines.append(
-            "  :kctx <cluster> — войти и показать снимки (один набор — применится сразу); "
-            ":kctx <cluster> N — войти и применить N"
-        )
+        lines.append(f"  {t('kctx.list_hint')}")
         self.add_block(InfoBlock("\n".join(lines)))
 
     def _kctx_open_cluster(self, cluster: str, index: int | None) -> None:
@@ -7252,9 +7283,9 @@ class CommandRunner(App):
     def _kctx_show_snapshots(self, cluster: str) -> None:
         """Список снимков переменных кластера (свежайшие сверху)."""
         rows = snapshots_for_cluster(self._kctx_load_items(), cluster)
-        lines = [f"[bold]kctx — {escape(cluster)}: снимки переменных:[/bold]"]
+        lines = [t("kctx.snapshots_title", cluster=escape(cluster))]
         if not rows:
-            lines.append("  (снимков нет)")
+            lines.append(f"  {t('kctx.no_snapshots')}")
             lines.append(f"  {self._kctx_vars_hint()}")
         else:
             for i, row in enumerate(rows, start=1):
@@ -7262,7 +7293,7 @@ class CommandRunner(App):
                 text = format_vars(row["vars"], self.kctx_vars) or "—"
                 lines.append(f"  {i}. {escape(text)}  ({when})")
             lines.append("")
-            lines.append("  :kctx N — применить набор N")
+            lines.append(f"  {t('kctx.apply_hint')}")
         self.add_block(InfoBlock("\n".join(lines)))
 
     def _kctx_apply_index(self, index: int, *, auto_single: bool = False) -> None:
@@ -7277,8 +7308,7 @@ class CommandRunner(App):
         rows = snapshots_for_cluster(self._kctx_load_items(), cluster)
         if not (1 <= index <= len(rows)):
             self.add_block(InfoBlock(
-                f"kctx: набора {index} нет у '{escape(cluster)}' "
-                f"(в журнале {len(rows)})."
+                t("kctx.no_set", index=index, cluster=escape(cluster), rows=len(rows))
             ))
             return
         row = rows[index - 1]
@@ -7289,14 +7319,16 @@ class CommandRunner(App):
             if err:
                 errors.append(f"{name}: {err}")
         self._current_kube_cluster = cluster
-        text = format_vars(row["vars"], self.kctx_vars) or "(пусто)"
-        message = f"kctx {escape(cluster)} #{index}: {escape(text)}"
+        text = format_vars(row["vars"], self.kctx_vars) or t("kctx.empty_vars")
+        message = t("kctx.application", cluster=escape(cluster), index=index, text=escape(text))
         if auto_single:
-            message += "  [dim](единственный набор — применился сразу)[/dim]"
+            message += "  " + t("kctx.single_set")
         if errors:
             message += f"  [red]errors: {'; '.join(errors)}[/red]"
         elif before and before != cluster:
-            message += f"  (кластер входа: {escape(before)} — примените ':kctx {escape(cluster)}', чтобы переключить)"
+            message += "  " + t(
+                "kctx.logged_cluster", before=escape(before), cluster=escape(cluster)
+            )
         self.add_block(InfoBlock(message))
 
     def _resolve_command_references(self, command: str) -> str | None:
@@ -9526,7 +9558,7 @@ class CommandRunner(App):
     def _handle_watch_command(self, args: list[str]) -> None:
         """`:watch <sec> <command>` и `:watch stop` (см. :?)."""
         if not args:
-            self.add_block(InfoBlock("Usage: :watch <sec> <command>   (stop: :watch stop)"))
+            self.add_block(InfoBlock(t("watch.usage_stop")))
             return
         if args[0] == "stop":
             if self._watch_state is None:
@@ -9541,20 +9573,20 @@ class CommandRunner(App):
             return
         if self._run_active:
             self.add_block(
-                InfoBlock("A runbook is running — stop it first: :run stop (or Esc).")
+                InfoBlock(t("watch.runbook_running"))
             )
             return
         try:
             interval = float(args[0])
         except ValueError:
-            self.add_block(InfoBlock("Usage: :watch <sec> <command>  (sec — число секунд)"))
+            self.add_block(InfoBlock(t("watch.usage_seconds")))
             return
         if interval <= 0:
-            self.add_block(InfoBlock("Usage: :watch <sec> <command>  (sec должен быть > 0)"))
+            self.add_block(InfoBlock(t("watch.usage_positive")))
             return
         command = " ".join(args[1:]).strip()
         if not command:
-            self.add_block(InfoBlock("Usage: :watch <sec> <command>"))
+            self.add_block(InfoBlock(t("watch.usage")))
             return
         self._start_watch(command, interval)
 
@@ -9581,10 +9613,11 @@ class CommandRunner(App):
             "ticks": 0,
         }
         self._refresh_running_title()
-        text = (
-            f"[dim]watch: {escape_display_markup(final_command)} · every {interval:g}s · "
-            "F4 / :kill / :watch stop — остановить[/dim]\n"
-        )
+        text = t(
+            "watch.running",
+            command=escape_display_markup(final_command),
+            interval=f"{interval:g}",
+        ) + "\n"
         block.text_content = text
         block.update(text)
         self.add_block(block)
@@ -9791,6 +9824,10 @@ class CommandRunner(App):
         for screen in self.screen_stack:
             screen.set_class(is_matrix, MATRIX_CLASS)
 
+    def _apply_language(self, settings_lang: Any = None) -> None:
+        """Язык из CLI / $IDVJPY_LANG / settings.yml (`auto` → $LANG, иначе `en`)."""
+        self.language = set_language(resolve_language(CLI_LANGUAGE, settings_lang))
+
     def _apply_theme_name(self, name: str | None) -> None:
         """Ставит тему из settings.yml; неизвестное имя — textual-dark."""
         theme = self._normalize_theme_name(name or self.DEFAULT_THEME)
@@ -9824,20 +9861,59 @@ class CommandRunner(App):
         self._save_settings_theme(theme)
         self.add_block(InfoBlock(f"Theme: {theme} (saved in {self.FILE_SETTINGS})"))
 
+    def _handle_lang_command(self, args: list[str]) -> None:
+        """`:lang` — текущий язык и список; `:lang ru` — выбрать и сохранить."""
+        if not args:
+            self.add_block(InfoBlock(t(
+                "lang.usage",
+                current=current_language(),
+                available=", ".join(available_languages()),
+            )))
+            return
+        code = args[0].strip().lower()
+        if code == "auto":
+            self.language = set_language(resolve_language("auto", None))
+            self._save_settings_language("auto")
+            self.add_block(InfoBlock(t("lang.saved", name=self.language)))
+            return
+        if code not in available_languages():
+            self.add_block(InfoBlock(t("lang.unknown", name=args[0])))
+            return
+        self.language = set_language(code)
+        self._save_settings_language(self.language)
+        self.add_block(InfoBlock(t("lang.saved", name=self.language)))
+
     def _save_settings_theme(self, name: str) -> None:
         """Пишет ключ theme: в settings.yml, сохраняя остальные строки и комментарии."""
+        self._save_settings_scalar(
+            self.KEY_THEME,
+            name,
+            "TUI color theme (`d` toggles textual-dark / textual-light).",
+        )
+
+    def _save_settings_language(self, code: str) -> None:
+        """Пишет ключ language: в settings.yml (как `:theme` пишет тему)."""
+        self._save_settings_scalar(
+            self.KEY_LANGUAGE,
+            code,
+            "UI language (en, ru, …; auto = follow $LANG). `:lang` shows and sets it.",
+        )
+
+    def _save_settings_scalar(self, key: str, value: str, comment: str) -> None:
+        """Пишет `key: value` в settings.yml, сохраняя остальные строки и комментарии."""
         path = self.FILE_SETTINGS
         try:
             if os.path.exists(path):
                 with open(path, encoding=self.ENCODING) as f:
                     raw = f.read()
                 lines = raw.splitlines(keepends=True)
+                pattern = re.compile(rf"^{re.escape(key)}:\s*")
                 replaced = False
                 out: list[str] = []
                 for line in lines:
-                    if re.match(r"^theme:\s*", line):
+                    if pattern.match(line):
                         nl = "\n" if line.endswith("\n") else ""
-                        out.append(f"theme: {name}{nl}")
+                        out.append(f"{key}: {value}{nl}")
                         replaced = True
                     else:
                         out.append(line)
@@ -9846,20 +9922,15 @@ class CommandRunner(App):
                         out[-1] += "\n"
                     if out and out[-1].strip():
                         out.append("\n")
-                    out.append(
-                        "# TUI color theme (`d` toggles textual-dark / textual-light).\n"
-                    )
-                    out.append(f"theme: {name}\n")
+                    out.append(f"# {comment}\n")
+                    out.append(f"{key}: {value}\n")
                 with open(path, "w", encoding=self.ENCODING) as f:
                     f.writelines(out)
             else:
                 with open(path, "w", encoding=self.ENCODING) as f:
-                    f.write(
-                        "# TUI color theme (`d` toggles textual-dark / textual-light).\n"
-                        f"theme: {name}\n"
-                    )
+                    f.write(f"# {comment}\n{key}: {value}\n")
         except OSError as e:
-            self.add_block(InfoBlock(f"Could not save theme to {path}: {e}"))
+            self.add_block(InfoBlock(f"Could not save {key} to {path}: {e}"))
 
     def _settings_terminal_mouse(self) -> bool:
         """
@@ -9990,9 +10061,17 @@ def apply_instance_name(name: str) -> None:
     CommandRunner.FILE_HISTORY = history_file_for(name)
 
 
+def apply_language(lang: str | None) -> None:
+    """Язык из CLI --lang (значение из settings.yml применяется в on_mount)."""
+    global CLI_LANGUAGE
+    CLI_LANGUAGE = (lang or "").strip() or None
+    set_language(resolve_language(CLI_LANGUAGE, None))
+
+
 if __name__ == "__main__":
     args = parse_arguments()
     apply_instance_name(args.instance_name)
+    apply_language(args.lang)
     demo_spec = load_demo_for_cli(args.demo) if args.demo else None
     app = CommandRunner(
         demo=demo_spec,

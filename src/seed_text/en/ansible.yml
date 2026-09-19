@@ -1,0 +1,62 @@
+tags:
+  ansvars:
+    comment: ansible variables
+    commands:
+      0: check $INV/$PLAY/…
+  ansible:
+    comment: 'ansible: inventory, ad-hoc, docs'
+    commands:
+      0: ansible version
+      1: non-default config
+      2: inventory JSON
+      3: group graph
+      4: hosts matching pattern $HOST
+      5: ping $HOST
+      6: facts for $HOST
+      7: distribution of $HOST
+      8: command $ARGS on $HOST
+      9: check mode for module $MODULE
+      10: module $MODULE (changes the host)
+      11: docs for $MODULE
+      12: 'REPL (better: > ansible-console -i $INV)'
+  aplay:
+    comment: 'ansible-playbook: syntax, check, run'
+    commands:
+      0: syntax-check $PLAY
+      1: playbook hosts
+      2: playbook tasks
+      3: playbook tags
+      4: check + diff
+      5: check, limit $LIMIT
+      6: check, tags $TAGS
+      7: run, limit $LIMIT (changes hosts)
+      8: run, tags $TAGS (changes hosts)
+      9: run $PLAY (changes hosts)
+  avault:
+    comment: ansible-vault
+    commands:
+      0: show $VAULTFILE
+      1: encrypt to stdout
+      2: decrypt to stdout
+      3: encrypt a file (changes $VAULTFILE)
+      4: decrypt a file (changes $VAULTFILE)
+      5: 'create $VAULTFILE (better: > ansible-vault create $VAULTFILE)'
+      6: 'edit (better: > ansible-vault edit $VAULTFILE)'
+  agalaxy:
+    comment: 'ansible-galaxy: roles, collections'
+    commands:
+      0: installed collections
+      1: installed roles
+      2: search for a collection
+      3: search for a role
+      4: install a collection
+      5: install a role
+      6: role skeleton $ROLE
+  aping:
+    comment: ping inventory hosts
+    commands:
+      0: list-hosts → ping
+  achk:
+    comment: 'ansible overview: inventory → syntax → check'
+    commands:
+      0: inventory --list → syntax-check → check --diff

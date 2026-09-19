@@ -1,0 +1,40 @@
+tags:
+  qvars:
+    comment: dig/nmap variables
+    commands:
+      0: check $HOST/$PORT/…
+  dig:
+    comment: 'dig: A/AAAA/MX/NS/PTR'
+    commands:
+      0: full answer
+      1: A/AAAA only
+      2: A
+      3: AAAA
+      4: MX
+      5: NS
+      6: SOA
+      7: TXT
+      8: CNAME
+      9: via resolver $DNS
+      10: PTR (reverse)
+      11: delegation trace
+      12: answer section only
+  nmap:
+    comment: 'nmap: ping and a short connect-scan'
+    commands:
+      0: ping-scan (is host up?)
+      1: TCP connect, top 20, no ping
+      2: single port $PORT
+      3: service version on $PORT
+      4: ping-scan of network $CIDR
+      5: port $PORT + reason
+      6: UDP $PORT (often needs root)
+      7: SYN-scan (needs root)
+  dchk:
+    comment: 'DNS: short + NS'
+    commands:
+      0: +short → NS
+  nchk:
+    comment: short host inspection
+    commands:
+      0: ping-scan → top 20 TCP (no -A/-p-)

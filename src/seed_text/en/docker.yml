@@ -1,0 +1,55 @@
+tags:
+  dvars:
+    comment: docker variables
+    commands:
+      0: check $IMAGE/$CTR/…
+  dck:
+    comment: 'docker: containers, images, logs'
+    commands:
+      0: running containers
+      1: all containers
+      2: images
+      3: logs of $CTR
+      4: inspect a container
+      5: CPU/RAM without follow
+      6: processes in $CTR
+      7: ps inside (no TTY)
+      8: pull $IMAGE
+      9: one-off run of $IMAGE
+      10: stop $CTR
+      11: start $CTR
+      12: restart $CTR
+      13: errors in logs
+      14: networks
+      15: volumes
+      16: inspect an image
+      17: images/volumes disk usage
+      18: remove a stopped $CTR
+      19: remove image $IMAGE
+      20: 'shell in $CTR (better: > docker exec -it $CTR sh)'
+  dcmp:
+    comment: docker compose
+    commands:
+      0: compose services (cwd)
+      1: services, file $COMPOSE_FILE
+      2: render config
+      3: logs of all services
+      4: logs of service $SVC
+      5: update images
+      6: bring up in background
+      7: restart $SVC
+      8: stop and remove containers
+      9: 'exec in $SVC (better: > docker compose exec $SVC sh)'
+      10: old docker-compose binary
+  dps:
+    comment: docker overview
+    commands:
+      0: ps → stats → images
+  dlog:
+    comment: container logs
+    commands:
+      0: logs + grep for errors
+  dcstat:
+    comment: compose overview
+    commands:
+      0: ps → config → logs

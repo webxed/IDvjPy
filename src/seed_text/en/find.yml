@@ -1,0 +1,28 @@
+tags:
+  fvars:
+    comment: find variables
+    commands:
+      0: check $SRC/$PATTERN/…; pattern is a glob (-name)
+  find:
+    comment: 'find: files, glob, time, size'
+    commands:
+      0: files
+      1: directories
+      2: glob $PATTERN
+      3: case-insensitive glob
+      4: files by glob
+      5: modified less than $DAYS days ago
+      6: older than $DAYS days
+      7: larger than $SIZE (e.g. 100M)
+      8: empty files and directories
+      9: symlinks
+      10: like ls -dils
+      11: 20 largest files
+      12: first 50 paths
+      13: how many files
+      14: search without .git/.venv/node_modules
+      15: delete found (not in playbook)
+  fchk:
+    comment: search files by glob
+    commands:
+      0: type f -name → wc -l (without -delete)

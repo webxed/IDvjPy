@@ -1,0 +1,127 @@
+# UI text catalogue — English is the source of truth (see src/i18n.py).
+#
+# * keys are dotted paths; `t("kctx.off")` reads `kctx: { off: ... }`
+# * `{name}` are str.format placeholders; `{interval:g}` keeps format specs
+# * Textual/Rich markup ([bold]…[/]) is part of a value wherever the template
+#   needs it — keep it when translating
+# * layout indentation is added by the code, not baked into values
+# * commands, tag names, settings keys and file names are never translated
+
+startup:
+  session_row: "[bold]session:[/] [bold #67e8f9]{session}[/]   [dim]:session NAME — switch  ·  :new — another window[/]"
+  tagline: "tags → templates → command line"
+  assemble: "[bold]{bang}[/] / [bold]!![/] assemble the line, [bold]Enter[/] runs it.  Full help: [bold]:?[/]"
+  keys:
+    - "[bold]:?[/] help  [bold]:q[/] quit  [bold]:h[/] history  [bold]:c[/] clear  [bold]:welcome[/] seed"
+    - "[bold]#tag cmd[/] save    [bold]?[/] / [bold]??[/] DB tags     [bold]{bang}[/] insert"
+    - "[bold]$VAR=val[/] variable   [bold]$OUT[/] last block line   [bold]| cmd[/] pipe"
+    - "[bold]Tab[/] journal  [bold]F2[/] lines  [bold]F3[/] copy  [bold]F5[/] JSON  [bold]d[/] / [bold]:theme[/] theme"
+
+session:
+  usage: "Usage: :session NAME   |   :new [NAME|-] [DIR] — a window in a separate terminal"
+
+kctx:
+  "off": "kctx journal is off: kctx_vars: [] in settings.yml."
+  set_vars: "Set journal variables ({names}) — assignments to them are recorded."
+  no_list: "kctx: no snapshot list is open. Run ':kctx <cluster>' first, or ':kctx <cluster> N'."
+  usage: "Usage: :kctx [cluster [N]] — N is a snapshot number from the list"
+  clusters_title: "[bold]kctx — clusters in the journal:[/bold]"
+  empty: "(empty)"
+  login_hint: "Log in to a cluster (klogin … / tsh kube login … / kubectl config use-context …)"
+  cluster_row: "{i}. {cluster}  ({n} snap.)  {when}{marker}"
+  bullet_row: "• {cluster}  (0 snap.){marker}"
+  current_marker: " ← current"
+  list_hint: ":kctx <cluster> — log in and show snapshots (a single set is applied at once); :kctx <cluster> N — log in and apply N"
+  snapshots_title: "[bold]kctx — {cluster}: variable snapshots:[/bold]"
+  no_snapshots: "(no snapshots)"
+  apply_hint: ":kctx N — apply snapshot N"
+  no_set: "kctx: no set {index} for '{cluster}' (journal has {rows})."
+  empty_vars: "(empty)"
+  application: "kctx {cluster} #{index}: {text}"
+  single_set: "[dim](single set — applied at once)[/dim]"
+  logged_cluster: "(logged-in cluster: {before} — run ':kctx {cluster}' to switch)"
+
+watch:
+  usage: "Usage: :watch <sec> <command>"
+  usage_stop: "Usage: :watch <sec> <command>   (stop: :watch stop)"
+  usage_seconds: "Usage: :watch <sec> <command>  (sec is the number of seconds)"
+  usage_positive: "Usage: :watch <sec> <command>  (sec must be > 0)"
+  runbook_running: "A runbook is running — stop it first: :run stop (or Esc)."
+  running: "[dim]watch: {command} · every {interval}s · F4 / :kill / :watch stop — stop[/dim]"
+
+runbook:
+  modes: "auto — run and wait for completion · manual — insert and wait for Enter (empty Enter — skip) · prompt — type the line"
+  no_directives: "the tag has no run: directives — every step will run auto; a mutating step is safer marked run:manual (see :? run)"
+  plan_footer_stop: "Esc stops"
+  plan_footer_dry: "[yellow]dry run — nothing executed[/yellow]"
+  usage_header: "Usage: :run <tag|file.yml> [--step] [--dry]   |   :run stop"
+  usage_notes:
+    - "  auto steps run one after another, manual/prompt wait for you, Esc stops."
+    - "  A tag's step mode comes from directives in the command comment: run:manual,"
+    - "  run:prompt, run:pause=2, run:continue (see :? run)."
+  tags_title: "Runbook tags in the library:"
+  no_tags: "No tag carries run: directives yet."
+  tag_missing: "Runbook: tag '{name}' not found or has no live commands. `?tag` — library, `:run` — usage."
+  pause_warning: "{token}: pause must be > 0 seconds — skipped"
+  manual_hint: "Enter — run · empty Enter — skip the step · Esc — stop the run"
+  prompt_hint: "Type the line and press Enter · Esc — stop the run"
+  continue_hint: "[dim]{label} · continue manually or `:run {source} --step`[/dim]"
+  stopped: "Runbook {title}: stopped at step {index}/{total}. You can type now."
+  done: "Runbook {title}: {total} step(s) done."
+
+llm:
+  offline: "[offline] The built-in IDvjPy_term stub: no network request was made.\nThis is how :llm and :llm ask are checked without keys; real answers come from the providers in llm_providers.yml."
+  answer_language: "English"
+
+lang:
+  usage: "Language: {current}\nAvailable: {available}\nSet: :lang <code>  (auto — follow $LANG / $LC_ALL)\nSaved in settings.yml (key `language`); a new language applies to text printed from now on."
+  unknown: "Unknown language: {name}. Type :lang for the list."
+  saved: "Language: {name} (saved in settings.yml)"
+  session_only: "Language: {name} (this session)"
+
+cmd:
+  "?": "command help (:? calc — calculator reference)"
+  q: "quit the application"
+  w: "write the last block output to a file"
+  h: "history: :h [N], :h /text, :h compact"
+  c: "clear all journal blocks"
+  json: "JSON viewer: last block or a file"
+  md: "markdown viewer; #L<n> — source line"
+  rg: "search markdown files (Obsidian vault)"
+  i: "Kubernetes Ingress Analyzer"
+  cd: "show or change the shell cwd"
+  fm: "OS file manager in a new window"
+  term: "system terminal in a new window"
+  ed: "external editor: file / $OUT / $BLOCK"
+  env: "re-read .bashrc_term* into this process"
+  r: "focused/last block command into the input"
+  cmd: "block command with values → clipboard"
+  log: "full block output: Line-API viewer, / search, f — matches only (F7)"
+  o: "session output history: :o /text, :o clear"
+  diff: "unified diff of two block outputs"
+  name: "label a block buffer (|@label)"
+  kill: "stop the running background command"
+  watch: "rerun a command every N seconds"
+  llm: "ask an LLM (ask / reset / offline)"
+  cht: "cheat.sh cheat sheets"
+  g: "search journal lines"
+  "n": "next search hit"
+  "N": "previous search hit"
+  stats: "library usage summary"
+  mv: "move a command / rename a tag"
+  export: "tag or library → JSON / Markdown"
+  import: "import commands from a JSON file"
+  alias: "commands as bash functions"
+  kctx: "cluster journal: saved vars per cluster (kctx_vars)"
+  session: "show or switch instance"
+  new: "app window in a new terminal (session)"
+  send: "forward a command to another session"
+  "send!": "forward and run it immediately"
+  backup: "snapshot the tags DB into backups/"
+  welcome: "seed catalog (same as an empty DB)"
+  screensaver: "overlay now — matrix rain (default) / stars; idle: screensaver_idle"
+  theme: "TUI theme (:theme nord / dark / light)"
+  lang: "UI language (:lang ru / en; auto follows $LANG)"
+  playbook: "dump this session as a --demo YAML"
+  run: "run a command chain (runbook): tag or YAML, wait for you where told"
+  update: "compare VERSION with GitHub main"

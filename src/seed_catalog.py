@@ -1,4 +1,10 @@
-"""Handbook seed catalog for the empty-database welcome hint."""
+"""Handbook seed catalog for the empty-database welcome hint and `:welcome`.
+
+Тексты — в локалях (`catalog.*`, части `src/locales/<lang>/seed.yml`); команды,
+имена скриптов и файлов справочников не переводятся.
+"""
+
+from i18n import t
 
 # Seed scripts live in src/; data files (settings.yml, DB) stay in cwd.
 SEED_DIR = "src"
@@ -31,36 +37,47 @@ def cmd_click(script: str) -> str:
     )
 
 
-# script, one-line description, handbook markdown (empty if none)
+# script, handbook markdown (empty if none); the one-line description is the
+# locale key `catalog.desc.<script without seed_/.py>`.
 SEED_HANDBOOKS_CORE = (
-    ("seed_linux_commands.py", "Linux: proc, file, net, kube", "SEED_LINUX_COMMANDS.md"),
-    ("seed_k8s_chains.py", "Цепочки для расследования k8s: kpod, klog, kavail, kstore, …", "K8S_CHAINS.md"),
-    ("seed_git.py", "git: status, diff, branches; gstat / gsync", "SEED_GIT_COMMANDS.md"),
+    ("seed_linux_commands.py", "SEED_LINUX_COMMANDS.md"),
+    ("seed_k8s_chains.py", "K8S_CHAINS.md"),
+    ("seed_git.py", "SEED_GIT_COMMANDS.md"),
 )
 SEED_HANDBOOKS_OPS = (
-    ("seed_docker.py", "docker / compose: dck, dcmp, dps, dlog", "SEED_DOCKER_COMMANDS.md"),
-    ("seed_helm.py", "helm: релизы, values, dry-run; hls", "SEED_HELM_COMMANDS.md"),
-    ("seed_ansible.py", "ansible: inventory, playbook check, vault; achk", "SEED_ANSIBLE_COMMANDS.md"),
-    ("seed_http.py", "HTTP: curl, nginx, traefik", "SEED_HTTP_COMMANDS.md"),
-    ("seed_netfw.py", "сокеты и firewall: ss, iptables, nft, firewalld", "SEED_NETFW_COMMANDS.md"),
-    ("seed_ip.py", "iproute2 / ethtool: ip, eth, ilink", "SEED_IP_COMMANDS.md"),
-    ("seed_netdbg.py", "L4/L7: tcpdump, nc, mtr, TLS; npath / tlschk", "SEED_NETDBG_COMMANDS.md"),
-    ("seed_data.py", "postgres и kafka: pg, kf", "SEED_DATA_COMMANDS.md"),
-    ("seed_host.py", "архивы: tar, gzip, zip", "SEED_HOST_COMMANDS.md"),
-    ("seed_disk.py", "диски: df, du, lsblk, smartctl, ncdu", "SEED_DISK_COMMANDS.md"),
-    ("seed_systemd.py", "systemd: systemctl, journalctl, dmesg; sstat", "SEED_SYSTEMD_COMMANDS.md"),
-    ("seed_sysinfo.py", "хост, lsof, strace; hstat / lport / pdbg", "SEED_SYSINFO_COMMANDS.md"),
-    ("seed_sysstat.py", "sysstat: vmstat, iostat, mpstat; oload", "SEED_SYSSTAT_COMMANDS.md"),
-    ("seed_vault.py", "HashiCorp Vault: status, kv metadata", "SEED_VAULT_COMMANDS.md"),
-    ("seed_text.py", "текст: grep, awk, sed", "SEED_TEXT_COMMANDS.md"),
-    ("seed_pipe.py", "конвейер: sort, uniq, cut, jq; ucount", "SEED_PIPE_COMMANDS.md"),
-    ("seed_rsync.py", "rsync: dry-run / copy", "SEED_RSYNC_COMMANDS.md"),
-    ("seed_find.py", "find: glob, mtime, size", "SEED_FIND_COMMANDS.md"),
-    ("seed_recon.py", "DNS и порты: dig, nmap", "SEED_RECON_COMMANDS.md"),
-    ("seed_ssh.py", "ssh / scp, OpenSSH-сертификаты", "SEED_SSH_COMMANDS.md"),
-    ("seed_pkg.py", "пакеты: apt, dnf, rpm; aptq / rpmq", "SEED_PKG_COMMANDS.md"),
-    ("seed_user.py", "люди и права: ident, perm; uidchk", "SEED_USER_COMMANDS.md"),
+    ("seed_docker.py", "SEED_DOCKER_COMMANDS.md"),
+    ("seed_helm.py", "SEED_HELM_COMMANDS.md"),
+    ("seed_ansible.py", "SEED_ANSIBLE_COMMANDS.md"),
+    ("seed_http.py", "SEED_HTTP_COMMANDS.md"),
+    ("seed_netfw.py", "SEED_NETFW_COMMANDS.md"),
+    ("seed_ip.py", "SEED_IP_COMMANDS.md"),
+    ("seed_netdbg.py", "SEED_NETDBG_COMMANDS.md"),
+    ("seed_data.py", "SEED_DATA_COMMANDS.md"),
+    ("seed_host.py", "SEED_HOST_COMMANDS.md"),
+    ("seed_disk.py", "SEED_DISK_COMMANDS.md"),
+    ("seed_systemd.py", "SEED_SYSTEMD_COMMANDS.md"),
+    ("seed_sysinfo.py", "SEED_SYSINFO_COMMANDS.md"),
+    ("seed_sysstat.py", "SEED_SYSTAT_COMMANDS.md"),
+    ("seed_vault.py", "SEED_VAULT_COMMANDS.md"),
+    ("seed_text.py", "SEED_TEXT_COMMANDS.md"),
+    ("seed_pipe.py", "SEED_PIPE_COMMANDS.md"),
+    ("seed_rsync.py", "SEED_RSYNC_COMMANDS.md"),
+    ("seed_find.py", "SEED_FIND_COMMANDS.md"),
+    ("seed_recon.py", "SEED_RECON_COMMANDS.md"),
+    ("seed_ssh.py", "SEED_SSH_COMMANDS.md"),
+    ("seed_pkg.py", "SEED_PKG_COMMANDS.md"),
+    ("seed_user.py", "SEED_USER_COMMANDS.md"),
 )
+
+
+def handbook_key(script: str) -> str:
+    """`seed_linux_commands.py` → `linux_commands` (ключ локали, без точек)."""
+    return script.removeprefix("seed_").removesuffix(".py")
+
+
+def handbook_desc(script: str) -> str:
+    """Однострочное описание справочника на текущем языке."""
+    return t(f"catalog.desc.{handbook_key(script)}")
 
 
 def _section(title: str) -> str:
@@ -68,14 +85,15 @@ def _section(title: str) -> str:
 
 
 KNOWN_SEED_SCRIPTS = frozenset(
-    (*(script for script, _, _ in SEED_HANDBOOKS_CORE),
-     *(script for script, _, _ in SEED_HANDBOOKS_OPS),
+    (*(script for script, _ in SEED_HANDBOOKS_CORE),
+     *(script for script, _ in SEED_HANDBOOKS_OPS),
      "seed_ops.py")
 )
 
 
-def _entry(script: str, desc: str, doc: str) -> list[str]:
+def _entry(script: str, doc: str) -> list[str]:
     lines = [f"  {cmd_click(script)}"]
+    desc = handbook_desc(script)
     if doc:
         lines.append(f"    [dim]{desc}[/]  {md_click(doc)}")
     else:
@@ -86,29 +104,30 @@ def _entry(script: str, desc: str, doc: str) -> list[str]:
 def format_empty_db_hint(db_file: str) -> str:
     """Welcome text when the command database has no live rows."""
     lines = [
-        f"[bold {_ACCENT}]Empty command database[/]  [dim]({db_file})[/]",
+        f"[bold {_ACCENT}]{t('catalog.title')}[/]  [dim]({db_file})[/]",
         "",
-        f"[bold]Теги пустые.[/]  Свои команды: [bold {_CMD}]#tag cmd[/]",
-        "[dim]Каждый --seed перезаписывает только свои теги; перед этим копия БД в backups/. Вручную:[/] [bold]:backup[/]",
-        "Клик по зелёной команде — во ввод, [bold]Enter[/], затем [bold]??[/] [dim](или ~5 с).[/]",
-        "[dim]Клик по имени .md (нужен terminal_mouse) или[/] [bold]:md файл.md[/][dim] — справочник с форматированием.[/]",
-        "[dim]Показать этот каталог снова:[/] [bold]:welcome[/]",
+        t("catalog.tags_empty"),
+        t("catalog.seed_note"),
+        t("catalog.click_hint"),
+        t("catalog.md_hint"),
+        t("catalog.show_again"),
         "",
-        _section("Ядро"),
+        _section(t("catalog.section_core")),
     ]
-    for script, desc, doc in SEED_HANDBOOKS_CORE:
-        lines.extend(_entry(script, desc, doc))
+    for script, doc in SEED_HANDBOOKS_CORE:
+        lines.extend(_entry(script, doc))
     lines.extend(
         [
             "",
-            _section("Все ops сразу") + " [dim](без linux / k8s / git)[/]",
+            _section(t("catalog.section_ops_all"))
+            + f" [dim]{t('catalog.section_ops_all_note')}[/]",
             f"  {cmd_click('seed_ops.py')}",
             "",
-            _section("Ops по отдельности"),
+            _section(t("catalog.section_ops")),
         ]
     )
-    for script, desc, doc in SEED_HANDBOOKS_OPS:
-        lines.extend(_entry(script, desc, doc))
+    for script, doc in SEED_HANDBOOKS_OPS:
+        lines.extend(_entry(script, doc))
     return "\n".join(lines)
 
 
@@ -128,7 +147,8 @@ def format_library_overview(live_tags: list[str]) -> str:
     live_set = set(live)
     groups = handbook_groups()
     lines = [
-        f"[bold {_ACCENT}]Разделы[/]  [dim]?tag · ?? · :welcome — каталог seed[/]",
+        f"[bold {_ACCENT}]{t('catalog.overview_title')}[/]  "
+        f"[dim]{t('catalog.overview_hint')}[/]",
         "",
     ]
     for name in _handbook_section_order():
@@ -138,5 +158,5 @@ def format_library_overview(live_tags: list[str]) -> str:
         lines.append(f"  [bold]{name}[/]  [dim]{' '.join(tags)}[/]")
     custom = [tag for tag in live if group_for_tag(tag) is None]
     if custom:
-        lines.append(f"  [bold]свои[/]  [dim]{' '.join(custom)}[/]")
+        lines.append(f"  [bold]{t('catalog.custom')}[/]  [dim]{' '.join(custom)}[/]")
     return "\n".join(lines)

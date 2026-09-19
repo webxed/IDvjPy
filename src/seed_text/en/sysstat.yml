@@ -1,0 +1,38 @@
+tags:
+  stvars:
+    comment: sysstat variables
+    commands:
+      0: check $DELAY/$SAMPLES/…
+  vmstat:
+    comment: 'vmstat: procs, memory, io, cpu'
+    commands:
+      0: one snapshot
+      1: memory summary
+      2: disk
+      3: every $DELAY s, $SAMPLES times
+      4: wide columns
+  iostat:
+    comment: 'iostat: CPU and disk'
+    commands:
+      0: one snapshot (no avg-since-boot)
+      1: extended, $SAMPLES times
+      2: disk $DISK
+      3: with LVM names
+  mpstat:
+    comment: 'mpstat: CPU per core'
+    commands:
+      0: one snapshot
+      1: all CPUs, $SAMPLES times
+      2: processes, CPU
+      3: PID $PID
+      4: CPU via sar
+  monui:
+    comment: interactive monitors (TTY)
+    commands:
+      0: htop
+      1: iotop (often needs root)
+      2: iftop on $IFACE
+  oload:
+    comment: 'load: vmstat + iostat'
+    commands:
+      0: vmstat N → iostat -xz N

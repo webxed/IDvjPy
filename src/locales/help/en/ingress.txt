@@ -1,0 +1,24 @@
+[bold]Kubernetes Ingress Analyzer[/bold]
+
+[bold]Usage:[/bold]
+  :i list                   - List ingresses (uses $NS if set)
+  :i list -n <namespace>    - List in namespace (saves to $NS)
+  :i ns <namespace>         - Describe namespace (JSON viewer)
+  :i analyze <name>         - Analyze ingress (uses $NS if set)
+  :i analyze <name> -n <ns> - Analyze in namespace (saves to $NS)
+  :i check <service>        - Check service endpoints (uses $NS)
+  :i check <service> -n <ns>- Check in namespace (saves to $NS)
+
+[bold]Namespace persistence:[/bold]
+  When -n is specified, namespace is saved to $NS variable.
+  Subsequent commands without -n will use $NS automatically.
+
+[bold]Analysis includes:[/bold]
+  • Ingress configuration (hosts, paths, TLS)
+  • Nginx config from controller (via crossplane)
+  • Service and endpoint health
+  • Path-to-service mapping
+
+[bold]Prerequisites:[/bold]
+  • kubectl configured with cluster access
+  • crossplane: pip install crossplane (optional, for nginx config parsing)

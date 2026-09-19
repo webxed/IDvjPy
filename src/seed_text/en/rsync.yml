@@ -1,0 +1,27 @@
+tags:
+  rvars:
+    comment: rsync variables
+    commands:
+      0: check $SRC/$DEST/$REMOTE/…
+  rsync:
+    comment: 'rsync: dry-run, copy, ssh'
+    commands:
+      0: list source, no copying
+      1: dry-run archive
+      2: dry-run + itemize-changes
+      3: dry-run with --delete
+      4: dry-run with exclude
+      5: dry-run to $REMOTE
+      6: dry-run from $REMOTE
+      7: local copy
+      8: copy with compression
+      9: progress + partial
+      10: copy with exclude
+      11: to $REMOTE (ssh)
+      12: from $REMOTE (ssh)
+      13: limit ~5 MB/s
+      14: copy + delete extra on dest (not in playbook)
+  rchk:
+    comment: rsync check (dry-run)
+    commands:
+      0: list-only → itemize dry-run (without --delete)

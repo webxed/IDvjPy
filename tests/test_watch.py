@@ -63,7 +63,7 @@ async def test_watch_usage_and_single_instance(isolated_home):
         await submit(pilot, ":watch abc echo x")
         assert "Usage: :watch <sec>" in last_info(app).text_content
         await submit(pilot, ":watch -1 echo x")
-        assert "sec должен быть > 0" in last_info(app).text_content
+        assert "sec must be > 0" in last_info(app).text_content
         await submit(pilot, ":watch 1 echo a")
         await _watch_block(app)
         await submit(pilot, ":watch 1 echo b")

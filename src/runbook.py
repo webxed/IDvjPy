@@ -47,6 +47,7 @@ import yaml
 
 import database_v2 as database
 from demo import session_line_needs_wait, submit_line
+from i18n import t, tlist
 
 MODE_AUTO = "auto"
 MODE_MANUAL = "manual"
@@ -74,20 +75,13 @@ STEP_KEYS = {"type", "text", "manual", "prompt", "hint", "caption",
 PLAN_KEYS = {"title", "steps", "pause", "stop_on_error",
              "start_pause", "type_delay", "command_timeout", "reset_tags", "loop"}
 
-MODES_HELP = (
-    "auto — выполнить и ждать завершения · manual — вставить и ждать Enter "
-    "(пустой Enter — пропустить) · prompt — набрать строку"
-)
-
+# Тексты плана и подсказок — в локалях (`runbook.*`, см. src/locales/en.yml).
 # Тег без единой `run:`-директивы: прогон пойдёт целиком auto. Молчать нельзя —
 # так выглядит устаревший сид (директивы появились в v1.124): `:run vapprole`
 # старого набора сам выполнял `$ROLE=custom-role` и падал на следующем шаге, а
 # мутирующий `vault write -force` ушёл бы без подтверждения. Поэтому в план
 # печатается замечание (`format_plan` показывает его как `note:`).
-NO_DIRECTIVES_NOTE = (
-    "в теге нет run:-директив — все шаги пойдут auto; мутирующий шаг "
-    "безопаснее пометить run:manual (см. :? run)"
-)
+NO_DIRECTIVES_KEY = "runbook.no_directives"
 
 
 class RunbookError(Exception):
@@ -177,7 +171,7 @@ def parse_directives(comment: str, base: RunSpec | None = None) -> tuple[RunSpec
         elif name == "pause":
             pause = _pause_value(value) if value else None
             if pause is None:
-                warnings.append(f"{tokens[index]}: нужна пауза > 0 секунды — пропущено")
+                warnings.append(t("runbook.pause_warning", token=tokens[index]))
             else:
                 spec.pause = pause
         elif name == "continue":
@@ -204,10 +198,7 @@ def steps_from_tag(db_file: str, tag: str) -> RunPlan:
     name = (tag or "").strip()
     rows = database.get_commands_by_tag(db_file, name)
     if not rows:
-        raise RunbookError(
-            f"Runbook: tag '{name}' not found or has no live commands. "
-            "`?tag` — библиотека, `:run` — usage."
-        )
+        raise RunbookError(t("runbook.tag_missing", name=name))
     tag_comment = database.get_tag_comment(db_file, name)
     base, base_warnings = parse_directives(tag_comment)
     directed = has_run_directive(tag_comment)
@@ -234,7 +225,7 @@ def steps_from_tag(db_file: str, tag: str) -> RunPlan:
             )
         )
     if not directed:
-        plan.warnings.insert(0, NO_DIRECTIVES_NOTE)
+        plan.warnings.insert(0, t(NO_DIRECTIVES_KEY))
     return plan
 
 
@@ -326,7 +317,7 @@ def build_plan(db_file: str, target: str, *, step: bool = False) -> RunPlan:
             if item.mode == MODE_AUTO:
                 item.mode = MODE_MANUAL
         # `--step` переводит всё в manual — замечание об auto-шагах больше не нужно.
-        plan.warnings = [w for w in plan.warnings if w != NO_DIRECTIVES_NOTE]
+        plan.warnings = [w for w in plan.warnings if w != t(NO_DIRECTIVES_KEY)]
     return plan
 
 
@@ -347,9 +338,13 @@ def format_plan(plan: RunPlan, *, dry: bool = False) -> str:
     total = len(plan.steps)
     head = (
         f"[bold]Runbook {plan.title}[/bold] · {total} step(s) · "
-        + ("[yellow]dry run — nothing executed[/yellow]" if dry else "Esc — остановить")
+        + (
+            t("runbook.plan_footer_dry")
+            if dry
+            else t("runbook.plan_footer_stop")
+        )
     )
-    lines = [head, f"[dim]{MODES_HELP}[/dim]"]
+    lines = [head, f"[dim]{t('runbook.modes')}[/dim]"]
     for index, step in enumerate(plan.steps, start=1):
         hint = f"  [dim]# {step.hint}[/dim]" if step.hint else ""
         lines.append(f"  {index:>2}. [bold]{step.mode:<6}[/bold] {step.text}{hint}")
@@ -363,19 +358,17 @@ def format_plan(plan: RunPlan, *, dry: bool = False) -> str:
 def usage_text(db_file: str) -> str:
     """Подсказка для `:run` без аргументов (вместе со списком готовых тегов)."""
     lines = [
-        "Usage: :run <tag|file.yml> [--step] [--dry]   |   :run stop",
-        "  auto-шаги идут подряд, manual/prompt ждут человека, Esc — остановить.",
-        "  Режим шага тега — директивы в комментарии команды: run:manual,",
-        "  run:prompt, run:pause=2, run:continue (см. :? run).",
+        t("runbook.usage_header"),
+        *tlist("runbook.usage_notes"),
     ]
     found = tags_with_directives(db_file)
     if found:
         lines.append("")
-        lines.append("[bold]Runbook tags in the library:[/bold]")
+        lines.append(f"[bold]{t('runbook.tags_title')}[/bold]")
         lines.extend(f"  [bold]{tag}[/bold]  ({count} step(s))" for tag, count in found)
     else:
         lines.append("")
-        lines.append("[dim]No tag carries run: directives yet.[/dim]")
+        lines.append(f"[dim]{t('runbook.no_tags')}[/dim]")
     return "\n".join(lines)
 
 
@@ -450,12 +443,12 @@ def _arm_human_step(app: Any, step: RunStep, index: int, total: int) -> None:
     if step.mode == MODE_MANUAL:
         app.add_block(_info(
             f"[bold]RUN {index}/{total} · manual[/bold]{hint}\n"
-            "Enter — выполнить · пустой Enter — пропустить шаг · Esc — остановить прогон"
+            + t("runbook.manual_hint")
         ))
     else:
         app.add_block(_info(
             f"[bold]RUN {index}/{total} · prompt[/bold]{hint}\n"
-            "Наберите строку и нажмите Enter · Esc — остановить прогон"
+            + t("runbook.prompt_hint")
         ))
 
 
@@ -510,7 +503,7 @@ async def play_runbook(app: Any, plan: RunPlan) -> None:
                 _end(app, state, (
                     f"[bold red]Runbook {plan.title} stopped[/bold red] · "
                     f"step {index}/{total} exited {code}\n  {step.text}\n"
-                    f"[dim]{step.label} · дальше — вручную или `:run {plan.source} --step`[/dim]"
+                    + t("runbook.continue_hint", label=step.label, source=plan.source)
                 ))
                 return
         pause = plan.pause if step.pause is None else step.pause
@@ -521,4 +514,4 @@ async def play_runbook(app: Any, plan: RunPlan) -> None:
             await asyncio.sleep(step.pause)
     if state is None:
         return
-    _end(app, state, f"Runbook {plan.title}: {total} step(s) done.")
+    _end(app, state, t("runbook.done", title=plan.title, total=total))

@@ -127,8 +127,8 @@ def test_bundled_all_tour_guards():
         ":screensaver 120",
         ":screensaver 0",
         ":llm",
-        ":llm offline Привет! Ответь одной строкой.",
-        ":llm ask offline Найди поды api и покажи логи",
+        ":llm offline Hi! Answer in one line.",
+        ":llm ask offline Find the api pods and show the logs",
     ):
         assert any(needle in t for t in types), needle
     keys = {k for st in steps for k in (st["keys"] or [])}
@@ -385,7 +385,7 @@ async def test_bundled_all_plays(isolated_home):
         assert "Exported 5 command(s) to library.md" in infos
         assert "Exported 2 shell function(s) to run.sh" in infos
         assert "Backup:" in infos
-        assert "kctx — кластеры" in infos
+        assert "kctx — clusters" in infos
         assert "LLM providers:" in infos
         assert "offline" in infos
         assert "app-ctx:" in " ".join(seen_headers)  # :llm ask приложил библиотеку

@@ -1,0 +1,61 @@
+tags:
+  cvars:
+    comment: HTTP variables
+    commands:
+      0: check $URL/$HOST/…
+  curl:
+    comment: 'curl: headers, timings, Host'
+    commands:
+      0: headers only
+      1: verbose (TLS, redirects)
+      2: code and time
+      3: response body
+      4: headers with Host
+      5: body with Host (vhost)
+      6: follow redirects
+      7: non-zero exit on HTTP ≥400
+      8: short timeout
+      9: timing breakdown
+      10: POST, code only
+      11: headers, no TLS check
+  ngx:
+    comment: 'nginx: config, status, logs'
+    commands:
+      0: config check
+      1: full config dump
+      2: version and modules
+      3: unit nginx
+      4: journal unit
+      5: config directories
+      6: main config
+      7: site file $FILE
+      8: nginx ports
+      9: error.log
+      10: access.log
+      11: reload after successful nginx -t
+  trf:
+    comment: 'traefik: API, routers, logs'
+    commands:
+      0: binary version
+      1: health ping API
+      2: overview
+      3: HTTP routers
+      4: HTTP services
+      5: middlewares
+      6: TCP routers
+      7: typical ports
+      8: journal unit
+      9: logs of traefik container ($CTR)
+      10: static config $FILE
+  hchk:
+    comment: URL check
+    commands:
+      0: headers + timings
+  ngxstat:
+    comment: nginx overview
+    commands:
+      0: nginx -t → status → error.log
+  trfstat:
+    comment: traefik overview
+    commands:
+      0: ping → routers → services

@@ -1,0 +1,49 @@
+tags:
+  hivars:
+    comment: hostinfo / lsof / strace variables
+    commands:
+      0: check $PID/$PORT/$CMD/…
+  hinfo:
+    comment: 'host: kernel, time, memory, CPU'
+    commands:
+      0: kernel and hostname
+      1: distribution
+      2: hostname / machine-id
+      3: clock and NTP
+      4: uptime and load
+      5: RAM / swap
+      6: CPU
+      7: CPU count
+  lsof:
+    comment: 'lsof: files, ports, PID'
+    commands:
+      0: who listens on TCP $PORT
+      1: sockets on $PORT
+      2: files of process $PID
+      3: who opened $FILE
+      4: processes named $PROC
+      5: first 40 TCP listeners
+      6: files of user $USER
+  strace:
+    comment: 'strace: system calls'
+    commands:
+      0: strace version
+      1: syscall summary of $CMD
+      2: summary, with children
+      3: summary of filter $TRACE
+      4: trace $CMD (short command)
+      5: summary of $PID, 8s (needs ptrace)
+      6: filter $TRACE on $PID, 8s
+      7: 'follow $PID (better: > strace -p $PID)'
+  hstat:
+    comment: host overview
+    commands:
+      0: uname → uptime → free
+  lport:
+    comment: who listens on $PORT
+    commands:
+      0: LISTEN TCP → all sockets on $PORT
+  pdbg:
+    comment: 'process: lsof + strace -c'
+    commands:
+      0: lsof -p → timeout strace -c -p

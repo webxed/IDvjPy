@@ -1,0 +1,49 @@
+tags:
+  pgvars:
+    comment: postgres variables (libpq)
+    commands:
+      0: check libpq variables
+  pg:
+    comment: 'postgres: status, sessions, size'
+    commands:
+      0: server availability
+      1: connection parameters
+      2: version
+      3: replica?
+      4: databases
+      5: schemas
+      6: tables
+      7: roles
+      8: active queries
+      9: load per database
+      10: replication
+      11: current DB size
+      12: lock waits
+      13: unit postgresql
+      14: unit journal
+      15: 'interactive psql (better: > psql)'
+  kfvars:
+    comment: kafka variables
+    commands:
+      0: check $BROKER/$TOPIC/…
+  kf:
+    comment: 'kafka: topics, groups, kcat'
+    commands:
+      0: cluster metadata (kcat/kafkacat)
+      1: last 10 messages of $TOPIC, then exit
+      2: list topics
+      3: describe $TOPIC
+      4: all topics in detail
+      5: consumer groups
+      6: lag of group $GROUP
+      7: config of topic $TOPIC
+      8: broker API (availability)
+      9: topics (Confluent .sh script)
+  pgstat:
+    comment: postgres overview
+    commands:
+      0: ready → version → replica? → activity
+  kfstat:
+    comment: kafka overview
+    commands:
+      0: kcat metadata → list topics

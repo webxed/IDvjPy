@@ -19,6 +19,8 @@ from textual import events
 from textual.keys import REPLACED_KEYS, _character_to_key, _get_unicode_name_from_key
 
 BUNDLED_DEMOS_DIR = Path(__file__).resolve().parent / "demos"
+# Текстовый слой туров: `demos/text/<lang>/<tour>.yml` (title/captions/types).
+DEMO_TEXT_DIRNAME = "text"
 RE_DEMO_SAVE_TAG = re.compile(r"^#([A-Za-z_][A-Za-z0-9]*)")
 
 KEY_ALIASES = {
@@ -75,13 +77,75 @@ def resolve_demo_path(name: str) -> Path | None:
     return None
 
 
-def load_scenario(path: str | Path) -> dict[str, Any]:
-    """Load and normalize a demo YAML file."""
+def _text_overlay(name: str, lang: str | None = None) -> dict[str, Any]:
+    """Текстовый слой тура: `demos/text/<lang>/<name>.yml` (если он есть).
+
+    Формат::
+
+        title: ...
+        captions: {3: "...", 7: "..."}   # по номеру шага в базовом YAML
+        types:    {24: ":llm offline ..."}
+
+    Базовый `demos/<name>.yml` хранит шаги и их базовый (русский) текст;
+    слой языка перекрывает только текст. Команды, `keys`, `pause`, `loop` — из базы.
+    """
+    from i18n import current_language
+
+    code = (lang or current_language() or "").strip()
+    if not code:
+        return {}
+    path = BUNDLED_DEMOS_DIR / DEMO_TEXT_DIRNAME / code / f"{name}.yml"
+    if not path.is_file():
+        return {}
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def apply_text_overlay(
+    data: dict[str, Any], name: str, lang: str | None = None
+) -> dict[str, Any]:
+    """Наложить текстовый слой языка на сырой сценарий (см. `_text_overlay`)."""
+    overlay = _text_overlay(name, lang)
+    if not overlay:
+        return data
+    title = str(overlay.get("title") or "").strip()
+    if title:
+        data["title"] = title
+    steps = data.get("steps") or []
+    for source, key in (("captions", "caption"), ("types", "type")):
+        mapping = overlay.get(source)
+        if not isinstance(mapping, dict):
+            continue
+        for raw_index, value in mapping.items():
+            try:
+                index = int(raw_index)
+            except (TypeError, ValueError):
+                continue
+            if not 0 <= index < len(steps) or not isinstance(steps[index], dict):
+                continue
+            text = str(value or "").strip()
+            if not text:
+                continue
+            step = steps[index]
+            if key == "type" and "type" not in step and "text" in step:
+                step["text"] = text
+            else:
+                step[key] = text
+    return data
+
+
+def load_scenario(path: str | Path, lang: str | None = None) -> dict[str, Any]:
+    """Load and normalize a demo YAML file (text overlay for bundled tours)."""
     demo_path = Path(path)
     with demo_path.open("r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
     if not isinstance(data, dict):
         raise ValueError(f"Demo scenario must be a mapping: {demo_path}")
+    if demo_path.parent == BUNDLED_DEMOS_DIR:
+        data = apply_text_overlay(data, demo_path.stem, lang)
     data.setdefault("title", demo_path.stem)
     data["steps"] = [normalize_step(step) for step in (data.get("steps") or [])]
     if not data["steps"]:

@@ -1,0 +1,16 @@
+title: IDvjPy short tour
+captions:
+  0: Help — prefixes and keyboard shortcuts
+  1: A normal command → a block in the journal
+  2: The variable lives in .bashrc_term
+  4: JSON in the journal — then F5
+  5: Save a command template
+  8: Tag library
+  9: 'Preview: how the references will expand'
+  10: ! inserts text, it doesn't run yet
+  11: A second Enter — run the assembled line
+  12: Assemble a chain with !!
+  14: Focus the last block
+  15: JSON viewer (F5), Esc closes it
+  17: Line-cursor mode — Enter copies the line into the input
+  19: A note into history, without running

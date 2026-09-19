@@ -1,0 +1,134 @@
+tags:
+  kvars:
+    comment: incident variables
+    commands:
+      0: check $NS/$POD/…/$QUOTA
+  kns:
+    comment: cluster / namespace
+    commands:
+      0: current context
+      1: all contexts
+      2: list namespaces
+      3: yaml namespace $NS
+      4: namespaced API
+      5: nodes wide (version/OS/addresses)
+      6: my permissions in $NS
+  kpod:
+    comment: pods in $NS
+    commands:
+      0: all pods wide
+      1: not Running
+      2: pods $APP
+      3: describe $POD
+      4: json $POD → F5
+      5: container states
+      6: pod metrics
+      7: node / podIP / hostIP
+      8: phase / reason / message $POD
+      9: restarts / node / IP (summary)
+  klog:
+    comment: logs $POD (without follow)
+    commands:
+      0: logs $POD
+      1: container logs $CTR
+      2: previous logs
+      3: logs $APP
+      4: grep for errors
+  kev:
+    comment: events $NS / $POD
+    commands:
+      0: all events
+      1: events $POD
+      2: Warning only
+      3: 'kubectl events: Warning (1.23+)'
+      4: kubectl events for $POD
+  ksvc:
+    comment: service and endpoints
+    commands:
+      0: svc + endpoints
+      1: describe $SVC
+      2: endpoints yaml
+      3: endpointslice $SVC
+      4: NetworkPolicy
+  king:
+    comment: ingress (next to :i)
+    commands:
+      0: list ingress
+      1: describe $ING
+      2: json $ING → F5
+  kdep:
+    comment: deploy / rs / rollout
+    commands:
+      0: workload in $NS
+      1: describe $DEPLOY
+      2: json $DEPLOY → F5
+      3: rollout status
+      4: rollout history
+      5: ReplicaSet $APP
+  kres:
+    comment: quotas / limits / free resources
+    commands:
+      0: list ResourceQuota
+      1: describe compute-resources
+      2: describe $QUOTA
+      3: json all quotas → F5 / kjq
+      4: json compute-resources
+      5: LimitRange in $NS
+      6: LimitRange yaml
+      7: node metrics (metrics-server)
+      8: allocatable CPU/MEM/pods on nodes
+      9: events about quota/limit
+  kjq:
+    comment: jq on block stdout
+    commands:
+      0: pod list → name/phase/restarts
+      1: container state
+      2: conditions
+      3: image / resources
+      4: IP from endpoints
+      5: ingress rules
+      6: quota used vs hard (list or single object)
+  kavail:
+    comment: 'HPA / PDB: scaling and disruption'
+    commands:
+      0: 'HPA: current/target metrics'
+      1: describe HPA in $NS
+      2: 'PDB: disruptions allowed'
+      3: describe PDB in $NS
+      4: json PDB → F5
+  kstore:
+    comment: 'PVC / PV: volumes'
+    commands:
+      0: PVC in $NS
+      1: 'PVC: volume / storageclass'
+      2: describe PVC (Pending?)
+      3: json PVC → F5
+      4: 'PV: status/claim (cluster)'
+  kcrash:
+    comment: 'pod not Running: describe → previous logs → events'
+    commands:
+      0: CrashLoop / ImagePull / OOM
+  knet:
+    comment: svc / endpoints / app pods
+    commands:
+      0: 0 endpoints / no traffic
+  kroll:
+    comment: deploy + status + rs
+    commands:
+      0: rollout stuck
+  kwatch:
+    comment: wide + warnings
+    commands:
+      0: what happened in $NS
+  kquota:
+    comment: ResourceQuota + LimitRange + nodes
+    commands:
+      0: quotas / limits / allocatable
+  kscale:
+    comment: HPA / PDB / metrics under load
+    commands:
+      0: not scaling / disruption
+  kvolume:
+    comment: PVC / PV / events — volume not bound
+    commands:
+      0: Pending / no volume

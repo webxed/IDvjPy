@@ -1,0 +1,66 @@
+tags:
+  gvars:
+    comment: git variables
+    commands:
+      0: check $BRANCH/$COMMIT/…
+  git:
+    comment: 'git: status, diff, branches, remote, stash'
+    commands:
+      0: full status
+      1: short status
+      2: unstaged diff
+      3: staged diff
+      4: all local changes vs HEAD
+      5: last 20 commits
+      6: branch graph
+      7: last commit, list of files
+      8: commit $COMMIT
+      9: blame $FILE
+      10: local branches + tracking
+      11: local and remote branches
+      12: switch branch $BRANCH
+      13: create and switch $BRANCH
+      14: merge $BRANCH into current
+      15: rebase onto $BRANCH
+      16: remotes
+      17: fetch all remotes
+      18: pull with rebase
+      19: push current branch
+      20: push and set upstream
+      21: force-with-lease (not --force)
+      22: 'index: all changes'
+      23: 'index: $FILE'
+      24: discard changes in $FILE (not staged)
+      25: unstage $FILE
+      26: commit with message $MSG
+      27: amend the last commit
+      28: stash including untracked
+      29: list stashes
+      30: apply the last stash
+      31: diff of the last stash
+      32: undo commit, changes stay staged
+      33: revert commit $COMMIT
+      34: cherry-pick $COMMIT
+      35: reflog
+      36: list tags
+      37: who committed how much
+      38: what clean will delete (dry-run)
+      39: 'interactive add (better: > git add -p)'
+      40: unstage everything
+      41: 'interactive rebase (better: > git rebase -i HEAD~5)'
+  gstat:
+    comment: repository overview
+    commands:
+      0: status -sb → branches → log
+  gdiff:
+    comment: unstaged + staged diff
+    commands:
+      0: diff and diff --cached
+  gsync:
+    comment: fetch + status
+    commands:
+      0: fetch --all --prune → status → log
+  gundo:
+    comment: inspect before undo (no reset)
+    commands:
+      0: reflog + status; reset manually

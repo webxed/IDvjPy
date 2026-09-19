@@ -1,0 +1,53 @@
+title: IDvjPy — all in one go
+captions:
+  0: 'Act A. Does the math itself: calculator and ipcalc, no shell started'
+  1: 'Arithmetic: 1024*3 (block labeled calc:)'
+  2: 'Data units: 512Mi + 20% in Gi'
+  3: 'Percentages: 20% of 512Mi'
+  4: 'ipcalc: 192.168.1.0/24 — like on jodies.de/ipcalc'
+  5: 'ipcalc: 300 hosts — picking a mask'
+  6: 'Host: 8.8.8.8 — address, mask, reverse name'
+  7: Act B. The journal is a set of blocks, not a log
+  8: 'Pipe from a block: | grep 7'
+  9: 'JSON in the output: Tab → F5 — tree'
+  11: ↓ — select a node
+  12: Enter — $JSON and a | jq draft in the input
+  13: Enter — the draft is already run against the block
+  14: 'Explicit pipe: | jq against the focused block'
+  15: 'Output memory: :o /CrashLoop — grep over stdout of past commands'
+  16: Act C. Tags are variables with command templates
+  21: ?chain[1] — preview of how the references expand
+  22: ?? — the whole library with comments
+  23: '!api[1] — insert only, not a run yet'
+  24: Enter — run the assembled line
+  25: '!! — assemble a line from two tags'
+  27: 'Editing a template: #api+1 puts the command into the input'
+  30: '#api=2=comment — a comment on a specific command'
+  31: 'Soft delete: #api-1, restore with #api!1'
+  34: ':mv tmp[1] logs — move a command between tags'
+  36: ':stats — library summary'
+  37: ':export * library.md — the catalog as Markdown'
+  38: ':alias api run.sh — tags as bash functions'
+  39: 'Act D. Session: variables, history, diff, watch'
+  41: ':env — re-read .bashrc_term and aliases'
+  42: ':h 8 — shell history in a single block'
+  43: ':c clears the journal…'
+  44: '…but :o /CrashLoop still finds the old output'
+  45: 'Comparing outputs: two versions'
+  47: ':diff — unified diff (-b / +B)'
+  48: ":r 1 — bring a block's command back into the input"
+  49: ':watch 1 date +%s — ticks in a single block'
+  50: ':watch stop — stop it'
+  51: '@ sleep 60 — a command without a timeout'
+  52: 'F4 — SIGTERM to the process group'
+  53: ':backup — snapshot SQLite into backups/'
+  54: ':kctx — clusters and variable snapshots from the journal'
+  55: ':screensaver 120 / 0 — idle time before the screensaver'
+  57: '# comment — a line into history without running'
+  58: 'Act E. LLM: :llm — providers (offline is built in, no key needed)'
+  59: ':llm <provider> <message> — a reply with no keys and no network'
+  60: ':llm ask — task + app cheat sheet and a digest of tags (app-ctx)'
+types:
+  58: :llm
+  59: :llm offline Hi! Answer in one line.
+  60: :llm ask offline Find the api pods and show the logs

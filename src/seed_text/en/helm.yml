@@ -1,0 +1,29 @@
+tags:
+  hvars:
+    comment: helm variables
+    commands:
+      0: check $NS/$RELEASE/…
+  helm:
+    comment: 'helm: releases, values, dry-run'
+    commands:
+      0: releases in $NS
+      1: releases in all namespaces
+      2: status of $RELEASE
+      3: revision history
+      4: release values
+      5: release manifests
+      6: release notes
+      7: chart repositories
+      8: search for chart $CHART
+      9: chart metadata
+      10: default chart values
+      11: render without a cluster
+      12: dry-run upgrade
+      13: upgrade --install (changes the cluster)
+      14: dry-run rollback
+      15: dry-run uninstall
+      16: helm environment
+  hls:
+    comment: helm release overview
+    commands:
+      0: list → status → history → values

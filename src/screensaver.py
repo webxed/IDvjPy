@@ -26,6 +26,8 @@ from textual.events import Click, Key, MouseDown, MouseScrollDown, MouseScrollUp
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from i18n import tlist
+
 DUST = (".", "·", "*", "+")
 TOKENS = (
     "k8s",
@@ -149,6 +151,15 @@ COMMAND_HELP_LINES = (
     "Tab  — focus last journal block (from input)",
     "F2 line-cursor · F3 copy · F4 stop · F5 JSON · F6 simple · F7 full output  — journal keys",
 )
+
+
+def command_help_lines() -> tuple[str, ...]:
+    """Строки подсказок заставки на текущем языке (`screensaver.help`).
+
+    Каталог — `src/locales/<lang>/screensaver.yml`; встроенный набор выше служит
+    запасным, если локалей нет. Совпадение наборов сторожит `tests/test_i18n.py`.
+    """
+    return tlist("screensaver.help") or COMMAND_HELP_LINES
 
 
 def clock_glyph(moment: datetime, label: str) -> str:
@@ -450,7 +461,7 @@ class HelpTypewriter:
         pause: float = HELP_PAUSE_SEC,
     ) -> None:
         self.rng = random.Random(seed)
-        self.lines: tuple[str, ...] = tuple(lines) if lines else COMMAND_HELP_LINES
+        self.lines: tuple[str, ...] = tuple(lines) if lines else command_help_lines()
         self.type_cps = type_cps
         self.pause = pause
         self.phase = "type"

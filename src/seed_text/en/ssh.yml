@@ -1,0 +1,59 @@
+tags:
+  svars:
+    comment: ssh/scp variables
+    commands:
+      0: check $REMOTE/$KEY/$CERT/…
+  ssh:
+    comment: 'ssh: config, keys, login'
+    commands:
+      0: effective ssh_config for $HOST
+      1: is the host reachable by key
+      2: host key (for known_hosts)
+      3: keys and config
+      4: keys in the agent
+      5: fingerprint $KEY
+      6: check on port $PORT
+      7: remote command $CMD (no TTY)
+      8: connection debug
+      9: is ControlMaster present
+      10: 'interactive login (better: > ssh $REMOTE)'
+      11: 'login with TTY (better: > ssh -t $REMOTE)'
+      12: install pubkey (changes authorized_keys)
+      13: ~/.ssh directory
+      14: ed25519 if no $KEY yet (empty passphrase)
+      15: 'ed25519 with passphrase prompt (better: > ssh-keygen …)'
+      16: RSA 4096 if no $KEY yet
+      17: print public key from private $KEY
+      18: add $KEY to the agent
+      19: OpenSSH client version
+      20: key types
+      21: key exchange
+      22: ciphers
+      23: MAC
+      24: config and host keys
+      25: OpenSSH certificate files
+      26: 'sshd: keys, cert, auth methods (often needs root)'
+      27: full parse of certificate $CERT
+      28: type, CA, Valid from/to, principals
+      29: days left (GNU date; $CERT is *-cert.pub)
+  scp:
+    comment: 'scp: copy over ssh'
+    commands:
+      0: local → $REMOTE
+      1: $REMOTE → local
+      2: to port $PORT
+      3: recursive to $REMOTE
+      4: preserve mtime/mode
+      5: verbose
+  schk:
+    comment: ssh inspection (no login)
+    commands:
+      0: ssh -G → BatchMode true → keyscan
+  ossh:
+    comment: 'OpenSSH: version and algorithms'
+    commands:
+      0: ssh -V → ssh -Q key → ls *cert*
+  ocert:
+    comment: OpenSSH certificate expiry
+    commands:
+      0: summary -L → days_left

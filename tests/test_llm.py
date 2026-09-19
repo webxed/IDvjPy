@@ -17,7 +17,6 @@ pytestmark = pytest.mark.slow
 import llm_client
 from llm_client import (
     MAX_HISTORY_TURNS,
-    OFFLINE_ANSWER,
     OFFLINE_PROVIDER_NAME,
     LlmError,
     _extract_text,
@@ -166,8 +165,8 @@ def test_offline_provider_is_builtin(tmp_path):
     assert OFFLINE_PROVIDER_NAME in cfg["providers"]
     provider = cfg["providers"][OFFLINE_PROVIDER_NAME]
     assert provider["mock"] is True
-    # Возвращает answer без url/headers/сети.
-    assert perform_request(provider, "hi", {}) == OFFLINE_ANSWER
+    # Возвращает текст локали без url/headers/сети.
+    assert perform_request(provider, "hi", {}) == llm_client.offline_answer()
     # Свой `offline:` в конфиге не перетирается.
     cfg_path.write_text(
         "providers:\n  offline:\n    model: mine\n    mock: true\n    answer: custom\n",

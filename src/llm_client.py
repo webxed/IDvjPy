@@ -30,6 +30,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from i18n import t
 from update_check import (
     looks_like_proxy_auth_error,
     proxy_handler_map,
@@ -46,15 +47,20 @@ MAX_HISTORY_TURNS = 50
 # где нет сети или API-ключа. Появляется в любом конфиге; собственная секция
 # `offline:` в llm_providers.yml не перетирается.
 OFFLINE_PROVIDER_NAME = "offline"
-OFFLINE_ANSWER = (
-    "[offline] Встроенная заглушка IDvjPy_term: запрос в сеть не уходил.\n"
-    "Так проверяются :llm и :llm ask без ключей; настоящие ответы — "
-    "у провайдеров из llm_providers.yml."
-)
+OFFLINE_ANSWER_KEY = "llm.offline"
+# `answer_language` со значением из этого набора выключает правило языка совсем.
+_LANG_OFF = frozenset({"off", "none", "no", "false", "0"})
+
+
+def offline_answer() -> str:
+    """Ответ встроенного офлайн-провайдера (текст — в локалях)."""
+    return t(OFFLINE_ANSWER_KEY)
+
+
 OFFLINE_PROVIDER: dict[str, Any] = {
     "model": "stub",
     "mock": True,
-    "answer": OFFLINE_ANSWER,
+    "answer_key": OFFLINE_ANSWER_KEY,
     "timeout": 1,
 }
 # Лимит на вложенный файл (`@путь`): больше — явная ошибка, не молчаливая обрезка.
@@ -289,6 +295,20 @@ def _extract_text(payload: Any, response_path: str | None) -> str:
     )
 
 
+def _answer_language(provider: dict[str, Any]) -> str:
+    """Язык ответа: ключ провайдера, `auto`/отсутствие — язык интерфейса.
+
+    `off` / `none` / `no` / `false` / `0` отключают правило совсем (поведение до
+    v1.137: язык выбирает сама модель).
+    """
+    raw = str(provider.get("answer_language") or "").strip()
+    if raw.lower() in _LANG_OFF:
+        return ""
+    if not raw or raw.lower() == "auto":
+        return t("llm.answer_language")
+    return raw
+
+
 def _effective_system(
     provider: dict[str, Any], app_context: str | None = None
 ) -> str:
@@ -305,7 +325,7 @@ def _effective_system(
         parts.append(base)
     if app_context and str(app_context).strip():
         parts.append(str(app_context).strip())
-    lang = str(provider.get("answer_language") or "").strip()
+    lang = _answer_language(provider)
     if lang:
         parts.append(_LANG_RULE.format(lang=lang))
     return "\n\n".join(parts)
@@ -401,9 +421,13 @@ def perform_request(
     `history` — предыдущие пары сообщений (многоходовость `:llm`).
     `app_context` — контекст приложения (шпаргалка + библиотека тегов).
     Бросает LlmError с понятным сообщением при сетевых/HTTP/разборных ошибках.
-    Провайдер с `mock: true` возвращает `answer` сразу, без HTTP и без ключей.
+    Провайдер с `mock: true` отвечает сразу, без HTTP и без ключей: свой текст
+    (`answer`) или ключ локали (`answer_key`) — так отвечает встроенный `offline`.
     """
     if provider.get("mock"):
+        key = str(provider.get("answer_key") or "").strip()
+        if key:
+            return t(key)
         return str(provider.get("answer") or "")
     url = str(provider.get("url") or "").strip()
     if not url:

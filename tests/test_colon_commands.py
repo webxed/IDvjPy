@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from app import CommandBlock, CommandRunner
-from colon_commands import COLON_COMMANDS, linkify_colon_commands
+from colon_commands import COLON_COMMAND_NAMES, colon_command_hint, linkify_colon_commands
 from tests.conftest import (
     completion_click_spans,
     input_widget,
@@ -27,14 +27,17 @@ def _command_values() -> set[str]:
 
 def test_table_covers_every_colon_command():
     """Новая `:`-команда без подсказки — падение теста, а не тихий пропуск."""
-    missing = _command_values() - {name for name, _ in COLON_COMMANDS}
+    missing = _command_values() - set(COLON_COMMAND_NAMES)
     assert not missing, f"no completion hint for: {sorted(missing)}"
 
 
 def test_table_has_no_duplicates_and_nonempty_descriptions():
-    names = [name for name, _ in COLON_COMMANDS]
+    names = list(COLON_COMMAND_NAMES)
     assert len(names) == len(set(names))
-    assert all(name and description for name, description in COLON_COMMANDS)
+    assert all(names)
+    # Подсказка приходит из локали: непереведённый ключ вернулся бы как `cmd.<имя>`.
+    missing = [name for name in names if colon_command_hint(name) == f"cmd.{name}"]
+    assert not missing, f"no hint text for: {sorted(missing)}"
 
 
 async def _type(app: CommandRunner, pilot, value: str):
@@ -51,7 +54,7 @@ async def test_colon_lists_all_commands(isolated_home):
         await _type(app, pilot, ":")
         clist = app._completion_list
         assert clist.is_visible()
-        assert clist.total_candidates == len(COLON_COMMANDS)
+        assert clist.total_candidates == len(COLON_COMMAND_NAMES)
         assert ":q" in clist.all_candidates
         assert ":md" in clist.all_candidates
         # Описание видно рядом с именем, а не только имя.

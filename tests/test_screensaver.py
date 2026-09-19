@@ -9,7 +9,6 @@ from textual.app import App as TextualApp
 
 from app import CommandRunner
 from screensaver import (
-    COMMAND_HELP_LINES,
     MATRIX_GLYPHS,
     MATRIX_HEAD_STYLE,
     MATRIX_MAX_SPEED,
@@ -25,6 +24,7 @@ from screensaver import (
     MatrixRain,
     StarField,
     clock_glyph,
+    command_help_lines,
     flatten_command,
     format_bytes_short,
     load_library_reminders,
@@ -123,7 +123,7 @@ def test_help_typewriter_shuffles_pauses_and_cycles():
     assert sorted(seen) == sorted(lines)
     assert seen != list(lines)
     assert a.current != b.current or a._deck != b._deck
-    assert all("  — " in line for line in COMMAND_HELP_LINES)
+    assert all("  — " in line for line in command_help_lines())
 
 
 def test_help_typewriter_indents_from_left_edge():
@@ -482,7 +482,7 @@ async def test_screensaver_help_bar_types_command_help(isolated_home):
         await pilot.pause()
         assert isinstance(app.screen, DevopsScreensaver)
         help_bar = app.screen.query_one("#ss-help")
-        assert app.screen._help.current in COMMAND_HELP_LINES
+        assert app.screen._help.current in command_help_lines()
         for _ in range(8):
             app.screen._tick()
         line = app.screen._help.render_line(80).plain

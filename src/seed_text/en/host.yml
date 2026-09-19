@@ -1,0 +1,43 @@
+tags:
+  avars:
+    comment: archive variables
+    commands:
+      0: check $SRC/$ARCHIVE/$PATTERN
+  tar:
+    comment: 'tar: list and pack'
+    commands:
+      0: list files in archive
+      1: list .tar.gz
+      2: list with permissions, first 50
+      3: pack $SRC → $DEST (.tar.gz)
+      4: pack without .git
+      5: extract to cwd
+      6: extract to $DEST
+      7: compare archive with $SRC
+  gz:
+    comment: gzip / gunzip / zcat
+    commands:
+      0: size and compression ratio
+      1: decompress, keep .gz
+      2: first lines without writing to disk
+      3: same via zcat
+      4: compress, keep source
+      5: grep inside .gz ($PATTERN)
+  zip:
+    comment: zip / unzip
+    commands:
+      0: list and permissions in .zip
+      1: list files
+      2: detailed listing
+      3: pack $SRC → $DEST
+      4: extract to cwd
+      5: extract to $DEST
+      6: grep inside .zip
+  tstat:
+    comment: archive inspect
+    commands:
+      0: tar -tzf + gzip -l (no extraction)
+  zstat:
+    comment: zip inspect
+    commands:
+      0: zipinfo + unzip -l (no extraction)

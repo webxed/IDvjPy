@@ -19,11 +19,15 @@ def _escape_markup(text: str) -> str:
     return (text or "").replace("[", "\\[")
 
 
-def handbook_md_path(name: str) -> Path | None:
+def handbook_md_path(name: str, lang: str | None = None) -> Path | None:
     """Resolve a handbook markdown by basename.
 
     Seed handbooks moved to ``docs/``; the overview docs (K8S_CHAINS.md) stay
     at the repo root. Search cwd and repo root, each also under ``docs/``.
+
+    ``lang`` (по умолчанию — язык интерфейса) даёт приоритет каталогу языка:
+    ``docs/<lang>/NAME`` → ``docs/NAME`` → ``NAME``. Каталогов перевода может
+    и не быть — тогда работает базовый (русский) справочник.
     """
     raw = (name or "").strip()
     if not raw or any(sep in raw for sep in ("/", "\\", "..")):
@@ -31,8 +35,20 @@ def handbook_md_path(name: str) -> Path | None:
     base = Path(raw).name
     if not base.lower().endswith(".md"):
         return None
+    if lang is None:
+        try:
+            from i18n import current_language
+
+            lang = current_language()
+        except ImportError:  # pragma: no cover - i18n always ships with src/
+            lang = None
+    code = (lang or "").strip()
     for folder in (Path.cwd(), REPO_ROOT):
-        for candidate in (folder / base, folder / "docs" / base):
+        candidates = []
+        if code:
+            candidates.append(folder / "docs" / code / base)
+        candidates.extend((folder / "docs" / base, folder / base))
+        for candidate in candidates:
             try:
                 candidate.resolve().relative_to(folder.resolve())
             except ValueError:

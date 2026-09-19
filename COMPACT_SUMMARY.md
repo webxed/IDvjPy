@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.136**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.137**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -27,7 +27,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no such tag) searches command text + comments across tags |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:?` `:q` `:w` `:h` `:c` `:json` `:md` `:rg` `:i` `:cd` `:fm` `:term` `:ed` `:env` `:r` `:cmd` `:log` `:o` `:diff` `:name` `:kill` `:watch` `:llm` `:cht` `:g` `:/` `:n` `:N` `:stats` `:mv` `:export` `:import` `:alias` `:kctx` `:session` `:new` `:send` `:send!` `:backup` `:welcome` `:screensaver` `:theme` `:playbook` `:run` `:update` |
+| `:` | `:?` `:q` `:w` `:h` `:c` `:json` `:md` `:rg` `:i` `:cd` `:fm` `:term` `:ed` `:env` `:r` `:cmd` `:log` `:o` `:diff` `:name` `:kill` `:watch` `:llm` `:cht` `:g` `:/` `:n` `:N` `:stats` `:mv` `:export` `:import` `:alias` `:kctx` `:session` `:new` `:send` `:send!` `:backup` `:welcome` `:screensaver` `:theme` `:lang` `:playbook` `:run` `:update` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.80 (app v1.136) |
+| `test_cmd.md` | Manual plan v1.81 (app v1.137) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -180,19 +180,19 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.136 |
+| `src/app.py` | TUI (`CommandRunner`), v1.137 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
 | `src/database_v2.py` | SQLite tagged history |
 | `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
-| `src/seed_catalog.py` | Empty-DB welcome catalog (click `--seed` / `.md`) |
-| `src/md_viewer.py` | Modal Markdown viewer (`:md`, welcome links) |
+| `src/seed_catalog.py` | Empty-DB welcome catalog (click `--seed` / `.md`); texts from `catalog.*` (`locales/<lang>/seed.yml`), commands/scripts never translated |
+| `src/md_viewer.py` | Modal Markdown viewer (`:md`, welcome links). Handbook lookup is language-aware: `handbook_md_path(name, lang)` prefers `docs/<lang>/NAME`, then `docs/NAME`, then `NAME` (repo root / cwd) — a language without its own copy gets the base handbook |
 | `src/k8s_complete.py` | Имена ресурсов k8s из живого кластера (`kubectl get`) |
 | `src/update_check.py` | Compare `VERSION` with GitHub main (`:update`) |
 | `src/data_dirs.py` | Data-каталог: `--data-dir` / `$IDVJPY_DATA_DIR` / portable / OS default |
 | `src/kctx_store.py` | Кластерный журнал (`kctx.json` в data-dir): снимки переменных из `kctx_vars` по кластерам, парсер `parse_kctx_vars` |
-| `src/llm_client.py` | LLM-запросы по `llm_providers.yml` (`:llm`) |
+| `src/llm_client.py` | LLM-запросы по `llm_providers.yml` (`:llm`); `answer_language` провайдера, а при `auto`/отсутствии — имя языка UI (`llm.answer_language` из локали; `off`/`none`/`no`/`false`/`0` отключают правило) |
 | `src/llm_context.py` | Контекст приложения для LLM: шпаргалка префиксов + выжимка тегов/команд (`:llm ask`, ключ `app_context`) |
 | `src/llm_providers.example.yml` | Образец конфига провайдеров LLM |
 | `src/settings.example.yml` | Шаблон настроек для первого запуска в новом data-каталоге |
@@ -204,7 +204,8 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/history_store.py` | `history_<instance>.txt` append/read/compact, file locks |
 | `src/session_mailbox.py` | Пересылка команд между сессиями (`:send`): `inbox_<instance>.jsonl` 0600, append под lock / drain |
 | `src/session_registry.py` | Реестр активных сессий — `session_<instance>.pid` 0600: автоимя `:new` = наименьшее свободное `sN` среди работающих окон (устаревшие pid-файлы подчищаются) |
-| `src/help_texts.py` | Static `:?` / `:i` help texts |
+| `src/help_texts.py` | Accessors for the `:?` / `:? run` / `:? calc` / `:i` help texts — files `src/locales/help/<lang>/{main,runbook,calc,ingress}.txt` via `i18n.text()` (`en` is the source of truth) |
+| `src/i18n.py` | UI-language core: catalogue lookup (`t`/`tlist`) and long texts (`text("main")` → `locales/help/<lang>/*.txt`), language resolution (`--lang` → `$IDVJPY_LANG` → `settings.yml: language` → `en`; `auto` follows `$LANG`). Catalogues: `src/locales/<lang>.yml` plus parts in `src/locales/<lang>/*.yml` (`screensaver`, `seed`), deep-merged; `en` is the source of truth; missing keys fall back to `en`, unknown keys return themselves. Tests: `tests/test_i18n.py` (keys are strings — YAML reads bare `off`/`n`/`N` as bool; every language has all help texts and all `catalog.desc.*`) |
 | `src/ansi_output.py` | ANSI/ESC в выводе команд: SGR → цвета (`to_markup`), плоский текст без кодов (`to_plain`), терминальный `\r` (`collapse_carriage_returns`); ключ `ansi_colors` |
 | `src/runbook.py` | `:run` — полуавтоматический прогон цепочки: шаги `auto`/`manual`/`prompt`, директивы `run:` в комментариях тега, план из YAML (`note:` для тега без единой директивы) |
 | `src/seed_*.py` | Handbook seeds (linux, k8s, git, ops, …) |
@@ -217,6 +218,14 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.137
+
+- **Мультиязычный интерфейс: каталоги локалей + `:lang` / `--lang` / `language`.** Тексты UI переехали из литералов в каталоги `src/locales/<lang>.yml` (`en` — источник правды, `ru` — перевод), чтение — `src/i18n.py` (`t("kctx.off")`, `tlist("startup.keys")`). Язык выбирается по порядку `--lang` → `$IDVJPY_LANG` → `settings.yml: language` → `en`; значение `auto` разворачивается из `$LC_ALL`/`$LC_MESSAGES`/`$LANG`. Новая команда `:lang` (без аргумента — текущий и список; `:lang ru` — выбрать и сохранить, как `:theme`; `:lang auto`) и ключ `language` в `settings.example.yml`; в запуск добавлен флаг `--lang` (и корневой лаунчер). Локализованы: стартовый блок, сообщения `:kctx` / `:watch` / `:run` / `:llm offline`, подсказки `:`-команд (таблица имён — `COLON_COMMAND_NAMES`, текст — `cmd.<имя>`), каталог `:welcome` (`catalog.*`), строки справки заставки (`screensaver.help`), а справка `:?` / `:? run` / `:? calc` / `:i` переехала в файлы `src/locales/help/<lang>/*.txt` (доступ — `src/help_texts.py`, текст — `i18n.text()`; `ru` полностью переведён). `:?` получил строку про `:lang`. Не переводятся команды, имена тегов, ключи настроек и имена файлов; неизвестный ключ печатается как есть, отсутствующий падает на `en` (пустоты нет), битый файл локали/справки (не UTF-8, сломанный YAML) тоже откатывается на `en`, а не роняет приложение, смена языка не перерисовывает уже показанные блоки. Тесты: `tests/test_i18n.py` (24: сверка en↔ru (ключа и частей каталога), отсутствие кириллицы в `en`, ловушка YAML-ключей `off`/`n`/`N`, нормализация `ru_RU.UTF-8`, приоритет CLI→env→settings, `auto` по локали, `:lang` — список/смена/сохранение/неизвестный код, язык из settings при старте, справка и описания сидов есть в каждой локали, каталог заставки сходится с встроенным набором), `tests/test_colon_commands.py` (подсказки из локали), `tests/test_seed_catalog.py` / `tests/test_commands.py` (каталог из локалей), `tests/test_screensaver.py` (строки из каталога), `tests/test_llm.py` (офлайн-ответ из `llm.offline`).
+- **Тексты демо-туров — слоем по языкам.** Базовые `src/demos/*.yml` хранят шаги (команды, `keys`, `pause`, `loop`) и базовый текст; перевод живёт в `src/demos/text/<lang>/<tour>.yml` (`title`, `captions`/`types` по номеру шага). `demo.load_scenario()` накладывает слой языка (`apply_text_overlay`), поэтому `--demo` показывает подписи выбранного языка, а команды остаются общими. Тесты: `tests/test_demo.py` (needles шагов — английские).
+- **Комментарии сидов — по языкам (`src/seed_text/<lang>/`).** Встроенные комментарии в `src/seed_*.py` остаются базовым текстом, английские — в `src/seed_text/en/<handbook>.yml`, ключ — тег + позиция команды. `seed_lib.localized_tags()` / `localized_comment()` / `localized_tag_comment()`; язык — `settings.yml: language` → `$IDVJPY_LANG` (`resolve_seed_language`), поэтому `--seed` и `--comments` пишут на языке приложения (для `language: ru` — встроенный русский). Конвенция перевода — `src/seed_text/README.md`. Тесты: `tests/test_seed_i18n.py` (покрытие всех встроенных комментариев, отсутствие кириллицы в `en`, тег ровно в одном файле, откат к базовому тексту, язык из settings), `tests/test_seed_git.py` / `tests/test_seed_linux_commands.py` (ожидания — английские).
+- **`:llm` по умолчанию отвечает на языке интерфейса.** `answer_language` провайдера: `auto` или отсутствие ключа → имя языка приложения (`llm.answer_language` из локали), а `off` / `none` / `no` / `false` / `0` выключают правило языка совсем (прежнее поведение).
+- **Поиск справочников — по языку.** `handbook_md_path(name, lang)` сначала смотрит `docs/<lang>/NAME`, затем `docs/NAME` и корень: перевод справочника можно положить рядом, не трогая код (для языка без своей копии работает базовый). Тест — `tests/test_seed_catalog.py`.
 
 ## v1.136
 

@@ -1,0 +1,47 @@
+tags:
+  pkvars:
+    comment: package variables
+    commands:
+      0: check $PKG
+  apt:
+    comment: apt / dpkg (Debian/Ubuntu)
+    commands:
+      0: candidate and installed version
+      1: package description
+      2: search
+      3: installed?
+      4: updates
+      5: dpkg status
+      6: package files
+      7: which package owns a path/name
+      8: update indexes (changes the cache)
+      9: install $PKG (changes the system)
+      10: remove $PKG
+  dnf:
+    comment: dnf / yum (RHEL/Fedora)
+    commands:
+      0: info $PKG
+      1: installed?
+      2: search
+      3: any updates?
+      4: package files
+      5: yum info (old hosts)
+      6: install $PKG (changes the system)
+      7: remove $PKG
+  rpm:
+    comment: 'rpm: queries (RHEL and more)'
+    commands:
+      0: installed?
+      1: info
+      2: files
+      3: configs
+      4: $PKG as a path → package
+      5: verify package files
+  aptq:
+    comment: 'apt overview: policy + upgradable'
+    commands:
+      0: policy → list --upgradable
+  rpmq:
+    comment: 'rpm overview: query + info'
+    commands:
+      0: rpm -q → rpm -qi

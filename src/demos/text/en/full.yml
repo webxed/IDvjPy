@@ -1,0 +1,20 @@
+title: IDvjPy full tour
+captions:
+  0: App map
+  1: A shell command doesn't block the TUI
+  2: Change the app's cwd
+  6: Session variable
+  8: curl against $HOST, jq on the block
+  12: Tab — focus the last block
+  13: Search across journal lines
+  14: Fill the journal
+  17: Pipe stdout of the focused block
+  18: JSON viewer
+  20: Line cursor F2
+  22: 'Templates: check / logs / pipeline'
+  29: Type ! — tag list
+  31: Enter runs the inserted command
+  34: Editing a template
+  38: Soft delete and restore
+  42: Park a line in history without running
+  44: 'Repeat a block''s command (:r)'

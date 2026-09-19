@@ -35,7 +35,7 @@ def test_seed_git_tids_and_playbooks(tmp_path):
     assert "reset" not in gundo["command"]
 
     assert database.get_tag_comment(db, "git")
-    assert "короткий status" in database.get_command_comment(db, "git", 2)
+    assert "short status" in database.get_command_comment(db, "git", 2)
 
 
 def test_seed_git_does_not_touch_linux_or_k8s(tmp_path):

@@ -1,0 +1,61 @@
+screensaver:
+  help:
+  - :?  — full command help
+  - :q  — quit
+  - :w file  — write journal to a file
+  - :h [N]  — last N history lines
+  - :h /text  — search history in completions
+  - :c  — clear journal blocks
+  - :json  — JSON viewer (last block or file)
+  - ':md file|path[#L n]  — Markdown viewer (handbook or path; #L n = line)'
+  - :rg pat [dir]  — search .md (ripgrep/built-in); click path:line
+  - :cd [path]  — show or change shell cwd (tags DB stays at launch dir)
+  - :fm [path]  — OS file manager (new window)
+  - :term [path]  — system terminal (new window)
+  - :env  — re-read .bashrc_term* into this process
+  - :session [NAME]  — show or switch instance
+  - :session new [NAME] [DIR]  — app window in a new terminal
+  - :new [NAME|-] [DIR]  — app window in a new terminal (own session)
+  - :send <session|*> cmd  — forward a command to another session (:send! runs it)
+  - :welcome  — seed catalog
+  - :backup  — snapshot the tags DB
+  - ':screensaver  — matrix rain now (default) or stars; idle: screensaver_idle'
+  - :r [N]  — block command into the input (N = how far back)
+  - :cmd [N] [show]  — block command with current $VAR/secrets to clipboard
+  - ':log [N]  — full block output: / search, f — matches only (F7)'
+  - :kill [all]  — stop running background commands (SIGTERM group)
+  - :watch N cmd  — rerun the command every N seconds in one block
+  - :stats  — runs per tag, top commands, never-run
+  - :mv tag[1] tag2 | :mv tag tag2  — move a command / rename a tag
+  - :export <tag>|* [file]  — one tag JSON / whole library Markdown
+  - :alias <tag>|* [file.sh]  — commands as bash functions
+  - :diff  — unified diff of two block outputs
+  - :o [N] | :o /text  — session output history / search
+  - :llm [provider] msg  — ask an LLM (default provider; $OUT / $BLOCK)
+  - :llm offline msg  — built-in stub (no network, no key)
+  - :llm ask [provider] task  — task + tag library → !tag[tid] refs
+  - :cht query  — cheat.sh reference in the journal
+  - ':ed [file|$OUT|$BLOCK]  — external editor (TUI paused; editor: in settings.yml)'
+  - ':kctx [cluster] [N]  — cluster journal: saved vars per cluster (kctx_vars)'
+  - :/text  — search journal lines; :n / :N next/prev
+  - :theme [name]  — TUI theme (saved in settings.yml)
+  - :playbook [file]  — dump this session as --demo YAML
+  - :run tag|file.yml  — half-automatic chain; manual steps wait for Enter
+  - :update  — compare VERSION with GitHub main
+  - :i  — Kubernetes Ingress Analyzer
+  - '> cmd  — real TTY (htop, vim, ssh); env/$PWD come back'
+  - '@ cmd  — run without command_timeout (long non-TTY jobs)'
+  - '#tag cmd  — save literal template (refs not expanded)'
+  - '# command  — park a line in history, do not run'
+  - '#tag- / #tag!  — soft-delete / restore a tag'
+  - '? / ??  — query tags; ?text = content search across commands'
+  - '!tag[tid]  — insert a template (does not run)'
+  - '!!  — assemble refs into the input line'
+  - '| cmd  — pipe focused block stdout'
+  - $VAR=val  — set env in .bashrc_term_<instance>
+  - $VAR=@key  — take value from the focused block line (key column)
+  - $$VAR=val  — SECRET env var (hidden in journal, not sent to :llm)
+  - $OUT / $BLOCK  — last line / full stdout of the source block
+  - Enter  — run the assembled line; ! / !! only insert
+  - Tab  — focus last journal block (from input)
+  - F2 line-cursor · F3 copy · F4 stop · F5 JSON · F6 simple · F7 full output  — journal keys

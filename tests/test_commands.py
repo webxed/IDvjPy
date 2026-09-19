@@ -4,6 +4,7 @@ import pytest
 pytestmark = pytest.mark.slow
 
 from app import CommandBlock, CommandRunner, InfoBlock, escape_help_markup
+from i18n import t
 from tests.conftest import input_widget, last_info, submit, type_keys, wait_command_done
 
 
@@ -41,7 +42,7 @@ async def test_starts_without_existing_database(isolated_home):
         await pilot.pause()
         assert db.is_file()
         texts = " ".join(block.text_content for block in app.query(InfoBlock))
-        assert "Empty command database" in texts
+        assert t("catalog.title") in texts
         assert "seed_linux_commands.py --seed" in texts
         assert "seed_k8s_chains.py --seed" in texts
         assert "seed_git.py --seed" in texts
@@ -57,7 +58,7 @@ async def test_starts_without_existing_database(isolated_home):
         assert "seed_pkg.py --seed" in texts
         assert "seed_user.py --seed" in texts
         assert "seed_ssh.py --seed" in texts
-        assert "Ops по отдельности" in texts
+        assert t("catalog.section_ops") in texts
         assert "SEED_LINUX_COMMANDS.md" in texts
         assert "open_handbook_md" in texts
         assert "insert_seed_command" in texts
@@ -75,12 +76,12 @@ async def test_startup_shows_sections_when_db_has_tags(isolated_home):
     async with app.run_test(size=(80, 24)) as pilot:
         await pilot.pause()
         texts = " ".join(block.text_content for block in app.query(InfoBlock))
-        assert "Разделы" in texts
+        assert t("catalog.overview_title") in texts
         assert "linux" in texts
         assert "proc" in texts
-        assert "свои" in texts
+        assert t("catalog.custom") in texts
         assert "mine" in texts
-        assert "Empty command database" not in texts
+        assert t("catalog.title") not in texts
 
 
 async def test_colon_welcome_shows_seed_catalog(isolated_home):
@@ -89,7 +90,7 @@ async def test_colon_welcome_shows_seed_catalog(isolated_home):
         await submit(pilot, "#mine echo already-have-tags")
         await submit(pilot, ":welcome")
         texts = " ".join(block.text_content for block in app.query(InfoBlock))
-        assert "Empty command database" in texts
+        assert t("catalog.title") in texts
         assert "seed_linux_commands.py --seed" in texts
         assert "insert_seed_command" in texts
 
@@ -196,7 +197,7 @@ async def test_seed_hint_skipped_when_database_has_commands(isolated_home):
         await pilot.pause()
         texts = " ".join(block.text_content for block in app.query(InfoBlock))
         assert "IDvjPy_term" in texts
-        assert "Empty command database" not in texts
+        assert t("catalog.title") not in texts
         assert "seed_linux_commands.py --seed" not in texts
 
 

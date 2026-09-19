@@ -22,6 +22,9 @@ FILE_SETTINGS = "settings.yml"
 ENCODING = "utf-8"
 DEFAULT_DB = "mytags.db"
 DEFAULT_BACKUP_DIR = "backups"
+# Комментарии сидов по языкам: `src/seed_text/<lang>/<handbook>.yml`.
+SEED_TEXT_DIR = Path(__file__).resolve().parent / "seed_text"
+DEFAULT_SEED_LANG = "en"
 
 # One SQLite snapshot per database path per process (seed_ops runs many modules).
 _BACKED_UP: dict[str, Path | None] = {}
@@ -177,12 +180,118 @@ def hard_delete_commands_by_tag(db_file: str, tag: str) -> None:
     conn.close()
 
 
+def resolve_seed_language() -> str:
+    """Язык комментариев сидов: settings.yml → $IDVJPY_LANG → $LANG(auto) → en.
+
+    Отдельного `--lang` у seed-скриптов нет: язык — это настройка приложения
+    (`language`), поэтому засеянная библиотека говорит на том же языке, что и UI.
+    """
+    settings_lang: object = None
+    if os.path.exists(FILE_SETTINGS):
+        try:
+            with open(FILE_SETTINGS, encoding=ENCODING) as fh:
+                data = yaml.safe_load(fh) or {}
+            if isinstance(data, dict):
+                settings_lang = data.get("language")
+        except Exception:
+            settings_lang = None
+    try:
+        from i18n import resolve_language
+    except ImportError:  # запуск без src/ в sys.path — остаёмся на en
+        return DEFAULT_SEED_LANG
+    return resolve_language(None, settings_lang)
+
+
+def _translated(value: object, fallback: str) -> str:
+    text = str(value).strip() if value is not None else ""
+    return text or fallback
+
+
+_TEXT_CACHE: dict[str, dict[str, dict]] = {}
+
+
+def load_seed_text(lang: str | None = None) -> dict[str, dict]:
+    """Комментарии сидов для языка: слияние `seed_text/<lang>/*.yml` по тегам.
+
+    Формат файла::
+
+        tags:
+          git:
+            comment: "git: status, diff, branches"
+            commands:
+              0: "full status"
+
+    Тег встречается ровно в одном файле (сторожит `tests/test_seed_i18n.py`),
+    поэтому label/имя хэндбука для поиска не нужно. Результат кешируется на
+    процесс — `apply_comments` ходит в индекс на каждую строку БД.
+    """
+    code = lang or resolve_seed_language()
+    cached = _TEXT_CACHE.get(code)
+    if cached is not None:
+        return cached
+    directory = SEED_TEXT_DIR / code
+    index: dict[str, dict] = {}
+    if directory.is_dir():
+        for path in sorted(directory.glob("*.yml")):
+            try:
+                data = yaml.safe_load(path.read_text(encoding=ENCODING))
+            except (OSError, UnicodeDecodeError, yaml.YAMLError):
+                continue
+            tags = data.get("tags") if isinstance(data, dict) else None
+            if not isinstance(tags, dict):
+                continue
+            for tag, block in tags.items():
+                if isinstance(block, dict):
+                    index[str(tag)] = block
+    _TEXT_CACHE[code] = index
+    return index
+
+
+def reset_seed_text_cache() -> None:
+    """Тесты: перечитать `seed_text/*` после правки файлов."""
+    _TEXT_CACHE.clear()
+
+
+def localized_tag_comment(tag: str, fallback: str, lang: str | None = None) -> str:
+    """Подпись тега на текущем языке; нет перевода — fallback (базовый текст)."""
+    block = load_seed_text(lang).get(str(tag)) or {}
+    return _translated(block.get("comment"), fallback)
+
+
+def localized_comment(
+    tag: str, position: int, fallback: str, lang: str | None = None
+) -> str:
+    """Комментарий команды по позиции (tid - 1) на текущем языке."""
+    block = load_seed_text(lang).get(str(tag)) or {}
+    value = (block.get("commands") or {}).get(position)
+    return _translated(value, fallback)
+
+
+def localized_tags(seed_tags: dict, lang: str | None = None) -> dict:
+    """Тот же набор тегов, но комментарии — из `seed_text/<lang>/*.yml`.
+
+    Ключа нет — остаётся встроенный комментарий (это базовый текст хэндбука).
+    """
+    index = load_seed_text(lang)
+    if not index:
+        return seed_tags
+    out: dict = {}
+    for tag, (tag_comment, commands) in seed_tags.items():
+        block = index.get(str(tag)) or {}
+        command_map = block.get("commands") or {}
+        new_commands = [
+            (cmd, _translated(command_map.get(index_), cmd_comment))
+            for index_, (cmd, cmd_comment) in enumerate(commands)
+        ]
+        out[tag] = (_translated(block.get("comment"), tag_comment), new_commands)
+    return out
+
 def run_seed(db_file: str, seed_tags: dict, *, label: str = "seed") -> int:
     """Replace tags in seed_tags; return number of commands inserted."""
     backup_sqlite_before_seed(db_file, label)
     database.init_db(db_file)
     n = 0
-    for tag, (tag_comment, commands) in seed_tags.items():
+    for tag, (tag_comment, commands) in localized_tags(seed_tags).items():
         hard_delete_commands_by_tag(db_file, tag)
         for cmd, cmd_comment in commands:
             tid = database.add_command(db_file, cmd, tag)

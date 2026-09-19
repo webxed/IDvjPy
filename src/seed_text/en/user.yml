@@ -1,0 +1,38 @@
+tags:
+  uvars:
+    comment: user and permission variables
+    commands:
+      0: check $USER/$FILE/$MODE/…
+  ident:
+    comment: id, getent, last, sudo
+    commands:
+      0: current uid/gid
+      1: account $USER
+      2: name
+      3: groups of $USER
+      4: passwd $USER
+      5: group $GROUP
+      6: last logins
+      7: failed logins (often root)
+      8: lastlog, tail
+      9: sudo -l without a password (may fail)
+      10: 'sudo -l (better: > sudo -l)'
+      11: who is on the system
+      12: sessions
+  perm:
+    comment: chmod / chown / stat
+    commands:
+      0: metadata of $FILE
+      1: permissions and owner
+      2: path chain
+      3: ACL (if present)
+      4: current umask
+      5: chmod $MODE (changes the file)
+      6: recursive chmod
+      7: owner $OWNER
+      8: owner and group
+      9: group $GROUP
+  uidchk:
+    comment: 'who am I: id + groups + sudo'
+    commands:
+      0: id → groups → sudo -n -l

@@ -99,7 +99,7 @@ def test_parse_directives_continue_and_bad_values():
     spec, warnings = parse_directives(None or "")
     assert (spec.mode, spec.hint, spec.pause, spec.stop_on_error) == (MODE_AUTO, "", None, True)
     spec, warnings = parse_directives("run:pause=abc шаг")
-    assert spec.pause is None and warnings and "пауза" in warnings[0]
+    assert spec.pause is None and warnings and "pause must be > 0" in warnings[0]
     spec, warnings = parse_directives("run:nope остальное")
     # Неизвестная директива не съедает комментарий: он остаётся подсказкой.
     assert spec.hint == "run:nope остальное" and warnings
@@ -156,12 +156,12 @@ def test_steps_from_tag_without_directives_notes_all_auto(tmp_path):
     _add(db, "echo two")
     plan = steps_from_tag(db, "chain")
     assert [step.mode for step in plan.steps] == [MODE_AUTO, MODE_AUTO]
-    assert any("run:-директив" in warning for warning in plan.warnings)
-    assert "run:-директив" in format_plan(plan)
+    assert any("no run: directives" in warning for warning in plan.warnings)
+    assert "no run: directives" in format_plan(plan)
     # `--step` переводит все шаги в manual — замечание теряет смысл.
     stepped = build_plan(db, "chain", step=True)
     assert [step.mode for step in stepped.steps] == [MODE_MANUAL, MODE_MANUAL]
-    assert not any("run:-директив" in warning for warning in stepped.warnings)
+    assert not any("no run: directives" in warning for warning in stepped.warnings)
 
 
 def test_steps_from_tag_with_a_directive_has_no_note(tmp_path):
@@ -170,14 +170,14 @@ def test_steps_from_tag_with_a_directive_has_no_note(tmp_path):
     _add(db, "echo one", comment="run:manual проверьте")
     _add(db, "echo two")
     assert not any(
-        "run:-директив" in warning for warning in steps_from_tag(db, "chain").warnings
+        "no run: directives" in warning for warning in steps_from_tag(db, "chain").warnings
     )
     db2 = str(tmp_path / "tagcomment.db")
     database.init_db(db2)
     _add(db2, "echo one")
     database.set_tag_comment(db2, "chain", "run:pause=1.5 цепочка")
     assert not any(
-        "run:-директив" in warning for warning in steps_from_tag(db2, "chain").warnings
+        "no run: directives" in warning for warning in steps_from_tag(db2, "chain").warnings
     )
 
 

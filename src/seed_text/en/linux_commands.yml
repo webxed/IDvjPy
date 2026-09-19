@@ -1,0 +1,74 @@
+tags:
+  proc:
+    comment: Processes
+    commands:
+      0: list processes
+      1: interactive process monitor
+      2: handy monitor (if installed)
+      3: kill a process by PID
+      4: kill by name
+      5: kill by name pattern
+      6: run immune to session disconnect
+      7: list shell background jobs
+      8: bring a job to foreground
+      9: resume in background
+  file:
+    comment: Files and directories
+    commands:
+      0: list files with details
+      1: recursive copy
+      2: move or rename
+      3: delete with confirmation
+      4: create a directory and parents
+      5: remove an empty directory
+      6: create an empty file / update time
+      7: print file contents
+      8: paged view
+      9: first lines of output
+      10: last lines, follow the file
+      11: all json files in the current dir
+  net:
+    comment: Network
+    commands:
+      0: TCP/UDP sockets (ports)
+      1: check host reachability
+      2: HTTP request, headers only
+      3: download to stdout
+      4: SSH connection
+      5: network sync
+      6: copy over SSH
+      7: interface addresses
+      8: routing table
+      9: test placeholder
+      10: test placeholder 3
+  kube:
+    comment: Kubernetes (kubectl + tsh)
+    commands:
+      0: Teleport authorization (:kctx remembers NS/POD per cluster)
+      1: list kube contexts
+      2: current context
+      3: cluster info
+      4: list namespaces
+      5: all resources in namespace $NS
+      6: pods in namespace $NS
+      7: details for pod $POD
+      8: logs of pod $POD
+      9: 'logs of pod $POD (follow, better: > cmd)'
+      10: 'exec into pod $POD (better: > cmd)'
+      11: deployments in namespace $NS
+      12: details for deployment $DEPLOY
+      13: rollout status $DEPLOY
+      14: rollout restart $DEPLOY
+      15: services in namespace $NS
+      16: port-forward to service $SVC
+      17: apply a manifest in namespace $NS
+      18: delete a manifest in namespace $NS
+  logs:
+    comment: Working with logs
+    commands:
+      0: list files in /var/log
+      1: filter by *.log
+      2: last line
+      3: print / separator
+      4: line count
+      5: 'pipe: ll /var/log → grep *.log → tail -n 1'

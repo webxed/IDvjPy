@@ -1,0 +1,24 @@
+[bold]Анализатор Kubernetes Ingress[/bold]
+
+[bold]Использование:[/bold]
+  :i list                   - Список ingress (использует $NS, если задан)
+  :i list -n <namespace>    - Список в namespace (сохраняет в $NS)
+  :i ns <namespace>         - Описать namespace (JSON-просмотрщик)
+  :i analyze <name>         - Проанализировать ingress (использует $NS, если задан)
+  :i analyze <name> -n <ns> - Проанализировать в namespace (сохраняет в $NS)
+  :i check <service>        - Проверить эндпоинты сервиса (использует $NS)
+  :i check <service> -n <ns>- Проверить в namespace (сохраняет в $NS)
+
+[bold]Сохранение namespace:[/bold]
+  Когда указан -n, namespace сохраняется в переменную $NS.
+  Последующие команды без -n будут автоматически использовать $NS.
+
+[bold]Анализ включает:[/bold]
+  • Конфигурацию Ingress (хосты, пути, TLS)
+  • Конфиг Nginx из контроллера (через crossplane)
+  • Состояние сервисов и эндпоинтов
+  • Сопоставление путей и сервисов
+
+[bold]Требования:[/bold]
+  • kubectl настроен с доступом к кластеру
+  • crossplane: pip install crossplane (опционально, для разбора конфига nginx)

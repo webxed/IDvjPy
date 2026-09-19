@@ -1,0 +1,50 @@
+tags:
+  vvars:
+    comment: vault variables (token is not printed)
+    commands:
+      0: check $VAULT_ADDR/$SECRET/…; token=set|unset
+  vault:
+    comment: 'vault: status, auth, kv metadata'
+    commands:
+      0: sealed / HA / version
+      1: status JSON → F5
+      2: health (address required)
+      3: health HTTP without CLI (often without a token)
+      4: auth methods
+      5: secret engines
+      6: policies
+      7: policy text $POLICY
+      8: audit devices
+      9: 'current token: ttl, policies (not the token itself)'
+      10: lookup JSON → F5
+      11: keys on mount $MOUNT
+      12: keys in $SECRET
+      13: KV metadata (without values)
+      14: metadata JSON → F5
+      15: read a secret (will land in the journal)
+      16: single field $FIELD
+      17: Raft peers (HA)
+      18: autopilot
+      19: AppRole $ROLE
+      20: 'login (better: > vault login)'
+      21: write a field (changes Vault)
+  vstat:
+    comment: Vault overview
+    commands:
+      0: status → health HTTP → auth → engines
+  vkv:
+    comment: KV inspection without values
+    commands:
+      0: kv list $SECRET → metadata get (not kv get)
+  vapprole:
+    comment: 'AppRole: chained login (values are `$$…=@key`; run with `:run vapprole`)'
+    commands:
+      0: 'run:manual token from vault.website: insert the value after ='
+      1: 'run:manual AppRole name: type it after = (e.g. custom-role)'
+      2: run:auto role_id from tabular output
+      3: 'run:auto secret: role_id from the previous block'
+      4: run:manual issue secret_id — confirm with Enter
+      5: 'run:auto secret: secret_id from the previous block'
+      6: run:auto login → token
+      7: 'run:auto secret: update `$VAULT_TOKEN` to the approle token'
+      8: run:auto check access with the new token

@@ -48,7 +48,7 @@ async def test_kctx_lists_clusters(isolated_home):
         await submit(pilot, ":kctx")
         texts = " ".join(block.text_content for block in app.query(InfoBlock))
         assert "prod" in texts and "staging" in texts
-        assert "2 сн." in texts
+        assert "2 snap." in texts
         assert ":kctx <cluster>" in texts
 
 
@@ -93,12 +93,12 @@ async def test_kctx_digit_guards(isolated_home, monkeypatch):
         monkeypatch.setattr(app, "run_command", lambda cmd, stdin_data=None, *, no_timeout=False: None)
         await submit(pilot, ":kctx 99")  # списка ещё не открывали
         texts = " ".join(block.text_content for block in app.query(InfoBlock))
-        assert "нет открытого списка" in texts
+        assert "no snapshot list is open" in texts
         add_snapshot(app.FILE_KCTX, "staging", {"NS": "default"}, now=100.0)
         await submit(pilot, ":kctx staging")
         await submit(pilot, ":kctx 99")  # индекс вне диапазона
         texts = " ".join(block.text_content for block in app.query(InfoBlock))
-        assert "набора 99 нет" in texts
+        assert "no set 99" in texts
 
 
 async def test_kctx_cluster_n_applies_in_one_go(isolated_home, monkeypatch):
@@ -133,8 +133,8 @@ async def test_kctx_single_snapshot_applies_right_away(isolated_home, monkeypatc
         assert app.local_env.get("NS") == "default"
         assert app.local_env.get("POD") == "web-1"
         # сказано, почему применилось, а список из одной строки не печатается
-        assert "единственный набор" in texts
-        assert "снимки переменных" not in texts
+        assert "single set" in texts
+        assert "variable snapshots" not in texts
 
 
 async def test_kctx_several_snapshots_still_need_number(isolated_home, monkeypatch):
@@ -149,8 +149,8 @@ async def test_kctx_several_snapshots_still_need_number(isolated_home, monkeypat
 
         await submit(pilot, ":kctx prod")
         texts = " ".join(block.text_content for block in app.query(InfoBlock))
-        assert "снимки переменных" in texts
-        assert ":kctx N — применить набор N" in texts
+        assert "variable snapshots" in texts
+        assert ":kctx N — apply snapshot N" in texts
         assert app.local_env.get("NS") is None  # ничего не применилось само
 
         await submit(pilot, ":kctx prod 2")  # явный номер работает как раньше
@@ -227,7 +227,7 @@ async def test_kctx_vars_empty_disables_the_journal(isolated_home, monkeypatch):
         assert app.kctx_vars == ()
         await submit(pilot, ":kctx")  # ни журнала, ни кластера
         texts = " ".join(block.text_content for block in app.query(InfoBlock))
-        assert "Журнал выключен" in texts
+        assert "kctx journal is off" in texts
         await submit(pilot, "klogin prod")
         await submit(pilot, "$NS=team-a")
         assert not (isolated_home / "kctx.json").exists()

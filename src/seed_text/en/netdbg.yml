@@ -1,0 +1,45 @@
+tags:
+  ndvars:
+    comment: tcpdump/nc/tls variables
+    commands:
+      0: check $HOST/$PORT/$IFACE/…
+  pcap:
+    comment: 'tcpdump: short capture'
+    commands:
+      0: up to $COUNT packets on $IFACE, 8s
+      1: port $PORT
+      2: host $HOST
+      3: SYN
+      4: 'follow (better: > tcpdump -nn -i $IFACE)'
+  ncat:
+    comment: 'nc: connect-check'
+    commands:
+      0: TCP $HOST:$PORT
+      1: TCP, 3s timeout
+      2: UDP (unreliable)
+      3: several ports
+  hops:
+    comment: traceroute / mtr
+    commands:
+      0: hops, no DNS
+      1: TCP SYN on $PORT
+      2: tracepath
+      3: mtr report, $COUNT cycles
+      4: mtr TCP $PORT
+      5: interactive mtr
+  tls:
+    comment: openssl s_client / x509
+    commands:
+      0: handshake $HOST:$PORT SNI $SNI
+      1: 'certificate: dates/subject'
+      2: x509 text, 40 lines
+      3: openssl version
+      4: interactive s_client
+  npath:
+    comment: path to $HOST
+    commands:
+      0: nc -vz → traceroute → mtr -r
+  tlschk:
+    comment: TLS handshake + certificate dates
+    commands:
+      0: s_client -brief → x509 dates

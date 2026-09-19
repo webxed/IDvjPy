@@ -9,9 +9,9 @@ def test_seed_linux_commands_sets_comments(tmp_path):
     assert n == 10 + 11 + 9 + 19
     row = database.get_command_by_tid(db, "proc", 1)
     assert row["command"] == "ps aux"
-    assert database.get_command_comment(db, "proc", 1) == "Список процессов"
-    assert database.get_command_comment(db, "kube", 7) == "Поды в namespace $NS"
-    assert database.get_tag_comment(db, "file") == "Файлы и каталоги"
+    assert database.get_command_comment(db, "proc", 1) == "list processes"
+    assert database.get_command_comment(db, "kube", 7) == "pods in namespace $NS"
+    assert database.get_tag_comment(db, "file") == "Files and directories"
 
 
 def test_apply_comments_fills_empty_keeps_extras(tmp_path):
@@ -21,8 +21,8 @@ def test_apply_comments_fills_empty_keeps_extras(tmp_path):
     database.add_command(db, "ll /var/log/", "logs")
     n = apply_comments(db)
     assert n >= 2
-    assert database.get_command_comment(db, "proc", 1) == "Список процессов"
-    assert database.get_command_comment(db, "logs", 1) == "Список файлов в /var/log"
+    assert database.get_command_comment(db, "proc", 1) == "list processes"
+    assert database.get_command_comment(db, "logs", 1) == "list files in /var/log"
     database.set_command_comment(db, "proc", 1, "уже было")
     apply_comments(db, only_empty=True)
     assert database.get_command_comment(db, "proc", 1) == "уже было"

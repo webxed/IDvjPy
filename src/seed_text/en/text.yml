@@ -1,0 +1,61 @@
+tags:
+  tvars:
+    comment: grep/awk/sed variables
+    commands:
+      0: check $FILE/$PATTERN/…
+  grep:
+    comment: 'grep: search in file and tree'
+    commands:
+      0: lines with numbers
+      1: case-insensitive
+      2: inverted filter
+      3: match count
+      4: extended regexp
+      5: fixed string
+      6: context ±3
+      7: 5 lines after
+      8: 5 lines before
+      9: matches only
+      10: with filename
+      11: filename only, if there is a hit
+      12: recursive from cwd
+      13: search in .gz
+  awk:
+    comment: 'awk: fields, sums, unique'
+    commands:
+      0: first field (FS=space)
+      1: first field, FS=$SEP
+      2: first and last field
+      3: line number
+      4: first line (header)
+      5: line $N
+      6: drop empty lines
+      7: unique lines, file order
+      8: sum of first field
+      9: lines matching $PATTERN
+      10: field count per line
+      11: line count
+  sed:
+    comment: 'sed: print and replace to stdout'
+    commands:
+      0: first 20 lines
+      1: line $N
+      2: lines by regexp $PATTERN
+      3: first replacement per line
+      4: all replacements per line
+      5: case-insensitive replacements
+      6: print changed lines only
+      7: drop empty lines
+      8: trim trailing spaces
+      9: strip CR (CRLF→LF) to stdout
+      10: without first line
+      11: without last line
+      12: edit file + .bak (not in playbook)
+  gchk:
+    comment: 'search: lines + counter'
+    commands:
+      0: grep -n → grep -c
+  sprev:
+    comment: replace to stdout (no -i)
+    commands:
+      0: s///g → lines by $PATTERN

@@ -144,39 +144,41 @@ def _seed_items(tag: str):
 
 def run_seed(db_file: str) -> int:
     """(Re)seed seed tags: hard-delete then add commands in order."""
-    from seed_lib import backup_sqlite_before_seed
+    from seed_lib import backup_sqlite_before_seed, localized_tags
 
     backup_sqlite_before_seed(db_file, "linux")
     database.init_db(db_file)
     n = 0
-    for tag in SEED_COMMANDS:
+    raw = {tag: (TAG_COMMENTS.get(tag, ""), list(_seed_items(tag))) for tag in SEED_COMMANDS}
+    for tag, (tag_comment, commands) in localized_tags(raw).items():
         hard_delete_commands_by_tag(db_file, tag)
-        for cmd, cmd_comment in _seed_items(tag):
+        for cmd, cmd_comment in commands:
             tid = database.add_command(db_file, cmd, tag)
             if cmd_comment:
                 database.set_command_comment(db_file, tag, tid, cmd_comment)
             n += 1
-        comment = TAG_COMMENTS.get(tag, "")
-        if comment:
-            database.set_tag_comment(db_file, tag, comment)
+        if tag_comment:
+            database.set_tag_comment(db_file, tag, tag_comment)
     return n
 
 
 def apply_comments(db_file: str, only_empty: bool = True) -> int:
     """Set comments on existing rows; do not delete or insert commands."""
+    from seed_lib import localized_comment, localized_tag_comment
+
     database.init_db(db_file)
     updated = 0
     by_text = {}
     for tag in SEED_COMMANDS:
-        for cmd, cmd_comment in _seed_items(tag):
+        for position, (cmd, cmd_comment) in enumerate(_seed_items(tag)):
             if cmd_comment:
-                by_text[(tag, cmd)] = cmd_comment
-        tag_comment = TAG_COMMENTS.get(tag, "")
+                by_text[(tag, cmd)] = localized_comment(tag, position, cmd_comment)
+        tag_comment = localized_tag_comment(tag, TAG_COMMENTS.get(tag, ""))
         if tag_comment and (
             not only_empty or not database.get_tag_comment(db_file, tag)
         ):
             database.set_tag_comment(db_file, tag, tag_comment)
-    logs_comment = TAG_COMMENTS.get("logs", "")
+    logs_comment = localized_tag_comment("logs", TAG_COMMENTS.get("logs", ""))
     if logs_comment and (
         not only_empty or not database.get_tag_comment(db_file, "logs")
     ):
@@ -192,9 +194,12 @@ def apply_comments(db_file: str, only_empty: bool = True) -> int:
         current = (row["comment"] or "").strip()
         if only_empty and current:
             continue
-        wanted = by_text.get((row["tag"], row["command"])) or EXTRA_COMMENTS.get(
-            (row["tag"], int(row["tid"]))
-        )
+        wanted = by_text.get((row["tag"], row["command"]))
+        if not wanted:
+            fallback = EXTRA_COMMENTS.get((row["tag"], int(row["tid"])))
+            if fallback:
+                # Пользовательский tid: позиция выводится из самого tid.
+                wanted = localized_comment(row["tag"], int(row["tid"]) - 1, fallback)
         if not wanted or wanted == current:
             continue
         database.set_command_comment(db_file, row["tag"], int(row["tid"]), wanted)
