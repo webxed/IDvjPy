@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.148 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.149 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -69,7 +69,7 @@ IDvjPy 是一个用 Python（Textual）编写、以键盘操作的终端应用�
 需要 Python 3.12+。
 
 ```bash
-./setup.sh                 # 创建 .venv 并安装依赖
+./setup.sh                 # 创建 .venv（检查 Python 3.12+）并安装依赖
 source .venv/bin/activate
 # 或：pip install -r requirements.txt
 # 测试：pip install -r requirements-dev.txt
@@ -96,7 +96,7 @@ idvjpy --demo short          # 从已安装的包运行自动演示
 python3 -m idvjpy_boot       # 同样通过 python -m 运行
 ```
 
-wheel 中包含代码和资源（`app.tcss`、`demos/`、配置示例、`.bashrc_term.example`）；用户存储（settings/数据库/history）**不会**打进包——首次启动时会在系统 data 目录中创建（`--data-dir` → `$IDVJPY_DATA_DIR` → 操作系统的系统目录，见「启动」）。这样同一个包可以升级（`pip install -U`），而不影响自己的标签和历史。
+wheel 中包含代码和资源（`app.tcss`、`demos/`、配置示例、`.bashrc_term.example`，以及 `:md` 手册 —— `docs/<lang>/*.md` 和 `K8S_CHAINS.md`）；用户存储（settings/数据库/history）**不会**打进包——首次启动时会在系统 data 目录中创建（`--data-dir` → `$IDVJPY_DATA_DIR` → 操作系统的系统目录，见「启动」）。这样同一个包可以升级（`pip install -U`），而不影响自己的标签和历史。
 
 包版本与应用版本一致（`CommandRunner.VERSION` → `MAJOR.MINOR.0`）。
 

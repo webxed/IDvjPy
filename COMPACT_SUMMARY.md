@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.148**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.149**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.94 (app v1.148) |
+| `test_cmd.md` | Manual plan v1.95 (app v1.149) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -182,10 +182,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
 | `pyproject.toml` / `setup.py` / `MANIFEST.in` | Корневая сборка: `pip install .` / `uv tool install git+…` (build_py вкладывает `src/` в `packaging/idvjpy_boot`) |
-| `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
+| `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.148 |
+| `src/app.py` | TUI (`CommandRunner`), v1.149 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -229,6 +229,12 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.149
+
+- **Fix: `--lang` не работал у установленного пакета.** `packaging/idvjpy_boot:main()` не вызывал `apply_language(args.lang)` — корневой `python3 app.py --lang ru` язык применял, а `idvjpy --lang ru` молча игнорировал флаг. Сторож — `tests/test_packaging_root.py::test_entry_points_do_the_same_bootstrap` (AST-сверка шагов запуска: `parse_arguments`, `apply_instance_name`, `apply_language`, `load_demo_for_cli`, `CommandRunner`, `run`).
+- **Справочники `:md` теперь едут в пакет.** `handbook_md_path` ищет markdown в `cwd` и в `REPO_ROOT`, а у установленного пакета `REPO_ROOT` — каталог `idvjpy_boot/`, где `docs/` не было: `:md SEED_*.md` и `.md`-ссылки из `:welcome` у pip/uv-установки не открывались. Теперь `build_wheel.sh` и корневой `setup.py` (`build_py`) вкладывают рядом с `src/` ещё `docs/` и `K8S_CHAINS.md`, `package-data` обоих `pyproject.toml` и `MANIFEST.in` их везут (wheel 190 → 270 файлов), а `:md` находит справочник языка (`docs/<lang>/NAME` → `docs/NAME` → `NAME`) без правки кода. Проверено распаковкой wheel: `SEED_GIT_COMMANDS.md` резолвится в `docs/en/…` и `docs/zh/…`, `K8S_CHAINS.md` — в корень пакета. Сторожа: `test_package_data_covers_handbooks`, `test_handbook_resolves_from_package_root` (симуляция раскладки пакета).
+- **`setup.sh` стал устойчивым:** `set -euo pipefail`, `cd` в корень репозитория, явная проверка Python 3.12+ (с текущей версией в сообщении), повторный запуск на существующем `.venv` не пересоздаёт окружение, `pip` — через `python -m pip`, в конце — подсказки про dev-зависимости, сиды и каталог данных. Прогон без сети доходит ровно до `pip install`.
 
 ## v1.148
 

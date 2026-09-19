@@ -52,6 +52,7 @@ def main() -> None:
 
     args = app.parse_arguments()
     app.apply_instance_name(args.instance_name)
+    app.apply_language(args.lang)
     demo_spec = app.load_demo_for_cli(args.demo) if args.demo else None
     application = app.CommandRunner(
         demo=demo_spec,

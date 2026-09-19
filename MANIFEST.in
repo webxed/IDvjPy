@@ -5,4 +5,7 @@ include LICENSE
 recursive-include src *
 include src/.bashrc_term.example
 recursive-include packaging *.py *.toml *.sh
+# sdist: справочники `:md` (вложенные копии создаёт build_py)
+recursive-include docs *.md
+include K8S_CHAINS.md
 recursive-include tests *.py

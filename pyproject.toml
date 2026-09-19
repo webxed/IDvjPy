@@ -33,4 +33,4 @@ include-package-data = false
 idvjpy_boot = "packaging/idvjpy_boot"
 
 [tool.setuptools.package-data]
-idvjpy_boot = ["src/**/*", "src/.bashrc_term.example"]
+idvjpy_boot = ["src/**/*", "src/.bashrc_term.example", "docs/**/*", "K8S_CHAINS.md"]

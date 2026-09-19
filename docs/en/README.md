@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.148 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.149 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -69,7 +69,7 @@ Launch: `python3 app.py` (launcher; code in `src/`). Tests: `python3 -m pytest t
 Python 3.12+ is required.
 
 ```bash
-./setup.sh                 # creates .venv and installs dependencies
+./setup.sh                 # creates .venv (checks Python 3.12+) and installs dependencies
 source .venv/bin/activate
 # or: pip install -r requirements.txt
 # tests: pip install -r requirements-dev.txt
@@ -96,7 +96,7 @@ idvjpy --demo short          # auto-tour from the installed package
 python3 -m idvjpy_boot       # the same via python -m
 ```
 
-The wheel includes the code and resources (`app.tcss`, `demos/`, config examples, `.bashrc_term.example`); the user's stores (settings/DB/history) are **not** placed into the package — on first launch they are created in the system data directory (`--data-dir` → `$IDVJPY_DATA_DIR` → the OS system directory, see "Launch"). This way the same package can be upgraded (`pip install -U`) without touching your tags and history.
+The wheel includes the code and resources (`app.tcss`, `demos/`, config examples, `.bashrc_term.example`, and the `:md` handbooks — `docs/<lang>/*.md` plus `K8S_CHAINS.md`); the user's stores (settings/DB/history) are **not** placed into the package — on first launch they are created in the system data directory (`--data-dir` → `$IDVJPY_DATA_DIR` → the OS system directory, see "Launch"). This way the same package can be upgraded (`pip install -U`) without touching your tags and history.
 
 The package version matches the application version (`CommandRunner.VERSION` → `MAJOR.MINOR.0`).
 

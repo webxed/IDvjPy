@@ -55,6 +55,8 @@ pyvenv.cfg
 # --- Сборка: setuptools (root setup.py), PyInstaller, packaging/build_wheel.sh ---
 *.egg-info/
 packaging/idvjpy_boot/src/
+packaging/idvjpy_boot/docs/
+packaging/idvjpy_boot/K8S_CHAINS.md
 dist/
 build/
 *.spec

@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.148 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.149 — умный терминал для создания командных строк из тегов.
 
 Переводы: [English](docs/en/README.md) · [中文](docs/zh/README.md).
 
@@ -69,7 +69,7 @@ IDvjPy — терминальное приложение (TUI) на Python (Text
 Нужен Python 3.12+.
 
 ```bash
-./setup.sh                 # создаёт .venv и ставит зависимости
+`./setup.sh                 # создаёт .venv, проверяет Python 3.12+ и ставит зависимости`
 source .venv/bin/activate
 # или: pip install -r requirements.txt
 # тесты: pip install -r requirements-dev.txt
@@ -96,7 +96,7 @@ idvjpy --demo short          # автотур из установленного 
 python3 -m idvjpy_boot       # то же самое через python -m
 ```
 
-В wheel входят код и ресурсы (`app.tcss`, `demos/`, примеры конфигов, `.bashrc_term.example`); хранилища пользователя (settings/БД/history) в пакет **не** кладутся — при первом запуске они создаются в системном data-каталоге (`--data-dir` → `$IDVJPY_DATA_DIR` → системный каталог ОС, см. «Запуск»). Так один и тот же пакет можно обновлять (`pip install -U`), не трогая свои теги и историю.
+В wheel входят код и ресурсы (`app.tcss`, `demos/`, примеры конфигов, `.bashrc_term.example`, а также справочники `:md` — `docs/<lang>/*.md` и `K8S_CHAINS.md`); хранилища пользователя (settings/БД/history) в пакет **не** кладутся — при первом запуске они создаются в системном data-каталоге (`--data-dir` → `$IDVJPY_DATA_DIR` → системный каталог ОС, см. «Запуск»). Так один и тот же пакет можно обновлять (`pip install -U`), не трогая свои теги и историю.
 
 Версия пакета соответствует версии приложения (`CommandRunner.VERSION` → `MAJOR.MINOR.0`).
 

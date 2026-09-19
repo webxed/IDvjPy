@@ -1,6 +1,6 @@
 # backup_db.py - перенос библиотеки тегов
 
-CLI для импорта/экспорта базы тегов IDvjPy_term (**v1.148**, `mytags.db`).
+CLI для импорта/экспорта базы тегов IDvjPy_term (**v1.149**, `mytags.db`).
 Форматы: JSON (перенос и слияние) и CSV (правка в таблицах).
 
 Корневой `python3 backup_db.py` — лаунчер; код в `src/backup_db.py`.
