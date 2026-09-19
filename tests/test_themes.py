@@ -10,10 +10,14 @@
 from __future__ import annotations
 
 from textual.geometry import Region
-from textual.widgets import Input
 
 from app import MATRIX_CLASS, MATRIX_THEME, MATRIX_THEME_NAME, CommandRunner
 from tests.conftest import submit, wait_command_done
+
+
+def _input_row(app):
+    """Строка ввода: рамка (и подсветка фокуса) живёт на контейнере, не на поле."""
+    return app.query_one(f"#{app.ID_INPUT_ROW}")
 
 
 def _hex_of(color) -> str:
@@ -87,8 +91,8 @@ async def test_matrix_theme_is_selectable(isolated_home):
         assert MATRIX_THEME_NAME in app.available_themes
         assert app.theme == MATRIX_THEME_NAME
         assert app.screen.has_class(MATRIX_CLASS)
-        # Рамка поля ввода — в тон фосфору, а не фиолетовая.
-        border = app.query_one(Input).styles.border_top
+        # Рамка строки ввода — в тон фосфору, а не фиолетовая.
+        border = _input_row(app).styles.border_top
         assert _hex_of(border[1]).lower() == MATRIX_THEME.primary.lower()
 
 
@@ -98,17 +102,17 @@ async def test_matrix_class_follows_theme(isolated_home):
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause()
         assert not app.screen.has_class(MATRIX_CLASS)
-        default_border = _hex_of(app.query_one(Input).styles.border_top[1])
+        default_border = _hex_of(_input_row(app).styles.border_top[1])
 
         await submit(pilot, f":theme {MATRIX_THEME_NAME}")
         await pilot.pause()
         assert app.screen.has_class(MATRIX_CLASS)
-        assert _hex_of(app.query_one(Input).styles.border_top[1]) != default_border
+        assert _hex_of(_input_row(app).styles.border_top[1]) != default_border
 
         await submit(pilot, ":theme textual-dark")
         await pilot.pause()
         assert not app.screen.has_class(MATRIX_CLASS)
-        assert _hex_of(app.query_one(Input).styles.border_top[1]) == default_border
+        assert _hex_of(_input_row(app).styles.border_top[1]) == default_border
 
 
 async def test_matrix_theme_survives_restart(isolated_home):
@@ -129,22 +133,25 @@ async def test_matrix_theme_survives_restart(isolated_home):
         assert second.screen.has_class(MATRIX_CLASS)
 
 
-async def test_palette_theme_change_keeps_input_margins(isolated_home):
-    """Смена темы при открытой палитре не ломает рамку поля ввода.
+async def test_palette_theme_change_keeps_input_row_width(isolated_home):
+    """Смена темы при открытой палитре не ломает рамку строки ввода.
 
-    Textual матчит CSS по **имени класса**: `textual.command.CommandLineInput`
-    (поле палитры `Ctrl+P`) объявляет `width: 1fr; border: blank; ...`.
-    Пока наш виджет тоже назывался `CommandLineInput`, это правило начинало
-    действовать на нём, как только палитра открывалась (её CSS попадает в общий
-    stylesheet), а применялось — при следующем переприменении CSS (смена темы).
-    С `width: 1fr` и `margin: 0 1` поле становится шире экрана на колонку,
-    и правая рамка уезжает за край (симптом: «рамка исчезает»).
+    Textual матчит CSS по **имени класса**: у поля палитры `Ctrl+P` (в
+    `textual.command`) оно совпадает с именем нашего виджета и объявляет
+    `width: 1fr; border: blank; …`. Пока строка ввода была самим полем, это
+    правило начинало действовать на нём, как только палитра открывалась (её CSS
+    попадает в общий stylesheet), а применялось — при следующем переприменении
+    CSS (смена темы): поле становилось шире экрана на колонку, и правая рамка
+    уезжала за край. Теперь рамка — у контейнера `#input-row`, а поле адресуется
+    по id, так что чужое правило не решает ничего: сторож смотрит на строку.
     """
     app = CommandRunner()
     async with app.run_test(size=(70, 18)) as pilot:
         await pilot.pause()
-        inp = app.query_one(f"#{app.ID_INPUT}", Input)
-        assert inp.region.width == 70 - 2  # margin 0 1: по колонке с каждой стороны
+        row = _input_row(app)
+        assert row.region.width == 70 - 2  # margin 0 1: по колонке с каждой стороны
+        inp = app.query_one(f"#{app.ID_INPUT}")
+        assert inp.region.right <= row.region.right - 1  # поле внутри рамки
 
         await pilot.press("ctrl+p")
         await pilot.pause()
@@ -152,12 +159,14 @@ async def test_palette_theme_change_keeps_input_margins(isolated_home):
         app.theme = "textual-light"  # ровно как ThemeProvider (DiscoveryHit)
         await pilot.pause()
         await pilot.pause()
-        assert inp.region.width == 70 - 2, "поле ввода получило width: 1fr из чужого CSS"
+        assert row.region.width == 70 - 2, "строка ввода поехала от чужого CSS"
+        assert inp.region.right <= row.region.right - 1
 
         await pilot.press("escape")
         await pilot.pause()
         await pilot.pause()
-        assert inp.region.width == 70 - 2
+        assert row.region.width == 70 - 2
+        assert inp.region.right <= row.region.right - 1
 
 
 async def test_block_focus_highlight_is_soft(isolated_home):

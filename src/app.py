@@ -100,7 +100,7 @@ try:
     from textual import events
     from textual.app import App, ComposeResult, InvalidThemeError, SuspendNotSupported
     from textual.binding import Binding, BindingType
-    from textual.containers import VerticalScroll
+    from textual.containers import Horizontal, VerticalScroll
     from textual.content import Content
     from textual.selection import Selection
     from textual.strip import Strip
@@ -345,6 +345,36 @@ def escape_help_markup(text: str) -> str:
     """Keep ``[bold]`` tags; escape other ``[brackets]`` so Rich does not swallow them."""
     parts = RE_HELP_KEEP_MARKUP.split(text)
     return "".join(part if i % 2 else escape(part) for i, part in enumerate(parts))
+
+
+# Приглашение строки ввода: cwd виден всегда (как в терминале), серым слева от
+# курсора. `~` — домашний каталог, длинный путь укорачивается (см. `shorten_path`).
+CWD_PROMPT_SEP = "❯"
+
+
+def shorten_path(path: str, home: str | None = None, max_len: int = 0) -> str:
+    """Путь для приглашения: `~` вместо дома и хвост вместо середины.
+
+    `max_len` > 0 ограничивает длину (место в строке ввода принадлежит команде,
+    а не пути): остаётся последний компонент, сколько влезет, и многоточие впереди
+    (`…/work/proj`) — по хвосту понятно, где ты (как `%3~` в zsh). Один
+    компонент длиннее лимита режется сам.
+    """
+    text = os.path.normpath(path or ".")
+    base = os.path.normpath(home) if home else os.path.expanduser("~")
+    if base and base != os.sep and (text == base or text.startswith(base + os.sep)):
+        text = "~" + text[len(base):]
+    if max_len <= 0 or len(text) <= max_len:
+        return text
+    parts = text.split(os.sep)
+    tail = len(parts) - 1
+    while tail > 1 and len(f"…{os.sep}" + os.path.join(*parts[tail - 1:])) <= max_len:
+        tail -= 1
+    short = f"…{os.sep}" + os.path.join(*parts[tail:])
+    if len(short) > max_len:
+        head = max(1, max_len - 1)
+        short = short[:head] + "…"
+    return short
 
 
 def escape_display_markup(text: str) -> str:
@@ -2273,7 +2303,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.151"
+    VERSION = "v1.152"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2320,6 +2350,8 @@ class CommandRunner(App):
     FILE_BASH_ALIASES = ".bashrc" # Системный файл алиасов
 
     ID_INPUT = "command-input"
+    ID_CWD_PROMPT = "cwd-prompt"
+    ID_INPUT_ROW = "input-row"
     ID_RESULTS_CONTAINER = "results-container"
     KEY_HISTORY_LINES = "history_lines"
     KEY_HISTORY_KEEP = "history_keep"
@@ -3548,6 +3580,8 @@ class CommandRunner(App):
         # 0. Привязать список подсказок к полю ввода
         cmd_input = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         cmd_input.set_completion_list(self._completion_list)
+        # Приглашение в строке ввода: cwd видно сразу, без `:cd` (как в терминале).
+        self._refresh_cwd_prompt()
 
         # 1. Загрузка общих настроек
         try:
@@ -4055,13 +4089,44 @@ class CommandRunner(App):
             pass
 
     def compose(self) -> ComposeResult:
-        """Построение UI."""
+        """Построение UI.
+
+        Строка ввода — контейнер: слева серым приглашение с текущим каталогом
+        (как в терминале), справа само поле. Рамка — у контейнера, поэтому
+        подсветка фокуса — `:focus-within` (см. app.tcss).
+        """
         yield Header()
-        yield CommandLineInput(placeholder="Enter command (type 2+ chars for completion)", id=self.ID_INPUT)
+        with Horizontal(id=self.ID_INPUT_ROW):
+            yield Static("", id=self.ID_CWD_PROMPT)
+            yield CommandLineInput(id=self.ID_INPUT)
         self._completion_list = CompletionList()
         yield self._completion_list
         yield JournalScroll(id=self.ID_RESULTS_CONTAINER)
         yield Footer()
+
+    def _refresh_cwd_prompt(self) -> None:
+        """Показать cwd в приглашении строки ввода (серым, как промпт терминала).
+
+        Ширина — треть окна: путь не должен съедать место под команду (полный
+        путь всегда виден в шапке блока).
+        """
+        try:
+            prompt = self.query_one(f"#{self.ID_CWD_PROMPT}", Static)
+        except Exception:
+            return
+        limit = max(12, int(self.size.width / 3))
+        text = f"{shorten_path(os.getcwd(), max_len=limit)} {CWD_PROMPT_SEP} "
+        prompt.update(escape_display_markup(text))
+
+    def on_resize(self, event: events.Resize) -> None:
+        """Окно изменилось — пересчитать длину пути в приглашении."""
+        self._refresh_cwd_prompt()
+
+    def on_click(self, event: events.Click) -> None:
+        """Клик по приглашению с путём — фокус в строку ввода (мышь как ускорение)."""
+        widget = event.widget
+        if widget is not None and getattr(widget, "id", None) == self.ID_CWD_PROMPT:
+            self.action_focus_input()
 
     def action_focus_input(self) -> None:
         """Переводит фокус в строку ввода без выделения всего текста."""
@@ -5696,6 +5761,7 @@ class CommandRunner(App):
         self._old_cwd = old
         os.environ["OLDPWD"] = old
         os.environ["PWD"] = os.getcwd()
+        self._refresh_cwd_prompt()
         return os.getcwd()
 
     def _ingest_tty_session(self, env_path: str, pwd_path: str, before: Mapping[str, str]) -> list[str]:
@@ -6031,6 +6097,7 @@ class CommandRunner(App):
         self._old_cwd = old
         os.environ["OLDPWD"] = old
         os.environ["PWD"] = os.getcwd()
+        self._refresh_cwd_prompt()
         self.add_block(InfoBlock(f"cwd: {os.getcwd()}"))
 
     def _command_from_block(self, block: Static | None) -> str:

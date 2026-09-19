@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.151 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.152 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -284,7 +284,7 @@ curl -H "Bearer $TOKEN" https://api.example   # 普通的 $TOKEN 替换
 - `:kill [all]` —— 停止正在运行的命令；`:watch <秒> <命令>` —— 在同一个块中重复它（`:watch stop`）
 - `:alias <tag> [file.sh]` / `:alias * [library.sh]` —— 把命令导出为 bash 函数 `tag_tid()`
 - `:i …` —— Kubernetes Ingress Analyzer（`:i` 不带参数时显示帮助）
-- `:cd [path]` —— 显示 / 切换 shell 命令的 cwd（`cd path` 也一样）。标签库、历史和 `.bashrc_term*` 仍留在数据目录中（而不是新的 cwd —— 见「文件和设置」）；不会在新目录中创建空的 `mytags.db`。
+- `:cd [path]` —— 显示 / 切换 shell 命令的 cwd（`cd path` 也一样）。标签库、历史和 `.bashrc_term*` 仍留在数据目录中（而不是新的 cwd —— 见「文件和设置」）；不会在新目录中创建空的 `mytags.db`。当前目录始终可见：在输入行左侧以灰色显示（`~/项目 ❯`，点击路径可把焦点返回输入行）；`~` 表示主目录，过长的路径会截取尾部（不超过窗口宽度的三分之一；完整路径见块标题）。
 - `:fm [path]` —— 在新窗口中打开系统文件管理器（cwd 或路径）。Linux：`xdg-open`；macOS：`open`；Windows：`explorer`。自定义：`$FILEMAN`
 - `:term [path]` —— 在新窗口中打开系统终端。Linux：`xdg-terminal-exec` / `gnome-terminal` / …；macOS：Terminal.app；Windows：`wt` 或 `cmd`。自定义：`$TERMINAL`
 - `:env` —— 在已运行的应用中重新读取 `.bashrc_term*`（以及 `~/.bashrc` 的别名）。在 `> cmd` 之后，**同一个** bash 的导出会被自动采纳（嵌套的 `> bash` 里面再 `export` —— 则不会）

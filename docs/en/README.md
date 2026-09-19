@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.151 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.152 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -293,7 +293,7 @@ Aliases with `$1` / `$2` / `$@` substitute arguments (`alias klogin="tsh kube lo
 - `:kill [all]` — stop the running command; `:watch <sec> <command>` — repeat it in one block (`:watch stop`)
 - `:alias <tag> [file.sh]` / `:alias * [library.sh]` — dump commands as bash functions `tag_tid()`
 - `:i …` — Kubernetes Ingress Analyzer (`:i` without arguments — help)
-- `:cd [path]` — show / change the cwd for shell commands (`cd path` does the same). The tag database, history and `.bashrc_term*` stay in the data directory (not in the new cwd — see "Files and settings"); an empty `mytags.db` is not created in the new folder.
+- `:cd [path]` — show / change the cwd for shell commands (same as `cd path`). The tags DB, history and `.bashrc_term*` stay in the data directory (not in the new cwd — see "Files and settings"); an empty `mytags.db` is not created in the new folder. The current directory is always visible: in grey on the left of the input line (`~/project ❯`; clicking the path focuses the input), `~` stands for the home directory, and a long path is shortened to its tail (at most a third of the window width; the full path is in block headers)
 - `:fm [path]` — the OS file manager in a new window (cwd or a path). Linux: `xdg-open`; macOS: `open`; Windows: `explorer`. Custom: `$FILEMAN`
 - `:term [path]` — the system terminal in a new window. Linux: `xdg-terminal-exec` / `gnome-terminal` / …; macOS: Terminal.app; Windows: `wt` or `cmd`. Custom: `$TERMINAL`
 - `:env` — re-read `.bashrc_term*` (and `~/.bashrc` aliases) in the already running application. After `> cmd`, exports of **the same** bash are picked up by themselves (a nested `> bash` + `export` inside — no)

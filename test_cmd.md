@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.151
+# План тестирования IDvjPy_term v1.152
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -636,7 +636,7 @@ cd /tmp
 :theme textual-dark
 ```
 
-**Ожидание:** `:r` кладёт команду сфокусированного (или последнего) блока во ввод. `:cmd [N] [show]` — материализует команду блока с текущими `$VAR`/секретами и кладёт в буфер обмена; в журнале — маскированная версия, `show` печатает полную (секреты видны). `:cmd 5` при одном блоке — `too far back`. `cd` / `:cd` меняет cwd для shell-команд; нет каталога — ошибка, не молчание. База тегов / история / `.bashrc_term*` остаются в каталоге запуска (пустой `mytags.db` в новой папке не появляется). `:theme` показывает / ставит тему в `settings.yml`. `d` на журнале переключает dark/light.
+**Ожидание:** `:r` кладёт команду сфокусированного (или последнего) блока во ввод. `:cmd [N] [show]` — материализует команду блока с текущими `$VAR`/секретами и кладёт в буфер обмена; в журнале — маскированная версия, `show` печатает полную (секреты видны). `:cmd 5` при одном блоке — `too far back`. `cd` / `:cd` меняет cwd для shell-команд; нет каталога — ошибка, не молчание. База тегов / история / `.bashrc_term*` остаются в каталоге запуска (пустой `mytags.db` в новой папке не появляется). Серое приглашение слева в строке ввода (`~/путь ❯`) показывает текущий каталог и меняется после каждого `cd`/`:cd` (`~` вместо дома, длинный путь — хвостом; клик по пути возвращает фокус в строку). Заголовок блока по-прежнему несёт полный путь. `:theme` показывает / ставит тему в `settings.yml`. `d` на журнале переключает dark/light.
 
 ```
 #demo echo one
@@ -647,7 +647,7 @@ cd /tmp
 
 **Ожидание:** `:export demo` → `demo.json` (каноническая схема: `export_date`, `total_commands`, `tag_comments`, `commands` с `id`/`timestamp`/`deleted`); `:export demo.json` без тега → `demo.json`; `:export * library.json` → вся библиотека каноническим JSON (`tag_filter` пуст — именно такой файл нужен для `library_url`), `:export * library.md` — Markdown-каталог; `:import demo.json` создаёт **новые** `tid` (не затирает); `:export` без аргументов — Usage со обоими формами `*`. Глобальные `id` из файла импортом не берутся (чужой `id` не может затереть другую строку). То же и в CLI — одна реализация, `src/db_transfer.py` — но лаунчер живёт в каталоге репозитория: из каталога данных зовите его по пути (`python3 /путь/к/IDvjPy/backup_db.py export f.json` / `import f.json [--mode replace] [--keep-tids]`), а `settings.yml` и `backups/` он берёт из текущего каталога; адресная правка по `tid` — `export-csv` / `import-csv`; снимок и возврат — `backup` / `restore <file>` (со снимком до операции); обёртка `./backup_db.sh backup|restore <file>`.
 
-Автотесты: `test_replay_puts_command_in_input`, `test_cd_changes_app_cwd`, `test_colon_cd_and_missing_dir`, `test_colon_theme_sets_and_lists`, `test_toggle_dark_saves_theme`, `test_export_and_import_tag`, `test_export_star_json_is_whole_library`, `test_export_usage_lists_both_library_formats`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`.
+Автотесты: `test_replay_puts_command_in_input`, `test_cd_changes_app_cwd`, `test_colon_cd_and_missing_dir`, `test_colon_theme_sets_and_lists`, `test_toggle_dark_saves_theme`, `test_export_and_import_tag`, `test_export_star_json_is_whole_library`, `test_export_usage_lists_both_library_formats`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_cwd_prompt.py` (приглашение с путём).
 
 ---
 
@@ -1516,7 +1516,7 @@ cd <каталог с library.json> && python3 -m http.server 8000
 
 ---
 
-**Версия документа**: v1.97
-**Версия приложения**: v1.151
+**Версия документа**: v1.98
+**Версия приложения**: v1.152
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

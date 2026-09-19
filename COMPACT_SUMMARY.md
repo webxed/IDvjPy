@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.151**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.152**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.97 (app v1.151) |
+| `test_cmd.md` | Manual plan v1.98 (app v1.152) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -153,7 +153,8 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
-| `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!` |
+| `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!`, `:export` одного тега и `:export * file.json` (JSON всей библиотеки) |
+| `tests/test_cwd_prompt.py` | Приглашение строки ввода: `shorten_path` (`~`, хвост длинного пути, узкое окно), путь виден и обновляется после `cd`/`:cd`, плейсхолдера нет, клик по пути фокусирует ввод |
 | `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
 | `tests/test_journal_follow.py` | Режим чтения: колесо вверх/фокус на блоке не уводит вид и фокус; возобновление при докрутке до низа и по Enter; `:send!` во время чтения |
 | `tests/test_line_api_block.py` | Line API: включение ключом/`IDVJPY_LINE_BLOCKS`, вывод/высота/свёртка/курсор, инфоблоки действительно рисуются (`render_line`), выделение мышью по строкам + подсветка, клетка→символ (`meta['offset']`) остаётся точной |
@@ -185,7 +186,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.151 |
+| `src/app.py` | TUI (`CommandRunner`), v1.152 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -231,6 +232,11 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.152
+
+- **Текущий каталог видно всегда: серое приглашение в строке ввода.** Плейсхолдер «Enter command» заменён путём (`~/проект ❯`) — как в терминале: видно, где ты, и пока строка пуста, и пока в неё набирают команду. Путь укорачивается (`shorten_path`: `~` вместо дома; длинный — хвостом, как `%3~` в zsh, не больше трети ширины окна), полный путь по-прежнему в шапке блока. Строка ввода стала контейнером `#input-row`: рамка у контейнера (подсветка фокуса — `:focus-within`), приглашение `#cwd-prompt` — серым (`$text-muted`), поле `#command-input` — без своей рамки. Обновляется в `on_mount`, `on_resize` (лимит длины зависит от ширины) и там, где меняется cwd: `cd` / `:cd` и `_adopt_tty_cwd` (после `> cmd` оболочка могла уехать в другой каталог). Клик по приглашению возвращает фокус в строку (мышь — ускорение). Тесты: `tests/test_cwd_prompt.py` (7).
+- **Сопутствующее:** `CLAUDE.md` (устройство строки ввода), README (ru/en/zh — у `:cd`), `test_cmd.md` (секция 25).
 
 ## v1.151
 
