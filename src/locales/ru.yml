@@ -83,7 +83,9 @@ relang:
 
 hist:
   import_unknown: "Неизвестная оболочка: {name}. Известные: {shells}."
-  import_none: "История оболочки не найдена. Искал: {paths}."
+  import_none: "История оболочки не найдена. Искали: {paths}."
+  import_usage: "Использование: :h import [оболочка] — известные: {shells}."
+  import_write_failed: "Не удалось записать {file}: {error}"
   import_done: "История оболочки → {file}: {total} строк из {sources}, новых {added}."
   import_failed: "Не прочитано: {paths}."
 
@@ -136,5 +138,6 @@ cmd:
   update: "сверить VERSION с GitHub main"
 
 help:
+  usage: "Использование: :? [тема]. Темы: {topics}"
   unknown_topic: "Нет такой темы справки: '{topic}'. Темы: {topics}"
   topic_needs_space: "Тема справки отделяется пробелом: `{example}`, а не `{glued}`"

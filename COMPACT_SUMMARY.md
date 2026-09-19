@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.146**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.147**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.91 (app v1.146) |
+| `test_cmd.md` | Manual plan v1.92 (app v1.147) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
@@ -158,6 +158,8 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_colon_commands.py` | Подсказки `:`-команд: покрытие всех `CMD_*`, фильтр по буквам, `:/` не перебивается, Tab вставляет без запуска, Enter на точном имени выполняет, ссылка — только на имени команды |
 | `tests/test_tag_ref_click.py` | Клик по `!tag[tid]` в `??`: обычный — только вставка; Ctrl+клик и двойной клик — вставить и выполнить (как «Enter, Enter», без дубля ссылки); `!tag ` без tid и чужие ссылки не выполняются |
 | `tests/test_help_topics.py` | Темы `:? <тема>`: уникальность и наличие текста на каждом языке, алиасы (в т.ч. русские слова), неизвестная тема — ошибка со списком тем, `:?calc` — подсказка пробела, оглавление `main` покрывает реестр, подсказки после `:? ` |
+| `tests/test_secrets.py` | Секреты (20): ввод/показ маскируются, файл 0600 и удаление при выходе, `.bashrc_term`/history не видят значения, `:llm` (`$OUT` и контекст библиотеки), замороженная маскировка (`:watch`, `:o`, шапка `:log`, снятый/переопределённый секрет), чужие файлы секретов не удаляются, `:cmd` с `clear_clipboard_after_secret` |
+| `tests/test_history_import.py` | Импорт истории (33): форматы (zsh extended/континуация, bash-метки, fish `\`/`\n`/кавычки, PSReadLine), распознавание zsh по содержимому, пути по linux/darwin/win32 + XDG/APPDATA, батч-запись и её ошибка, BOM/бинарь, `sh`→`ksh`, `:h import` в TUI (импорт, идемпотентность, «не найдено», нечитаемый источник, ошибка записи, лишние аргументы, незнакомая оболочка) |
 | `tests/test_stylesheet.py` | Стили — `src/app.tcss`: путь и наличие файла, Textual-синтаксис (`$surface`, `dock`), отсутствие `app.css` в коде/упаковке, попадание в wheel |
 | `tests/test_tag_query_hints.py` | Подсказки `?`: список тегов с числом команд и комментарием, фильтр, `??`/пробел не перебиваются, Tab без запуска, клик по строке выполняет запрос (путь по клику только вставляется), ссылка — только на `?tag` |
 | `tests/test_themes.py` | Тема `matrix` (палитра, выбор из settings.yml/`:theme`, класс `matrix-mode` и зелёные рамки только у неё, сохранение между запусками) и мягкая подсветка блока в фокусе |
@@ -181,7 +183,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенная `src/` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.146 |
+| `src/app.py` | TUI (`CommandRunner`), v1.147 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -202,7 +204,8 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/json_viewer.py` | JSON tree modal |
 | `src/ingress_analyzer.py` | `:i` k8s |
 | `src/command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
-| `src/history_store.py` | `history_<instance>.txt` append/read/compact, file locks; `append_history_file_lines` — пачка под одним lock’ом без дублей (импорт) |
+| `src/history_store.py` | `history_<instance>.txt` append/read/compact, file locks; `append_history_file_lines` — пачка под одним lock’ом без дублей (импорт) и с явной ошибкой (`AppendResult.added/error`: занятый файл не пишем молча) |
+| `src/history_import.py` | Импорт истории оболочки (`:h import`): поиск файлов по ОС и `$HISTFILE` (fish/pwsh — XDG-каталог на всех ОС, nushell — системный, на win32 только Windows-пути), разбор по содержимому (zsh extended + континуация `\`+newline, bash-метки, fish `\`/`\n` однопроходно, PSReadLine/nushell), хвост 4 МБ у больших файлов, BOM/бинарь, `sh` → `ksh` |
 | `src/session_mailbox.py` | Пересылка команд между сессиями (`:send`): `inbox_<instance>.jsonl` 0600, append под lock / drain |
 | `src/session_registry.py` | Реестр активных сессий — `session_<instance>.pid` 0600: автоимя `:new` = наименьшее свободное `sN` среди работающих окон (устаревшие pid-файлы подчищаются) |
 | `src/help_texts.py` | Реестр справки `:?`: `HELP_TEXTS` + `HELP_TOPICS` (канонические имена тем → текст: `calc`, `run`, `i`, `md`, `llm`, `tags`, `vars`, `kctx`, `send`, `session`), `help_topic()` (имена и алиасы → `i18n.text()`) — файлы `src/locales/help/<lang>/{main,runbook,calc,ingress,llm,tags,vars,md,kctx,send,session}.txt` (`en` — источник правды) |
@@ -222,6 +225,13 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.147
+
+- **Секреты: инвариант «значение не в журнале» больше не зависит от момента показа (высокая).** Маскировка считалась при каждой отрисовке из текущего набора `$$`-секретов, поэтому после `$$NAME-`, переопределения, `:env` или `:session` любой повторный рендер (space/←→, F2, F8, поиск `:/`, `:w`) показывал настоящее значение. Теперь текст замораживается в момент записи вывода (`CommandBlock.freeze_secrets`, `masked_header/masked_stdout/masked_stderr`): `_make_command_block` и `update_content` прячут секреты сразу, `:watch` перезамораживает на каждом тике, `_output_history` (`:o`) хранит уже замаскированный вывод, шапка `:log` маскируется, `:llm` маскирует и контекст библиотеки (`app_context`), а не только сообщение. Попутно: `:watch` больше не печатает значение в теле блока (раньше маскировалась только шапка), `load_bashrc` не подменяет значение секрета из `.bashrc_term` (иначе маска «разъезжалась» и `secrets_<instance>.json` перезаписывался), при выходе чистится **только своё** хранилище (`secrets_<instance>.json*`, соседняя сессия свои значения сохраняет), а `:cmd` с `clear_clipboard_after_secret: true` не кладёт команду со значениями в буфер (в журнале — объяснение). Явные исключения по запросу человека (`F3`, `:log`/F7, `:cmd show`) остались и описаны в `AGENTS.md`/README.
+- **Импорт истории (`:h import`) — форматы, пути и явные ошибки.** Разбор: снимается реальная zsh-континуация `\`+newline (было `do\ ; echo …` вместо `do ; echo …`), fish-unescape стал однопроходным (литеральный `C:\new` больше не превращается в `C:\ ; ew`), формат определяется по содержимому (нестандартный `$HISTFILE` вроде `~/.history` с zsh-extended записями), `sh` — алиас `ksh` (находит `~/.sh_history`), BOM снимается (`utf-8-sig`), бинарный файл — ошибка, а не мусорные «команды», у файлов больше 4 МБ читается только хвост. Пути: fish и PowerShell Core — XDG-каталог на всех ОС, nushell — системный (`Application Support` / `%APPDATA%`), на Windows в списке только Windows-пути (не мусорят сообщение «где искали»). Ошибки перестали выглядеть успехом: `append_history_file_lines` возвращает `AppendResult(added, error)` и не пишет пачку без блокировки (занятый файл, ошибка записи — отдельные сообщения `hist.import_write_failed`), нечитаемый источник отличается от «истории нет», лишний аргумент — `Usage: :h import [shell]`.
+- **Гигиена кода.** Диспетчер `:`-команд переведён с цепочки `elif` (~150 строк) на таблицы `COLON_ARG_HANDLERS` / `COLON_NOARG_HANDLERS` плюс маленькие обёртки (`_handle_history_args`, `_handle_help_args`, `_handle_send_run_args`, …); забытая ветка больше не может молча отвечать «Unknown command» — `tests/test_colon_commands.py` требует обработчик для каждой `CMD_*`. Удалён мёртвый код: `ClickableCommand`, `_replay_focused_command`, `_scroll_results`, `_show_calc_help`/`_show_runbook_help` (после тем справки), `has_escapes`, `demo._wait_input_focus`, `MatrixRain.head_rows`, `IngressAnalyzer.install_crossplane`, `database_v2.delete_command_by_global_id`/`get_commands_by_prefix` (и упоминания в `DATABASE.md`), `backup_db.export_tag`/`import_tag`, `help_texts.topic_names_in_text`. Новые локали: `help.usage`, `hist.import_usage`/`import_write_failed` (en/ru/zh).
+- Тесты: `tests/test_secrets.py` (+8: заморозка после снятия/переопределения, `:o`, шапка `:log`, `:watch`, `.bashrc_term`, чужие хранилища, `:cmd`, контекст `:llm`), `tests/test_history_import.py` (+10) и правимые кейсы путей/форматов, `tests/test_colon_commands.py` (+1: диспетчер покрывает все `CMD_*`).
 
 ## v1.146
 

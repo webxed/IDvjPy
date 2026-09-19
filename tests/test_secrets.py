@@ -208,3 +208,147 @@ async def test_non_secret_paste_keeps_clipboard(isolated_home):
         await pilot.pause()
         assert inp.value == "echo plain-text"
         assert pyperclip.paste() == "plain-text"
+
+
+# --- Замороженная маскировка (инвариант: значение не появляется в журнале) ----
+
+
+async def test_masking_survives_secret_removal(isolated_home):
+    """После `$$NAME-` повторный рендер блока не показывает значение.
+
+    Маскировка «на момент показа» брала текущий набор секретов, поэтому снятый
+    (или переопределённый, или потерянный при `:session`) секрет проявлялся при
+    любом перерендере: space/←→, F8, F2, поиск `:/`, `:w`.
+    """
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, f"$$TOKEN={SECRET}")
+        await submit(pilot, "echo $TOKEN")
+        block = await wait_command_done(app, timeout=8.0)
+        assert SECRET not in block._format_output()
+        await submit(pilot, "$$TOKEN-")
+        assert SECRET not in block._format_output()
+        assert SECRET not in (block.text_content or "")
+        # Перерендер сворачиванием — тот же путь, что space / ←→.
+        block.collapsed = True
+        assert SECRET not in block._format_output()
+        block.collapsed = False
+        assert SECRET not in block._format_output()
+
+
+async def test_output_history_is_masked_after_secret_removal(isolated_home):
+    """`:o` хранит уже замаскированный вывод, а не сырой."""
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, f"$$TOKEN={SECRET}")
+        await submit(pilot, "echo $TOKEN")
+        await wait_command_done(app, timeout=8.0)
+        stored = app._output_history[-1]
+        assert SECRET not in stored["stdout"]
+        await submit(pilot, "$$TOKEN-")
+        await submit(pilot, ":o")
+        assert SECRET not in last_info(app).text_content
+
+
+async def test_log_title_masks_secret(isolated_home):
+    """Шапка `:log` — тоже показ: значение из команды маскируется."""
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, f"$$TOKEN={SECRET}")
+        await submit(pilot, f"echo {SECRET}")
+        await wait_command_done(app, timeout=8.0)
+        await submit(pilot, ":log")
+        await pilot.pause()
+        assert SECRET not in (app.screen.title or "")
+        await pilot.press("escape")
+        await pilot.pause()
+
+
+async def test_watch_body_masks_secret(isolated_home):
+    """Блок `:watch` прячет значение и в заголовке, и в теле."""
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, f"$$TOKEN={SECRET}")
+        await submit(pilot, ":watch 5 echo $TOKEN")
+        await pilot.pause()
+        state = app._watch_state
+        assert state is not None, "watch не запустился"
+        block = state["block"]
+        assert SECRET not in (block.text_content or "")
+        assert "****" in (block.text_content or "")
+        await submit(pilot, ":watch stop")
+        await pilot.pause()
+
+
+async def test_env_reload_does_not_overwrite_secret(isolated_home):
+    """`.bashrc_term` не подменяет значение секрета (иначе маска разъедется)."""
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, f"$$TOKEN={SECRET}")
+        Path(app.FILE_BASHRC).write_text("TOKEN=from-bashrc\n", encoding="utf-8")
+        await submit(pilot, ":env")
+        await pilot.pause()
+        assert app.local_env["TOKEN"] == SECRET
+
+
+async def test_exit_keeps_other_session_secrets_file(isolated_home):
+    """Выход удаляет только своё хранилище — соседнюю сессию не трогает."""
+    other = isolated_home / "secrets_s2.json"
+    other.write_text('{"K": "v"}', encoding="utf-8")
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, f"$$TOKEN={SECRET}")
+        own = app.FILE_SECRETS
+        assert os.path.isfile(own)
+    assert not os.path.exists(own)
+    assert other.is_file()
+
+
+async def test_cmd_does_not_copy_secret_when_clipboard_flag_on(isolated_home):
+    """С `clear_clipboard_after_secret` `:cmd` не кладёт значение в буфер."""
+    import pyperclip
+
+    _enable_clear_clip(isolated_home)
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, f"$$TOKEN={SECRET}")
+        await submit(pilot, "echo $TOKEN")
+        await wait_command_done(app, timeout=8.0)
+        pyperclip.copy("sentinel")
+        await submit(pilot, ":cmd")
+        info = last_info(app).text_content
+        assert "Not copied" in info
+        assert SECRET not in info
+        assert pyperclip.paste() == "sentinel"
+
+
+async def test_llm_app_context_masks_secrets(isolated_home, monkeypatch):
+    """Контекст библиотеки (`:llm ask`) тоже уходит замаскированным."""
+    import app as app_module
+
+    (isolated_home / "llm_providers.yml").write_text(
+        "default: ds\nproviders:\n  ds:\n    url: http://x\n    model: m\n",
+        encoding="utf-8",
+    )
+    seen: dict = {}
+
+    def fake(provider, message, env, timeout=60, **kwargs):
+        seen.update(kwargs)
+        seen["message"] = message
+        return "ok"
+
+    monkeypatch.setattr(app_module, "perform_request", fake)
+    app = CommandRunner()
+    async with app.run_test(size=(140, 40)) as pilot:
+        # Тег хранит ЛИТЕРАЛЬНОЕ значение — раньше оно уезжало в контексте.
+        await submit(pilot, f"#api curl -H 'Bearer {SECRET}' https://api")
+        await submit(pilot, f"$$TOKEN={SECRET}")
+        await submit(pilot, ":llm ask explain the library")
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline and not seen:
+            await pilot.pause()
+    assert seen
+    assert SECRET not in seen["message"]
+    context = seen.get("app_context") or ""
+    assert context
+    assert SECRET not in context

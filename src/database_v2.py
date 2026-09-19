@@ -151,12 +151,6 @@ def delete_command_by_tid(db_file: str, tag: str, tid: int):
     conn.commit()
     conn.close()
 
-def delete_command_by_global_id(db_file: str, global_id: int):
-    """Marks a single command as deleted by global ID."""
-    conn = get_db_connection(db_file)
-    conn.execute("UPDATE commands SET deleted = 1 WHERE id = ?", (global_id,))
-    conn.commit()
-    conn.close()
 
 def get_all_tags(db_file: str):
     """Fetches a unique list of all tags from the database."""
@@ -321,20 +315,6 @@ def usage_stats(db_file: str) -> dict:
         }
     finally:
         conn.close()
-
-
-def get_commands_by_prefix(db_file: str, prefix: str):
-    """
-    Returns distinct command strings that start with prefix (for Tab completion).
-    """
-    conn = get_db_connection(db_file)
-    cursor = conn.execute(
-        "SELECT DISTINCT command FROM commands WHERE deleted = 0 AND command LIKE ? ORDER BY command",
-        (prefix + "%",)
-    )
-    result = [row["command"] for row in cursor.fetchall()]
-    conn.close()
-    return result
 
 
 def _escape_like(text: str) -> str:

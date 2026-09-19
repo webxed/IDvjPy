@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.146
+# План тестирования IDvjPy_term v1.147
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -77,10 +77,14 @@ $$TOKEN
 - **Хранение (только сессия).** Запись идёт в `secrets_default.json` (права `0600`), нет в `.bashrc_term_default` и `history_default.txt`.
 - **Выход.** `:q` (или `--demo-quit`, Ctrl+C) — файл `secrets_default.json` удаляется, значения не переживают перезапуск.
 - `$$TOKEN` → `is set (value hidden)`; `$$TOKEN-` → `removed`; после — `is not set`.
-- **LLM.** `:llm ds explain $OUT`, где в выводе был секрет → в отправленном сообщении `****`, в шапке блока `secrets: hidden`.
-- **Буфер.** С `clear_clipboard_after_secret: true` вставка значения в `$$TOKEN=` (Ctrl+V / Shift+Insert) очищает CLIPBOARD/PRIMARY; обычная вставка (`echo `) буфер не трогает.
+- **LLM.** `:llm ds explain $OUT`, где в выводе был секрет → в отправленном сообщении `****`, в шапке блока `secrets: hidden`; литеральное значение в сохранённом теге тоже маскируется в контексте `:llm ask`.
+- **Заморозка маскировки.** `echo $TOKEN` → space/←→ (свернуть-развернуть), F2, F8, `:/` поиск — значение по-прежнему `****`; после `$$TOKEN-` (или `:session`/`$$TOKEN=другое`) повторный рендер **того же блока** секрет не раскрывает; `:o` тоже показывает `****`.
+- **Шапки.** `:log` (F7) — подзаголовок `secrets visible`, заголовок с командой маскирован; `:watch 5 echo $TOKEN` — в шапке и теле блока `****`.
+- **`.bashrc_term`.** Положить `TOKEN=from-bashrc` в `.bashrc_term_default` и дать `:env` → значение секрета не подменяется.
+- **Чужие сессии.** Создать рядом `secrets_s2.json` и выйти — файл на месте (чистится только своё хранилище).
+- **Буфер.** С `clear_clipboard_after_secret: true` вставка значения в `$$TOKEN=` (Ctrl+V / Shift+Insert) очищает CLIPBOARD/PRIMARY; обычная вставка (`echo `) буфер не трогает; `:cmd` с командой, где есть значение, в буфер не копируется (в журнале `Not copied`).
 
-**Ограничения (проверить, что ведут себя именно так):** маскируется вся строка ввода — имя видно только в подзаголовке; в `> cmd` реальный терминал показывает значение, пока TUI на паузе (журнальная строка `TTY: …` уже маскирована); если команда печатает секрет, в журнале `****`, но `F3` отдаёт настоящий вывод; строка, начинающаяся с `$$`, всегда трактуется как секрет.
+**Ограничения (проверить, что ведут себя именно так):** маскируется вся строка ввода — имя видно только в подзаголовке; в `> cmd` реальный терминал показывает значение, пока TUI на паузе (журнальная строка `TTY: …` уже маскирована); строка, начинающаяся с `$$`, всегда трактуется как секрет; **явные исключения по запросу человека** — `F3`, `:log`/F7 и `:cmd show` отдают настоящие данные.
 
 Автотест: `tests/test_secrets.py`.
 
@@ -316,11 +320,13 @@ printf '#1700000000\necho from-bash\ngit status\n' > ~/.bash_history
 :h import bash        # Shell history → …/history_default.txt: 2 line(s) from bash 2, 2 new.
 :h import             # все найденные оболочки (bash, zsh, fish, ksh, nu, pwsh)
 :h import bash        # повторно — «0 new» (уже имеющиеся строки не дублируются)
+:h import sh          # `sh` = `ksh` (тот же ~/.sh_history)
+:h import bash extra  # Usage: :h import [shell] — известные: … (лишний аргумент)
 :h import nope        # Unknown shell: nope. Known: zsh, bash, …
 Up                    # импортированные команды видны по ↑ и в :h /текст
 ```
 
-**Ожидание:** ищутся файлы истории по ОС и `$HISTFILE` (`~/.bash_history`, `~/.zsh_history`, fish, ksh, nushell, PowerShell PSReadLine — `%APPDATA%` на Windows, XDG/`Application Support` на Linux/macOS). Берутся последние 5000 строк каждого файла; zsh extended (`: ts:dur;cmd`) и bash-метки `#<epoch>` разбираются, многострочные записи сворачиваются в одну строку. Ничего не выполняется, файлы только читаются; если истории нет — сообщение со списком искомых путей. Проверка: `python3 -m pytest tests/test_history_import.py -q`.
+**Ожидание:** ищутся файлы истории по ОС и `$HISTFILE` (`~/.bash_history`, `~/.zsh_history`, fish, ksh, nushell, PowerShell PSReadLine — `%APPDATA%` на Windows, XDG-каталог на Linux/macOS). Берутся последние 5000 строк каждого файла (у больших — только хвост); zsh extended (`: ts:dur;cmd`) и bash-метки `#<epoch>` разбираются, многострочные записи (в т.ч. реальная zsh-континуация `\`+newline) сворачиваются в одну строку, формат определяется и по содержимому (нестандартный `$HISTFILE`). Ничего не выполняется, файлы только читаются; если истории нет — сообщение со списком искомых путей. Отказы видны явно: `chmod 000 ~/.bash_history` → `Not read: …`, read-only `history_default.txt` → `Could not write …`, а не «0 new». Проверка: `python3 -m pytest tests/test_history_import.py -q`.
 
 ---
 
@@ -1477,7 +1483,7 @@ steps:
 
 ---
 
-**Версия документа**: v1.91
-**Версия приложения**: v1.146
-**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
+**Версия документа**: v1.92
+**Версия приложения**: v1.147
+**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

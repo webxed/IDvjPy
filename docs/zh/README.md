@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.146 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.147 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -235,12 +235,13 @@ curl -H "Bearer $TOKEN" https://api.example   # 普通的 $TOKEN 替换
 
 - **输入。**从值的第一个字符起，输入行被遮蔽；秘密名称显示在副标题中（`Secret $TOKEN: value hidden`）。
 - **存储（仅会话）。** `secrets_<instance>.json`（权限 `0600`）在设置时创建，并在退出应用时**删除**——值不会在重启后保留。不会写入 `.bashrc_term`、`history_*.txt` 和 playbook 日志；已存在的文件会在启动时、以及通过 `:env` 和 `:session` 重新读取。
-- **输出。** 日志中值显示为 `****`：块头部、显示的 stdout/stderr、`:o` 以及 `TTY: …` 行。同时 `raw_stdout` 是真实的——`|`、`$OUT` 和 `F3` 操作真实数据。
+- **输出。** 日志中值显示为 `****`：块头部、显示的 stdout/stderr、`:o` 以及 `TTY: …` 行。遮蔽在**写入输出时就冻结**（用当时仍有效的秘密），因此 `$$NAME-`、重定义、`:env` 或 `:session` 都不会在重新渲染时（space/←→、F2、F8、`:/` 搜索、`:w`）泄露已显示的内容；`:o` 保存的已经是遮蔽过的输出。同时 `raw_stdout` 是真实的——`|`、`$OUT` 和 `F3` 操作真实数据。
+- **环境与会话。** `.bashrc_term*` 和 `:env` 不能替换秘密的值（来自存储的名称会被跳过）；退出时只清理自己的 `secrets_<instance>.json*` —— 相邻会话不会丢失自己的值。
 - **LLM。** 秘密不会发送到 `:llm`：消息中的值（包括通过 `$OUT` / `$BLOCK` / `@文件` 进入的值）在发送前会被替换为 `****`，块头部显示 `secrets: hidden`。
 - **从输出中捕获。** `$VAR=@key` / `$$VAR=@key` 从聚焦（或最后一个）已完成的块中取值：第一个 token 等于 `key` 的那一行——对 `vault read` / `vault write` 的表格（`Key  Value`）很方便；`@last` —— 最后一行非空行（例如 `| jq -r .field` 之后）。示例 —— `vapprole` 剧本（[`docs/SEED_VAULT_COMMANDS.md`](../../docs/SEED_VAULT_COMMANDS.md)）。
-- **插入秘密时的剪贴板。** `settings.yml` 中的 `clear_clipboard_after_secret: true` —— 把值插入 `$$NAME=…` 行之后，CLIPBOARD/PRIMARY/内部缓冲区会被清空（默认 `false`；普通插入不会动缓冲区；某些剪贴板管理器可能仍会保留历史）。
+- **插入秘密时的剪贴板。** `settings.yml` 中的 `clear_clipboard_after_secret: true` —— 把值插入 `$$NAME=…` 行之后，CLIPBOARD/PRIMARY/内部缓冲区会被清空（默认 `false`；普通插入不会动缓冲区；某些剪贴板管理器可能仍会保留历史）。开启该键时，`:cmd` 也不会把含秘密值的命令放入剪贴板——日志中会给出说明。
 
-限制：整行输入都会被遮蔽（名称也一样——它在副标题中可见）；在交互式 `> cmd` 中，只要 TUI 处于暂停状态，真实终端会显示该值；如果命令自己打印出秘密，日志中是 `****`，但 `F3` 会给出真实输出；以 `$$` 开头的行始终被视为秘密。
+限制（有意为之）：整行输入都会被遮蔽（名称也一样——它在副标题中可见）；在交互式 `> cmd` 中，只要 TUI 处于暂停状态，真实终端会显示该值；以 `$$` 开头的行始终被视为秘密；**由人主动请求的明确例外** —— `F3`、`:log`/F7（真实输出，副标题显示 `secrets visible`）和 `:cmd show`（打印具体化后的命令）会给出真实数据。
 
 **计算器（无前缀）：** 以数字（或 `(` / `-`）开头且能整体解析为算术或单位换算的行会在本地计算——不会启动 shell，结果以标题为 `calc:` 的块出现。其余的行（`7z …`、`(cd … && …)`、`-la`、`2>/dev/null …`）仍然交给 shell——其中含有无法按算术解析的词。TUI 中的完整帮助：`:? calc`。
 
@@ -265,7 +266,7 @@ curl -H "Bearer $TOKEN" https://api.example   # 普通的 $TOKEN 替换
 - `:h [N]` —— `history_<instance>.txt` 的最后 N 行显示为一个块（默认值来自 `settings.yml`；这些行可以用逐行模式取用）。文件中只有被保存的内容：`:` 命令（`history_queries` 名单之外的）、`#tag` 保存、`?`/`!` 行和 `$VAR=…` 都不会写入其中；而按 ↑ 则会翻遍本会话中**所有**输入过的内容（`:` 命令等来自会话记录），按输入顺序——最后输入的行最先返回
 - `:h /text` —— 在提示中搜索该文件（不区分大小写，最新的在前，相同行只出现一次）。Esc+Enter —— 用同样的搜索写入日志
 - `:h compact` —— 压缩旧历史（去重为唯一行）；不动最后 `history_keep` 行。启动时——仅在文件长度超过 `2 × history_keep` 时才执行
-- `:h import [shell]` —— 把用户的 shell 历史追加到 `history_<instance>.txt`：会查找 `~/.bash_history`、`~/.zsh_history`、fish（`~/.local/share/fish/fish_history`）、ksh（`~/.sh_history`）、nushell 和 PowerShell PSReadLine（Windows 上是 `%APPDATA%\Microsoft\PowerShell\PSReadLine\ConsoleHost_history.txt`，Linux/macOS 上是 XDG 路径）；已设置的 `$HISTFILE` 排在最前。每个文件取最后 5000 行，已有的行不会重复（再次导入不会添加任何内容），不会执行任何命令。不带名称——所有找到的 shell，`:h import zsh` —— 只导入它。导入后 ↑、`:h /text` 和提示会立即看到这些命令
+- `:h import [shell]` —— 把用户的 shell 历史追加到 `history_<instance>.txt`：会查找 `~/.bash_history`、`~/.zsh_history`、fish（`~/.local/share/fish/fish_history`）、ksh（`~/.sh_history`；`sh` 是同一个文件）、nushell（系统数据目录：`Application Support` / `%APPDATA%`）、PowerShell PSReadLine（Windows 上是 `%APPDATA%\Microsoft\…`，Linux/macOS 上是 XDG 路径）；已设置的 `$HISTFILE` 排在最前（格式按其内容判断，即使文件名不常见）。每个文件取最后 5000 行（大文件只读尾部），已有的行不会重复（再次导入不会添加任何内容），不会执行任何命令。不带名称——所有找到的 shell，`:h import zsh` —— 只导入它。失败会明确显示：文件被占用、写入错误和无法读取的来源都会被报告，而不会看起来像「新增 0 行」。导入后 ↑、`:h /text` 和提示会立即看到这些命令
 - `:c` —— 清空日志中的块
 - `:json` / `:json <file>` —— JSON viewer（最后一个块或文件）
 - `:md <file.md>[#L<n>]` —— 带格式的 Markdown 手册（在欢迎信息中点击名称；Esc 关闭）。也接受路径——绝对路径或相对于 `md_dir`/cwd 的路径，`:rg` 和 Obsidian vault 中的文件就是这样打开的；`#L<n>` 会直接打开到第 n 行（如同 GitHub）。`:md` 会写入历史（↑ / `:h`）。长度超过 `md_render_lines`（默认 1000 行）的文件会在 Line-API 查看器中以源码打开——速度快，支持 `/` 搜索和 `#L` 跳转（对超大文件做格式化渲染要耗费数十秒）。`y` 会把文件的完整路径复制到剪贴板——在格式化视图中还可以点击头部中的名称（raw 视图下只有 `y`）

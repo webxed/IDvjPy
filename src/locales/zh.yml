@@ -89,7 +89,9 @@ relang:
 
 hist:
   import_unknown: "未知的 shell: {name}。已知: {shells}。"
-  import_none: "未找到 shell 历史。查找位置: {paths}。"
+  import_none: "未找到 shell 历史。查找过：{paths}。"
+  import_usage: "用法：:h import [shell] —— 已知：{shells}。"
+  import_write_failed: "无法写入 {file}：{error}"
   import_done: "Shell 历史 → {file}: 来自 {sources} 的 {total} 行，新增 {added} 行。"
   import_failed: "未读取: {paths}。"
 
@@ -142,5 +144,6 @@ cmd:
   update: "将 VERSION 与 GitHub main 比较"
 
 help:
+  usage: "用法：:? [主题]。主题：{topics}"
   unknown_topic: "没有该帮助主题：'{topic}'。主题：{topics}"
   topic_needs_space: "帮助主题前要有空格：`{example}`，而不是 `{glued}`"

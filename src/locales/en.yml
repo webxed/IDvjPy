@@ -89,6 +89,8 @@ relang:
 hist:
   import_unknown: "Unknown shell: {name}. Known: {shells}."
   import_none: "No shell history found. Looked in: {paths}."
+  import_usage: "Usage: :h import [shell] — known: {shells}."
+  import_write_failed: "Could not write {file}: {error}"
   import_done: "Shell history → {file}: {total} line(s) from {sources}, {added} new."
   import_failed: "Not read: {paths}."
 
@@ -141,5 +143,6 @@ cmd:
   update: "compare VERSION with GitHub main"
 
 help:
+  usage: "Usage: :? [topic]. Topics: {topics}"
   unknown_topic: "No help topic '{topic}'. Topics: {topics}"
   topic_needs_space: "Help topics take a space: `{example}` (not `{glued}`)"

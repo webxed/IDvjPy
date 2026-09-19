@@ -29,6 +29,18 @@ def test_parse_zsh_multiline_folds_into_one_line():
     assert history_import.parse_history(text, "zsh") == ["echo one ; echo two"]
 
 
+def test_parse_zsh_real_multiline_continuation():
+    r"""Реальный формат zsh: перенос внутри записи пишется как `\`+newline.
+
+    Без снятия континуации в команде оставался хвостовой `\`:
+    `for i in 1 2; do\ ; echo $i\ ; done` — такое не выполнится.
+    """
+    text = ": 1700000000:0;for i in 1 2; do\\\necho $i\\\ndone\n"
+    assert history_import.parse_history(text, "zsh") == [
+        "for i in 1 2; do ; echo $i ; done"
+    ]
+
+
 def test_parse_bash_drops_timestamp_markers():
     text = "#1700000000\ngit status\n#1700000001\nls\n"
     assert history_import.parse_history(text, "bash") == ["git status", "ls"]
@@ -43,6 +55,19 @@ def test_parse_fish_escaped_newline_folds():
     assert history_import.parse_history("- cmd: printf a\\nb\n", "fish") == [
         "printf a ; b"
     ]
+
+
+def test_parse_fish_literal_backslash_n_is_kept():
+    r"""`\n` (литеральный слэш + n, например `C:\new`) — не перенос строки."""
+    assert history_import.parse_history("- cmd: set p C:\\\\new\n", "fish") == [
+        "set p C:\\new"
+    ]
+
+
+def test_parse_histfile_with_unknown_name_detects_zsh():
+    """`$HISTFILE=~/.history` с zsh-extended записями не оставляет маркеры в тексте."""
+    text = ": 1700000000:0;ls -la\n"
+    assert history_import.parse_history(text, "sh") == ["ls -la"]
 
 
 def test_parse_readline_is_plain():
@@ -71,15 +96,17 @@ def test_candidate_paths_linux():
     assert paths["/home/u/.local/share/fish/fish_history"] == "fish"
 
 
-def test_candidate_paths_macos_uses_application_support():
+def test_candidate_paths_macos_uses_system_data_dir():
+    """fish и pwsh — всегда XDG (`~/.local/share`), nushell — системный каталог."""
     paths = {
-        source.path
+        source.path: source.shell
         for source in history_import.candidate_sources(
             env={"HOME": "/Users/u"}, platform="darwin"
         )
     }
-    assert "/Users/u/Library/Application Support/fish/fish_history" in paths
-    assert "/Users/u/.zsh_history" in paths
+    assert paths["/Users/u/.local/share/fish/fish_history"] == "fish"
+    assert paths["/Users/u/Library/Application Support/nushell/history.txt"] == "nu"
+    assert paths["/Users/u/.zsh_history"] == "zsh"
 
 
 def test_candidate_paths_windows_uses_appdata():
@@ -103,6 +130,11 @@ def test_candidate_paths_windows_uses_appdata():
             "ConsoleHost_history.txt",
         ),
     }
+    # Пути «чужой» ОС в список не попадают — иначе они мусорят сообщение «где искали».
+    assert not [src for src in sources if src.path.startswith("C:\\Users\\u\\.")]
+    assert {
+        src.path for src in sources if src.shell == "nu"
+    } == {os.path.join(appdata, "nushell", "history.txt")}
 
 
 def test_candidate_paths_respect_xdg_data_home():
@@ -171,14 +203,24 @@ def test_read_sources_limits_to_the_tail(tmp_path):
 def test_append_history_file_lines_skips_existing_and_empty(tmp_path):
     path = str(tmp_path / "history.txt")
     (tmp_path / "history.txt").write_text("old\n", encoding="utf-8")
-    assert append_history_file_lines(path, ["old", "", "new", "new2"]) == 2
+    result = append_history_file_lines(path, ["old", "", "new", "new2"])
+    assert result.added == 2
+    assert not result.error
     assert (tmp_path / "history.txt").read_text(encoding="utf-8") == "old\nnew\nnew2\n"
 
 
 def test_append_history_file_lines_creates_missing_file(tmp_path):
     path = str(tmp_path / "nope.txt")
-    assert append_history_file_lines(path, ["a", "b"]) == 2
+    result = append_history_file_lines(path, ["a", "b"])
+    assert result.added == 2
     assert (tmp_path / "nope.txt").read_text(encoding="utf-8") == "a\nb\n"
+
+
+def test_append_history_file_lines_reports_error(tmp_path):
+    """Ошибка записи — явная, а не «0 новых строк» (каталога нет)."""
+    result = append_history_file_lines(str(tmp_path / "nope" / "h.txt"), ["a"])
+    assert result.added == 0
+    assert result.error
 
 
 # --- `:h import` в TUI -------------------------------------------------------
@@ -242,3 +284,92 @@ async def test_h_import_reports_searched_paths(isolated_home, monkeypatch):
         text = last_info(app).text_content
         assert "No shell history found" in text
         assert ".bash_history" in text
+
+
+async def test_h_import_rejects_extra_args(isolated_home, monkeypatch):
+    """Лишний аргумент — явная подсказка, а не молчаливый импорт первой оболочки."""
+    from app import CommandRunner
+
+    _isolate_history_env(monkeypatch, isolated_home)
+    (isolated_home / ".bash_history").write_text("echo x\n", encoding="utf-8")
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await submit(pilot, ":h import bash extra")
+        assert "Usage: :h import" in last_info(app).text_content
+
+
+async def test_h_import_reports_unreadable_source(isolated_home, monkeypatch):
+    """Нечитаемый файл — это не «истории нет»: причина видна."""
+    import os as os_module
+    import stat as stat_module
+
+    from app import CommandRunner
+
+    if os_module.geteuid() == 0:
+        import pytest
+
+        pytest.skip("root читает файл с любыми правами")
+    _isolate_history_env(monkeypatch, isolated_home)
+    hist = isolated_home / ".bash_history"
+    hist.write_text("echo x\n", encoding="utf-8")
+    hist.chmod(0)
+    try:
+        app = CommandRunner()
+        async with app.run_test(size=(100, 30)) as pilot:
+            await submit(pilot, ":h import bash")
+            text = last_info(app).text_content
+            assert "Not read" in text
+            assert ".bash_history" in text
+    finally:
+        hist.chmod(stat_module.S_IRUSR | stat_module.S_IWUSR)
+
+
+async def test_h_import_reports_write_failure(isolated_home, monkeypatch):
+    """Файл истории только для чтения — не выдаём «0 new» за успех."""
+    import os as os_module
+
+    from app import CommandRunner
+
+    if os_module.geteuid() == 0:
+        import pytest
+
+        pytest.skip("root пишет в файл с любыми правами")
+    _isolate_history_env(monkeypatch, isolated_home)
+    (isolated_home / ".bash_history").write_text("echo x\n", encoding="utf-8")
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        target = isolated_home / "history_default.txt"
+        target.write_text("", encoding="utf-8")
+        target.chmod(0o400)
+        try:
+            await submit(pilot, ":h import bash")
+            assert "Could not write" in last_info(app).text_content
+        finally:
+            target.chmod(0o600)
+
+
+def test_read_sources_skips_binary_file(tmp_path):
+    """Бинарный `$HISTFILE` — ошибка источника, а не мусорные «команды»."""
+    (tmp_path / ".bash_history").write_bytes(b"\x00\x01\x02binary")
+    results = history_import.read_sources(
+        "bash", env={"HOME": str(tmp_path)}, platform="linux"
+    )
+    assert results and results[0].error
+    assert results[0].commands == []
+
+
+def test_read_sources_strips_bom(tmp_path):
+    (tmp_path / ".bash_history").write_bytes("\ufeffecho bom\n".encode("utf-8"))
+    results = history_import.read_sources(
+        "bash", env={"HOME": str(tmp_path)}, platform="linux"
+    )
+    assert results[0].commands == ["echo bom"]
+
+
+def test_sh_is_an_alias_for_ksh(tmp_path):
+    """`:h import sh` ищет `.sh_history` (ksh-подобный файл), а не молчит."""
+    (tmp_path / ".sh_history").write_text("ls\n", encoding="utf-8")
+    results = history_import.read_sources(
+        "sh", env={"HOME": str(tmp_path)}, platform="linux"
+    )
+    assert [r.commands for r in results] == [["ls"]]

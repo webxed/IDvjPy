@@ -1,6 +1,6 @@
 # Как приложение читает команды из базы данных
 
-IDvjPy_term хранит тегированные команды в SQLite. Этот файл описывает текущую схему, кэш в памяти и все пути чтения (состояние на **v1.146**).
+IDvjPy_term хранит тегированные команды в SQLite. Этот файл описывает текущую схему, кэш в памяти и все пути чтения (состояние на **v1.147**).
 
 Код: `src/database_v2.py` (доступ к SQLite), `src/app.py` (маршрутизация `?`, `!`, `!!`, Tab, старт).
 
@@ -139,15 +139,8 @@ SQL: `get_command_by_global_id`. Тоже только вставка во вв�
 
 ### Tab-подсказки
 
-`get_commands_by_prefix(prefix)`:
-
-```sql
-SELECT DISTINCT command FROM commands
-WHERE deleted = 0 AND command LIKE 'префикс%'
-ORDER BY command
-```
-
-К этому добавляются команды из истории сессии и файлы текущей директории (path-контекст). Это не подстановка по `tid`.
+Подсказки команд собираются из истории сессии, живых строк БД (`get_all_commands_with_ids`)
+и файлов текущей директории (path-контекст). Это не подстановка по `tid`.
 
 ### Раскрытие ссылок в произвольной строке
 
@@ -179,7 +172,6 @@ ORDER BY command
 | `get_command_by_tid` | одна команда `(tag, tid)` |
 | `get_command_by_global_id` | одна команда по `id` |
 | `get_all_commands_with_ids` | все живые: `id, tag, tid, command, comment` |
-| `get_commands_by_prefix` | `command LIKE prefix%` для completion |
 | `search_commands_by_content` | подстрочный `LIKE` по `command` + `comment` (поиск `?text`); `_escape_like` экранирует `%`/`_`/`\` |
 | `bump_command_usage` | `use_count = use_count + 1, last_used = now` по тексту команды (запись) |
 | `usage_stats` | агрегаты для `:stats`: теги, top-10 по запускам, never-run |

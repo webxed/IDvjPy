@@ -369,31 +369,6 @@ def list_db(db_file: str, show_comments: bool = False):
     conn.close()
 
 
-def export_tag(db_file: str, tag: str, output_file: str):
-    """
-    Export a single tag with all its commands and metadata to JSON.
-
-    Args:
-        db_file: Path to SQLite database
-        tag: Tag name to export
-        output_file: Path to output JSON file
-    """
-    export_db(db_file, output_file, tag=tag, include_deleted=False)
-    print(f"✓ Exported tag '{tag}' to {output_file}")
-
-
-def import_tag(db_file: str, input_file: str, mode: str = 'merge'):
-    """
-    Import a single tag from JSON file.
-
-    Args:
-        db_file: Path to SQLite database
-        input_file: Path to input JSON file
-        mode: Import mode - 'merge' or 'replace'
-    """
-    import_db(db_file, input_file, mode=mode, skip_existing=(mode == 'merge'), preserve_tid=True)
-
-
 def export_csv(db_file: str, output_file: str, tag: str | None = None, include_deleted: bool = False, use_backup_dir: bool = True):
     """
     Export commands from database to CSV file for editing in spreadsheet software.

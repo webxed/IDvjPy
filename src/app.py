@@ -156,12 +156,10 @@ try:
         resolve_target_dir,
     )
     from help_texts import (
-        calc_help,
         help_topic,
         help_topic_names,
         ingress_help,
         main_help,
-        runbook_help,
     )
     from history_store import (
         DEFAULT_HISTORY_KEEP,
@@ -806,6 +804,9 @@ class CommandBlock(LineNavigable, Static):
         # и признак «это блок :watch». Выставляются приложением.
         self._stop_requested: bool = False
         self._watch: bool = False
+        # Готовый текст с уже спрятанными секретами: см. `freeze_secrets`.
+        # None — текст ещё не зафиксирован, маскируем по текущему набору `$$`.
+        self._frozen: tuple[str, str, str] | None = None
 
         # Формируем отображаемый контент: text_content — плоский (для копирования),
         # супер-класс получает экранированную версию для Textual-разметки.
@@ -856,20 +857,59 @@ class CommandBlock(LineNavigable, Static):
         """stderr без escape-кодов (для `:log` и копирования)."""
         return to_plain(self.raw_stderr or "")
 
+    def _app_mask(self) -> "Callable[[str], str] | None":
+        """Чем маскировать секреты (``CommandRunner._mask_secrets``) или None."""
+        app = getattr(self, "app", None)
+        mask = getattr(app, "_mask_secrets", None)
+        return cast("Callable[[str], str]", mask) if callable(mask) else None
+
     def _mask_for_display(self, text: str) -> str:
         """Спрятать значения секретов ($$NAME=…) в показываемом тексте.
 
         Маскируется только отображение: ``raw_stdout`` остаётся настоящим,
-        чтобы `|`, `$OUT` и F3 работали с реальными данными.
+        чтобы `|`, `$OUT` и F3 работали с реальными данными. Для уже записанного
+        вывода берётся замороженный текст (см. `freeze_secrets`).
         """
-        app = getattr(self, "app", None)
-        mask = getattr(app, "_mask_secrets", None)
-        if callable(mask):
-            try:
-                return cast("Callable[[str], str]", mask)(text)
-            except Exception:
-                return text
-        return text
+        mask = self._app_mask()
+        if mask is None:
+            return text
+        try:
+            return mask(text)
+        except Exception:
+            return text
+
+    def freeze_secrets(self, mask: "Callable[[str], str]") -> None:
+        """Запомнить текст с уже спрятанными секретами (один раз — на момент записи).
+
+        Маскировка «на момент показа» зависит от текущего набора `$$`-секретов:
+        после `$$NAME-`, переопределения или `:session` повторный рендер (space,
+        F2, поиск `:/`, `:w`) показал бы значение. Поэтому готовый текст
+        замораживается тогда же, когда записан вывод.
+        """
+        self._frozen = (
+            mask(self.header),
+            mask(self.raw_stdout.rstrip()),
+            mask(self.raw_stderr.rstrip()),
+        )
+
+    @property
+    def masked_stdout(self) -> str:
+        """stdout для показа: замороженный, иначе по текущим секретам."""
+        if self._frozen is not None:
+            return self._frozen[1]
+        return self._mask_for_display(self.raw_stdout.rstrip())
+
+    @property
+    def masked_stderr(self) -> str:
+        """stderr для показа: замороженный, иначе по текущим секретам."""
+        if self._frozen is not None:
+            return self._frozen[2]
+        return self._mask_for_display(self.raw_stderr.rstrip())
+
+    @property
+    def masked_header(self) -> str:
+        """Заголовок для показа: замороженный, иначе как есть."""
+        return self.header if self._frozen is None else self._frozen[0]
 
     def _truncate_output(
         self, text: str, render: "Callable[[str], str] | None" = None
@@ -908,23 +948,23 @@ class CommandBlock(LineNavigable, Static):
         escape_header = escape_display_markup if display else _identity
         safe = self._output_transform(display)
         prefix = self._label_prefix(display)
+        header_text = self.masked_header
         if self.collapsed:
             # Свернутый вид — только заголовок
             if self._simple_mode():
-                return f"▶ {prefix}{escape_header(self.header)}\n"
+                return f"▶ {prefix}{escape_header(header_text)}\n"
             indicator = "[dim]▶[/dim]"
-            return f"{indicator} {prefix}{escape_header(self.header)}\n"
+            return f"{indicator} {prefix}{escape_header(header_text)}\n"
 
-        parts = [prefix + escape_header(self.header)]
+        parts = [prefix + escape_header(header_text)]
 
         # Основной вывод (с обрезкой если нужно)
         if self.raw_stdout:
-            masked = self._mask_for_display(self.raw_stdout.rstrip())
-            parts.append(self._truncate_output(masked, safe))
+            parts.append(self._truncate_output(self.masked_stdout, safe))
 
         # Stderr внизу с подсветкой ошибки
         if self.raw_stderr and self.raw_stderr.strip():
-            masked_err = self._mask_for_display(self.raw_stderr.rstrip())
+            masked_err = self.masked_stderr
             if self._simple_mode():
                 parts.append(f"STDERR:\n{safe(masked_err)}")
             else:
@@ -1002,6 +1042,10 @@ class CommandBlock(LineNavigable, Static):
         self.return_code = return_code
         self._truncated = False  # Сброс флага при обновлении
         self.pending = False
+        mask = self._app_mask()
+        if mask is not None:
+            # Секреты прячутся ровно один раз — здесь, а не при каждой отрисовке.
+            self.freeze_secrets(mask)
         follow = False
         app = getattr(self, "app", None)
         if app is not None and hasattr(app, "_should_follow_journal_end"):
@@ -1376,34 +1420,6 @@ class MarkdownCommandBlock(CommandBlock):
             return
         self.update(self._display_payload())
 
-
-class ClickableCommand(Static):
-    """Кликабельный виджет для отображения команды с возможностью клика."""
-
-    @property
-    def app(self) -> "CommandRunner":
-        """Textual типизирует Widget.app как базовый App; отдаём реальный подкласс."""
-        return cast("CommandRunner", super().app)
-
-    def __init__(self, command_ref: str, display_text: str, **kwargs):
-        """
-        Инициализация кликабельной команды.
-
-        Args:
-            command_ref: Ссылка на команду (например, "!deploy[2]")
-            display_text: Отображаемый текст (например, "deploy[2]")
-        """
-        self.command_ref = command_ref
-        super().__init__(display_text, **kwargs)
-
-    def on_click(self, event) -> None:
-        """Обработчик клика - вставляет команду в input."""
-        app = self.app
-        if hasattr(app, 'query_one'):
-            input_widget = app.query_one(f"#{app.ID_INPUT}", Input)
-            input_widget.value = self.command_ref
-            input_widget.cursor_position = len(self.command_ref)
-            input_widget.focus()
 
 class InfoBlock(LineNavigable, Static):
     """Виджет для отображения информационных сообщений (не от команд).
@@ -2255,7 +2271,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.146"
+    VERSION = "v1.147"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -3807,10 +3823,17 @@ class CommandRunner(App):
 
         Источники — файлы истории по ОС (`~/.bash_history`, `~/.zsh_history`,
         fish, ksh, nushell, PowerShell PSReadLine; `$HISTFILE` — первым). Читаются
-        последние `history_import_limit` строк каждого и одним lock’ом
+        последние `history_import.DEFAULT_IMPORT_LIMIT` строк каждого и одним lock’ом
         дописываются в `history_<instance>.txt` — ↑, `:h /текст` и подсказки видят
-        их сразу. Ничего не исполняется; подряд идущие дубликаты не пишутся.
+        их сразу. Ничего не исполняется; строки, уже имеющиеся в файле, не пишутся
+        (повторный импорт ничего не добавляет). Неудача (нечитаемый источник,
+        занятый файл, ошибка записи) сообщается явно, а не выглядит успехом.
         """
+        if len(args) > 1 or (args and " " in args[0]):
+            self.add_block(InfoBlock(t(
+                "hist.import_usage", shells=", ".join(history_import.KNOWN_SHELLS)
+            )))
+            return
         name = args[0].strip() if args else ""
         shell = name.strip().lower()
         if shell and shell not in history_import.KNOWN_SHELLS:
@@ -3822,19 +3845,33 @@ class CommandRunner(App):
             return
         results = history_import.read_sources(shell or None)
         readable = [result for result in results if not result.error]
+        failed = [result for result in results if result.error]
+        failed_text = ", ".join(
+            f"{result.path} ({result.error})" for result in failed
+        )
         if not readable:
-            self.add_block(InfoBlock(t(
-                "hist.import_none",
-                paths=", ".join(history_import.searched_paths(shell or None)),
-            )))
+            # Существующий, но нечитаемый файл — это не «истории нет»: говорим причину.
+            if failed:
+                self.add_block(InfoBlock(t("hist.import_failed", paths=failed_text)))
+            else:
+                self.add_block(InfoBlock(t(
+                    "hist.import_none",
+                    paths=", ".join(history_import.searched_paths(shell or None)),
+                )))
             return
         commands = [cmd for result in readable for cmd in result.commands]
-        added = append_history_file_lines(
+        outcome = append_history_file_lines(
             self.FILE_HISTORY,
             commands,
             encoding=self.ENCODING,
             lock_timeout=self.FILE_LOCK_TIMEOUT,
         )
+        if outcome.error:
+            self.add_block(InfoBlock(t(
+                "hist.import_write_failed", file=self.FILE_HISTORY, error=outcome.error
+            )))
+            return
+        added = outcome.added
         self._history_file_stat = None
         # Старый префикс уникализируем (уникальные строки остаются), хвост не трогаем.
         self._maybe_compact_history()
@@ -3847,13 +3884,9 @@ class CommandRunner(App):
                 f"{result.shell} {len(result.commands)}" for result in readable
             ),
         )))
-        failed = [result for result in results if result.error]
         if failed:
             self.add_block(InfoBlock(t(
-                "hist.import_failed",
-                paths=", ".join(
-                    f"{result.path} ({result.error})" for result in failed
-                ),
+                "hist.import_failed", paths=failed_text
             )))
 
     def _parse_bashrc_assignment(self, line: str) -> tuple | None:
@@ -3911,6 +3944,10 @@ class CommandRunner(App):
                                 continue
                             key, value = parsed
                             if key in seen_keys:
+                                continue
+                            if key in self._secret_names:
+                                # Секрет не подменяем окружением из .bashrc_term: значение
+                                # живёт в secrets_<instance>.json, иначе маскировка разъедется.
                                 continue
                             seen_keys.add(key)
                             self.local_env[key] = value
@@ -4429,11 +4466,15 @@ class CommandRunner(App):
         форматированный markdown вместо моноширинного текста.
         """
         if markdown:
-            return MarkdownCommandBlock(*args, **kwargs)
-        cls: type[CommandBlock] = (
-            CommandLineBlock if self._line_api_blocks else CommandBlock
-        )
-        return cls(*args, **kwargs)
+            block: CommandBlock = MarkdownCommandBlock(*args, **kwargs)
+        else:
+            cls: type[CommandBlock] = (
+                CommandLineBlock if self._line_api_blocks else CommandBlock
+            )
+            block = cls(*args, **kwargs)
+        # Блок создаётся в UI-потоке: прячем секреты сразу, пока значения живы.
+        block.freeze_secrets(self._mask_secrets)
+        return block
 
     def action_show_console(self) -> None:
         """Ctrl+O: свернуть TUI и показать консоль под приложением (как в MC).
@@ -5093,156 +5134,205 @@ class CommandRunner(App):
             self._journal_search(raw[1:])
             return
         command = parts[0]
-        if command == self.CMD_QUIT:
-            self.exit()
-        elif command == self.CMD_WRITE:
-            if len(parts) > 1:
-                filename = parts[1]
-                try:
-                    all_blocks = [
-                        block
-                        for block in self.query("CommandBlock, InfoBlock")
-                        if isinstance(block, (CommandBlock, InfoBlock))
-                    ]
-                    # Удаляем теги форматирования перед записью
-                    content_to_write = "\n\n---\n\n".join(
-                        self._strip_formatting_tags(block.text_content) for block in all_blocks
-                    )
-                    with open(filename, "a", encoding=self.ENCODING) as f:
-                        f.write(content_to_write)
-                    self.add_block(InfoBlock(f"Log content written to '{filename}'"))
-                except Exception as e:
-                    self.add_block(InfoBlock(f"Error writing to file: {e}"))
-            else:
-                self.add_block(InfoBlock("Error: Filename required for :w command."))
-        elif command == self.CMD_HISTORY:
-            hist_args = parts[1:]
-            sub = hist_args[0].strip().lower() if hist_args else ""
-            rest = " ".join(hist_args) if hist_args else ""
-            if sub == "compact" and len(hist_args) == 1:
-                self._handle_history_compact()
-            elif sub == "import":
-                self._handle_history_import(hist_args[1:])
-            elif rest.startswith("/") and rest[1:].strip():
-                self._show_history_search(rest[1:], exclude=user_input)
-            else:
-                try:
-                    num_arg = parts[1] if len(parts) > 1 and not parts[1].startswith("/") else None
-                    num_lines = int(num_arg) if num_arg is not None else self.history_lines
-                    if history_file_stat_key(self.FILE_HISTORY) is None:
-                        self.add_block(InfoBlock(f"{self.FILE_HISTORY} not found."))
-                    else:
-                        history = self._read_file_history()[-num_lines:]
-                        if not history:
-                            self.add_block(InfoBlock(f"{self.FILE_HISTORY} is empty."))
-                        else:
-                            self.add_block(InfoBlock("\n".join(history)))
-                except Exception as e:
-                    self.add_block(InfoBlock(f"Error reading history: {e}"))
-        elif command == self.CMD_CLEAR:
-            self.clear_all_blocks()
-        elif command == self.CMD_KILL:
-            self._handle_kill_command(parts[1:])
-        elif command == self.CMD_WATCH:
-            self._handle_watch_command(parts[1:])
-        elif command == self.CMD_MOVE:
-            self._handle_move_command(parts[1:])
-        elif command == self.CMD_STATS:
-            self._handle_stats_command()
-        elif command == self.CMD_DIFF:
-            self._handle_diff_command()
-        elif command == self.CMD_OUT:
-            self._handle_out_command(parts[1:])
-        elif command == self.CMD_KCTX:
-            self._handle_kctx_command(parts[1:])
-        elif command == self.CMD_JSON:
-            # Открываем JSON viewer
-            if len(parts) > 1:
-                # Режим с аргументом: открываем JSON из файла
-                filename = parts[1]
-                self._open_json_file(filename)
-            else:
-                # Режим без аргументов: открываем JSON из последнего блока
-                self._open_json_from_last_block()
-        elif command == self.CMD_INGRESS:
-            # Kubernetes Ingress Analyzer
-            self.handle_ingress_command(user_input[2:].strip())
-        elif command == self.CMD_HELP:
-            topic = parts[1].strip().lower() if len(parts) > 1 else ""
-            if topic:
-                self._show_help_topic(topic)
-            else:
-                self._show_main_help()
-        elif len(command) > 1 and command.startswith(self.CMD_HELP):
+        args = parts[1:]
+        if command in self.COLON_ARG_HANDLERS:
+            getattr(self, self.COLON_ARG_HANDLERS[command])(args)
+            return
+        if command in self.COLON_NOARG_HANDLERS:
+            getattr(self, self.COLON_NOARG_HANDLERS[command])()
+            return
+        if len(command) > 1 and command.startswith(self.CMD_HELP):
             # `:?calc` — тема приклеена к команде; подсказываем пробел, а не гадаем.
             self._show_glued_help_topic(command[len(self.CMD_HELP):])
-        elif command == self.CMD_CD:
-            if len(parts) == 1:
-                self.add_block(InfoBlock(f"cwd: {os.getcwd()}"))
-            else:
-                self._change_cwd(" ".join(parts[1:]))
-        elif command == self.CMD_REPLAY:
-            self._handle_replay_command(parts[1:])
-        elif command == self.CMD_EXPAND:
-            self._handle_expand_command(parts[1:])
-        elif command == self.CMD_LOG:
-            self._handle_log_command(parts[1:])
-        elif command == self.CMD_ALIAS:
-            self._handle_alias_command(parts[1:])
-        elif command == self.CMD_LLM:
-            self._handle_llm_command(parts[1:])
-        elif command == self.CMD_CHT:
-            self._handle_cht_command(parts[1:])
-        elif command == self.CMD_NAME:
-            self._handle_name_command(parts[1:])
-        elif command == self.CMD_RG:
-            self._handle_rg_command(parts[1:])
-        elif command == self.CMD_GREP:
-            self._journal_search(" ".join(parts[1:]))
-        elif command == self.CMD_SEARCH_NEXT:
-            self._journal_search(self._search_pattern, direction=1, next_only=True)
-        elif command == self.CMD_SEARCH_PREV:
-            self._journal_search(self._search_pattern, direction=-1, next_only=True)
-        elif command == self.CMD_EXPORT:
-            self._export_tag(parts[1:])
-        elif command == self.CMD_IMPORT:
-            self._import_tag(parts[1:])
-        elif command == self.CMD_THEME:
-            self._handle_theme_command(parts[1:])
-        elif command == self.CMD_LANG:
-            self._handle_lang_command(parts[1:])
-        elif command == self.CMD_RELANG:
-            self._handle_relang_command(parts[1:])
-        elif command == self.CMD_MD:
-            self.action_open_handbook_md(" ".join(parts[1:]))
-        elif command == self.CMD_PLAYBOOK:
-            self._handle_playbook_command(parts[1:])
-        elif command == self.CMD_RUN:
-            self._handle_run_command(parts[1:])
-        elif command == self.CMD_UPDATE:
-            self._handle_update_command()
-        elif command == self.CMD_SESSION:
-            self._handle_session_command(parts[1:])
-        elif command == self.CMD_NEW:
-            self._handle_new_window(parts[1:])
-        elif command in (self.CMD_SEND, self.CMD_SEND_RUN):
-            self._handle_send_command(parts[1:], run=command == self.CMD_SEND_RUN)
-        elif command == self.CMD_SCREENSAVER:
-            self._handle_screensaver_command(parts[1:])
-        elif command == self.CMD_WELCOME:
-            self._show_welcome_catalog()
-        elif command == self.CMD_BACKUP:
-            self._handle_backup_command(parts[1:])
-        elif command == self.CMD_FM:
-            self._handle_gui_open(self.CMD_FM, parts[1:])
-        elif command == self.CMD_TERM:
-            self._handle_gui_open(self.CMD_TERM, parts[1:])
-        elif command == self.CMD_EDITOR:
-            self._handle_editor_command(parts[1:])
-        elif command == self.CMD_ENV:
-            self._handle_env_reload(parts[1:])
+            return
+        self.add_block(InfoBlock(f"Unknown command: '{command}'"))
+
+    # --- Разбор `:`-команд ----------------------------------------------------
+    # Таблицы вместо цепочки `elif`: команда без обработчика не может потеряться
+    # (сторожит `tests/test_colon_commands.py`), а у каждого пути есть имя для
+    # справки и теста. Особые формы разобраны выше: `:/text` — поиск по журналу,
+    # `:?<тема>` — приклеенная тема. Хендлеры таблиц получают `args` (остаток),
+    # безаргументные — вызываются без аргументов.
+    COLON_ARG_HANDLERS: dict[str, str] = {
+        CMD_WRITE: "_handle_write_command",
+        CMD_HISTORY: "_handle_history_args",
+        CMD_CLEAR: "_handle_clear_args",
+        CMD_HELP: "_handle_help_args",
+        CMD_KILL: "_handle_kill_command",
+        CMD_WATCH: "_handle_watch_command",
+        CMD_MOVE: "_handle_move_command",
+        CMD_OUT: "_handle_out_command",
+        CMD_KCTX: "_handle_kctx_command",
+        CMD_JSON: "_handle_json_args",
+        CMD_INGRESS: "_handle_ingress_args",
+        CMD_CD: "_handle_cd_args",
+        CMD_REPLAY: "_handle_replay_command",
+        CMD_EXPAND: "_handle_expand_command",
+        CMD_LOG: "_handle_log_command",
+        CMD_ALIAS: "_handle_alias_command",
+        CMD_LLM: "_handle_llm_command",
+        CMD_CHT: "_handle_cht_command",
+        CMD_NAME: "_handle_name_command",
+        CMD_RG: "_handle_rg_command",
+        CMD_GREP: "_handle_grep_args",
+        CMD_SEARCH_NEXT: "_handle_search_next_args",
+        CMD_SEARCH_PREV: "_handle_search_prev_args",
+        CMD_EXPORT: "_handle_export_args",
+        CMD_IMPORT: "_handle_import_args",
+        CMD_THEME: "_handle_theme_command",
+        CMD_LANG: "_handle_lang_command",
+        CMD_RELANG: "_handle_relang_command",
+        CMD_MD: "_handle_md_args",
+        CMD_PLAYBOOK: "_handle_playbook_command",
+        CMD_RUN: "_handle_run_command",
+        CMD_SESSION: "_handle_session_command",
+        CMD_NEW: "_handle_new_window",
+        CMD_SEND: "_handle_send_args",
+        CMD_SEND_RUN: "_handle_send_run_args",
+        CMD_SCREENSAVER: "_handle_screensaver_command",
+        CMD_BACKUP: "_handle_backup_command",
+        CMD_FM: "_handle_fm_args",
+        CMD_TERM: "_handle_term_args",
+        CMD_EDITOR: "_handle_editor_command",
+        CMD_ENV: "_handle_env_reload",
+    }
+
+    COLON_NOARG_HANDLERS: dict[str, str] = {
+        CMD_QUIT: "_handle_quit_command",
+        CMD_STATS: "_handle_stats_command",
+        CMD_DIFF: "_handle_diff_command",
+        CMD_UPDATE: "_handle_update_command",
+        CMD_WELCOME: "_show_welcome_catalog",
+    }
+
+    def _handle_quit_command(self) -> None:
+        """`:q` — выход (файлы и секреты подчищает `on_unmount`)."""
+        self.exit()
+
+    def _handle_write_command(self, args: list[str]) -> None:
+        """`:w <file>` — дописать содержимое журнала в файл."""
+        if not args:
+            self.add_block(InfoBlock("Error: Filename required for :w command."))
+            return
+        filename = args[0]
+        try:
+            all_blocks = [
+                block
+                for block in self.query("CommandBlock, InfoBlock")
+                if isinstance(block, (CommandBlock, InfoBlock))
+            ]
+            # Удаляем теги форматирования перед записью
+            content_to_write = "\n\n---\n\n".join(
+                self._strip_formatting_tags(block.text_content) for block in all_blocks
+            )
+            with open(filename, "a", encoding=self.ENCODING) as f:
+                f.write(content_to_write)
+            self.add_block(InfoBlock(f"Log content written to '{filename}'"))
+        except Exception as e:
+            self.add_block(InfoBlock(f"Error writing to file: {e}"))
+
+    def _handle_history_args(self, args: list[str]) -> None:
+        """`:h [N|/текст|compact|import [оболочка]]` — лента и файл истории."""
+        sub = args[0].strip().lower() if args else ""
+        rest = " ".join(args) if args else ""
+        if sub == "compact" and len(args) == 1:
+            self._handle_history_compact()
+            return
+        if sub == "import":
+            self._handle_history_import(args[1:])
+            return
+        if rest.startswith("/") and rest[1:].strip():
+            # `exclude` — чтобы только что набранная строка не искалась сама в себе.
+            self._show_history_search(rest[1:], exclude=f":{self.CMD_HISTORY} {rest}")
+            return
+        try:
+            num_arg = args[0] if args and not args[0].startswith("/") else None
+            num_lines = int(num_arg) if num_arg is not None else self.history_lines
+            if history_file_stat_key(self.FILE_HISTORY) is None:
+                self.add_block(InfoBlock(f"{self.FILE_HISTORY} not found."))
+                return
+            history = self._read_file_history()[-num_lines:]
+            if not history:
+                self.add_block(InfoBlock(f"{self.FILE_HISTORY} is empty."))
+                return
+            self.add_block(InfoBlock("\n".join(history)))
+        except Exception as e:
+            self.add_block(InfoBlock(f"Error reading history: {e}"))
+
+    def _handle_clear_args(self, args: list[str]) -> None:
+        """`:c` — очистить журнал (аргументов не принимает)."""
+        self.clear_all_blocks()
+
+    def _handle_help_args(self, args: list[str]) -> None:
+        """`:? [тема]` — общая справка или разбор темы (`:? llm`)."""
+        if len(args) > 1:
+            self.add_block(InfoBlock(t(
+                "help.usage", topics=", ".join(help_topic_names())
+            )))
+            return
+        topic = args[0].strip().lower() if args else ""
+        if topic:
+            self._show_help_topic(topic)
         else:
-            self.add_block(InfoBlock(f"Unknown command: '{command}'"))
+            self._show_main_help()
+
+    def _handle_ingress_args(self, args: list[str]) -> None:
+        """`:i …` — команды анализатора ingress (разбор — в самом анализаторе)."""
+        self.handle_ingress_command(" ".join(args))
+
+    def _handle_cd_args(self, args: list[str]) -> None:
+        """`:cd [path]` — показать или сменить cwd shell."""
+        if not args:
+            self.add_block(InfoBlock(f"cwd: {os.getcwd()}"))
+            return
+        self._change_cwd(" ".join(args))
+
+    def _handle_json_args(self, args: list[str]) -> None:
+        """`:json [file]` — просмотрщик из последнего блока или из файла."""
+        if args:
+            self._open_json_file(args[0])
+        else:
+            self._open_json_from_last_block()
+
+    def _handle_grep_args(self, args: list[str]) -> None:
+        """`:g текст` — поиск по строкам журнала."""
+        self._journal_search(" ".join(args))
+
+    def _handle_search_next_args(self, args: list[str]) -> None:
+        """`:n` — следующее совпадение поиска по журналу."""
+        self._journal_search(self._search_pattern, direction=1, next_only=True)
+
+    def _handle_search_prev_args(self, args: list[str]) -> None:
+        """`:N` — предыдущее совпадение поиска по журналу."""
+        self._journal_search(self._search_pattern, direction=-1, next_only=True)
+
+    def _handle_export_args(self, args: list[str]) -> None:
+        """`:export …` — тег или вся библиотека в JSON/Markdown."""
+        self._export_tag(args)
+
+    def _handle_import_args(self, args: list[str]) -> None:
+        """`:import <file>` — команды из JSON."""
+        self._import_tag(args)
+
+    def _handle_md_args(self, args: list[str]) -> None:
+        """`:md <файл|справочник>[#L<n>]` — markdown с форматированием."""
+        self.action_open_handbook_md(" ".join(args))
+
+    def _handle_send_args(self, args: list[str]) -> None:
+        """`:send <сессия|*> <команда>` — переслать, но не выполнять."""
+        self._handle_send_command(args, run=False)
+
+    def _handle_send_run_args(self, args: list[str]) -> None:
+        """`:send! …` — переслать и выполнить сразу."""
+        self._handle_send_command(args, run=True)
+
+    def _handle_fm_args(self, args: list[str]) -> None:
+        """`:fm [path]` — файловый менеджер ОС в новом окне."""
+        self._handle_gui_open(self.CMD_FM, args)
+
+    def _handle_term_args(self, args: list[str]) -> None:
+        """`:term [path]` — системный терминал в новом окне."""
+        self._handle_gui_open(self.CMD_TERM, args)
 
     def _show_welcome_catalog(self) -> None:
         """Same seed catalog as a fresh empty database."""
@@ -5822,9 +5912,6 @@ class CommandRunner(App):
             return
         self.set_input_draft(cmd)
 
-    def _replay_focused_command(self) -> None:
-        """Обратная совместимость: :r без аргумента (последний блок)."""
-        self._handle_replay_command([])
 
     def _handle_expand_command(self, args: list[str]) -> None:
         """`:cmd [N] [show]` — материализованная команда блока (со значениями).
@@ -5852,6 +5939,15 @@ class CommandRunner(App):
             self.add_block(InfoBlock("No command block to expand."))
             return
         expanded = self._expand_aliases(self._substitute_variables(source))
+        if self.clear_clipboard_after_secret and self._mask_secrets(expanded) != expanded:
+            # Ключ `clear_clipboard_after_secret` включён — в буфер значение секрета
+            # не кладём (его читают другие приложения). Показываем, что потеряли.
+            self.add_block(InfoBlock(
+                "[bold]Not copied[/bold]: `clear_clipboard_after_secret` is on and the "
+                "command contains secret values.\n"
+                f"[dim]{escape(self._mask_secrets(expanded))}[/dim]"
+            ))
+            return
         self.copy_text(expanded)
         if show:
             self.add_block(InfoBlock(
@@ -5903,7 +5999,7 @@ class CommandRunner(App):
         if not lines:
             self.add_block(InfoBlock("Output is empty."))
             return
-        title = f"Output — {block.source_command or block.header}"
+        title = f"Output — {self._mask_secrets(block.source_command or block.header)}"
         secret = " · secrets visible" if self._secret_names else ""
         sub_title = f"{len(lines)} lines · {len(stdout)} chars{secret} · Esc closes"
         self.push_screen(OutputViewerScreen(lines, title=title, subtitle=sub_title))
@@ -6841,13 +6937,6 @@ class CommandRunner(App):
         """Show ingress command help."""
         self._add_help_block(ingress_help())
 
-    def _show_calc_help(self) -> None:
-        """Show the full calculator reference (`:? calc`)."""
-        self._add_help_block(calc_help())
-
-    def _show_runbook_help(self) -> None:
-        """Показать справку по прогону цепочек (`:? run`)."""
-        self._add_help_block(runbook_help())
 
     def _list_ingresses(self, namespace: str | None = None) -> None:
         """List ingresses in namespace or all namespaces."""
@@ -7267,13 +7356,15 @@ class CommandRunner(App):
         return None, f"key '{key}' not found in block output (keys: {shown or 'none'})"
 
     def _purge_secrets_file(self) -> None:
-        """Удалить файлы секретов при выходе: значения не переживают сессию.
+        """Удалить свой файл секретов при выходе: значения не переживают сессию.
 
-        Подчищаются все `secrets_*.json*` в data-каталоге (включая .tmp и другие
-        инстансы), а имена убираются из памяти/os.environ.
+        Подчищается только `secrets_<своё имя>.json*` (включая .tmp): файлы
+        соседних сессий — их собственные, иначе работающий сосед потеряет свои
+        значения (они останутся только в его памяти).
         """
         base = getattr(self, "_data_dir", None) or os.getcwd()
-        for path in glob.glob(os.path.join(base, "secrets_*.json*")):
+        pattern = os.path.join(base, f"{os.path.basename(self.FILE_SECRETS)}*")
+        for path in glob.glob(pattern):
             try:
                 os.unlink(path)
             except OSError:
@@ -8510,10 +8601,6 @@ class CommandRunner(App):
             return
         self.run_command(command, stdin_data, no_timeout=no_timeout)
 
-    def _scroll_results(self, delta: int) -> None:
-        """Прокрутка журнала команд (когда фокус не на поле ввода)."""
-        container = self.query_one(f"#{self.ID_RESULTS_CONTAINER}", VerticalScroll)
-        container.scroll_relative(y=delta, animate=False, immediate=True)
 
     def _read_file_history(self) -> list[str]:
         """Строки history.txt из кэша; перечитывает файл при смене mtime/size."""
@@ -8825,12 +8912,14 @@ class CommandRunner(App):
         """
         self._stop_thinking(block)
         now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        # `:o` хранит только показ: храним уже замаскированный текст, иначе после
+        # `$$NAME-` (или смены сессии) grep и показ выдали бы значение.
         self._output_history.append(
             {
                 "time": now,
-                "command": block.source_command or "",
-                "stdout": to_plain(raw_stdout),
-                "stderr": to_plain(raw_stderr),
+                "command": self._mask_secrets(block.source_command or ""),
+                "stdout": self._mask_secrets(to_plain(raw_stdout)),
+                "stderr": self._mask_secrets(to_plain(raw_stderr)),
                 "code": return_code,
             }
         )
@@ -9313,7 +9402,7 @@ class CommandRunner(App):
                 tag_comments=tag_comments,
                 max_chars=max_chars,
             )
-            app_context = ctx.text
+            app_context = self._mask_secrets(ctx.text)
             app_ctx_tags = ctx.tags
             for row in library:
                 known_tids.setdefault(row["tag"], set()).add(row["tid"])
@@ -9755,9 +9844,10 @@ class CommandRunner(App):
             "ticks": 0,
         }
         self._refresh_running_title()
+        block.freeze_secrets(self._mask_secrets)
         text = t(
             "watch.running",
-            command=escape_display_markup(final_command),
+            command=escape_display_markup(self._mask_secrets(final_command)),
             interval=f"{interval:g}",
         ) + "\n"
         block.text_content = text
@@ -9846,22 +9936,27 @@ class CommandRunner(App):
         try:
             ts = datetime.datetime.now().strftime("%H:%M:%S")
             interval = state["interval"]
+            block.raw_stdout = stdout
+            block.raw_stderr = stderr
+            block.return_code = rc
+            # Тик — новая запись вывода: маскируем секреты здесь же, в UI-потоке.
+            block.freeze_secrets(self._mask_secrets)
             parts = [
-                f"[bold]{ts} ({os.getcwd()}) $ {escape_display_markup(state['command'])}[/bold]",
+                f"[bold]{ts} ({os.getcwd()}) $ "
+                f"{escape_display_markup(self._mask_secrets(state['command']))}[/bold]",
                 f"[dim]watch #{tick} · every {interval:g}s · F4/:kill stop[/dim]",
             ]
             if stdout:
-                parts.append(block._truncate_output(stdout, block._output_transform(True)))
+                parts.append(
+                    block._truncate_output(block.masked_stdout, block._output_transform(True))
+                )
             if stderr and stderr.strip():
-                stderr_text = block._output_transform(True)(stderr)
+                stderr_text = block._output_transform(True)(block.masked_stderr)
                 parts.append(f"[bold red]STDERR:[/bold red]\n{stderr_text}")
             if rc:
                 parts.append(f"[bold yellow]Exit code: {rc}[/bold yellow]")
             text = "\n".join(parts) + "\n\n"
             block.text_content = text
-            block.raw_stdout = stdout
-            block.raw_stderr = stderr
-            block.return_code = rc
             block.update(text)
         except Exception:
             # Блок удалён (:c) или приложение закрывается — гасим цикл.

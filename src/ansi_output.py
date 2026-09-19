@@ -46,11 +46,6 @@ RE_ERASE = re.compile(r"\x1b\[0?[KJ]")
 RE_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
-def has_escapes(text: str) -> bool:
-    """Есть ли в тексте escape-последовательности (быстрая проверка)."""
-    return "\x1b" in (text or "")
-
-
 def escape_brackets(text: str) -> str:
     """`[` → `\\[`: чужой вывод не должен стать разметкой Textual.
 

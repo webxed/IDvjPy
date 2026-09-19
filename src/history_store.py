@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import time
+from dataclasses import dataclass
 
 import portalocker
 
@@ -159,27 +160,37 @@ def append_history_file_line(
         return False
 
 
+@dataclass(frozen=True)
+class AppendResult:
+    """Итог батч-дописи: сколько строк добавлено и что помешало (если помешало)."""
+
+    added: int = 0
+    error: str = ""
+
+
 def append_history_file_lines(
     path: str,
     commands: list[str] | tuple[str, ...],
     encoding: str = "utf-8",
     lock_timeout: int = 5,
-) -> int:
+) -> AppendResult:
     """Дописать пачку команд одним exclusive flock; вернуть число добавленных.
 
     Импорт чужой истории — это хвост из тысяч строк: блокировку берём **один раз**
     (а не как `append_history_file_line` на каждую строку). Пустые строки и строки,
     которые уже есть в файле, не пишутся — повторный импорт того же файла ничего не
     добавит (порядок уже имеющихся строк не меняется).
+
+    Неудача возвращается явно (`AppendResult.error`): без блокировки пачку не пишем
+    (иначе разъедется проверка дублей в двух сессиях), а ошибка записи не должна
+    выглядеть как «0 новых строк».
     """
     try:
         with open(path, "ab+") as f:
-            locked = False
             try:
                 acquire_file_lock(f, lock_timeout)
-                locked = True
-            except FileLockTimeoutError:
-                locked = False
+            except FileLockTimeoutError as exc:
+                return AppendResult(0, f"history file is locked ({exc})")
             try:
                 f.seek(0)
                 data = f.read().decode(encoding, errors="replace")
@@ -194,12 +205,11 @@ def append_history_file_lines(
                     added += 1
                 if added:
                     f.flush()
-                return added
+                return AppendResult(added)
             finally:
-                if locked:
-                    release_file_lock(f)
-    except OSError:
-        return 0
+                release_file_lock(f)
+    except OSError as exc:
+        return AppendResult(0, str(exc))
 
 
 def remove_history_file_line(

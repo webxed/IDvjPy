@@ -40,6 +40,26 @@ def test_table_has_no_duplicates_and_nonempty_descriptions():
     assert not missing, f"no hint text for: {sorted(missing)}"
 
 
+def test_every_command_has_a_dispatch_handler():
+    """Каждая `:`-команда лежит в таблице диспетчера, а её обработчик существует.
+
+    Раньше это была цепочка `elif`: забытая ветка молча отвечала «Unknown command».
+    Теперь команда либо в `COLON_ARG_HANDLERS` / `COLON_NOARG_HANDLERS`, либо
+    разбирается особо (`:`?<тема>`, `:/text`) — и тест это сторожит.
+    """
+    dispatch = {
+        **CommandRunner.COLON_ARG_HANDLERS,
+        **CommandRunner.COLON_NOARG_HANDLERS,
+    }
+    assert set(CommandRunner.COLON_ARG_HANDLERS).isdisjoint(
+        CommandRunner.COLON_NOARG_HANDLERS
+    )
+    missing = sorted(_command_values() - set(dispatch))
+    assert not missing, f"no dispatch handler for: {missing}"
+    for name, method in dispatch.items():
+        assert hasattr(CommandRunner, method), f":{name} → {method} does not exist"
+
+
 async def _type(app: CommandRunner, pilot, value: str):
     inp = input_widget(app)
     inp.value = value

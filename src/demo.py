@@ -688,11 +688,6 @@ def _prepare_input(app: Any, *, clear: bool) -> None:
         inp.cursor_position = len(inp.value or "")
 
 
-async def _wait_input_focus(app: Any, timeout: float = 1.0) -> None:
-    """focus() is applied on the next refresh; don't type before that."""
-    await _ensure_input_focus(app, timeout=timeout)
-
-
 def _exit_line_nav(app: Any) -> None:
     focused = getattr(app, "focused", None)
     if focused is not None and getattr(focused, "line_nav_active", False):

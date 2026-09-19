@@ -873,9 +873,6 @@ class MatrixRain:
                 cells[row][x] = (column.glyphs[row], self._style_for(i))
         return cells_to_text(cells)
 
-    def head_rows(self) -> list[int]:
-        """Строки голов всех столбцов (тесты/отладка)."""
-        return [int(column.y) for column in self.columns]
 
     def _seed_columns(self) -> None:
         self.columns = [self._new_column(stagger=True) for _ in range(self.width)]

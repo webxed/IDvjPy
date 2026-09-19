@@ -179,28 +179,6 @@ class IngressAnalyzer:
         except subprocess.TimeoutExpired:
             return False, "crossplane check timed out"
 
-    def install_crossplane(self) -> tuple[bool, str]:
-        """
-        Install crossplane via pip.
-
-        Returns:
-            Tuple of (success, message)
-        """
-        try:
-            result = subprocess.run(
-                ["pip", "install", "crossplane"],
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-            if result.returncode == 0:
-                self._crossplane_available = True
-                return True, "crossplane installed successfully"
-            return False, f"pip install failed: {result.stderr}"
-        except subprocess.TimeoutExpired:
-            return False, "Installation timed out"
-        except Exception as e:
-            return False, f"Installation error: {e}"
 
     def list_ingresses(self, namespace: str | None = None) -> list[IngressInfo]:
         """

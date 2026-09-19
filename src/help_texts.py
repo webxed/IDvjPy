@@ -91,25 +91,9 @@ def help_topic(name: str) -> str | None:
     return body or None
 
 
-def topic_names_in_text(body: str) -> tuple[str, ...]:
-    """Темы, упомянутые в тексте справки (`:? <тема>`) — для сторожа оглавления."""
-    lowered = body.lower()
-    return tuple(name for name in help_topic_names() if f":? {name}" in lowered)
-
-
 def main_help() -> str:
     """Полная справка по `:`-командам и префиксам (`:?`)."""
     return text("main")
-
-
-def runbook_help() -> str:
-    """Справка по прогону цепочки (`:? run`)."""
-    return text("runbook")
-
-
-def calc_help() -> str:
-    """Справочник калькулятора и ipcalc (`:? calc`)."""
-    return text("calc")
 
 
 def ingress_help() -> str:
