@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.158 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.159 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -53,7 +53,7 @@ Launch: `python3 app.py` (launcher; code in `src/`). Tests: `python3 -m pytest t
 - cheat.sh from the TUI: `:cht <query>` — [cht.sh](https://github.com/chubin/cheat.sh) cheat sheets in the journal (commands, questions about languages, search `~`), without ANSI; the output is a regular block (`$OUT`, `|`, F3, F7, search)
 - Runbook — a semi-automatic command chain: `:run <tag|file.yml>` runs the steps in order and stops where your decision is needed (`run:manual` — the line is in the input, edit it and press Enter; `run:prompt` — you type from scratch; an empty Enter skips the step). If the tag has no `run:` directives at all, the plan warns: all steps will go `auto` (this is what an outdated seed looks like — and a mutation may go through without confirmation). A step error stops the run, `Esc` / `:run stop` does too; `--step` — stop at every step, `--dry` — plan only; help — `:? run`. A ready example — `:run vapprole` (token → role → `role_id` → `secret_id` → login → check; the token and role steps are prefix lines `$$VAULT_TOKEN=` / `$ROLE=`, the value is appended after `=`)
 - Output of colored commands — as in a terminal: SGR codes (`curl wttr.in`, `ls --color=always`, colored `grep`) are drawn with the block's colors (`ansi_colors: true`) instead of flowing into the TUI frame; cursor/OSC sequences and control characters are always stripped, the `\r` redraw of progress bars (`docker build`, `pip`, `curl` with progress) is collapsed to the final line — instead of a hundred frames you see the result. Plain text (`F3`, `|`, `$OUT`/`$BLOCK`, `:log`, `@key`) is always without escape codes (F6 — plain output once)
-- Clean history: typos (`command not found`, 127) are automatically removed from `history_*.txt`
+- Clean history: typos (`command not found`, 127) are automatically removed from `history_*.txt` and from the session ↑ list — the error stays in the journal. Turn it off with `history_forget_not_found: false` (then such lines are kept like any other command)
 - `:llm` answer language: `answer_language: Russian` on the provider — a hard rule against answers not in the user's language (e.g. Chinese)
 - The wait for a `:llm` answer is visible: a spinner and time animate in the block (`⠋ thinking… 3s / 60s`, the second limit is the provider's `timeout`), so the request does not look like a hang; the entry is removed as soon as the answer or an error arrives. While the request is in flight, the block is not parsed as markdown (a service line is shown), and the input and journal remain free
 - :llm ask: `:llm ask [<provider>] <task>` — the provider (the default one, or the one named first) receives the task **plus** the application cheat sheet and a digest of the tag library (tag/tid/command/comment, relevant to the task — higher, the rest — by names). The answer comes as ready-made references `!kpod[1]` / `!! kpod[1] && klog[1]`; existing references are additionally shown as a clickable line (insert into the input, launch — with a separate Enter). For a regular `:llm`, the same context is enabled by the provider key `app_context: true|N` (`N` — character budget, default 6000; no key/false — disabled). The logic is in `src/llm_context.py`
@@ -397,6 +397,7 @@ If `Shift+Enter` behaves as a regular Enter, the terminal does not distinguish t
 - **Tab** for a path replaces only the current token; a full command from history/DB — the whole line.
 - A directory with `/` (`ls ~/`) — the first candidate is the directory itself; Enter runs it, Tab does not force a child path.
 - An exact match of the whole line hides the list, Enter runs the command.
+- File hints describe the **last** token of the line, so while the caret sits in another word (fixing the command name) they are neither offered nor applied — otherwise Enter pasted the path argument into the first word (`bar ~/f.txt` → `~/f.txt ~/f.txt`).
 - **A trailing space** (`ls` + space): the list closes, Enter runs what is typed, not a longer candidate (`ls -la`). To take a candidate — Tab without a trailing space.
 - **`!file` / `!kube`**: right after `!` a list of tags (`[file, kube, log]`). Tab selects a tag, then commands: `<139> file[1]  ls -la`, into the input — `!file[1]`. Assembly `#file !file[1] | !file[2]` with a decoding at the top of the list.
 - **`?`**: you type `?` — a list of tags with a hint (`?vault  (2)  HashiCorp Vault`: the number of commands and the tag comment), letters filter, frequently used ones are higher. `Tab`/`Enter` insert `?vault` without running (launch — a separate Enter), a **click on a row** substitutes `?vault` and runs the query right away; only `?vault` is a link, the rest is plain text. `??` (all commands) does not get interrupted by the list, `?vault ` (a space) closes it.
@@ -410,6 +411,7 @@ max_lines: 100000
 history_lines: 20
 history_keep: 500            # the history tail as a feed; older — without repeats. 0 = do not compact. :h compact
 history_completion: true     # hints from history_*.txt while typing (including `@`/`>` lines); false — only ↑ and :h /
+history_forget_not_found: true  # a typo (`command not found`, 127) leaves history_*.txt and the ↑ list (the error stays in the journal); false — keep it as a regular command
 history_queries: [llm, cht, rg, md, run, send, send!]  # invocations of these `:` commands — to history (↑/:h), but not to hints; [] — do not write
 md_dir: ""                   # directory of documents for `:rg` (e.g. an Obsidian vault); empty — cwd
 md_render_lines: 1000        # threshold for a formatted `:md`; longer — raw view in the Line-API viewer

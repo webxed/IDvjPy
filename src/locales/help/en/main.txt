@@ -11,7 +11,9 @@
   :h [N]      - Last N lines of history_<instance>.txt (default: 20)
                 Calls of query commands (`:llm`, `:cht`, `:rg`, `:md`, `:run`,
                 `:send`) stay there for Up/`:h` but are never suggested — the
-                list is `history_queries` in settings.yml (empty — do not record)
+                list is `history_queries` in settings.yml (empty — do not record).
+                A typo (`command not found`, 127) is dropped from the file and from
+                Up — `history_forget_not_found: false` keeps it
   :h /text    - Search that file in completions (unique lines, newest first); Enter dumps a block
   :h compact  - Unique old history; keep the last history_keep lines as a sequence
   :h import [shell] - Append your shell history (bash/zsh/fish/ksh/nu/pwsh; `$HISTFILE`
@@ -236,6 +238,9 @@
   (paths) ./ | / | ~/ <Tab> - file/dir hints; bare names after file-taking
                commands (cat/vim/…) and from the 2nd arg of grep/sed/awk/jq.
                Computed per command segment: `cat f | grep ot` lists nothing.
+               Hints describe the LAST token, so they are neither offered nor
+               applied while the caret sits in another word (fixing the command
+               name in `bar ~/f.txt` no longer pastes the path twice).
                file_completion: auto | paths | off
   (hist) ↺ history <Tab> - history lines matching what you typed, incl. `@`/`>`
                commands (history_completion: true; :h /text filters too)

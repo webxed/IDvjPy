@@ -24,6 +24,12 @@ history_keep: 500
 # false — only ↑ and :h /text.
 history_completion: true
 
+# A typo (`command not found`, exit 127) is removed from history_*.txt and from the session
+# ↑: the journal keeps the error, but ↑ / `:h` do not offer a command that does not exist.
+# Only 127 **with** "command not found" in stderr counts — `bash -c 'exit 127'` stays.
+# false — keep such lines in history as any other command.
+history_forget_not_found: true
+
 # Which `:`-command invocations to write to history_*.txt (↑ / `:h`), but not show
 # in suggestions: these are queries and navigation, not commands to repeat. Names — without
 # `:`; can be a comma-separated string (`history_queries: llm, run`). Empty (`[]`),

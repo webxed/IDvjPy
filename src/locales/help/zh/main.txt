@@ -12,7 +12,9 @@
   :h [N]      - history_<instance>.txt 的最后 N 行（默认：20）
                 查询类命令的调用（`:llm`、`:cht`、`:rg`、`:md`、`:run`、
                 `:send`）会留在那里供 ↑/`:h` 使用，但绝不会被提示 —
-                列表为 settings.yml 中的 `history_queries`（留空 — 不记录）
+                列表为 settings.yml 中的 `history_queries`（留空 — 不记录）。
+                拼写错误（`command not found`，127）会从文件和 ↑ 中移除 —
+                `history_forget_not_found: false` 会保留它
   :h /text    - 在该文件的提示中搜索（唯一行，新的在上）；Enter 输出块
   :h compact  - 去重的旧历史；最后 history_keep 行保持为序列
   :h import [shell] - 追加你的 shell 历史（bash/zsh/fish/ksh/nu/pwsh；`$HISTFILE`
@@ -237,6 +239,9 @@
   (路径) ./ | / | ~/ <Tab> - 文件/目录提示；在接收文件的命令
                （cat/vim/…）之后的裸名称，以及 grep/sed/awk/jq 的从第 2 个参数起。
                按命令的每个段单独计算：`cat f | grep ot` 不显示任何内容。
+               提示描述的是最后一个标记，因此当光标位于其他单词时，
+               它们既不显示也不会被应用（在 `bar ~/f.txt` 中修改命令名
+               不会再插入两次路径）。
                file_completion: auto | paths | off
   (历史) ↺ history <Tab> - 与已输入内容匹配的历史行，包括 `@`/`>`
                命令（history_completion: true；:h /text 也会过滤）

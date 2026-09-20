@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.158 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.159 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -53,7 +53,7 @@ IDvjPy 是一个用 Python（Textual）编写、以键盘操作的终端应用�
 - 从 TUI 使用 cheat.sh：`:cht <请求>` —— 在日志中显示 [cht.sh](https://github.com/chubin/cheat.sh) 速查（命令、语言问题、`~` 搜索），不带 ANSI；输出是普通块（`$OUT`、`|`、F3、F7、搜索）
 - 运行手册（runbook）—— 半自动命令链：`:run <tag|文件.yml>` 依次执行步骤，并在需要你决定的地方停下（`run:manual` —— 把命令放进输入行，你修改后按 Enter；`run:prompt` —— 从零开始输入；空 Enter 跳过该步骤）。如果标签中没有任何 `run:` 指令，计划会警告：所有步骤都将以 `auto` 执行（过期的种子就是这样——变更可能在无确认的情况下执行）。某步出错会停止运行，`Esc` / `:run stop` 也会；`--step` —— 每步都停下，`--dry` —— 只显示计划；帮助 —— `:? run`。现成示例 —— `:run vapprole`（token → role → `role_id` → `secret_id` → login → 校验；token 和 role 步骤是带前缀的行 `$$VAULT_TOKEN=` / `$ROLE=`，值在该 `=` 之后补写）
 - 彩色命令的输出与终端一致：SGR 码（`curl wttr.in`、`ls --color=always`、彩色 `grep`）由块的颜色渲染（`ansi_colors: true`），而不会流进 TUI 画面；光标/OSC 序列和控制字符始终会被剔除，进度条的 `\r` 重绘（`docker build`、`pip`、带进度的 `curl`）会折叠为最终一行——于是看到的是结果，而不是上百帧。纯文本（`F3`、`|`、`$OUT`/`$BLOCK`、`:log`、`@key`）始终不带转义码（F6 —— 临时输出纯文本）
-- 干净的历史：拼写错误（`command not found`，127）会自动从 `history_*.txt` 中移除
+- 干净的历史：拼写错误（`command not found`，127）会自动从 `history_*.txt` 和本次会话的 ↑ 列表中移除 —— 错误仍留在日志中。可用 `history_forget_not_found: false` 关闭（此时这类行与其他命令一样保留）
 - `:llm` 回答语言：提供方的 `answer_language: Russian` —— 一条硬性规则，避免给出不使用用户语言（例如中文）的回答
 - `:llm` 的等待可见：块中会动画显示加载指示和时间（`⠋ thinking… 3s / 60s`，第二个上限是提供方的 `timeout`），因此请求不会看起来像卡死；一旦收到回答或错误，该记录就会被移除。请求进行期间，块不会按 markdown 解析（显示状态行），此时输入和日志仍然可用
 - :llm ask：`:llm ask [<提供方>] <任务>` —— 会把任务**连同**应用速查和标签库摘要（标签/tid/命令/注释，与任务相关的排在前，其余仅列名称）发给提供方（默认提供方，或由第一个词指定）。回答会给出可直接使用的链接 `!kpod[1]` / `!! kpod[1] && klog[1]`；已有链接还会以可点击行的形式显示（插入输入行，运行则另按 Enter）。对于普通 `:llm`，同一上下文由提供方的 `app_context: true|N` 开启（`N` —— 字符数预算，默认 6000；没有该键/false —— 关闭）。逻辑在 `src/llm_context.py`
@@ -388,6 +388,7 @@ JSON 用于搬运和合并（**绝不用**文件里的全局 `id`：以前外来
 - **Tab** 对路径只替换当前 token；来自历史/数据库的完整命令——替换整行。
 - 带 `/` 的目录（`ls ~/`）—— 第一个候选项就是该目录本身；Enter 执行它，Tab 不会强制进入子路径。
 - 整行精确匹配会隐藏列表，Enter 执行该命令。
+- 文件提示描述的是行中**最后一个** token，因此当光标位于其他单词（修改命令名）时，它们既不显示也不会被应用 —— 否则 Enter 会把路径参数插入到第一个单词（`bar ~/f.txt` → `~/f.txt ~/f.txt`）。
 - **行尾空格**（`ls` + 空格）：列表关闭，Enter 运行已输入的内容，而不是更长的候选项（`ls -la`）。要采用候选项——按不带末尾空格的 Tab。
 - **`!file` / `!kube`**：输入 `!` 后立即显示标签列表（`[file, kube, log]`）。Tab 选择标签，然后选择命令：`<139> file[1]  ls -la`，插入输入行的是 `!file[1]`。组装 `#file !file[1] | !file[2]`，并在列表上方给出展开说明。
 - **`?`**：输入 `?` 后——带提示的标签列表（`?vault  (2)  HashiCorp Vault`：命令数和标签注释），字母用于过滤，常用标签排在前面。`Tab`/`Enter` 插入 `?vault` 但不运行（运行——另按 Enter），**点击某行**会填入 `?vault` 并立即执行查询；只有 `?vault` 是链接，其余是普通文本。`??`（所有命令）不会打断列表，`?vault `（空格）会关闭它。
@@ -401,6 +402,7 @@ max_lines: 100000
 history_lines: 20
 history_keep: 500            # 历史尾部作为记录；更早的不去重。0 = 不压缩。:h compact
 history_completion: true     # 输入时来自 history_*.txt 的提示（包括 `@`/`>` 行）；false —— 仅 ↑ 和 :h /
+history_forget_not_found: true  # 拼写错误（`command not found`，127）会从 history_*.txt 和 ↑ 列表中移除（错误仍留在日志中）；false —— 与其他命令一样保留
 history_queries: [llm, cht, rg, md, run, send, send!]  # 这些 `:` 命令的调用——写入历史（↑/:h），但不作为提示；[] —— 不写入
 md_dir: ""                   # `:rg` 的文档目录（例如 Obsidian vault）；留空 —— cwd
 md_render_lines: 1000        # 格式化 `:md` 的阈值；更长则以 raw 视图在 Line-API 查看器中显示

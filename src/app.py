@@ -2023,6 +2023,32 @@ class CommandLineInput(Input):
             end += 1
         return start, end
 
+    def _caret_in_last_token(self) -> bool:
+        """Курсор внутри последнего токена строки.
+
+        Файловые подсказки строятся по **последнему** токену
+        (`CommandRunner._extract_path_token`), а вставка идёт в токен **под
+        курсором** (`_token_span`) — поэтому спрашивать их (и применять) можно
+        только пока курсор в том же слове. Иначе курсор в первом слове (правят
+        имя команды) получал бы путь-аргумент: `bar ~/f` + Enter → `~/f ~/f`.
+        """
+        text = self.value or ""
+        pos = max(0, min(self.cursor_position, len(text)))
+        trimmed = text.rstrip()
+        if not trimmed:
+            return False
+        end = len(trimmed)
+        start = end
+        while start > 0 and trimmed[start - 1] not in TOKEN_SEPS:
+            start -= 1
+        return start <= pos <= end
+
+    def _selected_path_item(self) -> bool:
+        """Выбранный кандидат — файловый (у него вставка привязана к последнему токену)."""
+        clist = self._completion_list
+        item = clist.get_selected_item() if clist is not None else None
+        return bool(item is not None and item.is_path)
+
     def _should_replace_last_token(self, selected: str) -> bool:
         """Path-токен заменяем только если кандидат — путь, а не целая команда."""
         clist = self._completion_list
@@ -2109,6 +2135,10 @@ class CommandLineInput(Input):
         if clist is not None and clist.is_visible():
             selected = clist.get_selected()
             if selected:
+                if self._selected_path_item() and not self._caret_in_last_token():
+                    # Список был для последнего токена, курсор ушёл — Tab не подставляет.
+                    clist.hide()
+                    return
                 if self._preview_completion_value(selected) != self.value:
                     self._apply_selected_completion(selected)
                     self._applying_completion = False
@@ -2173,6 +2203,15 @@ class CommandLineInput(Input):
                         self._completion_list.hide()
                         return
                 selected = self._completion_list.get_selected()
+                if (
+                    selected
+                    and self._selected_path_item()
+                    and not self._caret_in_last_token()
+                ):
+                    # Курсор ушёл из последнего токена (правят имя команды):
+                    # файловый кандидат ему не принадлежит — Enter выполняет строку.
+                    self._completion_list.hide()
+                    return
                 if selected and self._preview_completion_value(selected) != self.value:
                     self._apply_selected_completion(selected)
                     self._applying_completion = False
@@ -2302,6 +2341,12 @@ class CommandLineInput(Input):
             return
 
         candidates = app.get_input_completion_items(raw_value)
+        if any(item.is_path for item in candidates) and not self._caret_in_last_token():
+            # Файловые подсказки строятся по последнему токену: пока курсор в другом
+            # слове (правят имя команды), список не нужен и опасен — Enter подставил бы
+            # путь не туда (`bar ~/.config/f` → `~/.config/f ~/.config/f`).
+            self._completion_list.hide()
+            return
         history_items: list[CompletionItem] = []
         if hasattr(app, "get_history_completions"):
             history_items = app.get_history_completions(
@@ -2496,7 +2541,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.158"
+    VERSION = "v1.159"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2551,6 +2596,9 @@ class CommandRunner(App):
     KEY_HISTORY_LINES = "history_lines"
     KEY_HISTORY_KEEP = "history_keep"
     KEY_HISTORY_COMPLETION = "history_completion"
+    # Опечатки (`command not found`, 127) убираются из истории (файл + лента сессии):
+    # ошибка видна в журнале, но ↑ / `:h` не подсовывают несуществующую команду.
+    KEY_HISTORY_FORGET_NOT_FOUND = "history_forget_not_found"
     # Список `:`-команд, вызовы которых пишутся в history_*.txt (↑ / `:h`), но не
     # подсказываются (по умолчанию :llm :cht :rg :md :run :send :send!).
     KEY_HISTORY_QUERIES = "history_queries"
@@ -2756,6 +2804,8 @@ class CommandRunner(App):
         self.history_queries: frozenset[str] = frozenset(DEFAULT_HISTORY_QUERIES)
         # Подсказки из history_*.txt при наборе (в т.ч. `@`/`>`): см. get_history_completions.
         self.history_completion: bool = True
+        # Убирать ли опечатки (`command not found`, 127) из истории: см. `_forget_history_line`.
+        self.history_forget_not_found: bool = True
         self.check_updates: bool = False
         # `:import` без аргументов берёт источник отсюда (settings.yml).
         self.library_url: str = ""
@@ -3882,6 +3932,9 @@ class CommandRunner(App):
                     self.history_lines = settings.get(self.KEY_HISTORY_LINES, 20)
                     self.history_completion = bool(
                         settings.get(self.KEY_HISTORY_COMPLETION, True)
+                    )
+                    self.history_forget_not_found = bool(
+                        settings.get(self.KEY_HISTORY_FORGET_NOT_FOUND, True)
                     )
                     self.history_queries = parse_history_queries(
                         settings.get(self.KEY_HISTORY_QUERIES, DEFAULT_HISTORY_QUERIES)
@@ -9644,7 +9697,12 @@ class CommandRunner(App):
                 if raw_stderr:
                     raw_stderr += "\n"
                 raw_stderr += self.MSG_STOPPED
-        forget = self._is_command_not_found(raw_stderr, return_code)
+        # Опечатка (`command not found`): убрать строку из истории, чтобы ↑/`:h`
+        # не подсовывали заведомо битую команду. Вывод в журнале остаётся.
+        # Выключается ключом `history_forget_not_found: false`.
+        forget = self.history_forget_not_found and self._is_command_not_found(
+            raw_stderr, return_code
+        )
         self.call_from_thread(
             self._on_command_finished, block, raw_stdout, raw_stderr, return_code, forget
         )

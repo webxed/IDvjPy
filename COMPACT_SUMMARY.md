@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.158**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.159**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -86,6 +86,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 - `:h /text` greps that file in the completion list (case-insensitive, newest first, duplicate lines merged). Esc then Enter dumps a journal block (`shown/total`, cap 50). Empty `:h /` still tails the file like `:h`.
 - `:h compact` uniques the old prefix (last occurrence wins; lines also present in the tail are dropped from the prefix). The last `history_keep` lines (default 500, `settings.yml`) stay a verbatim sequence. Startup does this only when the file is longer than `2 × history_keep`. `history_keep: 0` disables.
 - `↑`/`↓` in the input walk the instance history file plus session commands. Typed text freezes as a needle; empty input walks everything. Down past the newest line restores the draft.
+- A typo is dropped from **both** stores: exit `127` **together with** `command not found` in stderr (`_is_command_not_found`) removes the line from the session walk and from `history_<instance>.txt` when the block finishes (`_forget_history_line` → `history_store.remove_history_file_line`, exclusive flock), so ↑/`:h`/hints never offer a command that does not exist — the error stays in the journal and `:o`. `bash -c 'exit 127'` (no such stderr) is not a typo. `history_forget_not_found: false` keeps such lines like any other command. Tests — `tests/test_history_typo.py`.
 - `--instance-name=user1` uses `history_user1.txt` (and `.bashrc_term_user1`). Missing instance file is filled once from legacy `history.txt`.
 
 ### JSON Viewer (F5 / `:json` / `:json file`)
@@ -101,6 +102,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 - Tab replaces **token only** for paths; full history/DB commands replace the **whole line** (prevents `cat cat json.file`).
 - Trailing slash (`ls ~/`, `./`, `/usr/`): first candidate is the directory itself; Enter runs it; Tab keeps it; Down+Tab drills in.
 - Exact full-line match hides the list so Enter submits instead of re-applying.
+- File hints are built from the **last** token (`_extract_path_token`) but applied to the token **under the caret** (`CommandLineInput._token_span`) — so both the showing and the applying require the caret to be in that last token (`_caret_in_last_token`). While the caret sits in another word (fixing the command name in `bar ~/f.txt`), the list is not offered and Enter/Tab would not apply it: without the guard the path landed in the first word (`~/f.txt ~/f.txt`). Tests — `tests/test_completion.py` (no hints while the caret is in the command word; Enter after the caret moved runs the line; completing with the caret in the last token still works).
 - **Trailing space** (`ls   `): list hides; Enter runs the typed command, not a longer candidate (`ls -la`). Tab (without trailing space) still applies the candidate.
 - After apply: space → Backspace → Enter must not duplicate the command.
 
@@ -151,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.104 (app v1.158) |
+| `test_cmd.md` | Manual plan v1.105 (app v1.159) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -195,7 +197,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.158 |
+| `src/app.py` | TUI (`CommandRunner`), v1.159 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -243,6 +245,11 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.159
+
+- **Файловые подсказки больше не меняют чужое слово.** Симптом: `bar ~/.config/idvjpy/history_default.txt` (опечатка) → правка имени команды в этой же строке → список предлагал путь, а Enter вставлял его в первое слово: `~/…txt ~/…txt`. Причина — рассинхрон: кандидаты строятся по **последнему** токену (`_extract_path_token`), а вставка идёт в токен **под курсором** (`_token_span`). Теперь оба шага требуют, чтобы курсор был в последнем токене (`CommandLineInput._caret_in_last_token`): список не показывается (`_show_completions`), а Enter/Tab его не применяют (курсор можно увести стрелками уже с открытым списком). Кандидаты из БД/истории не тронуты — у них своя семантика («полная команда заменяет строку»). Тесты: `tests/test_completion.py` (+3; проверено, что без охраны два из них падают).
+- **Ключ `history_forget_not_found`.** Поведение v1.127 (опечатка `command not found` + 127 убирается из `history_*.txt` и из ленты ↑) стало настраиваемым: `true` (по умолчанию — как раньше), `false` — такие строки хранятся как любые другие (команда есть только на другой машине, в другом окружении). Ключ — в шаблоне `src/settings/<lang>.yml` рядом с `history_completion`; «опечатка» по-прежнему только 127 **вместе** с `command not found` в stderr (`bash -c 'exit 127'` остаётся). Тесты: `tests/test_history_typo.py` (+1), `tests/test_data_dirs.py` (ключ в `EXPECTED_KEYS`).
 
 ## v1.158
 

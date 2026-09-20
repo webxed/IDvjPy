@@ -24,6 +24,12 @@ history_keep: 500
 # false —— 只有 ↑ 和 :h /text。
 history_completion: true
 
+# 拼写错误（`command not found`，退出码 127）会从 history_*.txt 和本次会话的 ↑ 中
+# 移除：错误仍留在日志中，但 ↑ / `:h` 不会再推荐不存在的命令。只统计 127 **且**
+# stderr 中有 “command not found” 的情况 —— `bash -c 'exit 127'` 会保留。
+# false —— 这类行与其他命令一样保存在历史中。
+history_forget_not_found: true
+
 # 哪些 `:` 命令的调用要写入 history_*.txt（↑ / `:h`），但不显示
 # 在提示中：它们是查询和导航，而不是用于重复执行的命令。名称不带
 # `:`；也可以写成逗号分隔的字符串（`history_queries: llm, run`）。空（`[]`）、

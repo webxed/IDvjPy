@@ -20,6 +20,7 @@ EXPECTED_KEYS = {
     "history_lines",
     "history_keep",
     "history_completion",
+    "history_forget_not_found",
     "history_queries",
     "database_tags_file",
     "backup_dir",

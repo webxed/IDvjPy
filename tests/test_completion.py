@@ -12,6 +12,77 @@ from tests.conftest import (
 )
 
 
+async def test_path_hints_not_offered_while_editing_the_command_word(isolated_home):
+    """Правят имя команды — файловые подсказки (они для последнего токена) не мешают.
+
+    Симптом: `bar <путь>` (опечатка), правка `bar` — а Enter подставлял путь в первое
+    слово: `<путь> <путь>`. Подсказки строятся по последнему токену, поэтому пока
+    курсор в другом слове, их не показываем.
+    """
+    target = isolated_home / "history_default.txt"
+    target.write_text("x\n", encoding="utf-8")
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.press("escape")
+        inp = input_widget(app)
+        inp.value = f"bar {target}"
+        inp.cursor_position = 3  # курсор в конце `bar` — правят имя команды
+        await pilot.pause()
+        assert not app._completion_list.is_visible()
+
+        await pilot.press("enter")
+        await wait_command_done(app)
+        block = list(app.query(CommandBlock))[-1]
+        # Выполнилась ровно набранная строка: путь в ней один раз.
+        assert block.header.count(str(target)) == 1
+
+
+async def test_enter_does_not_reinsert_path_after_caret_moves(isolated_home):
+    """Список открыт для последнего токена — Enter не подставляет путь в другое слово.
+
+    Курсор можно увести в начало строки стрелками уже с открытым списком.
+    """
+    target = isolated_home / "history_default.txt"
+    target.write_text("x\n", encoding="utf-8")
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.press("escape")
+        inp = input_widget(app)
+        inp.value = f"bar {target}"
+        inp.cursor_position = len(inp.value)
+        await pilot.pause()
+        assert app._completion_list.is_visible()  # курсор в конце — путь-аргумент
+
+        inp.cursor_position = 3  # ушли править имя команды
+        await pilot.pause()
+        await pilot.press("enter")
+        await wait_command_done(app)
+        block = list(app.query(CommandBlock))[-1]
+        assert block.header.count(str(target)) == 1
+        assert inp.value == ""  # строка отправилась как есть
+
+
+async def test_path_completion_still_works_with_caret_in_last_token(isolated_home):
+    """Штатный случай не сломан: курсор в последнем токене — путь дополняется."""
+    target = isolated_home / "history_default.txt"
+    target.write_text("x\n", encoding="utf-8")
+
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.press("escape")
+        inp = input_widget(app)
+        inp.value = f"cat {target.with_suffix('')}"  # путь без последних букв
+        inp.cursor_position = len(inp.value)
+        await pilot.pause()
+        assert app._completion_list.is_visible()
+
+        await pilot.press("enter")
+        await pilot.pause()
+        assert inp.value == f"cat {target}"
+
+
 async def test_path_hints_underline_dirs_not_files(isolated_home):
     """Каталог в подсказках пути — ссылка (подчёркнут), файл — обычный текст.
 

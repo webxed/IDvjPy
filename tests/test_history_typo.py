@@ -1,4 +1,7 @@
-"""Опечатки (command not found) не остаются в истории (фича history-hygiene)."""
+"""Опечатки (command not found) не остаются в истории (фича history-hygiene).
+
+Поведение опционально: ключ `history_forget_not_found` (по умолчанию `true`).
+"""
 import asyncio
 
 import pytest
@@ -53,3 +56,27 @@ async def test_successful_and_other_127_keep_history(isolated_home):
         text = hist_path.read_text(encoding="utf-8")
         assert "echo fine" in text
         assert "bash -c 'exit 127'" in text
+
+
+async def test_flag_off_keeps_the_typo(isolated_home):
+    """`history_forget_not_found: false` — опечатка хранится как любая другая команда.
+
+    Ключ можно выключить, когда битые строки нужны в ↑: например, команда есть
+    только на другой машине или в другом окружении.
+    """
+    settings = isolated_home / "settings.yml"
+    settings.write_text(
+        settings.read_text(encoding="utf-8") + "history_forget_not_found: false\n",
+        encoding="utf-8",
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        assert app.history_forget_not_found is False
+        await submit(pilot, "Жр")
+        block = await wait_command_done(app, timeout=8.0)
+        assert block.return_code == 127
+        # Дать «забыванию» время, если бы оно включилось: строки должны остаться.
+        await asyncio.sleep(0.5)
+        assert "Жр" in (isolated_home / "history_default.txt").read_text(encoding="utf-8")
+        assert any(line.strip() == "Жр" for line in app.session_history)
+        assert "command not found" in block.raw_stderr.lower()
