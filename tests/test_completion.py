@@ -1,6 +1,7 @@
 """Файловые подсказки: видимость списка, Tab не затирает команду, каталоги с /."""
 import pyperclip
 
+import database_v2 as database
 from app import CommandBlock, CommandRunner
 from tests.conftest import (
     completion_click_spans,
@@ -81,6 +82,89 @@ async def test_path_completion_still_works_with_caret_in_last_token(isolated_hom
         await pilot.press("enter")
         await pilot.pause()
         assert inp.value == f"cat {target}"
+
+
+async def test_db_command_hint_not_applied_while_editing_mid_line(isolated_home):
+    """Полная команда из БД подменяет строку целиком: пока курсор не в конце — не применяем.
+
+    Список мог открыться раньше (курсор был в конце), а потом курсор ушёл править
+    середину — Enter должен выполнить строку как есть, а не подменить её.
+    """
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        database.add_command(app.db_file, "echo mid-line-long", "test")
+        app._invalidate_library()
+        inp = input_widget(app)
+        inp.value = "echo mid-line"
+        inp.cursor_position = len(inp.value)
+        await pilot.pause()
+        assert app._completion_list.is_visible()
+        assert any(
+            "mid-line-long" in candidate
+            for candidate in app._completion_list.all_candidates
+        )
+
+        inp.cursor_position = 4  # ушли править `echo`
+        await pilot.pause()
+        await pilot.press("enter")
+        await wait_command_done(app)
+        block = list(app.query(CommandBlock))[-1]
+        assert "echo mid-line" in block.header
+        assert "mid-line-long" not in block.header
+        assert inp.value == ""  # строка отправилась как есть
+
+
+async def test_history_hint_not_applied_while_editing_mid_line(isolated_home):
+    """`↺` из истории — тоже целая строка: в середине строки Tab её не подменяет."""
+    (isolated_home / "history_default.txt").write_text(
+        "echo mid-line-hist\n", encoding="utf-8"
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        database.add_command(app.db_file, "echo mid-line-long", "test")
+        app._invalidate_library()
+        inp = input_widget(app)
+        inp.value = "echo mid-line"
+        inp.cursor_position = len(inp.value)
+        await pilot.pause()
+        assert app._completion_list.is_visible()
+        assert any(
+            candidate.startswith("↺")
+            for candidate in app._completion_list.all_displays
+        )
+
+        inp.cursor_position = 5  # середина строки
+        await pilot.pause()
+        await pilot.press("tab")
+        await pilot.pause()
+        # Tab не подставил целую строку: текст остался набранным, курсор на месте.
+        assert inp.value == "echo mid-line"
+        assert inp.cursor_position == 5
+
+
+async def test_whole_line_hint_not_offered_when_caret_stays_mid_line(isolated_home):
+    """Правка в середине строки не показывает список целых строк (даже когда совпадение есть)."""
+    (isolated_home / "history_default.txt").write_text(
+        "echo aaa bb\n", encoding="utf-8"
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        inp = input_widget(app)
+        inp.value = "echo aa bb"
+        inp.cursor_position = 6
+        await pilot.pause()
+        await pilot.press("a")  # правка в середине: значение снова совпадает с историей
+        await pilot.pause()
+        assert inp.value == "echo aaa bb"
+        assert inp.cursor_position == 7  # курсор так и остался в середине строки
+        assert not app._completion_list.is_visible()
+
+        # Контроль: курсор в конце строки — подсказка полной строки на месте.
+        inp.cursor_position = len(inp.value)
+        await pilot.press("backspace")
+        await pilot.pause()
+        assert inp.value == "echo aaa b"  # всё ещё префикс строки из истории
+        assert app._completion_list.is_visible()
 
 
 async def test_path_hints_underline_dirs_not_files(isolated_home):

@@ -244,7 +244,9 @@
                不会再插入两次路径）。
                file_completion: auto | paths | off
   (历史) ↺ history <Tab> - 与已输入内容匹配的历史行，包括 `@`/`>`
-               命令（history_completion: true；:h /text 也会过滤）
+               命令（history_completion: true；:h /text 也会过滤）。
+               来自数据库和历史的完整命令会替换整行，因此只在行尾显示
+               和应用：行中间的修改永远不会被补全覆盖。
   (JSON) Enter - 将 `jq 'path'` 插入输入框；也会设置 $JSON
 
 [bold]逐行光标模式[/bold]

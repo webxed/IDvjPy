@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.159 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.160 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -398,6 +398,7 @@ If `Shift+Enter` behaves as a regular Enter, the terminal does not distinguish t
 - A directory with `/` (`ls ~/`) — the first candidate is the directory itself; Enter runs it, Tab does not force a child path.
 - An exact match of the whole line hides the list, Enter runs the command.
 - File hints describe the **last** token of the line, so while the caret sits in another word (fixing the command name) they are neither offered nor applied — otherwise Enter pasted the path argument into the first word (`bar ~/f.txt` → `~/f.txt ~/f.txt`).
+- Full commands from the DB and history (`↺`) replace the **whole line**, so their place is the end of the line: mid-line they are neither offered nor applied by Enter/Tab (an edit in the middle is not overwritten). `!tag` / `?tag` / `:` hints are built from the token under the caret and work as before.
 - **A trailing space** (`ls` + space): the list closes, Enter runs what is typed, not a longer candidate (`ls -la`). To take a candidate — Tab without a trailing space.
 - **`!file` / `!kube`**: right after `!` a list of tags (`[file, kube, log]`). Tab selects a tag, then commands: `<139> file[1]  ls -la`, into the input — `!file[1]`. Assembly `#file !file[1] | !file[2]` with a decoding at the top of the list.
 - **`?`**: you type `?` — a list of tags with a hint (`?vault  (2)  HashiCorp Vault`: the number of commands and the tag comment), letters filter, frequently used ones are higher. `Tab`/`Enter` insert `?vault` without running (launch — a separate Enter), a **click on a row** substitutes `?vault` and runs the query right away; only `?vault` is a link, the rest is plain text. `??` (all commands) does not get interrupted by the list, `?vault ` (a space) closes it.

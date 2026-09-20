@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.159**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.160**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -102,7 +102,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 - Tab replaces **token only** for paths; full history/DB commands replace the **whole line** (prevents `cat cat json.file`).
 - Trailing slash (`ls ~/`, `./`, `/usr/`): first candidate is the directory itself; Enter runs it; Tab keeps it; Down+Tab drills in.
 - Exact full-line match hides the list so Enter submits instead of re-applying.
-- File hints are built from the **last** token (`_extract_path_token`) but applied to the token **under the caret** (`CommandLineInput._token_span`) — so both the showing and the applying require the caret to be in that last token (`_caret_in_last_token`). While the caret sits in another word (fixing the command name in `bar ~/f.txt`), the list is not offered and Enter/Tab would not apply it: without the guard the path landed in the first word (`~/f.txt ~/f.txt`). Tests — `tests/test_completion.py` (no hints while the caret is in the command word; Enter after the caret moved runs the line; completing with the caret in the last token still works).
+- File hints are built from the **last** token (`_extract_path_token`) but applied to the token **under the caret** (`CommandLineInput._token_span`) — so both showing and applying require the caret to be in that last token (`_caret_in_last_token`): fixing the command name in `bar ~/f.txt` no longer pastes the path twice. The same question decides every hint — `CommandLineInput._items_match_caret` (`_selected_match_caret`): `replace_token` items (`!tag`, `?tag`, `:commands`) are built from the caret's token and are always applicable, while full commands from the DB and history (`↺`) replace the **whole line** and need the end of the line (`_caret_at_line_end`). `_show_completions` hides the list when the guard says no, Enter/Tab then just run the typed line. Tests — `tests/test_completion.py` (6: paths while editing the command word, Enter after the caret moved, completing in the last token, DB/history mid-line apply, whole-line hints mid-line).
 - **Trailing space** (`ls   `): list hides; Enter runs the typed command, not a longer candidate (`ls -la`). Tab (without trailing space) still applies the candidate.
 - After apply: space → Backspace → Enter must not duplicate the command.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.105 (app v1.159) |
+| `test_cmd.md` | Manual plan v1.106 (app v1.160) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -197,7 +197,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.159 |
+| `src/app.py` | TUI (`CommandRunner`), v1.160 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -245,6 +245,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.160
+
+- **То же правило — и для остальных подсказок.** В v1.159 файловые подсказки перестали менять чужое слово; оставался тот же рассинхрон у кандидатов, подменяющих строку **целиком** (полные команды из БД и `↺` из истории): правка середины строки могла затираться целой командой (`echo mid-line` → `echo mid-line-long`). Теперь место вставки и место курсора сверяет один метод `CommandLineInput._items_match_caret` (`_selected_match_caret`): файловые — последний токен, `replace_token`-кандидаты (`!tag`/`?tag`/`:`) — токен под курсором (всегда можно), целая строка — только когда курсор в её конце (`_caret_at_line_end`). `_show_completions` прячет список, Enter/Tab такой пункт не применяют (строка выполняется как есть). Классификация — по уже существующим признакам пункта (`is_path` / `replace_token`), т.е. по тому же критерию, которым живёт вставка (`_should_replace_last_token`). Тесты: `tests/test_completion.py` (+3: применение целой команды из БД и `↺` после ухода курсора в середину, показ списка целых строк при правке середины; проверено, что без гейта все три падают).
 
 ## v1.159
 

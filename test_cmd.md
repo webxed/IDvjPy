@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.159
+# План тестирования IDvjPy_term v1.160
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1180,7 +1180,7 @@ bar ./podfile.txt       # опечатка: правка `bar` (курсор в 
 cat ./podfile           # курсор в последнем токене — Enter дополняет до ./podfile.txt
 ```
 
-**Ожидание:** при `file_completion: auto` (по умолчанию) `cat po` показывает файлы (`podfile.txt`), а `kubectl get po` — **не** листит cwd (нет мусора от `kubectl`/`docker`/`git`). В списке каталог виден ссылкой с подчёркиванием (`./beta-dir/`), файл — обычным текстом (`./alpha.txt`): при `cd` их больше не спутать; клик вставляет и каталог, и файл (файл — не ссылка, клик по нему ловит сам список). У `grep`/`sed`/`awk`/`jq` первый аргумент — шаблон: `grep ot` файлов не листит, а `grep -n x po` — листит. Контекст считается по текущему сегменту строки: в `cat podfile.txt | grep ot` подсказки относятся к `grep`, а не к `cat`. Список, оставшийся от ранее набранного текста, скрывается сам (Esc жать не нужно), и Enter больше не затирает набранное исчезнувшим кандидатом. **Файловые подсказки описывают последний токен строки:** пока курсор стоит в другом слове (например, правят имя команды в `bar ./podfile.txt`), список не появляется, а Enter/Tab его не применяют — иначе путь-аргумент вставлялся бы в первое слово (`./podfile.txt ./podfile.txt`). Курсор в последнем токене — обычное дополнение (`cat ./podfile` + Enter → `cat ./podfile.txt`). Явные пути (`./po`, `/…`, `~/…`) и `cd`/`pushd` работают во всех режимах. `file_completion: paths` — только явные пути и `cd`/`pushd` (голое `cat po` — без файлов). `file_completion: off` — файловых подсказок нет. Неизвестное значение — как `auto`.
+**Ожидание:** при `file_completion: auto` (по умолчанию) `cat po` показывает файлы (`podfile.txt`), а `kubectl get po` — **не** листит cwd (нет мусора от `kubectl`/`docker`/`git`). В списке каталог виден ссылкой с подчёркиванием (`./beta-dir/`), файл — обычным текстом (`./alpha.txt`): при `cd` их больше не спутать; клик вставляет и каталог, и файл (файл — не ссылка, клик по нему ловит сам список). У `grep`/`sed`/`awk`/`jq` первый аргумент — шаблон: `grep ot` файлов не листит, а `grep -n x po` — листит. Контекст считается по текущему сегменту строки: в `cat podfile.txt | grep ot` подсказки относятся к `grep`, а не к `cat`. Список, оставшийся от ранее набранного текста, скрывается сам (Esc жать не нужно), и Enter больше не затирает набранное исчезнувшим кандидатом. **Подсказки применяются только там, где стоит курсор:** файловые описывают последний токен строки (курсор в другом слове — списка нет, Enter/Tab ничего не подставляют: `bar ./podfile.txt` с курсором в `bar` не даёт `./podfile.txt ./podfile.txt`), а полные команды из БД и истории (`↺`) подменяют всю строку и потому ждут курсора в её конце (правка середины не затирается). `!tag`/`?tag`/`:`-подсказки строятся по токену под курсором и работают как раньше. Курсор в последнем токене — обычное дополнение (`cat ./podfile` + Enter → `cat ./podfile.txt`). Явные пути (`./po`, `/…`, `~/…`) и `cd`/`pushd` работают во всех режимах. `file_completion: paths` — только явные пути и `cd`/`pushd` (голое `cat po` — без файлов). `file_completion: off` — файловых подсказок нет. Неизвестное значение — как `auto`.
 
 Автотест: `tests/test_file_completion.py`, `tests/test_completion.py` (в т.ч. `test_path_hints_underline_dirs_not_files` — каталог ссылка с подчёркиванием, файл — нет; `test_path_hints_not_offered_while_editing_the_command_word` и `test_enter_does_not_reinsert_path_after_caret_moves` — путь не подставляется в чужое слово; `test_path_completion_still_works_with_caret_in_last_token` — дополнение не сломано), `tests/test_tag_query_hints.py::test_completion_click_without_run_only_inserts` (клик по файлу вставляет).
 
@@ -1197,7 +1197,7 @@ kubectl get pods
 kub ec            # ↺ kubectl get pods (Tab/Enter — вставить, второй Enter — запуск)
 ```
 
-**Ожидание:** при наборе обычной команды в выпадающем списке появляются (под маркером `↺`, свежие сверху) подходящие строки из `history_*.txt`, в том числе начинающиеся с `@` и `>` — их нет в `session_history` (для `@` команда запускается уже без префикса). `Tab`/`Enter` вставляют полную команду в строку (не запускают); следующий `Enter` — запуск. Дедупликация с кандидатами из БД/сессии. `history_completion: false` — только `↑` и `:h /text`; короткий ввод (<2) и `:`/`!`/`?`/`#`/`$` — без истории.
+**Ожидание:** при наборе обычной команды в выпадающем списке появляются (под маркером `↺`, свежие сверху) подходящие строки из `history_*.txt`, в том числе начинающиеся с `@` и `>` — их нет в `session_history` (для `@` команда запускается уже без префикса). `Tab`/`Enter` вставляют полную команду в строку (не запускают); следующий `Enter` — запуск. Дедупликация с кандидатами из БД/сессии. **Подсказка целой строки появляется и применяется только когда курсор в конце строки:** уведёте курсор в середину (←) — Enter/Tab выполнят набранное, не подменяя строку. `history_completion: false` — только `↑` и `:h /text`; короткий ввод (<2) и `:`/`!`/`?`/`#`/`$` — без истории.
 
 Автотест: `tests/test_history_completion.py`.
 
@@ -1572,7 +1572,7 @@ Ctrl+V в построчном режиме  # другое поведение: 
 
 ---
 
-**Версия документа**: v1.105
-**Версия приложения**: v1.159
+**Версия документа**: v1.106
+**Версия приложения**: v1.160
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

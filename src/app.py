@@ -2043,11 +2043,41 @@ class CommandLineInput(Input):
             start -= 1
         return start <= pos <= end
 
-    def _selected_path_item(self) -> bool:
-        """Выбранный кандидат — файловый (у него вставка привязана к последнему токену)."""
+    def _caret_at_line_end(self) -> bool:
+        """Курсор в конце строки (там, где можно дописать хвост).
+
+        Полные команды из БД и истории (`↺`) подменяют строку **целиком**
+        (`_should_replace_last_token` — False), поэтому их место только там, где
+        строка заканчивается: иначе Enter переписал бы текст, который человек
+        не правит (`echo foo` с курсором после `echo`).
+        """
+        text = self.value or ""
+        return bool(text.strip()) and self.cursor_position >= len(text.rstrip())
+
+    def _items_match_caret(self, items: Sequence[CompletionItem]) -> bool:
+        """Относятся ли кандидаты к тому месту строки, где стоит курсор.
+
+        Три вида подсказок — три места:
+          * файловые (`is_path`) строятся по **последнему** токену строки;
+          * `!tag`, `?tag`, `:`-команды и прочие (`replace_token`) — по токену
+            **под курсором**, поэтому их можно применять всегда;
+          * полные команды из БД и истории (`↺`) подменяют **всю строку** —
+            их место там, где строка и заканчивается.
+
+        Иначе Enter/Tab меняют текст, который человек не правит: `bar ~/f.txt`
+        с курсором в первом слове давало `~/f.txt ~/f.txt`.
+        """
+        if any(item.is_path for item in items):
+            return self._caret_in_last_token()
+        if any(item.replace_token for item in items):
+            return True
+        return self._caret_at_line_end()
+
+    def _selected_match_caret(self) -> bool:
+        """Выбранный кандидат относится к месту курсора (см. `_items_match_caret`)."""
         clist = self._completion_list
         item = clist.get_selected_item() if clist is not None else None
-        return bool(item is not None and item.is_path)
+        return self._items_match_caret([item] if item is not None else [])
 
     def _should_replace_last_token(self, selected: str) -> bool:
         """Path-токен заменяем только если кандидат — путь, а не целая команда."""
@@ -2135,8 +2165,8 @@ class CommandLineInput(Input):
         if clist is not None and clist.is_visible():
             selected = clist.get_selected()
             if selected:
-                if self._selected_path_item() and not self._caret_in_last_token():
-                    # Список был для последнего токена, курсор ушёл — Tab не подставляет.
+                if not self._selected_match_caret():
+                    # Список был для другого места строки, курсор ушёл — Tab не подставляет.
                     clist.hide()
                     return
                 if self._preview_completion_value(selected) != self.value:
@@ -2203,13 +2233,9 @@ class CommandLineInput(Input):
                         self._completion_list.hide()
                         return
                 selected = self._completion_list.get_selected()
-                if (
-                    selected
-                    and self._selected_path_item()
-                    and not self._caret_in_last_token()
-                ):
-                    # Курсор ушёл из последнего токена (правят имя команды):
-                    # файловый кандидат ему не принадлежит — Enter выполняет строку.
+                if selected and not self._selected_match_caret():
+                    # Курсор ушёл из того места, к которому относится кандидат (правили
+                    # имя команды, середину строки): Enter выполняет строку как есть.
                     self._completion_list.hide()
                     return
                 if selected and self._preview_completion_value(selected) != self.value:
@@ -2341,17 +2367,17 @@ class CommandLineInput(Input):
             return
 
         candidates = app.get_input_completion_items(raw_value)
-        if any(item.is_path for item in candidates) and not self._caret_in_last_token():
-            # Файловые подсказки строятся по последнему токену: пока курсор в другом
-            # слове (правят имя команды), список не нужен и опасен — Enter подставил бы
-            # путь не туда (`bar ~/.config/f` → `~/.config/f ~/.config/f`).
-            self._completion_list.hide()
-            return
         history_items: list[CompletionItem] = []
         if hasattr(app, "get_history_completions"):
             history_items = app.get_history_completions(
                 raw_value, exclude=[item.insert for item in candidates]
             )
+        if not self._items_match_caret([*candidates, *history_items]):
+            # Кандидат не про то место строки, где стоит курсор (правят имя команды
+            # или середину строки) — список не показываем: Enter менял бы чужой текст
+            # (`bar ~/.config/f` → `~/.config/f ~/.config/f`).
+            self._completion_list.hide()
+            return
         if candidates or history_items:
             # Точная команда уже набрана — не перехватывать Enter повторным apply.
             # Для каталога с / список оставляем, чтобы можно было углубиться.
@@ -2541,7 +2567,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.159"
+    VERSION = "v1.160"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,

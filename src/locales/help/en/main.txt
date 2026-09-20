@@ -243,7 +243,10 @@
                name in `bar ~/f.txt` no longer pastes the path twice).
                file_completion: auto | paths | off
   (hist) ↺ history <Tab> - history lines matching what you typed, incl. `@`/`>`
-               commands (history_completion: true; :h /text filters too)
+               commands (history_completion: true; :h /text filters too).
+               Full commands from the DB and history replace the WHOLE line, so
+               both are offered and applied only at the end of the line: an edit
+               in the middle is never overwritten by a completion.
   (JSON) Enter - Insert `jq 'path'` into input; also sets $JSON
 
 [bold]Line-cursor mode[/bold]
