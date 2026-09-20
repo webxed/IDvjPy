@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.153 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.154 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -351,6 +351,7 @@ JSON 用于搬运和合并（**绝不用**文件里的全局 `id`：以前外来
 | `F8` | 块标记对话框（`:name`）：输入标记，Enter —— 保存，留空 —— 取消标记，Esc —— 取消；之后用 `\|@标记 命令` |
 | `F2` | 块中的逐行模式 |
 | `Shift+Insert` / `Ctrl+V` | 插入到输入行（不会覆写已输入的内容）。在逐行模式下 `Ctrl+V` 会追加当前行 |
+| 右键点击 | 将剪贴板内容粘贴到输入行 —— 即使焦点在日志或提示列表中（无需先把光标放进输入行）。右键不会触发链接（`--seed`、`.md`、`:命令`） |
 | `Ctrl+D` | 清空整行输入 |
 | `Ctrl+W` / `Ctrl+Backspace` | 在输入行中：删除光标左侧的词（便于清理粘贴进来的输出，例如来自 `kubectl` 的）。`Ctrl+Backspace` 只在终端把它作为单独按键发送时有效；通用的做法是 `Ctrl+W` |
 | `Ctrl+F` / `Ctrl+Delete` | 在输入行中：删除光标右侧的词 |

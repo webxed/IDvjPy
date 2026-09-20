@@ -163,3 +163,6 @@ transfer:
   export_done: "Exported {count} command(s) of '{tag}' to {path}"
   export_library_done: "Exported {count} command(s) to {path} (Markdown catalog)"
   export_library_json_done: "Exported {count} command(s) to {path} (whole-library JSON)"
+
+clipboard:
+  empty: "Clipboard is empty"

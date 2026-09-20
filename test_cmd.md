@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.153
+# План тестирования IDvjPy_term v1.154
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -41,6 +41,7 @@ python3 app.py
 | `F5` | JSON viewer для сфокусированного (или последнего) блока |
 | `F6` | Simple output |
 | `Shift+Insert` / `Ctrl+V` | Вставка во ввод (не затирает уже набранное) |
+| Правый клик | Вставка из буфера в строку ввода, где бы ни был фокус (в журнале, в списке подсказок); ссылки правым кликом не выполняются |
 | `Ctrl+D` | Очистить строку ввода |
 | `d` | Тёмная / светлая тема (когда фокус не во вводе) |
 
@@ -1516,7 +1517,24 @@ cd <каталог с library.json> && python3 -m http.server 8000
 
 ---
 
-**Версия документа**: v1.99
-**Версия приложения**: v1.153
-**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
+## Секция 53: Правый клик — вставка из буфера
+
+```text
+pyperclip/терминал: в буфер положен текст `pasted-by-mouse`
+echo anchor                 # любой блок, чтобы увести фокус из строки
+Tab                         # фокус в журнале, курсора в строке ввода нет
+<правый клик по блоку>      # текст буфера — в строке ввода
+Ctrl+V в построчном режиме  # другое поведение: дописывает текущую строку
+<правый клик по пустому буферу>   # подзаголовок: Clipboard is empty
+```
+
+**Ожидание:** правый клик в любом месте (журнал, список подсказок, пустая область) кладёт текст буфера в строку ввода — переводить туда курсор заранее не нужно; фокус после вставки — в строке. Вставка идёт в позицию курсора (а при выделении в строке — в конец, как Ctrl+V). Ссылки (`--seed`, `.md`, `:команды`, `?tag` в подсказках) правым кликом **не выполняются** — иначе он затирал бы только что вставленный текст (брокер `@click` в Textual не различает кнопки, отсечка — `CommandRunner._broker_event`). Правый клик по пункту списка подсказок ничего не выбирает (это левый клик). В построчном режиме (F2 / `:log`) правый клик всё равно вставляет буфер, а `Ctrl+V` там дописывает текущую строку. Пустой буфер — подзаголовок `Clipboard is empty`, строка не меняется. С `clear_clipboard_after_secret: true` вставка значения в `$$TOKEN=` очищает буфер и от правого клика. На модалках (JSON, markdown, просмотр вывода) вставки нет — они сами едят мышь.
+
+Автотесты: `tests/test_paste_right_click.py` (8: вставка без фокуса в строке, в позицию курсора, ссылка правым кликом не выполняется, пункт подсказки не выбирается, блок не перехватывает фокус, пустой буфер, очистка буфера после секрета, модалка).
+
+---
+
+**Версия документа**: v1.100
+**Версия приложения**: v1.154
+**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

@@ -673,7 +673,12 @@ class LineNavigable(Static):
         но модификаторов и серии кликов он не видит (`@click.ctrl` разметка вообще
         не парсит — в ключе меты нет точек), поэтому «с запуском ли клик» решаем
         здесь: этот обработчик вызывается **до** брокера, в том же сообщении.
+
+        Правый клик — не выбор блока: это вставка из буфера (`on_mouse_down`),
+        фокус блока от него прыгать не должен.
         """
+        if event.button != 1:
+            return
         style = getattr(event, "style", None)
         meta = getattr(style, "meta", None) if style is not None else None
         action = meta.get("@click") if meta else None
@@ -1772,8 +1777,11 @@ class CompletionList(Static):
 
         Строки-ссылки кликаются сами (`@click`-span); здесь добираем те, что
         намеренно нарисованы обычным текстом (файлы в подсказках пути) — иначе
-        клик по ним пропадал бы совсем.
+        клик по ним пропадал бы совсем. Правый клик — вставка из буфера, а не
+        выбор пункта (`CommandRunner.on_mouse_down`).
         """
+        if event.button != 1:
+            return
         index = self.index_at_y(event.y)
         if index is None:
             return
@@ -2358,7 +2366,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.153"
+    VERSION = "v1.154"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -3468,15 +3476,27 @@ class CommandRunner(App):
         """Вставляет текст из буфера обмена в command input.
 
         В построчном режиме Ctrl+V дописывает текущую строку, а не буфер.
+        Правый клик (`on_mouse_down`) всегда вставляёт буфер — см.
+        `_paste_clipboard_into_input`.
         """
         focused = self.focused
         if isinstance(focused, LineNavigable) and getattr(focused, "line_nav_active", False):
             focused.append_current_line_to_input()
             return
+        self._paste_clipboard_into_input()
 
+    def _paste_clipboard_into_input(self) -> bool:
+        """Вставить буфер в строку ввода в позицию курсора; True — если вставили.
+
+        Фокус не важен: строка ввода получает его сама (правый клик по журналу
+        или по списку подсказок работает так же, как при курсоре в строке).
+        Выделение в строке не затирается — вставка идёт в конец.
+        """
         clip = paste_text_from_clipboards(self)
         if not clip:
-            return
+            self.sub_title = t("clipboard.empty")
+            self.set_timer(3, self.clear_subtitle)
+            return False
 
         input_widget = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         if not input_widget.has_focus:
@@ -3491,6 +3511,7 @@ class CommandRunner(App):
         input_widget.value = current[:pos] + clip + current[pos:]
         input_widget.cursor_position = pos + len(clip)
         self._maybe_clear_clipboard_after_secret()
+        return True
 
     def copy_text(self, text: str) -> None:
         """Копирует текст в CLIPBOARD, PRIMARY и внутренний буфер Textual."""
@@ -3543,7 +3564,35 @@ class CommandRunner(App):
         self._copy_selection_to_clipboard()
 
     def on_mouse_down(self, event: events.MouseDown) -> None:
+        """Правый клик — вставка из буфера, где бы ни был фокус.
+
+        Мышь — ускорение (клавиатурный путь Ctrl+V / Shift+Insert не меняется):
+        правый клик по журналу или списку подсказок вставляет текст в строку
+        ввода, не требуя сначала попасть в неё курсором. В построчном режиме
+        (F2 / `:log`) буфер всё равно вставляется, а Ctrl+V там дописывает
+        текущую строку. Модалки (JSON, markdown, просмотр вывода) сами едят
+        мышь, вставку не перехватывают.
+        """
         self._bump_screensaver_idle()
+        if event.button != 3:
+            return
+        if getattr(self.screen, "_modal", False):
+            return
+        event.stop()
+        self._paste_clipboard_into_input()
+
+    async def _broker_event(
+        self, event_name: str, event: events.Event, default_namespace: Any = None
+    ) -> bool:
+        """Брокер `@click`-действий: правый клик ссылку не выполняет.
+
+        Textual не различает кнопки, а правый клик у нас — вставка из буфера: без
+        этой отсечки он ещё и выполнял бы ссылку (`--seed`, `.md`, `:команда`,
+        `?tag` в подсказках), переписывая только что вставленный текст.
+        """
+        if event_name == "click" and isinstance(event, events.Click) and event.button != 1:
+            return False
+        return await super()._broker_event(event_name, event, default_namespace)
 
     def on_mouse_move(self, event: events.MouseMove) -> None:
         """Движение мыши — тоже активность, но событий много: не чаще 2 раз в секунду."""
@@ -4195,6 +4244,8 @@ class CommandRunner(App):
 
     def on_click(self, event: events.Click) -> None:
         """Клик по приглашению с путём — фокус в строку ввода (мышь как ускорение)."""
+        if event.button != 1:
+            return  # правый клик — вставка из буфера (on_mouse_down)
         widget = event.widget
         if widget is not None and getattr(widget, "id", None) == self.ID_CWD_PROMPT:
             self.action_focus_input()

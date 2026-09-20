@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.153**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.154**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.99 (app v1.153) |
+| `test_cmd.md` | Manual plan v1.100 (app v1.154) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -186,7 +186,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.153 |
+| `src/app.py` | TUI (`CommandRunner`), v1.154 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -232,6 +232,12 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.154
+
+- **Правый клик — вставка из буфера, где бы ни был фокус.** Мышь — ускорение (клавиатурный путь Ctrl+V / Shift+Insert не меняется): правый клик по журналу, списку подсказок или пустой области кладёт текст буфера в строку ввода, не требуя сначала попасть в неё курсором. `CommandRunner.on_mouse_down` (он же продлевает простой заставки для любой кнопки) при `button == 3` зовёт `_paste_clipboard_into_input` — тот же путь, что у Ctrl+V: вставка в позицию курсора, при выделении — в конец, `clear_clipboard_after_secret` срабатывает, пустой буфер — подсказка `clipboard.empty` (новый ключ en/ru/zh). В построчном режиме (F2 / `:log`) Ctrl+V по-прежнему дописывает текущую строку, а правый клик всегда вставляет буфер; на модалках (JSON, markdown, просмотр) вставки нет — они сами едят мышь.
+- **Правый клик не выполняет ссылки.** Брокер `@click` в Textual не различает кнопки, поэтому правый клик по `--seed` / `.md` / `:команде` / `?tag` в подсказках ещё и запускал бы действие и затирал только что вставленный текст. Отсечка — override `CommandRunner._broker_event` (клик с `button != 1` действию не отдаётся); обработчики `on_click` у `LineNavigable`, `CompletionList` и приглашения с путём тоже игнорируют не-левую кнопку, чтобы фокус/курсор не прыгали.
+- **Тесты:** `tests/test_paste_right_click.py` (8: вставка без фокуса в строке, в позицию курсора, ссылка правым кликом не выполняется, пункт подсказки не выбирается, блок не перехватывает фокус, пустой буфер, очистка буфера после секрета, модалка) + `tests/conftest.py::right_click` (в `pilot.click` кнопки нет). Доки: README (ru/en/zh — таблицы клавиш), `:?` (main.txt en/ru/zh), `test_cmd.md` (секция 53), `CLAUDE.md`.
 
 ## v1.153
 

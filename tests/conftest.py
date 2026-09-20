@@ -85,6 +85,15 @@ def input_widget(app: CommandRunner) -> CommandLineInput:
     return app.query_one(f"#{app.ID_INPUT}", CommandLineInput)
 
 
+async def right_click(pilot, *, widget=None, offset: tuple[int, int] = (0, 0), button: int = 3) -> bool:
+    """Правый клик мышью (у `pilot.click` кнопки нет — она всегда левая)."""
+    from textual.events import Click, MouseDown, MouseUp
+
+    return await pilot._post_mouse_events(
+        [MouseDown, MouseUp, Click], widget, offset, button=button
+    )
+
+
 async def type_keys(pilot, text: str) -> None:
     """Печатает строку посимвольно, как с клавиатуры."""
     if text:
