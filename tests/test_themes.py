@@ -4,8 +4,9 @@
 Пока она активна, на `Screen` висит класс `matrix-mode`, по которому app.tcss
 красит рамки (в остальных темах они свои — фиолетовые).
 
-Подсветка блока в фокусе — `$primary 25%` (смешение с фоном блока): сплошной
-`$primary-darken-1` слепил, особенно на большом блоке.
+Подсветка блока в фокусе — `$primary 12%` (смешение с фоном блока): сплошной
+`$primary-darken-1` слепил (прирост яркости ~65), 25% читалось ярко (~19) —
+поэтому сейчас ~9: блок виден, но текст с фоном не соревнуется.
 """
 from __future__ import annotations
 
@@ -179,5 +180,6 @@ async def test_block_focus_highlight_is_soft(isolated_home):
 
     assert focused != unfocused  # подсветка есть
     lift = _brightness(focused) - _brightness(unfocused)
-    # Сплошной `$primary-darken-1` давал скачок ~65; смешение 25% — ~19.
-    assert 0 < lift < 40, (unfocused, focused)
+    # Сплошной `$primary-darken-1` давал ~65, смешение 25% — ~19, 12% — ~9.
+    # Верхняя граница — сторож против возврата к слепящей заливке.
+    assert 0 < lift < 15, (unfocused, focused, lift)

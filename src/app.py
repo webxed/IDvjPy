@@ -2496,7 +2496,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.157"
+    VERSION = "v1.158"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -5130,8 +5130,17 @@ class CommandRunner(App):
         self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
 
     def action_copy_input_or_block(self) -> None:
-        """Ctrl+C: выделение мышью → в буфер; иначе вся строка ввода / весь блок (F3)."""
+        """Ctrl+C: выделение мышью → в буфер; иначе строка ввода / весь блок (F3).
+
+        Ctrl+C — `priority=True`, а такие привязки `App.on_event` проверяет раньше
+        виджетов: до экрана клавиша дойдёт только через приложение. Поэтому экран,
+        у которого Ctrl+C значит своё, спрашивается методом `copy_shortcut` (F7 -
+        просмотр вывода копирует подсвеченную строку) — сразу после выделения мышью.
+        """
         if self._copy_selection_to_clipboard():
+            return
+        shortcut = getattr(self.screen, "copy_shortcut", None)
+        if callable(shortcut) and shortcut():
             return
         inp = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         if inp.has_focus:

@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.157
+# План тестирования IDvjPy_term v1.158
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1115,11 +1115,12 @@ seq 1 400
 :log 1
 :log 999
 printf 'alpha\nhit-line\ngamma\n'   # затем F7: `/` → hit → Enter → f → Esc
+printf 'row-1\nrow-2\nother\n'    # F7: `/` → row → Enter → Esc → стрелки ↑/↓ → Enter → Ctrl+C
 ```
 
-**Ожидание:** после `seq 1 400` журнал показывает последние 300 строк с пометкой `100 lines truncated ... F7 views full`. `:log` (или `F7`) открывает полноэкранный **Line-API** просмотрщик со **всеми** 400 строками (в подзаголовке `400 lines · … chars`); стрелки/PgUp/PgDn прокручивают, Esc/q закрывают. `:log 1` — предыдущий блок; `:log 999` — `is too far back`. Поиск внутри: `/` → образец → Enter (в подзаголовке `hit · line N/M`), `n` / `N` — следующее/предыдущее с заворотом, Esc — закрыть поле. Строка совпадения подсвечивается **целиком** — фоном акцента на всю ширину плюс bold, а не только найденными символами (только `bold` без фона = регрессия `Strip.apply_style`, см. v1.132). `f` — режим «только совпадения»: на экране остаются только строки с образцом, в подзаголовке `matches N/M · line K · f / Esc — all lines`, причём `K` — номер в **исходном** выводе, а `n`/`N` идут по отобранным строкам; повторный `f` или Esc возвращают весь вывод, место совпадения сохраняется. `f` без поиска — подсказка `Filter needs a search first…` и полный список; новый образец без совпадений снимает фильтр (пустой экран хуже полного). Пустой вывод — `Output is empty.`; нет блоков — `No command block to view.`
+**Ожидание:** после `seq 1 400` журнал показывает последние 300 строк с пометкой `100 lines truncated ... F7 views full`. `:log` (или `F7`) открывает полноэкранный **Line-API** просмотрщик со **всеми** 400 строками (в подзаголовке `400 lines · … chars`); при выключенном фильтре стрелки/PgUp/PgDn прокручивают (построчно / по странице), Esc/q закрывают. `:log 1` — предыдущий блок; `:log 999` — `is too far back`. Поиск внутри: `/` → образец → Enter (в подзаголовке `hit · line N/M`), `n` / `N` — следующее/предыдущее с заворотом, Esc — закрыть поле. Строка совпадения подсвечивается **целиком** — фоном акцента на всю ширину плюс bold, а не только найденными символами (только `bold` без фона = регрессия `Strip.apply_style`, см. v1.132). `f` — режим «только совпадения»: на экране остаются только строки с образцом, в подзаголовке `matches N/M · line K · ↑↓ / n N — matches · f / Esc — all lines`, причём `K` — номер в **исходном** выводе, а `n`/`N` **и стрелки ↑/↓** идут по отобранным строкам (по кругу; вне фильтра стрелки по-прежнему просто прокручивают); повторный `f` или Esc возвращают весь вывод, место совпадения сохраняется. `f` без поиска — подсказка `Filter needs a search first…` и полный список; новый образец без совпадений снимает фильтр (пустой экран хуже полного). **Enter / Ctrl+C** копируют подсвеченную строку в буфер — как Enter в построчном режиме F2 (в подзаголовке `Copied line K: …`), экран при этом остаётся открытым; без поиска выделять нечего — `Nothing selected: / text, Enter — then Enter / Ctrl+C copies the line` (первую строку наугад не копируем). В поле поиска Ctrl+C копирует текст поля (`Copied search box (N chars)`), а не строку вывода; если мышью выделен текст, Ctrl+C по-прежнему отдаёт выделение. Пустой вывод — `Output is empty.`; нет блоков — `No command block to view.`
 
-Автотест: `tests/test_output_viewer.py`.
+Автотест: `tests/test_output_viewer.py` (24: в т.ч. Enter/Ctrl+C копируют подсвеченную строку, стрелки в фильтре и обычная прокрутка без него).
 
 ---
 
@@ -1568,7 +1569,7 @@ Ctrl+V в построчном режиме  # другое поведение: 
 
 ---
 
-**Версия документа**: v1.103
-**Версия приложения**: v1.157
+**Версия документа**: v1.104
+**Версия приложения**: v1.158
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

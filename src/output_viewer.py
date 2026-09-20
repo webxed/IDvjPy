@@ -10,8 +10,10 @@
 закрывает поиск. Строка совпадения подсвечивается **целиком** — фоном `--hit`
 (плюс bold), а не только найденными символами. `f` оставляет на экране только
 строки с совпадениями (как фильтр в JSON-вьюере), повторный `f` или Esc
-возвращают весь вывод. `q` / Esc — закрыть экран.
-`y` копирует путь исходного файла (`source_path`, raw-вид `:md`) в буфер.
+возвращают весь вывод; в режиме фильтра по совпадениям ходят и стрелки `↑` / `↓`.
+Enter и Ctrl+C копируют подсвеченную строку в буфер (как Enter в построчном
+режиме F2), `y` — путь исходного файла (`source_path`, raw-вид `:md`); `q` / Esc —
+закрыть экран.
 
 Строки берутся из `raw_stdout` (настоящие, как F3), секреты не маскируются —
 приложение предупреждает об этом в заголовке.
@@ -22,6 +24,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from rich.segment import Segment
+from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.geometry import Size
@@ -109,6 +112,33 @@ class OutputView(ScrollView):
     def pattern(self) -> str:
         """Текущий образец поиска."""
         return self._pattern
+
+    def visible_line(self, row: int) -> str:
+        """Текст видимой строки `row` (в режиме фильтра — из отобранных)."""
+        if 0 <= row < len(self._lines):
+            return self._lines[row]
+        return ""
+
+    @property
+    def current_line(self) -> str:
+        """Текст строки под курсором совпадения ("" — курсора нет)."""
+        row = self._match_row
+        return self.visible_line(row) if row is not None else ""
+
+    def on_key(self, event: events.Key) -> None:
+        """↑/↓ — по найденным строкам, пока включён фильтр «только совпадения».
+
+        В режиме фильтра на экране одни совпадения, и построчная прокрутка
+        бессмысленна: стрелки ведут подсвеченную строку к соседнему совпадению
+        (как `n` / `N`), а вид экрана держит `_jump` экрана. Без фильтра не мешаем
+        `ScrollableContainer` прокручивать вывод, поэтому перехватываем клавишу
+        только на успешный шаг (иначе событие идёт дальше — к обычной прокрутке).
+        """
+        if not self._filtered or event.key not in ("up", "down"):
+            return
+        walk = getattr(self.screen, "walk_matches", None)
+        if callable(walk) and walk(-1 if event.key == "up" else 1):
+            event.stop()
 
     def set_pattern(self, pattern: str) -> None:
         """Задать образец поиска (сбрасывает совпадение и фильтр «только совпадения»)."""
@@ -198,7 +228,12 @@ class OutputViewerScreen(ModalScreen[None]):
 
     Esc / q — закрыть (сначала — поле поиска, затем фильтр «только совпадения»),
     `/` — поиск, Enter — искать вперёд, `n` / `N` — следующее / предыдущее
-    совпадение, `f` — оставить только строки с совпадениями.
+    совпадение, `f` — оставить только строки с совпадениями, в этом режиме по
+    совпадениям ходят и стрелки `↑` / `↓` (обрабатывает `OutputView` — виджету
+    с фокусом их иначе забирает `ScrollableContainer`). Enter и Ctrl+C копируют
+    подсвеченную строку в буфер: Enter — привязкой экрана, Ctrl+C — методом
+    `copy_shortcut` (Ctrl+C — priority-binding приложения, до виджетов он не
+    доходит; см. `CommandRunner.action_copy_input_or_block`).
     """
 
     _modal = True
@@ -207,6 +242,7 @@ class OutputViewerScreen(ModalScreen[None]):
         Binding("escape", "escape_action", "Close"),
         Binding("q", "close_screen", "Close"),
         Binding("slash", "find_prompt", "Find"),
+        Binding("enter", "copy_line", "Copy line"),
         Binding("n", "find_next", "Next"),
         # Shift+N терминал присылает как заглавную `N` (см. json_viewer);
         # `shift+n` — для терминалов с modifyOtherKeys, где модификатор явный.
@@ -249,7 +285,7 @@ class OutputViewerScreen(ModalScreen[None]):
         yield Input(
             placeholder=(
                 "text  ·  Enter — search · n / N — next / prev"
-                "  ·  f — matches only · Esc — close field"
+                "  ·  f — matches only (↑ / ↓) · Esc — close field"
             ),
             id="output-search",
         )
@@ -279,6 +315,18 @@ class OutputViewerScreen(ModalScreen[None]):
 
     def _view(self) -> OutputView:
         return self.query_one(OutputView)
+
+    def _copy(self, text: str) -> bool:
+        """Положить текст в буфер через приложение (False — не вышло)."""
+        runner: Any = self.app
+        copy = getattr(runner, "copy_text", None)
+        try:
+            if copy is None:
+                raise RuntimeError("no clipboard helper")
+            copy(text)
+        except Exception:
+            return False
+        return True
 
     def _search_input(self) -> Input:
         return self.query_one("#output-search", Input)
@@ -325,7 +373,8 @@ class OutputViewerScreen(ModalScreen[None]):
         if view.filtered:
             self.sub_title = (
                 f"{pattern}  ·  matches {view.visible_count}/{view.line_count}"
-                f"  ·  line {view.source_line(row)}  ·  f / Esc — all lines"
+                f"  ·  line {view.source_line(row)}"
+                f"  ·  ↑↓ / n N — matches  ·  f / Esc — all lines"
             )
         else:
             self.sub_title = f"{pattern}  ·  line {row + 1}/{view.line_count}"
@@ -346,6 +395,73 @@ class OutputViewerScreen(ModalScreen[None]):
             self.action_find_prompt()
             return
         self._run_search(-1)
+
+    def walk_matches(self, direction: int) -> bool:
+        """Сдвинуть подсвеченную строку на соседнее совпадение (`↑` / `↓`).
+
+        True — сдвинулись. Зовётся из `OutputView.on_key` только в режиме фильтра,
+        где на экране одни совпадения: шаг — соседняя строка (не новый поиск по
+        образцу; `n` / `N` остаются поиском, поэтому разницы в фильтре не видно).
+        """
+        view = self._view()
+        total = view.visible_count
+        if not view.pattern or total <= 0:
+            return False
+        current = view.match_row
+        if current is None:
+            row = 0 if direction > 0 else total - 1
+        else:
+            row = (current + direction) % total  # по кругу, как `find`
+        self._jump(row, view.pattern)
+        return True
+
+    def action_copy_line(self) -> None:
+        """Enter / Ctrl+C — подсвеченная строка вывода в буфер.
+
+        «Выделенная» — строка текущего совпадения: её ставит `/`, по ней ходят
+        `n` / `N` и стрелки в режиме фильтра. Без поиска выделять нечего, поэтому
+        говорим об этом прямо (как `f` без образца), а не копируем первую строку
+        наугад; экран при этом не закрывается — можно искать дальше.
+        """
+        view = self._view()
+        row = view.match_row
+        if row is None or not (0 <= row < view.visible_count):
+            self.sub_title = (
+                "Nothing selected: / text, Enter — then Enter / Ctrl+C copies the line"
+            )
+            return
+        text = view.current_line
+        line_no = view.source_line(row)
+        if not self._copy(text):
+            self.sub_title = "Error copying the line to clipboard."
+            return
+        shown = " ".join(text.split())
+        self.sub_title = (
+            f"Copied line {line_no}: {shown[:60]}" if shown else f"Copied line {line_no} (empty)"
+        )
+
+    def copy_shortcut(self) -> bool:
+        """Ctrl+C внутри модалки: текст поля поиска или строка под курсором.
+
+        Ctrl+C — `priority=True` у приложения, такие привязки `App.on_event`
+        проверяет раньше виджетов, поэтому до экрана клавиша доходит только через
+        приложение (`CommandRunner.action_copy_input_or_block` спрашивает активный
+        экран методом `copy_shortcut` — сразу после выделения мышью). Поэтому
+        и в поле поиска Ctrl+C копирует текст поля, а не строку вывода.
+        """
+        search = self._search_input()
+        if search.display and search.has_focus:
+            text = search.selected_text or (search.value or "")
+            if not text:
+                self.sub_title = "Nothing to copy: the search box is empty"
+                return True
+            if not self._copy(text):
+                self.sub_title = "Error copying to clipboard."
+                return True
+            self.sub_title = f"Copied search box ({len(text)} chars)"
+            return True
+        self.action_copy_line()
+        return True
 
     def action_toggle_filter(self) -> None:
         """`f` — оставить только строки с совпадениями (повторно — весь вывод).
@@ -385,13 +501,7 @@ class OutputViewerScreen(ModalScreen[None]):
         if not self._source_path:
             self.sub_title = "No file path to copy (this is block output)."
             return
-        runner: Any = self.app
-        copy = getattr(runner, "copy_text", None)
-        try:
-            if copy is None:
-                raise RuntimeError("no clipboard helper")
-            copy(self._source_path)
-        except Exception:
+        if not self._copy(self._source_path):
             self.sub_title = "Error copying the file path to clipboard."
             return
         self.sub_title = f"Path copied: {self._source_path}"

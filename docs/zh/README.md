@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.157 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.158 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -297,7 +297,7 @@ curl -H "Bearer $TOKEN" https://api.example   # 普通的 $TOKEN 替换
 - `:screensaver` —— 立即显示屏保：**「矩阵雨」**（默认，`screensaver_matrix: true`）或 DevOps 星空（`screensaver_matrix: false`）。雨——下落的一列列字符（头部明亮、尾部渐暗；节奏缓慢均匀，20 fps 下每秒 1.8–6 行，`src/screensaver.py` 中的 `TICK_SECONDS` / `MATRIX_*_SPEED`）；在星空中，星星飞向观众，越近的越大，写着 `k8s` / `git` / `!!`，还有随行的实时时钟（`15:35:42`）和日期（`2026-08-26`）。画布可临时切换：`:screensaver matrix` / `:screensaver stars`。两种画布共有：顶部是横贯全宽的亮绿色条带，显示数据库中的命令（`!tag[tid]  cmd`）；左下是命令速查（从左向右打印，距边缘有缩进）；右下是 load 1/5/15 和 RAM（每秒从 `/proc` 读取），距右角有同样的缩进；窗口较窄时 load 可能压到速查上。被隐藏的手册（`#name--`）不会显示。任何按键、点击、滚轮滚动或鼠标移动都会关闭/重置空闲状态（不会进入输入行）。从其他会话发来的命令（`:send`）也会解除屏保——否则日志会一直关着。超时：`settings.yml` 中的 `screensaver_idle`（秒，`0` = 关闭）。`:screensaver 0` / `:screensaver 120` —— 仅对本会话。TUI 休眠期间（真正的 TTY：`> cmd`、Ctrl+O、`:ed`）不会打开屏保，返回后空闲时间重新计时——这样 `> vim` 就不会再遇到屏保了。`screensaver_stars: false` —— 星空不显示飞舞的尘埃/令牌（不影响矩阵画布）。空闲如同 Norton Commander：星星飞向观众；越近的写着 `k8s` / `git` / `!!`。随行的还有实时时钟（`15:35:42`）和日期（`2026-08-26`）。顶部是横贯全宽的亮绿色条带，显示数据库中的命令（`!tag[tid]  cmd`）。左下是命令速查（从左向右打印，距边缘缩进一如从前）；右下是 load 1/5/15 和 RAM（每秒从 `/proc` 读取），距右角有同样的缩进；窗口较窄时 load 可能压到速查上。被隐藏的手册（`#name--`）不会显示。任何按键、点击、滚轮滚动或鼠标移动都会关闭/重置空闲状态（不会进入输入行）。从其他会话发来的命令（`:send`）也会解除屏保——否则日志会一直关着。超时：`settings.yml` 中的 `screensaver_idle`（秒，`0` = 关闭）。`:screensaver 0` / `:screensaver 120` —— 仅对本会话。`screensaver_stars: false` —— 没有飞舞的尘埃/令牌（时钟、条带和 load 仍保留）。
 - `:r` —— 聚焦块的命令放入输入行；`:r N` —— 倒数 N 个块（0 = 最后一个）
 - `:cmd [N] [show]` —— 用当前 `$VAR` 值（含秘密）物化块命令 → 放入剪贴板；`show` 还会打印出来（秘密会变得可见）
-- `:log [N]`（F7）—— 在可滚动的 **Line-API** 查看器中显示块的完整输出（不再截断到 300 行）：方向键/PgUp/PgDn、Esc/q；文本搜索 —— `/`（Enter —— 向前，`n`/`N` —— 下一个/上一个匹配，Esc —— 关闭搜索框），匹配行整行高亮（强调色背景 + bold）；`f` —— 只保留有匹配的行（再次 `f` 或 Esc 恢复全部输出，副标题中的行号会恢复为原始行号）。`N` —— 倒数第几个块（0 = 聚焦/最后一个）。行是真实的（如同 F3），如有 `STDERR` 也会包含。`y` 会复制来源文件的路径（raw 视图 `:md`）；对块输出则明确显示 `No file path to copy`
+- `:log [N]`（F7）—— 在可滚动的 **Line-API** 查看器中显示块的完整输出（不再截断到 300 行）：行用 ↑/↓，翻页用 PgUp/PgDn，Esc/q；文本搜索 —— `/`（Enter —— 向前，`n`/`N` —— 下一个/上一个匹配，Esc —— 关闭搜索框），匹配行整行高亮（强调色背景 + bold）；`f` —— 只保留有匹配的行（再次 `f` 或 Esc 恢复全部输出，副标题中的行号会恢复为原始行号），此时用 ↑/↓ 在匹配之间移动；Enter 和 Ctrl+C 把选中的（高亮的）行复制到剪贴板 —— 如同 F2 逐行模式中的 Enter（没有搜索时无选中项：查看器会明确说明，而不是复制第一行；在搜索框中 Ctrl+C 复制框内文本）。`N` —— 倒数第几个块（0 = 聚焦/最后一个）。行是真实的（如同 F3），如有 `STDERR` 也会包含。`y` 会复制来源文件的路径（raw 视图 `:md`）；对块输出则明确显示 `No file path to copy`
 - `:name [<label>|<label>-|-]` —— 缓冲区标记：为聚焦（否则最后一个已完成）块打标记，以便从中管道而无需重新运行来源（`:name buff` → `|@buff awk '{...}'`）。不带参数时列出标记，`<label>-` —— 取消一个，`-` —— 全部。也可通过 `F8` 打开对话框。标记显示在块的头部（`[buff]`）；写入历史时管道记录为完整调用 `<来源> | <命令>`
 - `:/text` / `:g` / `:n` / `:N` —— 按日志行搜索（在块上按 `/` 会打开 `:/`；`n`/`N` —— 下一个 / 上一个）
 - `:export tag [file.json]` / `:import file.json` —— 单个标签与 JSON 互转（导入总是分配新的 `tid`；格式与 CLI 共用，`src/db_transfer.py`）；`:export * [library.md]` —— 整个库导出为 Markdown 目录，`:export * library.json` —— 整个库的规范 JSON（`tag_filter` 为空 —— 这正是 `library_url` 需要的文件；等同于不带 `--tag` 的 `backup_db.py export`）
@@ -325,7 +325,7 @@ JSON 用于搬运和合并（**绝不用**文件里的全局 `id`：以前外来
 - `:theme [name]` —— TUI 主题（`dark` / `light` / `nord` / `matrix` / …）；会写入 `settings.yml`。按键 `d` —— dark/light。应用自带主题 —— `matrix`：近乎黑底上的绿色荧光，如同屏保（输入框、提示和帮助的边框也会变绿）
 - `:lang [code]` —— 界面语言：不带参数时显示当前语言和可用列表，`:lang ru` —— 选择并保存（`settings.yml` 中的 `language` 键），`:lang auto` —— 跟随 `$LANG`/`$LC_ALL`。临时指定：`--lang` / `$IDVJPY_LANG`。随附语言：`en`、`ru`、`zh`。文本位于 `src/locales/`：目录 `src/locales/<lang>.yml` 加上分片 `src/locales/<lang>/*.yml`（`screensaver`、`seed`），`:?` 帮助则是文件 `src/locales/help/<lang>/*.txt`（`en` —— 唯一事实来源，缺失的键回退到它）；会切换消息、`:` 命令提示、`:welcome` 目录、屏保文本和 `:?` 帮助。新语言应用于切换之后打印的文本（已显示的块不会重绘）。命令、标签名、设置键和文件名不翻译（口号「Define your variables…」和 logo 也是：它们是品牌）。同一个 `language` 键还决定演示游走的文本层（`src/demos/text/<lang>/`）、种子注释（`src/seed_text/<lang>/` —— 因此 `--seed` 会用该语言写入说明）和手册目录（`docs/<lang>/`）
 - `:relang [code]` —— 把**已播种**库的注释（数据库中的标签说明和命令提示）翻译为另一种语言，而无需重新 `--seed`：不带参数时显示帮助，`:relang ru` —— 翻译，`:relang auto` —— 按 `$LANG`。只处理种子的规范标签和命令；你自己的标签、命令以及**手工修改过**的注释保持不变。写入前会先把数据库快照保存到 `backups/`。在终端中也是如此：`python3 src/relang.py --lang ru [--db …]`
-- 聚焦块的高亮很柔和：在块背景上叠加主题主色的 25%（以前实心的 `$primary-darken-1` 很刺眼，尤其是在很大的 `:?` 上）；在任何主题中都有效
+- 聚焦块的高亮很柔和：在块背景上叠加主题主色的 12%（以前实心的 `$primary-darken-1` 很刺眼，尤其是在很大的 `:?` 上；相对块背景的亮度增量 65 → 25% 时的 19 → 约 9）；在任何主题中都有效
 - `:kctx` —— 集群日志（`kctx.json`）：集群列表；`:kctx <cluster>` —— 登录（`klogin <c>` 或 `kubectl config use-context <c>`）并显示以前用过的 `NS`/`POD`/… 集合（只有一个集合时立即应用：别无选择）；`:kctx N` —— 应用集合 N；`:kctx <cluster> N` —— 一行完成登录并应用。哪些变量算作日志 —— settings.yml 中的 `kctx_vars` 键
 - `:?` —— TUI 内的这份帮助；`:? <主题>` —— 某组命令的详细说明（`:? llm`、`:? tags`、`:? calc`、`:? run`、`:? i`、`:? md`、`:? vars`、`:? kctx`、`:? send`、`:? session`；主题列表见帮助中的「帮助主题」一节以及 `:? ` 之后的提示）。未知主题会明确报错并列出主题；粘连写法 `:?calc` 会提示加空格
 

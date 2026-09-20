@@ -66,14 +66,18 @@
                 included) and copy it to the clipboard; `show` also prints it
                 (secrets become visible). N = blocks back (0 = last).
   :log [N]    - Full output of a block in a scrollable Line-API viewer (no 300-line
-                cap; arrows/PgUp/PgDn scroll, Esc or q closes). Find with `/`;
-                Enter — search, n/N — next/prev match, Esc — close the find field.
-                The matching line is highlighted in full (accent background + bold).
-                `f` — only matching lines (again `f` / Esc — back to all lines;
-                needs a search first; the subtitle keeps the original line number).
-                N = blocks back (0 = focused/last). Shows the block stdout
-                (like F3), escape codes stripped. Also F7. `y` copies the source
-                file path (raw `:md` view)
+                cap; rows scroll with ↑/↓ and pages with PgUp/PgDn, Esc or q closes).
+                Find with `/`; Enter — search, n/N — next/prev match, Esc — close the
+                find field. The matching line is highlighted in full (accent
+                background + bold). `f` — only matching lines (again `f` / Esc — back
+                to all lines; needs a search first; the subtitle keeps the original
+                line number), and then ↑/↓ walk the matches instead of scrolling.
+                Enter / Ctrl+C copy the highlighted line to the clipboard (as Enter
+                in the F2 line cursor; with no search there is nothing selected, and
+                the viewer says so instead of copying the first line). N = blocks
+                back (0 = focused/last). Shows the block stdout (like F3), escape
+                codes stripped. Also F7. `y` copies the source file path (raw `:md`
+                view)
   :kill [all] - Stop the running background command (focused block or the last one;
                 `:kill all` stops every running command). SIGTERM, then SIGKILL.
   :watch <sec> <command> - Rerun <command> every <sec> seconds in one block

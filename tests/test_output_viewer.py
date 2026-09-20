@@ -1,8 +1,10 @@
 """`:log` / F7 — полный вывод блока в Line-API просмотрщике (фича full-output-viewer).
 
 Проверяем: открытие модального экрана с полным выводом (без обрезки в 300 строк),
-выбор блока (N назад / сфокусированный), прокрутку, краевые случаи и что
-оптимизированная обрезка журнала по-прежнему оставляет хвост и считает скрытое.
+выбор блока (N назад / сфокусированный), прокрутку (в т.ч. что вне фильтра стрелки
+остаются прокруткой), копирование подсвеченной строки (Enter / Ctrl+C), ход по
+совпадениям стрелками при включённом фильтре, краевые случаи и что оптимизированная
+обрезка журнала по-прежнему оставляет хвост и считает скрытое.
 """
 
 from textual.widgets import Input
@@ -436,6 +438,141 @@ async def test_log_viewer_y_without_path_reports(isolated_home):
         await pilot.press("y")
         await pilot.pause()
         assert "No file path" in (screen.sub_title or "")
+
+
+async def test_log_viewer_enter_copies_the_highlighted_line(isolated_home):
+    """Enter в F7 — подсвеченная строка в буфер (как Enter в построчном F2).
+
+    Без поиска «выделенной» строки нет, и экран говорит об этом прямо, а не
+    копирует первую строку наугад (и не закрывается).
+    """
+    import pyperclip
+
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await submit(pilot, "seq -f 'row-%03g' 1 30")
+        await wait_command_done(app)
+        await submit(pilot, ":log")
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, OutputViewerScreen)
+        view = screen.query_one(OutputView)
+        search = screen.query_one("#output-search", Input)
+
+        await pilot.press("enter")
+        await pilot.pause()
+        assert isinstance(app.screen, OutputViewerScreen)
+        assert "Nothing selected" in (screen.sub_title or "")
+        assert pyperclip.paste() == ""
+
+        await pilot.press("slash")
+        await pilot.pause()
+        search.value = "row-01"
+        await pilot.press("enter")  # поиск; фокус уходит на вид
+        await pilot.pause()
+        assert view.visible_line(view.match_row) == "row-010"
+
+        await pilot.press("enter")  # копируем строку
+        await pilot.pause()
+        assert pyperclip.paste() == "row-010"
+        assert "Copied line 10" in (screen.sub_title or "")
+        assert isinstance(app.screen, OutputViewerScreen)  # экран не закрылся
+
+
+async def test_log_viewer_ctrl_c_copies_the_highlighted_line(isolated_home):
+    """Ctrl+C в F7 — та же строка, что и Enter (приложение уступает экрану)."""
+    import pyperclip
+
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await submit(pilot, "seq -f 'row-%03g' 1 30")
+        await wait_command_done(app)
+        await submit(pilot, ":log")
+        await pilot.pause()
+        screen = app.screen
+        view = screen.query_one(OutputView)
+        search = screen.query_one("#output-search", Input)
+
+        await pilot.press("slash")
+        await pilot.pause()
+        search.value = "row-02"
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("escape")  # закрыть поле, фокус на выводе
+        await pilot.pause()
+        assert view.visible_line(view.match_row) == "row-020"
+
+        await pilot.press("ctrl+c")
+        await pilot.pause()
+        assert pyperclip.paste() == "row-020"
+        assert isinstance(app.screen, OutputViewerScreen)  # приложение не вышло
+
+        # Поле поиска в фокусе: Ctrl+C — его текст, а не строка вывода.
+        await pilot.press("slash")
+        await pilot.pause()
+        search.value = "row-03"
+        await pilot.press("ctrl+c")
+        await pilot.pause()
+        assert pyperclip.paste() == "row-03"
+        assert view.match_row is not None  # строку вывода не трогали
+
+
+async def test_log_viewer_filter_arrows_walk_matches(isolated_home):
+    """В режиме фильтра по найденным строкам ходят и стрелки ↑/↓ (не только n/N)."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await submit(pilot, "seq -f 'row-%03g' 1 30")
+        await wait_command_done(app)
+        await submit(pilot, ":log")
+        await pilot.pause()
+        screen = app.screen
+        view = screen.query_one(OutputView)
+
+        await pilot.press("slash")
+        await pilot.pause()
+        screen.query_one("#output-search", Input).value = "row-01"
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("escape")  # закрыть поле, поиск остался
+        await pilot.pause()
+        await pilot.press("f")
+        await pilot.pause()
+        assert view.filtered and view.visible_count == 10
+        assert view.visible_line(view.match_row) == "row-010"
+
+        await pilot.press("down")
+        await pilot.pause()
+        assert view.visible_line(view.match_row) == "row-011"
+        await pilot.press("down")
+        await pilot.pause()
+        assert view.visible_line(view.match_row) == "row-012"
+        await pilot.press("up")
+        await pilot.pause()
+        assert view.visible_line(view.match_row) == "row-011"
+
+        # По кругу, как `n` / `N`: вверх с первой строки — последнее совпадение.
+        view.set_match(0)
+        await pilot.pause()
+        await pilot.press("up")
+        await pilot.pause()
+        assert view.visible_line(view.match_row) == "row-019"
+        assert "↑↓" in (screen.sub_title or "")
+
+
+async def test_log_viewer_arrows_still_scroll_without_filter(isolated_home):
+    """Без фильтра стрелки остаются обычной прокруткой (перехват только в фильтре)."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await submit(pilot, "seq 1 400")
+        await wait_command_done(app)
+        await submit(pilot, ":log")
+        await pilot.pause()
+        view = app.screen.query_one(OutputView)
+        assert view.scroll_offset.y == 0
+        await pilot.press("down")
+        await pilot.pause()
+        assert view.scroll_offset.y > 0
+        assert view.match_row is None
 
 
 async def test_truncate_keeps_tail_and_counts_hidden(isolated_home):

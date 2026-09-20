@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.157**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.158**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -151,7 +151,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.103 (app v1.157) |
+| `test_cmd.md` | Manual plan v1.104 (app v1.158) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -173,6 +173,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_tag_query_hints.py` | Подсказки `?`: список тегов с числом команд и комментарием, фильтр, `??`/пробел не перебиваются, Tab без запуска, клик по строке выполняет запрос (путь по клику только вставляется), ссылка — только на `?tag` |
 | `tests/test_themes.py` | Тема `matrix` (палитра, выбор из settings.yml/`:theme`, класс `matrix-mode` и зелёные рамки только у неё, сохранение между запусками) и мягкая подсветка блока в фокусе |
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
+| `tests/test_output_viewer.py` | Просмотр вывода (F7 / `:log`, 24): полный вывод без обрезки, выбор блока, прокрутка (стрелки без фильтра), поиск и подсветка строки целиком, фильтр «только совпадения» с исходными номерами, стрелки ↑/↓ по совпадениям в фильтре, Enter и Ctrl+C копируют подсвеченную строку (без поиска — явное «nothing selected»), Ctrl+C в поле поиска — текст поля |
 | `tests/test_demo.py` | YAML `--demo` (short/full/ip/features/all, guardrails тура `all`), `:playbook`, `loop: N` / `loop: true` |
 | `tests/test_gui_open.py` | `:fm` / `:term` argv by OS, `$FILEMAN` / `$TERMINAL`, detached spawn |
 | `tests/test_screensaver.py` | starfield и матричный дождь (`MatrixRain`: падение/сброс, глифы, палитра), `:screensaver` и холст по `screensaver_matrix` / `:screensaver matrix|stars`, idle timer, key swallowed, `:send` снимает заставку |
@@ -194,7 +195,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.157 |
+| `src/app.py` | TUI (`CommandRunner`), v1.158 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -218,6 +219,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/gui_open.py` | `:fm` / `:term` detached file manager / terminal |
 | `src/editor_open.py` | Внешний редактор для `:ed` (settings.yml `editor:` → `$VISUAL`/`$EDITOR` → системный; временные копии для `$OUT`/`$BLOCK`) |
 | `src/json_viewer.py` | JSON tree modal |
+| `src/output_viewer.py` | Просмотр полного вывода (`:log` / F7) на Line API: ленивый `render_line` без обрезки в 300 строк, поиск `/` → Enter + `n`/`N`, подсветка строки совпадения целиком (`outputview--hit` выбирается в `render_line`), `f` — только совпадения (в этом режиме по ним ходят и стрелки ↑/↓), Enter/Ctrl+C копируют подсвеченную строку (`copy_shortcut` — Ctrl+C у приложения `priority=True` и до виджетов не доходит), `y` — путь файла-источника |
 | `src/ingress_analyzer.py` | `:i` k8s |
 | `src/command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
 | `src/history_store.py` | `history_<instance>.txt` append/read/compact, file locks; `append_history_file_lines` — пачка под одним lock’ом без дублей (импорт) и с явной ошибкой (`AppendResult.added/error`: занятый файл не пишем молча) |
@@ -241,6 +243,14 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.158
+
+- **F7: Enter и Ctrl+C копируют подсвеченную строку.** В просмотрщике вывода не было способа взять одну строку: «выделенная» строка — это строка текущего совпадения (`outputview--hit`) — её ставит `/`, по ней ходят `n`/`N`. Теперь Enter и Ctrl+C кладут её в буфер (подзаголовок `Copied line N: …`), экран не закрывается (в F2 Enter копирует и уводит во ввод — в модалке это было бы неожиданно). Без поиска выделять нечего — явное `Nothing selected: / text, Enter — then Enter / Ctrl+C copies the line`, а не первая строка наугад. Ctrl+C — `priority=True` у приложения, такие привязки `App.on_event` проверяет раньше виджетов, поэтому модалка его сама перехватить не могла: `CommandRunner.action_copy_input_or_block` теперь спрашивает активный экран методом-хуком `copy_shortcut` (сразу после выделения мышью). В поле поиска Ctrl+C копирует текст поля, остальные экраны хука не имеют — поведение не тронуто.
+- **F7: стрелки ходят по совпадениям в режиме фильтра.** При включённом `f` на экране одни совпадения, и построчная прокрутка бессмысленна: `↑` / `↓` ведут подсветку к соседнему совпадению (по кругу, как `n` / `N`), подзаголовок подсказывает `↑↓ / n N — matches`. Реализовано в `OutputView.on_key` (виджету с фокусом стрелки иначе забирает `ScrollableContainer`) и только на успешный шаг: без фильтра стрелки остаются обычной прокруткой, `PgUp`/`PgDn` работают всегда. Заодно `:log` в справке обещает то же самое.
+- **Подсветка блока в фокусе в два раза тусклее.** `background: $primary 25%` читалось ярко — теперь `12%`: прирост яркости над фоном блока (замер в textual-dark) 18.7 → **8.8** (сплошной `$primary-darken-1` давал ~65). Тест `test_block_focus_highlight_is_soft` получил верхнюю границу `lift < 15` вместо `< 40` — сторож против возврата к слепящей заливке.
+
+Тесты: `tests/test_output_viewer.py` (24: +4 — Enter/Ctrl+C копируют подсвеченную строку, без поиска явное сообщение, Ctrl+C в поле поиска копирует поле, стрелки по совпадениям в фильтре и обычная прокрутка без него), `tests/test_themes.py`, `tests/test_commands.py`/`test_paste_right_click.py` (Ctrl+C не сломан), `tests/test_help_topics.py`, `tests/test_i18n.py`.
 
 ## v1.157
 
