@@ -21,6 +21,20 @@ startup:
 session:
   usage: "用法: :session NAME   |   :new [NAME|-] [DIR] — 在独立终端中打开窗口"
 
+scope:
+  usage: "用法: :scope add <组|标签>… （只保留这些）  |  :scope rm <组|标签>… （隐藏这些）\n       :scope clear | :scope all （显示全部）  |  :scope （当前状态）\n组: linux、k8s、git … —— 规范的种子集合；名称也可以是标签。"
+  status_all: "[bold]Scope:[/bold] 无过滤 —— 所有标签都会列出。\n  :scope add <组|标签>… 只保留这些；:scope rm … 隐藏这些。"
+  status: "[bold]Scope:[/bold] {label}\n  可见标签 {visible} 个，隐藏 {hidden} 个。显示全部: :scope clear"
+  applied: "[bold]已应用 Scope:[/bold] {label}\n  可见标签 {visible} 个，隐藏 {hidden} 个。显示全部: :scope clear"
+  cleared: "Scope 已清除：所有标签重新列出。"
+  unknown: "未知的组或标签: {names}。组: {groups}。"
+  mode_conflict: "Scope 已是 '{current}' —— 请先 :scope clear，再切换到 '{wanted}'。"
+  save_failed: "Scope 已启用，但无法写入 {file} —— 重启后会丢失。"
+  broken_file: "Scope: {error} —— 已忽略该文件，所有标签都会列出。"
+  section: "Scope: {label} —— 可见标签 {visible} 个，隐藏 {hidden} 个。显示全部: :scope clear"
+  stats_note: "[dim]Scope: {label} —— :stats 覆盖整个库；:scope clear 可恢复全部[/dim]"
+  in_session: "  Scope: {label}（:scope clear —— 显示全部）"
+
 kctx:
   "off": "kctx 日志已关闭：settings.yml 中 kctx_vars: []。"
   set_vars: "已设置的日志变量（{names}）——对它们的赋值会被记录。"
@@ -130,6 +144,7 @@ cmd:
   alias: "将命令导出为 bash 函数"
   kctx: "集群日志: 按集群保存的变量（kctx_vars）"
   session: "显示或切换实例"
+  scope: "会话标签范围: 在本窗口中保留或隐藏组/标签"
   new: "在新终端中打开应用窗口（会话）"
   send: "将命令转发到另一个会话"
   "send!": "转发并立即执行"

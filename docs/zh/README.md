@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.156 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.157 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -213,7 +213,7 @@ CI 会构建该镜像并运行冒烟测试 —— [`.github/workflows/tests.yml`
 | `?` / `??` / `?tag` / `?tag[tid]` | 查询标签 / 全部 / 按标签 / 预览；`?text`（2 个以上字符且不是标签）—— 按命令和注释内容搜索。输入 `?` 时显示带提示的标签列表（命令数 + 注释）：字母用于过滤，`Tab`/`Enter` 插入 `?tag`，**点击某行**立即执行查询 | `?deploy`、`?wide` |
 | `!tag[tid]` / `!N` | 把命令插入输入行（不运行） | `!deploy[1]` |
 | `!! …` | 在输入行中组装字符串 | `!! deploy[1] && start[1]` |
-| `:` | 应用命令 | `:q`、`:cd`、`:fm`、`:term`、`:session`、`:new`、`:send`、`:welcome`、`:backup`、`:screensaver`、`:r`、`:cmd`、`:kctx`、`:run`、`:playbook`、`:md`、`:rg`、`:lang`、`:relang`、`:?` |
+| `:` | 应用命令 | `:q`、`:cd`、`:fm`、`:term`、`:session`、`:new`、`:scope`、`:send`、`:welcome`、`:backup`、`:screensaver`、`:r`、`:cmd`、`:kctx`、`:run`、`:playbook`、`:md`、`:rg`、`:lang`、`:relang`、`:?` |
 | `\| cmd` | 管道聚焦（否则最后一个）块的 stdout（作为普通命令写入历史） | `\| grep error` |
 | `\|@label cmd` | 从带 `:name label` 标记的块管道（来源**不会**重新运行） | `\|@buff awk '{print $2}'` |
 | `\|@N cmd` | 从倒数第 N 个块管道，`0` = 最后一个 | `\|@1 jq .items` |
@@ -291,6 +291,7 @@ curl -H "Bearer $TOKEN" https://api.example   # 普通的 $TOKEN 替换
 - `:session` —— 当前实例（历史 + `.bashrc_term_*`）。`:session NAME` —— 切换或创建（标签数据库是共用的）。当前会话名称可在应用头部和终端窗口/标签标题中看到（`IDvjPy_term · NAME`，有命令运行时为 `— N running`）
 - `:new [NAME|-] [DIR]`（以及 `:session new …`）—— 在独立终端中启动一个新的应用窗口：自己的会话（`.bashrc_term_<NAME>` / `history_<NAME>.txt`），共用的 data 目录和标签数据库。`DIR` —— 新会话的工作目录（默认是 data 目录）；名称为 `-`/空时自动取 `sN` —— **正在运行的窗口之间**最小的空闲编号（data 目录中的 `session_<名称>.pid` 注册表，见 `src/session_registry.py`）：已关闭会话的文件不会占用名称，而 `s2` 关闭后该名称又空闲了。`$$` 秘密不会迁移。页脚中的 `New session` 按钮 / `Ctrl+N`。终端 —— `$TERMINAL`（例如 `kitty` / `alacritty -e`），否则从系统终端中选择；启动 —— `$IDVJPY_LAUNCH`
 - `:send <会话|*> <命令>` —— 把命令转发到另一个会话（`:new` 窗口）：插入目标会话的输入行，在那里另按 Enter 运行。`:send!` —— 立即执行（`:send! <会话|*> <命令>`）。`*` —— 发给除自己以外的所有会话。命令在发送方就完成物化（`$VAR`/`$OUT`、别名，以及 `|@label`/`|@N` → `<来源> | <命令>`）；`$$` 秘密以**名称**传输（`$TOKEN`），而目标没有的值会写入它的秘密存储（`secrets_<会话>.json`，0600，退出时清理）——因此命令在那里确实能执行，而信箱、日志和历史中都不会有该值；目标已有的值不会被覆盖（发送方日志中能看到什么被传递了、什么留在了目标那边）。缓冲区标记在每个会话中各自独立，因此 `|@…` 会展开为完整调用（来源会在目标会话中重新执行）；发送方没有该标记——命令不会发送。交换通过 data 目录中的 `inbox_<会话>.jsonl`（0600）进行；发给未启动会话的消息会等它启动。即使正在输入文本时收到也会追加到末尾，不会覆盖。在 `:send ` 之后按 Tab 会提示会话名称（`*` —— 发给其余所有会话；当前会话有标记）。`:send` / `:send!` 会写入 `history_*.txt`（可用 ↑ 重复、`:h /` 搜索），但不会作为提示给出
+- `:scope [add|rm|clear] …` —— **本窗口**的标签范围：`:scope add git` 在列表中只保留 git 手册，`:scope rm k8s` —— 隐藏 k8s，`:scope clear`（或 `:scope all`）—— 重新显示全部；不带参数时显示当前状态。它过滤**列表与提示**（`?`、`??`、`?text`、`!`/Tab 补全、屏保滚动条）；显式引用与命令（`?tag`、`!tag[tid]`、`:run`、`:stats`、`:export`、`:alias`、`:send`）不看过滤器 —— 已保存的链条和其他窗口的引用不会被破坏。名称可以是手册组（`linux`、`k8s`、`git` …）或单个标签；未知名称会明确报错并列出可用的组。按会话保存：数据目录中的 `scope_<会话>.json`（不会写入 SQLite，也不会随 `:export`/`:backup` 一起走）。窗口标题带有标记（`IDvjPy_term · git · only git`）。详见 `:? tags`
 - `:welcome` —— 如同空数据库时的种子目录（点击 `--seed` / `.md`）。数据库非空时启动会显示**分区**块，列出各 handbook 的现成标签（`linux`、`k8s`、`git`、ops、`自有`）
 - `:backup` —— 把 SQLite 快照保存到 `backups/`（就像 `--seed` 之前那样）。空的数据库不复制。恢复：把文件复制覆盖到工作数据库上。
 - `:screensaver` —— 立即显示屏保：**「矩阵雨」**（默认，`screensaver_matrix: true`）或 DevOps 星空（`screensaver_matrix: false`）。雨——下落的一列列字符（头部明亮、尾部渐暗；节奏缓慢均匀，20 fps 下每秒 1.8–6 行，`src/screensaver.py` 中的 `TICK_SECONDS` / `MATRIX_*_SPEED`）；在星空中，星星飞向观众，越近的越大，写着 `k8s` / `git` / `!!`，还有随行的实时时钟（`15:35:42`）和日期（`2026-08-26`）。画布可临时切换：`:screensaver matrix` / `:screensaver stars`。两种画布共有：顶部是横贯全宽的亮绿色条带，显示数据库中的命令（`!tag[tid]  cmd`）；左下是命令速查（从左向右打印，距边缘有缩进）；右下是 load 1/5/15 和 RAM（每秒从 `/proc` 读取），距右角有同样的缩进；窗口较窄时 load 可能压到速查上。被隐藏的手册（`#name--`）不会显示。任何按键、点击、滚轮滚动或鼠标移动都会关闭/重置空闲状态（不会进入输入行）。从其他会话发来的命令（`:send`）也会解除屏保——否则日志会一直关着。超时：`settings.yml` 中的 `screensaver_idle`（秒，`0` = 关闭）。`:screensaver 0` / `:screensaver 120` —— 仅对本会话。TUI 休眠期间（真正的 TTY：`> cmd`、Ctrl+O、`:ed`）不会打开屏保，返回后空闲时间重新计时——这样 `> vim` 就不会再遇到屏保了。`screensaver_stars: false` —— 星空不显示飞舞的尘埃/令牌（不影响矩阵画布）。空闲如同 Norton Commander：星星飞向观众；越近的写着 `k8s` / `git` / `!!`。随行的还有实时时钟（`15:35:42`）和日期（`2026-08-26`）。顶部是横贯全宽的亮绿色条带，显示数据库中的命令（`!tag[tid]  cmd`）。左下是命令速查（从左向右打印，距边缘缩进一如从前）；右下是 load 1/5/15 和 RAM（每秒从 `/proc` 读取），距右角有同样的缩进；窗口较窄时 load 可能压到速查上。被隐藏的手册（`#name--`）不会显示。任何按键、点击、滚轮滚动或鼠标移动都会关闭/重置空闲状态（不会进入输入行）。从其他会话发来的命令（`:send`）也会解除屏保——否则日志会一直关着。超时：`settings.yml` 中的 `screensaver_idle`（秒，`0` = 关闭）。`:screensaver 0` / `:screensaver 120` —— 仅对本会话。`screensaver_stars: false` —— 没有飞舞的尘埃/令牌（时钟、条带和 load 仍保留）。
@@ -427,6 +428,8 @@ editor: nano                 # `:ed`；可带参数（code --wait）；留空 �
 变量从 `.bashrc_term_<instance>`（优先）和 `.bashrc_term`（补充）读取。格式：`export VAR=val` 或 `VAR=val`。如果没有这些文件，启动时会复制 [`src/.bashrc_term.example`](../../src/.bashrc_term.example)。在运行中的应用里：`:env`，或用 `> vim .bashrc_term_default` 编辑文件（TTY 退出后会重新读取文件并采纳同一个 shell 的 `export`）。TTY 的导出不会自动写入 `.bashrc_term`——需要 `$VAR=val` 才能做到。
 
 数据库文件（`database_tags_file`，默认 `mytags.db`）**不会进入 git**。首次启动时会创建空的 SQLite 架构；日志中显示种子脚本目录（在顶部，不会跳到下方）。点击绿色的 `--seed` 会把命令插入输入行；Enter 运行；然后 `??`（或约 5 秒）。点击 `.md` 名称或 `:md 文件.md` 会打开带格式的手册（Esc 关闭）。需要 `terminal_mouse: true`。
+
+标签范围（命令 `:scope`）与历史放在一起：数据目录中的 `scope_<会话>.json`。它是窗口的属性，而不是数据的属性：库和运行计数不变，所以过滤器不会随 `:export` / `:backup` / `:send` 一起走，相邻窗口也不会丢失自己的标签。没有文件 —— 就没有过滤。
 
 ## 架构
 

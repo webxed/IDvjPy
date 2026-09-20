@@ -43,6 +43,14 @@
   :new [NAME|-] [DIR] - Another app instance in a NEW terminal window (Ctrl+N; :? session)
   :send <session|*> <cmd> - Forward a command to another session (`:send!` — at once;
                 secrets by name, the value goes to the target's store; :? send)
+  :scope [add|rm|clear] … - Tag scope of THIS window: `:scope add git` lists only the
+                git handbook, `:scope rm k8s` hides it, `:scope clear` (or `:scope all`)
+                shows everything again. Filters lists and hints (`?`, `??`, `?text`,
+                `!`/Tab completions, the screensaver ticker); explicit refs (`?tag`,
+                `!tag[tid]`, `:run`, `:stats`, `:export`) work as always — saved chains
+                never break. A name is a handbook group (linux, k8s, git, …) or a tag.
+                Per session: scope_<instance>.json; the window title carries the
+                marker (`IDvjPy_term · git · only git`). Details: :? tags
   :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
   :screensaver  - Idle overlay: matrix digital rain (screensaver_matrix, default) or the

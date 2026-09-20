@@ -15,6 +15,20 @@ startup:
 session:
   usage: "Usage: :session NAME   |   :new [NAME|-] [DIR] — окно в отдельном терминале"
 
+scope:
+  usage: "Использование: :scope add <группа|тег>… (оставить только это)  |  :scope rm <группа|тег>… (скрыть это)\n       :scope clear | :scope all (показать всё)  |  :scope (что сейчас)\nГруппы: linux, k8s, git, … — канонические наборы сидов; имя может быть и тегом."
+  status_all: "[bold]Scope:[/bold] фильтра нет — в списках все теги.\n  :scope add <группа|тег>… — оставить только это; :scope rm … — скрыть это."
+  status: "[bold]Scope:[/bold] {label}\n  видимых тегов: {visible}, скрытых: {hidden}. Показать всё: :scope clear"
+  applied: "[bold]Scope применён:[/bold] {label}\n  видимых тегов: {visible}, скрытых: {hidden}. Показать всё: :scope clear"
+  cleared: "Scope снят: в списках снова все теги."
+  unknown: "Неизвестная группа или тег: {names}. Группы: {groups}."
+  mode_conflict: "Scope уже '{current}' — сначала :scope clear, потом '{wanted}'."
+  save_failed: "Scope включён, но {file} записать не удалось — после перезапуска он пропадёт."
+  broken_file: "Scope: {error} — файл игнорирую, в списках все теги."
+  section: "Scope: {label} — видимых тегов: {visible}, скрытых: {hidden}. Показать всё: :scope clear"
+  stats_note: "[dim]Scope: {label} — :stats показывает всю библиотеку; :scope clear вернёт всё[/dim]"
+  in_session: "  Scope: {label} (:scope clear — показать всё)"
+
 kctx:
   "off": "Журнал выключен: kctx_vars: [] в settings.yml."
   set_vars: "Задайте переменные журнала ({names}) — они запишутся в журнал."
@@ -124,6 +138,7 @@ cmd:
   alias: "команды как bash-функции"
   kctx: "кластерный журнал: наборы переменных по кластерам (kctx_vars)"
   session: "показать/сменить инстанс"
+  scope: "область видимости тегов: оставить/скрыть наборы и теги в этом окне"
   new: "окно приложения в отдельном терминале (сессия)"
   send: "переслать команду в другую сессию"
   "send!": "переслать и сразу выполнить"

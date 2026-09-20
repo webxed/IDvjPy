@@ -44,6 +44,13 @@
   :new [NAME|-] [DIR] - 在新的终端窗口中打开另一个应用实例（Ctrl+N；:? session）
   :send <session|*> <cmd> - 将命令转发到另一个会话（`:send!` — 立即；
                 密钥按名称传递，值写入目标自己的存储；:? send）
+  :scope [add|rm|clear] … - 本窗口的标签范围：`:scope add git` 只列出 git 手册，
+                `:scope rm k8s` 将其隐藏，`:scope clear`（或 `:scope all`）重新
+                显示全部。只过滤列表与提示（`?`、`??`、`?text`、`!`/Tab 补全、
+                屏保滚动条）；显式引用（`?tag`、`!tag[tid]`、`:run`、`:stats`、
+                `:export`）照常工作，已保存的链条不会被破坏。名称可以是手册组
+                （linux、k8s、git …）或单个标签。按会话保存：scope_<会话>.json；
+                窗口标题带有标记（`IDvjPy_term · git · only git`）。详见 :? tags
   :welcome      - 种子目录（如同空数据库时的欢迎语；点击 --seed / .md）
   :backup       - 将命令数据库复制到 backups/（与 --seed 相同的快照）
   :screensaver  - 空闲覆盖层：矩阵数字雨（screensaver_matrix，

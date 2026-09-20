@@ -58,6 +58,7 @@ COLON_COMMAND_NAMES: tuple[str, ...] = (
     "theme",
     "lang",
     "relang",
+    "scope",
     "playbook",
     "run",
     "update",

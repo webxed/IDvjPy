@@ -16,4 +16,11 @@
                组合管道/保存：`#file !file[1] | !file[2]`（预览会展开引用）
   !N         - 按上次查询中的 ID 执行命令
 
+  Scope      - 窗口级标签过滤：:scope add git（只保留该手册）、:scope rm k8s
+               （隐藏它）、:scope clear / :scope all（显示全部）。只影响列表与
+               提示：?、??、?text、`!`/Tab 补全以及屏保滚动条。显式引用（?tag、
+               !tag[tid]、:run、:stats、:export）不看过滤器 —— 已保存的链条不会被
+               破坏。按会话保存（scope_<会话>.json）；窗口标题带有标记
+               （`· only git`）。不带参数时 :scope 报告当前状态。
+
   其他主题与完整命令列表 — :?

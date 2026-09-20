@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 import random
 import time
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -434,17 +434,26 @@ def ticker_items_from_commands(
     return tuple(items)
 
 
-def load_library_reminders(db_file: str | None) -> tuple[str, ...]:
-    """Snapshot live commands from SQLite. Hidden handbook tags stay out."""
+def load_library_reminders(
+    db_file: str | None, allowed_tags: Collection[str] | None = None
+) -> tuple[str, ...]:
+    """Snapshot live commands from SQLite. Hidden handbook tags stay out.
+
+    ``allowed_tags`` — scope сессии (`:scope`): лента заставки — тоже список
+    команд, поэтому показывает только видимое. ``None`` — фильтра нет.
+    """
     rows: list[tuple[str, int, str]] = []
     if db_file:
         try:
             import database_v2 as database
 
             hidden = set(database.get_hidden_tags(db_file))
+            allowed = set(allowed_tags) if allowed_tags is not None else None
             for row in database.get_all_commands_with_ids(db_file):
                 tag = row["tag"]
                 if tag in hidden:
+                    continue
+                if allowed is not None and tag not in allowed:
                     continue
                 rows.append((tag, int(row["tid"]), row["command"] or ""))
         except Exception:
@@ -957,6 +966,7 @@ class DevopsScreensaver(ModalScreen[None]):
         host_reader: Callable[[], HostSnapshot] | None = None,
         stars: bool | None = None,
         matrix: bool | None = None,
+        allowed_tags: Collection[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -966,6 +976,7 @@ class DevopsScreensaver(ModalScreen[None]):
         self._help_lines = help_lines
         self._stars = stars
         self._matrix = matrix
+        self._allowed_tags = allowed_tags
         self._field: StarField | MatrixRain = StarField(
             80, 24, seed=seed, tokens=tokens, stars=stars is not False
         )
@@ -983,7 +994,9 @@ class DevopsScreensaver(ModalScreen[None]):
 
     def on_mount(self) -> None:
         if self._ticker_items is None:
-            items = load_library_reminders(getattr(self.app, "db_file", None))
+            items = load_library_reminders(
+                getattr(self.app, "db_file", None), self._allowed_tags
+            )
         else:
             items = tuple(self._ticker_items)
         self._ticker = LibraryTicker(items, seed=self._seed)

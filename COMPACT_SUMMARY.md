@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.156**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.157**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -27,7 +27,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no such tag) searches command text + comments across tags |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:?` `:? <тема>` (`calc` `run` `i` `md` `llm` `tags` `vars` `kctx` `send` `session` `import`) `:q` `:w` `:h` `:c` `:json` `:md` `:rg` `:i` `:cd` `:fm` `:term` `:ed` `:env` `:r` `:cmd` `:log` `:o` `:diff` `:name` `:kill` `:watch` `:llm` `:cht` `:g` `:/` `:n` `:N` `:stats` `:mv` `:export` `:import` `:alias` `:kctx` `:session` `:new` `:send` `:send!` `:backup` `:welcome` `:screensaver` `:theme` `:lang` `:relang` `:playbook` `:run` `:update` |
+| `:` | `:?` `:? <тема>` (`calc` `run` `i` `md` `llm` `tags` `vars` `kctx` `send` `session` `import`) `:q` `:w` `:h` `:c` `:json` `:md` `:rg` `:i` `:cd` `:fm` `:term` `:ed` `:env` `:r` `:cmd` `:log` `:o` `:diff` `:name` `:kill` `:watch` `:llm` `:cht` `:g` `:/` `:n` `:N` `:stats` `:mv` `:export` `:import` `:alias` `:kctx` `:session` `:new` `:scope` `:send` `:send!` `:backup` `:welcome` `:screensaver` `:theme` `:lang` `:relang` `:playbook` `:run` `:update` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -51,6 +51,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 - In-memory cache `last_query_results`: `{global_id: command}`. Filled on start, every 5s, and replaced on `?`/`??`/`?tag`.
 - `!! tag[tid]` hits DB immediately. `!! 1` needs cache (start load, `??`, or 5s reload).
 - Tab completion: DB `command LIKE prefix%` (`deleted = 0`) + session history; path context uses cwd files only (not mixed with full commands). Typing `!file` / `!kube` lists tagged commands (`<id> tag[tid]  cmd`) and inserts `!tag[tid]` only. Hidden handbook tags (`#name--`) stay out of these lists; `??` / `?` show them under Hidden.
+- Tag scope (`:scope`) filters what these lists show (see below) — `_visible_library` is a cached slice of the same rows. `_library` stays whole: run counting (`bump_command_usage`) and the `:llm` context still see hidden tags, so `:stats` and the usage sort never drift.
 
 ---
 
@@ -133,6 +134,11 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 - `$VAR=@key` / `$$VAR=@key` — значение из вывода блока (строка с первым токеном `key`; `@last` — последняя).
 - `-n` without value → explicit error (no silent fallback).
 
+### Tag scope (per session)
+- `:scope add <group|tag>…` — keep only these (`only`), `:scope rm …` — hide these (`hide`), `:scope clear` / `:scope all` — drop the filter, bare `:scope` — the current state. A name is a handbook group (`linux`, `k8s`, `git`, docker, helm, … — the canonical `seed_groups` sets) or a single tag; comma and space both separate. An unknown name is an explicit error listing the groups; mixing `only` and `hide` in one scope is an explicit error (`ScopeModeError`), not a silent reset.
+- **Scope is a view filter, not data.** It only touches lists and hints: `?` (tag list), `??` (all commands), `?text` (content search), `!`/Tab completions and the screensaver ticker. Explicit refs and commands — `?tag`, `!tag[tid]`, `!N`, `:run`, `:stats`, `:export`, `:alias`, `:mv`, `:send`, `#tag+/-`, `--seed`, `:relang`, `:backup` — ignore it, so saved chains and other windows' refs never break. `??` still records every id in `last_query_results`, so `!ID` works for a hidden tag too.
+- **Per session, in a file.** `scope_<session>.json` in the data directory (not SQLite and not a DB table — the library is carried by `:export` / `backup_db.py`, the scope is a property of the window and must not travel). No file — no filter; a broken file — the filter is off and the journal says so. `:session NAME` reloads the scope of that name; the window/OSC title carries the marker (`IDvjPy_term · git · only git`). `:stats` covers the whole library and adds a reminder line while a scope is active.
+
 ### CLI
 - Root `app.py` is a launcher; the TUI module is `src/app.py`. `--instance-name` is parsed in the launcher / `src/app.py` `__main__` (pytest imports `src/app.py` via `pythonpath = src`).
 - Instance bashrc: `.bashrc_term_{instance}` in cwd. Template: `src/.bashrc_term.example`.
@@ -145,7 +151,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.102 (app v1.156) |
+| `test_cmd.md` | Manual plan v1.103 (app v1.157) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -171,6 +177,8 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_gui_open.py` | `:fm` / `:term` argv by OS, `$FILEMAN` / `$TERMINAL`, detached spawn |
 | `tests/test_screensaver.py` | starfield и матричный дождь (`MatrixRain`: падение/сброс, глифы, палитра), `:screensaver` и холст по `screensaver_matrix` / `:screensaver matrix|stars`, idle timer, key swallowed, `:send` снимает заставку |
 | `tests/test_docker_stand.py` | Файлы docker-стенда: seed-скрипты в entrypoint, compose-том/TTY, Dockerfile, `.dockerignore`, job CI |
+| `tests/test_tag_scope.py` | Область видимости тегов (модуль): `split_names` (пробелы/запятые), `classify` (группа побеждает одноимённый тег, известные/чужие имена), `only`/`hide`, `rm` на пустом → `hide`, `rm` из `only`, снятие последнего имени → пустой scope, смешение режимов → `ScopeModeError`, `split`/`describe`, round-trip `scope_<сессия>.json` и изоляция сессий, битый файл/нет файла |
+| `tests/test_scope_command.py` | `:scope` в TUI (инвариант «фильтр — только списки»): `?`/`??`/`!`-подсказки скрывают чужие теги, `?tag`/`!tag[tid]`/`:stats` работают при скрытом теге, `??` с секцией Scope, `rm` → hide, `clear`/`all` возвращают всё (файл удалён), статус без аргументов, ошибки неизвестного имени и смешения режимов, маркер в заголовке, переживает restart, две сессии независимы, битый файл → фильтр выключен и сообщение, лента заставки уважает scope |
 | `tests/test_ux_extras.py` | `:r N`, счётчик running в заголовке, `:alias`, консоль под TUI по Ctrl+O (suspend → ожидание клавиши → возврат, `SuspendNotSupported`) |
 
 Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then Enter.
@@ -186,7 +194,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.156 |
+| `src/app.py` | TUI (`CommandRunner`), v1.157 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -195,7 +203,8 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/net.py` | Общий сетевой слой (без Textual): HTTP(S) через stdlib + прокси с логином (`$PROXY_USER` / `$PROXY_PASS` → URL прокси), `open_url`, чистка пароля из текста ошибки, подсказка при «407». Для `:update`, `:llm`/`:cht` и `:import <url>` |
 | `src/remote_source.py` | Внешний источник для `:import <url>`: только `https://` (иначе явный `--insecure`), лимит 2 МБ, таймаут 10 с, `safe_url` без userinfo, `looks_remote` (ссылка или локальный файл), `RemoteError` с готовым текстом для журнала |
 | `src/backup_db.py` | Тонкий CLI над `db_transfer` (`backup_db.py` + обёртка `backup_db.sh`): `export`/`import`, `export-csv`/`import-csv`, `export-tags-csv`/`import-tags-csv`, `list`, `backup` (снимок SQLite + JSON + CSV), `restore` (со снимком до операции). Своей SQL-обвязки и своей JSON-схемы больше нет |
-| `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` |
+| `src/seed_groups.py` | Handbook name → tags for `#name--` / `#name!!` and for `:scope` groups |
+| `src/tag_scope.py` | Область видимости тегов у сессии (`:scope`): `TagScope` (`mode` `only`/`hide` + группы `seed_groups` + отдельные теги): `matches`/`split`/`add`/`drop`/`label`/`describe`, `classify`, `split_names`, `ScopeModeError`; файл `scope_<сессия>.json` в data-каталоге (нет файла — нет фильтра, битый — фильтр выключен и явное сообщение). Фильтр — только списки и подсказки; БД не трогает |
 | `src/seed_catalog.py` | Empty-DB welcome catalog (click `--seed` / `.md`); texts from `catalog.*` (`locales/<lang>/seed.yml`), commands/scripts never translated |
 | `src/md_viewer.py` | Modal Markdown viewer (`:md`, welcome links). Handbook lookup is language-aware: `handbook_md_path(name, lang)` prefers `docs/<lang>/NAME`, then `docs/NAME`, then `NAME` (repo root / cwd) — a language without its own copy gets the base handbook |
 | `src/k8s_complete.py` | Имена ресурсов k8s из живого кластера (`kubectl get`) |
@@ -232,6 +241,13 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.157
+
+- **`:scope` — область видимости тегов у сессии.** Два окна делят одну БД, но `session git` нужен свой фокус: `:scope add git` оставляет в списках только набор git, `:scope rm k8s` — скрывает k8s, `:scope clear` / `:scope all` — снимает фильтр, без аргумента — что сейчас. Имя — группа хендбука (`linux`, `k8s`, `git`, docker, helm, … — канонические наборы `seed_groups`) или отдельный тег; неизвестное имя — явная ошибка со списком групп, а смешивание `only` и `hide` — явная ошибка (`ScopeModeError`), а не тихий сброс. Модуль — `src/tag_scope.py`.
+- **Фильтр только представления.** Scope влияет на списки и подсказки (`?`, `??`, `?text`, подсказки `!`/Tab, лента заставки). Явные адреса и команды (`?tag`, `!tag[tid]`, `!N`, `:run`, `:stats`, `:export`, `:alias`, `:mv`, `:send`, `#tag+/-`, `--seed`, `:relang`, `:backup`) работают как раньше — сохранённые цепочки и чужие ссылки не ломаются; `??` по-прежнему кладёт все id в `last_query_results`, поэтому `!ID` работает и для скрытого тега. Кэш `_library` остаётся полным (учёт запусков и контекст `:llm`), а срез `_visible_library` строится только для списков — `:stats` и сортировка по частоте не «плавают».
+- **Свой файл у каждой сессии.** `scope_<сессия>.json` в каталоге данных: в SQLite не пишется (библиотеку носят через `:export` / `backup_db.py`, а область видимости — свойство окна). Нет файла — нет фильтра; битый файл — фильтр выключен и в журнале явное сообщение. `:session NAME` перечитывает scope этого имени; заголовок окна/вкладки несёт маркер `IDvjPy_term · git · only git`. В `:stats` при активном scope добавляется строка-напоминание (отчёт всё равно про всю библиотеку).
+- **Попутно:** в `_handle_stats_command` переменная цикла `t` затеняла функцию локали `t()` — переименована в `stat` (без этого новое сообщение падало с `'dict' object is not callable`).
 
 ## v1.156
 

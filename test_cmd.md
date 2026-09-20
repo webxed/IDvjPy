@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.156
+# План тестирования IDvjPy_term v1.157
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1539,7 +1539,36 @@ Ctrl+V в построчном режиме  # другое поведение: 
 
 ---
 
-**Версия документа**: v1.102
-**Версия приложения**: v1.156
+## Секция 54: Область видимости тегов (`:scope`)
+
+Нужны два набора: `git` (`gstat`) и `k8s` (`kpod`). Проверять лучше в двух окнах (`:new git`, `:new k8s`) — у каждой сессии свой scope.
+
+```text
+:scope                     # фильтра нет — в списках все теги
+:scope add git             # only git: видимых тегов N, скрытых M; заголовок окна → IDvjPy_term · default · only git
+?                          # список: gstat есть, kpod нет; внизу строка Scope: only git … :scope clear
+??                         # команды git есть, k8s нет; строка Scope: only git
+!<Tab>                     # подсказки: только git и gstat
+?kpod                      # явный адрес работает и для скрытого тега
+!kpod[1]                   # ссылка вставляет команду во ввод (запуск — отдельным Enter)
+:stats                     # считает ВСЮ библиотеку + строка Scope: … (:stats про всю БД)
+:scope rm kpod             # hide kpod: всё кроме k8s; добавить в only нельзя — сначала :scope clear
+:scope add git             # после rm → явная ошибка про смешивание режимов, scope не меняется
+:scope clear               # снова всё; файл scope_<сессия>.json удалён
+:scope all                 # то же, что clear
+:scope add nope             # Unknown group or tag: nope. Groups: docker, file, git, …
+<заставка по простою>       # лента показывает только команды git
+<второе окно :new git>      # у него свой scope: default ничего не потерял
+:session k8s               # у чужого имени свой файл — фильтра нет
+```
+
+**Ожидание:** scope — свойство **окна**, а не данных: библиотека, счётчики запусков и `:export`/`:backup`/`:send` не меняются (переключение сессии свой scope не теряет — возврат на имя возвращает фильтр). Фильтруются только списки и подсказки: `?`, `??`, `?text`, подсказки `!`/Tab и лента заставки. Явные адреса и команды (`?tag`, `!tag[tid]`, `:run`, `:stats`, `:export`, `:alias`, `:send`) работают как раньше — сохранённые цепочки не ломаются. Заголовок окна (и OSC-титул) несёт маркер `· only git`. Файл — `scope_<сессия>.json` в каталоге данных (`clear` его удаляет); битый файл не гасит приложение: фильтр выключен, в журнале — строка `Scope: … — file ignored`. Файла нет — фильтра нет.
+
+Автотесты: `tests/test_tag_scope.py` (16: разбор имён, группа побеждает одноимённый тег, only/hide, пустой результат → снятие фильтра, mix → ошибка, файл сессии, изоляция сессий, битый файл), `tests/test_scope_command.py` (15: скрытие в `?`/`!`-подсказках, явные адреса при скрытом теге, `??` с секцией, `rm` → hide, `clear`/`all`, ошибки неизвестного имени и смешения режимов, маркер в заголовке, restart, две сессии, битый файл, лента заставки); сторожит полноту — `tests/test_colon_commands.py` (`cmd.scope`), справку — `tests/test_help_topics.py`, локали — `tests/test_i18n.py`.
+
+---
+
+**Версия документа**: v1.103
+**Версия приложения**: v1.157
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

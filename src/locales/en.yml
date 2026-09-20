@@ -20,6 +20,20 @@ startup:
 session:
   usage: "Usage: :session NAME   |   :new [NAME|-] [DIR] — a window in a separate terminal"
 
+scope:
+  usage: "Usage: :scope add <group|tag>… (keep only these)  |  :scope rm <group|tag>… (hide these)\n       :scope clear | :scope all (show everything)  |  :scope (current state)\nGroups: linux, k8s, git, … — the canonical seed sets; a name may be a tag too."
+  status_all: "[bold]Scope:[/bold] no filter — every tag is listed.\n  :scope add <group|tag>… keeps only these; :scope rm … hides these."
+  status: "[bold]Scope:[/bold] {label}\n  {visible} tag(s) visible, {hidden} hidden. Show everything: :scope clear"
+  applied: "[bold]Scope applied:[/bold] {label}\n  {visible} tag(s) visible, {hidden} hidden. Show everything: :scope clear"
+  cleared: "Scope cleared: every tag is listed again."
+  unknown: "Unknown group or tag: {names}. Groups: {groups}."
+  mode_conflict: "Scope is already '{current}' — run :scope clear first, then switch to '{wanted}'."
+  save_failed: "Scope is active, but {file} could not be written — it will be lost on restart."
+  broken_file: "Scope: {error} — file ignored, every tag is listed."
+  section: "Scope: {label} — {visible} tag(s) visible, {hidden} hidden. Show everything: :scope clear"
+  stats_note: "[dim]Scope: {label} — :stats covers the whole library; :scope clear shows everything again[/dim]"
+  in_session: "  Scope: {label} (:scope clear — show everything)"
+
 kctx:
   "off": "kctx journal is off: kctx_vars: [] in settings.yml."
   set_vars: "Set journal variables ({names}) — assignments to them are recorded."
@@ -129,6 +143,7 @@ cmd:
   alias: "commands as bash functions"
   kctx: "cluster journal: saved vars per cluster (kctx_vars)"
   session: "show or switch instance"
+  scope: "session tag scope: keep or hide groups/tags in this window"
   new: "app window in a new terminal (session)"
   send: "forward a command to another session"
   "send!": "forward and run it immediately"

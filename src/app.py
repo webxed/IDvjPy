@@ -265,6 +265,15 @@ try:
         unexpanded_variables,
         wrap_tty_command,
     )
+    from tag_scope import (
+        ScopeModeError,
+        TagScope,
+        classify,
+        load_scope,
+        save_scope,
+        scope_file_for,
+        split_names,
+    )
     from update_check import (
         KIND_AVAILABLE,
         fetch_remote_version,
@@ -2487,7 +2496,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.156"
+    VERSION = "v1.157"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2627,6 +2636,7 @@ class CommandRunner(App):
     CMD_LOG = "log"  # полный вывод блока в Line-API просмотрщике
     CMD_SEND = "send"  # переслать команду в другую сессию (вставить во ввод)
     CMD_SEND_RUN = "send!"  # то же, но сразу выполнить в целевой сессии
+    CMD_SCOPE = "scope"  # какие теги показывать в этой сессии (фильтр представления)
     # Colon-команды, у которых аргументы — не пути: числа и поисковые шаблоны.
     # Для них `/` — начало `:o /text` (grep по выводам) / `:h /text`, а не листинг корня.
     COLON_NO_PATH_ARGS = frozenset(
@@ -2734,6 +2744,11 @@ class CommandRunner(App):
         self.last_query_results: dict[int, str] = {}
         # Кэш live-команд библиотеки для автодополнения (список dict).
         self._library_cache: list[dict] | None = None
+        # Область видимости тегов этой сессии (`:scope`): фильтр представления,
+        # в БД не пишется. Пустой scope — фильтра нет (видно всё).
+        self._tag_scope: TagScope = TagScope()
+        # Срез библиотеки после scope — для списков и подсказок (`_visible_library`).
+        self._scope_library_cache: list[dict] | None = None
         self._db_stat: tuple[int, int] | None = None
         self.history_lines: int = 20
         self.history_keep: int = DEFAULT_HISTORY_KEEP
@@ -3323,7 +3338,7 @@ class CommandRunner(App):
             return [], preview
 
         try:
-            lib = self._library()
+            lib = self._visible_library()
         except Exception:
             return [], preview
         tags = sorted({entry["tag"] for entry in lib})
@@ -3398,7 +3413,7 @@ class CommandRunner(App):
             return [], ""
         needle = matched.group("prefix")
         try:
-            lib = self._library()
+            lib = self._visible_library()
         except Exception:
             return [], ""
         if not lib:
@@ -3545,7 +3560,7 @@ class CommandRunner(App):
         try:
             from_db = {
                 entry["command"]
-                for entry in self._library()
+                for entry in self._visible_library()
                 if entry["command"].startswith(prefix)
             }
             candidates.extend(from_db)
@@ -3839,6 +3854,8 @@ class CommandRunner(App):
         self._data_dir = ensure_data_dir(resolve_data_dir(self._requested_data_dir))
         self._pin_instance_files()
         self._provision_fresh_data_dir()
+        # Область видимости сессии (`:scope`) — до заголовка: он её показывает.
+        scope_error = self._load_session_scope()
         self._refresh_running_title()  # заголовок окна/вкладки: IDvjPy_term · <сессия>
         # Реестр активных сессий: `:new` без имени берёт наименьшее свободное `sN`
         # среди работающих (session_registry).
@@ -3952,6 +3969,10 @@ class CommandRunner(App):
             self.sub_title = f"DB Error: {e}"
             self.set_timer(5, self.clear_subtitle)
 
+        # Битая область видимости — не гадаем: фильтр выключен, ошибка явная.
+        if scope_error:
+            self.add_block(InfoBlock(t("scope.broken_file", error=scope_error)))
+
         # 2.5. Миграция .bashrc_term -> .bashrc_term_{INSTANCE_NAME} для обратной совместимости
         if INSTANCE_NAME != "default":
             # Если существует старый .bashrc_term и нет нового с суффиксом, копируем
@@ -4011,6 +4032,7 @@ class CommandRunner(App):
         """Перечитать live-команды в _library_cache (один SQL-запрос)."""
         try:
             self._library_cache = self._read_library_rows()
+            self._scope_library_cache = None
             self._db_stat = history_file_stat_key(self.db_file)
         except Exception:
             self._library_cache = self._library_cache or []
@@ -4018,12 +4040,39 @@ class CommandRunner(App):
     def _invalidate_library(self) -> None:
         """Сбросить кэш после мутации; следующая подсказка перечитает БД."""
         self._library_cache = None
+        self._scope_library_cache = None
 
     def _library(self) -> list[dict]:
         """Кэш live-команд; лениво перечитывается после инвалидации."""
         if self._library_cache is None:
             self._reload_library_cache()
         return self._library_cache or []
+
+    def _scope_allows(self, tag: str) -> bool:
+        """Видно ли тег в этой сессии (scope пуст — видно всё)."""
+        scope = getattr(self, "_tag_scope", None)
+        return True if scope is None else scope.matches(tag)
+
+    def _visible_library(self) -> list[dict]:
+        """Live-команды, видимые в scope сессии.
+
+        Только для **списков и подсказок**. Учёт запусков (`bump_command_usage`)
+        и контекст `:llm` читают полную библиотеку: скрытый тег, запущенный
+        явной ссылкой `!tag[tid]`, должен считаться как раньше.
+        """
+        if self._scope_library_cache is None:
+            scope = getattr(self, "_tag_scope", None)
+            if scope is None or scope.is_empty:
+                self._scope_library_cache = self._library()
+            else:
+                self._scope_library_cache = [
+                    entry for entry in self._library() if scope.matches(entry["tag"])
+                ]
+        return self._scope_library_cache or []
+
+    def _visible_tag_names(self) -> set[str]:
+        """Имена видимых тегов — для заставки-ленты и секций справки."""
+        return {entry["tag"] for entry in self._visible_library()}
 
     def _populate_query_results(self) -> None:
         """
@@ -4046,6 +4095,7 @@ class CommandRunner(App):
         try:
             rows = self._read_library_rows()
             self._library_cache = rows
+            self._scope_library_cache = None
             self._db_stat = history_file_stat_key(self.db_file)
             self.last_query_results = {row["id"]: row["command"] for row in rows}
         except Exception:
@@ -4075,6 +4125,7 @@ class CommandRunner(App):
         try:
             rows = self._read_library_rows()
             self._library_cache = rows
+            self._scope_library_cache = None
             self._db_stat = stat
             self.last_query_results = {row["id"]: row["command"] for row in rows}
         except Exception:
@@ -5576,6 +5627,7 @@ class CommandRunner(App):
         CMD_NEW: "_handle_new_window",
         CMD_SEND: "_handle_send_args",
         CMD_SEND_RUN: "_handle_send_run_args",
+        CMD_SCOPE: "_handle_scope_command",
         CMD_SCREENSAVER: "_handle_screensaver_command",
         CMD_BACKUP: "_handle_backup_command",
         CMD_FM: "_handle_fm_args",
@@ -6716,6 +6768,129 @@ class CommandRunner(App):
             message or t("runbook.stopped", title=title, index=index, total=total)
         ))
 
+    # --- Область видимости тегов (`:scope`) -----------------------------------
+    # Scope — свойство **сессии**, а не данных: библиотека одна на все окна, но
+    # списки и подсказки конкретного окна показывают только выбранное. В SQLite
+    # ничего не пишется: файл `scope_<сессия>.json` в каталоге данных, поэтому
+    # `:export` / `:backup` / `:send` / соседние окна чужие теги не теряют.
+    def _load_session_scope(self) -> str:
+        """Прочитать область видимости сессии; вернуть текст ошибки ("" — ок)."""
+        scope, error = load_scope(self._data_dir or ".", self.instance_name)
+        self._apply_tag_scope(scope)
+        return error
+
+    def _apply_tag_scope(self, scope: TagScope) -> None:
+        """Применить scope: пересобрать срез библиотеки и обновить заголовок."""
+        self._tag_scope = scope
+        self._scope_library_cache = None
+        self._refresh_running_title()
+
+    def _scope_counts(self) -> tuple[int, int]:
+        """(видимых тегов, скрытых scope'ом) — для сообщений и секций."""
+        visible = self._visible_tag_names()
+        try:
+            all_tags = set(database.get_all_tags(self.db_file))
+        except Exception:
+            all_tags = set(visible)
+        return len(visible), len(all_tags - visible)
+
+    def _scope_status_text(self) -> str:
+        """`:scope` без аргументов — что сейчас скрыто и чем вернуть всё."""
+        if self._tag_scope.is_empty:
+            return t("scope.status_all")
+        visible, hidden = self._scope_counts()
+        return t(
+            "scope.status",
+            label=self._tag_scope.label,
+            visible=visible,
+            hidden=hidden,
+        )
+
+    def _scope_section(self) -> str:
+        """Приписка к `?` / `??`: scope включён и чем его снять."""
+        if self._tag_scope.is_empty:
+            return ""
+        visible, hidden = self._scope_counts()
+        return "\n" + t(
+            "scope.section",
+            label=self._tag_scope.label,
+            visible=visible,
+            hidden=hidden,
+        )
+
+    def _handle_scope_command(self, args: list[str]) -> None:
+        """`:scope` — какие теги показывать в этой сессии.
+
+        `:scope add <группа|тег>…` — оставить только перечисленное (режим only);
+        `:scope rm <группа|тег>…` — скрыть перечисленное (режим hide);
+        `:scope clear` / `:scope all` — снять фильтр; `:scope` — показать текущий.
+
+        Фильтруются **списки и подсказки** (`?`, `??`, `!`, Tab). Явные адреса и
+        команды (`?tag`, `!tag[tid]`, `:run`, `:stats`, `:export`, `:alias`,
+        `:send`) работают как раньше — иначе фильтр ломал бы сохранённые цепочки
+        и чужие ссылки.
+        """
+        args = [str(arg) for arg in args]
+        verb = args[0].strip().lower() if args else ""
+        if not verb:
+            self.add_block(InfoBlock(self._scope_status_text()))
+            return
+        if verb in ("clear", "all", "off", "none"):
+            if len(args) > 1:
+                self.add_block(InfoBlock(t("scope.usage")))
+                return
+            self._apply_tag_scope(TagScope())
+            save_scope(self._data_dir or ".", self.instance_name, self._tag_scope)
+            self.add_block(InfoBlock(t("scope.cleared")))
+            return
+        if verb not in ("add", "only", "rm", "hide", "drop"):
+            self.add_block(InfoBlock(t("scope.usage")))
+            return
+        names = split_names(args[1:])
+        if not names:
+            self.add_block(InfoBlock(t("scope.usage")))
+            return
+        try:
+            known_tags = database.get_all_tags(self.db_file)
+        except Exception:
+            known_tags = []
+        groups, tags, unknown = classify(names, known_tags)
+        if unknown:
+            from seed_groups import known_group_names
+
+            self.add_block(InfoBlock(t(
+                "scope.unknown",
+                names=", ".join(unknown),
+                groups=", ".join(known_group_names()),
+            )))
+            return
+        listed = [*groups, *tags]
+        try:
+            scope = (
+                self._tag_scope.add(listed)
+                if verb in ("add", "only")
+                else self._tag_scope.drop(listed)
+            )
+        except ScopeModeError as exc:
+            self.add_block(InfoBlock(t(
+                "scope.mode_conflict", current=exc.current, wanted=exc.wanted
+            )))
+            return
+        self._apply_tag_scope(scope)
+        data_dir = self._data_dir or "."
+        if not save_scope(data_dir, self.instance_name, scope):
+            self.add_block(InfoBlock(t(
+                "scope.save_failed", file=scope_file_for(self.instance_name)
+            )))
+            return
+        if scope.is_empty:
+            self.add_block(InfoBlock(t("scope.cleared")))
+            return
+        visible, hidden = self._scope_counts()
+        self.add_block(InfoBlock(t(
+            "scope.applied", label=scope.label, visible=visible, hidden=hidden
+        )))
+
     def _session_status_text(self) -> str:
         name = getattr(self, "instance_name", INSTANCE_NAME) or INSTANCE_NAME
         names = ", ".join(list_session_names(getattr(self, "_data_dir", ".") or "."))
@@ -7108,6 +7283,8 @@ class CommandRunner(App):
         self.instance_name = name
         self._pin_instance_files()
         register_session(self._data_dir or ".", name)
+        # scope — свойство сессии: у нового имени свой файл (пуст — видно всё).
+        scope_error = self._load_session_scope()
         self._refresh_running_title()  # заголовок окна/вкладки — имя новой сессии
         self.session_history = []
         self.session_history_pos = 0
@@ -7124,13 +7301,19 @@ class CommandRunner(App):
             before, after, _ = compacted
             extra = f"\n  Compacted history: {before} → {after} lines"
         verb = "Created" if created else "Switched to"
+        scope_line = ""
+        if not self._tag_scope.is_empty:
+            scope_line = "\n" + t("scope.in_session", label=self._tag_scope.label)
         self.add_block(InfoBlock(
             f"{verb} session {name}\n"
             f"  {os.path.basename(self.FILE_BASHRC)}  {os.path.basename(self.FILE_HISTORY)}\n"
             f"  Tags DB is shared. Journal stays. Playbook log cleared.{extra}"
+            f"{scope_line}"
         ))
         self.sub_title = f"Session {name}"
         self.set_timer(3, self.clear_subtitle)
+        if scope_error:
+            self.add_block(InfoBlock(t("scope.broken_file", error=scope_error)))
 
     def _screensaver_idle_seconds(self) -> float:
         try:
@@ -7181,7 +7364,10 @@ class CommandRunner(App):
             return
         if isinstance(current, DevopsScreensaver):
             return
-        self.push_screen(DevopsScreensaver(stars=self.screensaver_stars))
+        self.push_screen(DevopsScreensaver(
+            stars=self.screensaver_stars,
+            allowed_tags=self._scope_screensaver_tags(),
+        ))
 
     def _dismiss_screensaver(self) -> bool:
         """Снять активную заставку, если она на экране (без перезапуска таймера)."""
@@ -7246,7 +7432,24 @@ class CommandRunner(App):
                 "Cannot start screensaver while a demo or runbook is playing (Esc first)."
             ))
             return
-        self.push_screen(DevopsScreensaver(stars=self.screensaver_stars, matrix=matrix))
+        self.push_screen(DevopsScreensaver(
+            stars=self.screensaver_stars,
+            matrix=matrix,
+            allowed_tags=self._scope_screensaver_tags(),
+        ))
+
+    def _scope_screensaver_tags(self) -> set[str] | None:
+        """Имена тегов для ленты заставки: None — фильтра нет.
+
+        Лента — тоже «список», поэтому уважает scope сессии. Пустой scope → None
+        (без фильтра), иначе — имена видимых тегов (заставка не трогает БД ещё раз).
+        """
+        if self._tag_scope.is_empty:
+            return None
+        try:
+            return self._visible_tag_names()
+        except Exception:
+            return None
 
     def _start_update_check(self, *, always_report: bool) -> None:
         """Background GitHub version check. Startup only notifies if main is newer."""
@@ -8500,7 +8703,11 @@ class CommandRunner(App):
 
         try:
             if not tag_part:
-                tags = database.get_all_tags(self.db_file)
+                tags = [
+                    tag
+                    for tag in database.get_all_tags(self.db_file)
+                    if self._scope_allows(tag)
+                ]
                 tags_with_comments = database.get_all_tags_with_comments(self.db_file)
                 comments_dict = dict(tags_with_comments)
 
@@ -8517,6 +8724,7 @@ class CommandRunner(App):
 
                 content += "\n\nType `? <tag>` to see commands or `??` to see all."
                 content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
+                content += self._scope_section()
                 content += self._hidden_tags_section()
                 self.add_block(InfoBlock(content))
             elif tag_part == '?':
@@ -8530,11 +8738,14 @@ class CommandRunner(App):
                     tid = row['tid']
                     cmd_text = row['command']
                     cmd_comment = row['comment'] if 'comment' in row.keys() else ''
+                    # `!ID` должен работать и для скрытого scope тега: запись в
+                    # last_query_results — всегда, в показ — только видимое.
+                    self.last_query_results[global_id] = cmd_text
+                    if not self._scope_allows(tag):
+                        continue
                     if tag not in commands_by_tag:
                         commands_by_tag[tag] = []
                     commands_by_tag[tag].append((global_id, tid, cmd_text, cmd_comment))
-                    # Сохраняем для быстрого доступа по глобальному ID
-                    self.last_query_results[global_id] = cmd_text
 
                 if not commands_by_tag:
                     content += "  (None found)"
@@ -8556,6 +8767,7 @@ class CommandRunner(App):
                             ) + "\n"
                 content += "\nUse `!tag[tid]` or `!ID` to execute a command."
                 content += "\nUse #tag=<comment> for tag comments, #tag=ID=<comment> for command comments."
+                content += self._scope_section()
                 content += self._hidden_tags_section()
                 self.add_block(InfoBlock(content))
             else:
@@ -8613,7 +8825,11 @@ class CommandRunner(App):
                     return
                 content = f"[bold]Search '{needle}' in commands ({total}):[/bold]\n"
                 for row in rows:
+                    # `!ID` работает и для скрытого scope тега (см. `??`).
                     self.last_query_results[row["id"]] = row["command"]
+                for row in rows:
+                    if not self._scope_allows(row["tag"]):
+                        continue
                     cmd_comment = row["comment"] or ""
                     content += self._format_tagged_command_line(
                         row["id"], row["tag"], row["tid"], row["command"], cmd_comment
@@ -8621,6 +8837,7 @@ class CommandRunner(App):
                 if total > len(rows):
                     content += f"\n[dim]… and {total - len(rows)} more. Refine the search.[/dim]\n"
                 content += "\nUse `!tag[tid]` or `!ID` to run."
+                content += self._scope_section()
                 self.add_block(InfoBlock(content))
         except Exception as e:
             self.add_block(InfoBlock(f"Database error: {e}"))
@@ -10129,9 +10346,12 @@ class CommandRunner(App):
         return self._clickable_bang_ref(tag, tid, prefix="!")
 
     def _base_title(self) -> str:
-        """Базовый заголовок: приложение и текущая сессия."""
+        """Базовый заголовок: приложение, текущая сессия и активный scope."""
         name = getattr(self, "instance_name", None) or INSTANCE_NAME
-        return f"{self.TITLE} · {name}"
+        label = f"{self.TITLE} · {name}"
+        scope = getattr(self, "_tag_scope", None)
+        scope_label = scope.label if scope is not None and not scope.is_empty else ""
+        return f"{label} · {scope_label}" if scope_label else label
 
     def _set_terminal_title(self, label: str) -> None:
         """Заголовок окна/вкладки терминала (OSC 0). Textual сам его не ставит.
@@ -10294,12 +10514,12 @@ class CommandRunner(App):
         if s["per_tag"]:
             lines.append("")
             lines.append("[bold]Per tag (by runs):[/bold]")
-            for t in s["per_tag"][:12]:
+            for stat in s["per_tag"][:12]:
                 last = ""
-                if t.get("last_used"):
-                    last = f" · last {str(t['last_used'])[:16]}"
+                if stat.get("last_used"):
+                    last = f" · last {str(stat['last_used'])[:16]}"
                 lines.append(
-                    f"  {t['tag']:<16} {t['live']:>3} cmd · {t['runs']:>4} run(s){last}"
+                    f"  {stat['tag']:<16} {stat['live']:>3} cmd · {stat['runs']:>4} run(s){last}"
                 )
             if len(s["per_tag"]) > 12:
                 lines.append(f"  [dim]… and {len(s['per_tag']) - 12} more tag(s)[/dim]")
@@ -10313,6 +10533,10 @@ class CommandRunner(App):
                 )
         if s["live"] == 0:
             lines.append("  (empty database — run a seed or save a command)")
+        # `:stats` — про всю библиотеку (инвариант scope), но окно об этом скажет.
+        if not self._tag_scope.is_empty:
+            lines.append("")
+            lines.append(t("scope.stats_note", label=self._tag_scope.label))
         lines.append("")
         lines.append(
             f"[dim]DB: {self.db_file} · {os.path.getsize(self.db_file)} bytes · "

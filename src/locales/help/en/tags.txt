@@ -16,4 +16,12 @@
                Compose pipes/saves: `#file !file[1] | !file[2]` (preview expands refs)
   !N         - Execute command by ID from last query
 
+  Scope      - Per-window tag filter: :scope add git (only that handbook),
+               :scope rm k8s (hide it), :scope clear / :scope all (everything).
+               Affects lists and hints only: ?, ??, ?text, ! / Tab completions and
+               the screensaver ticker. Explicit refs (?tag, !tag[tid], :run,
+               :stats, :export) ignore the filter, so saved chains never break.
+               Kept per session (scope_<instance>.json); the window title shows
+               the marker (`· only git`). Without arguments :scope reports state.
+
   Other topics and the full command list — :?
