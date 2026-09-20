@@ -84,6 +84,8 @@ try:
     import glob
     import json
     import os
+    import re
+    import textwrap
     import threading
     import time
     from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -100,8 +102,9 @@ try:
     from textual import events
     from textual.app import App, ComposeResult, InvalidThemeError, SuspendNotSupported
     from textual.binding import Binding, BindingType
-    from textual.containers import Horizontal, VerticalScroll
+    from textual.containers import Horizontal, Vertical, VerticalScroll
     from textual.content import Content
+    from textual.screen import Screen
     from textual.selection import Selection
     from textual.strip import Strip
     from textual.style import Style as VisualStyle
@@ -350,6 +353,42 @@ def escape_help_markup(text: str) -> str:
 # Приглашение строки ввода: cwd виден всегда (как в терминале), серым слева от
 # курсора. `~` — домашний каталог, длинный путь укорачивается (см. `shorten_path`).
 CWD_PROMPT_SEP = "❯"
+# Сколько строк превью под полем показывать максимум (длинная строка целиком).
+INPUT_PREVIEW_MAX_ROWS = 6
+
+
+def paste_line(text: str) -> str:
+    """Привести вставляемый текст к одной строке (поле ввода однострочное).
+
+    Переносы строк ломали вёрстку: поле рассчитано на одну строку. Каждый
+    перенос (с окрестными пробелами) становится одним пробелом — так многострочная
+    вставка остаётся осмысленной командой, а не теряет хвост (Textual сам берёт
+    только первую строку из `Paste`). Однострочный текст не трогаем: отступы
+    и пробелы автора сохраняются как есть.
+    """
+    raw = text or ""
+    if "\n" not in raw and "\r" not in raw:
+        return raw
+    parts = [part.strip() for part in re.split(r"\r\n|\r|\n", raw)]
+    return " ".join(part for part in parts if part)
+
+
+def wrap_display_line(text: str, width: int) -> list[str]:
+    """Разбить строку по ширине для превью под полем (длинное видно целиком)."""
+    width = max(8, int(width))
+    lines: list[str] = []
+    for logical in (text or "").split("\n"):
+        lines.extend(
+            textwrap.wrap(
+                logical.expandtabs(4),
+                width=width,
+                break_long_words=True,
+                break_on_hyphens=False,
+                drop_whitespace=True,
+            )
+            or [""]
+        )
+    return lines
 
 
 def shorten_path(path: str, home: str | None = None, max_len: int = 0) -> str:
@@ -1895,6 +1934,20 @@ class CommandLineInput(Input):
         """Textual типизирует Widget.app как базовый App; отдаём реальный подкласс."""
         return cast("CommandRunner", super().app)
 
+    def _on_paste(self, event: events.Paste) -> None:
+        """Вставку из терминала обрабатывает приложение — целиком, одной строкой.
+
+        Textual (`Input._on_paste`) берёт из текста только первую строку, и хвост
+        многострочной вставки терялся бы. Своё событие отдаём в
+        `CommandRunner.handle_paste`, а `event.text` обнуляем: Textual диспетчерит
+        `_on_*` по **всему** MRO, и базовая `Input._on_paste` иначе вставила бы
+        первую строку ещё раз (уже после нас).
+        """
+        text = event.text or ""
+        event.text = ""
+        event.stop()
+        self.app.handle_paste(text)
+
     BINDINGS = [
         Binding("tab", "tab_input", show=False, priority=True),
         Binding("shift+insert", "paste_clipboard", show=False, priority=True),
@@ -2150,6 +2203,8 @@ class CommandLineInput(Input):
             app._bump_screensaver_idle()
         # Затем показываем подсказки
         self.call_after_refresh(self._show_completions)
+        # И превью длинной строки под полем (короткая — ничего не показывает).
+        self.call_after_refresh(app.refresh_input_preview)
 
     def _apply_secret_masking(self, value: str) -> None:
         """`$$NAME=value` — прятать значение секрета прямо в строке ввода.
@@ -2337,6 +2392,72 @@ class JournalScroll(VerticalScroll):
         self.app._scroll_journal_and_focus(height)
 
 
+class TermScreen(Screen):
+    """Экран приложения, который не заводит выделение на правую/среднюю кнопку.
+
+    Textual (`Screen._forward_event`) начинает выделение на **любую** кнопку
+    MouseDown и на отпускании мыши отдаёт `TextSelected` — даже если человек не
+    тянул, а только дрогнул на клетку. Приложение на этот сигнал копирует
+    выделенное в буфер, и правый клик (вставка из буфера, `CommandRunner`
+    `on_mouse_down`) затирал им чужие данные: в журнале это выглядело как будто
+    «правый клик ничего не вставил», а в приглашении в буфер попадало `~ ❯`.
+
+    Теперь при обработке не-левой кнопки `allow_select` выключен, выделение
+    вообще не заводится, буфер и прежнее выделение остаются как были. Левая
+    кнопка и протяжка работают как раньше (копирование при отпускании —
+    `CommandRunner.on_text_selected`).
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._suppress_select = False
+
+    @property
+    def allow_select(self) -> bool:
+        """Выделять текст можно всегда, кроме обработки не-левой кнопки мыши."""
+        return self.ALLOW_SELECT and not self._suppress_select
+
+    def get_widget_and_offset_at(self, x: int, y: int) -> Any:
+        """Клетка → символ под курсором: при не-левой кнопке не ищем (не выделяем)."""
+        if self._suppress_select:
+            return None, None
+        return super().get_widget_and_offset_at(x, y)
+
+    def get_focusable_widget_at(self, x: int, y: int) -> Any:
+        """Не-левая кнопка не меняет фокус.
+
+        Textual на MouseDown сам фокусирует виджет под мышью, и правый клик по
+        блоку журнала уводил фокус на блок, а вставка возвращала его в строку —
+        два перефокуса на каждое нажатие (видно как торможение).
+        """
+        if self._suppress_select:
+            return None
+        return super().get_focusable_widget_at(x, y)
+
+    def _forward_event(self, event: events.Event) -> None:
+        """Не-левая кнопка не заводит выделение (см. докстринг класса).
+
+        `0` и `1` — левая/движение: у настоящего терминала левая приходит как
+        `1` (`_xterm_parser`), а тестовый `Pilot` шлёт `0`.
+        """
+        if isinstance(event, events.MouseEvent) and event.button not in (0, 1):
+            self._suppress_select = True
+            # И не дать MouseUp снять уже сделанное выделение: правый клик сам по
+            # себе (в т.ч. с пустым буфером) выделение не трогает, текст остаётся
+            # в буфере. Подсветку снимет только сама вставка: строка ввода
+            # получает фокус, а `Input._watch_selection` в Textual снимает
+            # выделение экрана.
+            keep_offset = self._mouse_down_offset
+            self._mouse_down_offset = None
+            try:
+                super()._forward_event(event)
+            finally:
+                self._suppress_select = False
+                self._mouse_down_offset = keep_offset
+            return
+        super()._forward_event(event)
+
+
 class CommandRunner(App):
     """Textual приложение для запуска shell команд с поддержкой переменных."""
 
@@ -2366,7 +2487,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.154"
+    VERSION = "v1.156"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2415,6 +2536,8 @@ class CommandRunner(App):
     ID_INPUT = "command-input"
     ID_CWD_PROMPT = "cwd-prompt"
     ID_INPUT_ROW = "input-row"
+    ID_INPUT_LINE = "input-line"
+    ID_INPUT_PREVIEW = "input-preview"
     ID_RESULTS_CONTAINER = "results-container"
     KEY_HISTORY_LINES = "history_lines"
     KEY_HISTORY_KEEP = "history_keep"
@@ -2694,6 +2817,9 @@ class CommandRunner(App):
         self._ss_timer = None
         # Последнее движение мыши (throttle): MouseMove сыплется очень часто.
         self._ss_move_bump: float = 0.0
+        # Кнопка последнего MouseDown: `TextSelected` от не-левой кнопки не копируем
+        # (само выделение заводит только левая — `TermScreen.allow_select`).
+        self._last_mouse_button: int = 1
         # Запущенные фоновые процессы (shell-команды): CommandBlock -> Popen.
         # Нужны для F4 / :kill — остановить долгую команду, не дожидаясь timeout.
         self._proc_registry: dict[CommandBlock, subprocess.Popen] = {}
@@ -3463,14 +3589,23 @@ class CommandRunner(App):
 
     def on_paste(self, event: events.Paste) -> None:
         """Ctrl+V в терминале часто приходит как Paste, не как клавиша ctrl+v."""
+        self.handle_paste(event.text or "")
+
+    def handle_paste(self, text: str) -> None:
+        """Вставка текста в строку ввода — один путь для терминала, Ctrl+V и мыши.
+
+        В построчном режиме (`:log` / F2) вставка дописывает текущую строку
+        блока, а не буфер; на модалках — ничего (они сами едят вставку);
+        остальное — `paste_line` (переносы → пробел) и вставка в позицию курсора.
+        """
         self._bump_screensaver_idle()
+        if getattr(self.screen, "_modal", False):
+            return  # модалка сама вставляет в своё поле (поиск в JSON/markdown)
         focused = self.focused
         if isinstance(focused, LineNavigable) and getattr(focused, "line_nav_active", False):
             focused.append_current_line_to_input()
-            event.stop()
             return
-        # Обычная вставка: Input вставит текст сам; после — проверить секрет.
-        self.call_after_refresh(self._maybe_clear_clipboard_after_secret)
+        self._insert_into_input(paste_line(text))
 
     def action_paste_clipboard(self) -> None:
         """Вставляет текст из буфера обмена в command input.
@@ -3490,14 +3625,25 @@ class CommandRunner(App):
 
         Фокус не важен: строка ввода получает его сама (правый клик по журналу
         или по списку подсказок работает так же, как при курсоре в строке).
-        Выделение в строке не затирается — вставка идёт в конец.
+        Выделение в строке не затирается — вставка идёт в конец. Переносы строк
+        схлопываются в пробел: поле однострочное (см. `paste_line`).
         """
-        clip = paste_text_from_clipboards(self)
+        clip = paste_line(paste_text_from_clipboards(self))
         if not clip:
             self.sub_title = t("clipboard.empty")
             self.set_timer(3, self.clear_subtitle)
             return False
+        self._insert_into_input(clip)
+        return True
 
+    def _insert_into_input(self, text: str) -> None:
+        """Вставить текст в строку ввода в позицию курсора; фокус — в строку.
+
+        Выделение в строке не затирается: вставка идёт в конец, как у Ctrl+V.
+        Секретные строки проверяются так же (`_maybe_clear_clipboard_after_secret`).
+        """
+        if not text:
+            return
         input_widget = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
         if not input_widget.has_focus:
             input_widget.focus()
@@ -3508,10 +3654,9 @@ class CommandRunner(App):
             pos = len(current)
         else:
             pos = input_widget.cursor_position
-        input_widget.value = current[:pos] + clip + current[pos:]
-        input_widget.cursor_position = pos + len(clip)
+        input_widget.value = current[:pos] + text + current[pos:]
+        input_widget.cursor_position = pos + len(text)
         self._maybe_clear_clipboard_after_secret()
-        return True
 
     def copy_text(self, text: str) -> None:
         """Копирует текст в CLIPBOARD, PRIMARY и внутренний буфер Textual."""
@@ -3560,7 +3705,15 @@ class CommandRunner(App):
         return True
 
     def on_text_selected(self, event: events.TextSelected) -> None:
-        """Терминал: выделили текст мышью и отпустили кнопку — копируем в буфер."""
+        """Терминал: выделили текст мышью и отпустили кнопку — копируем в буфер.
+
+        `TextSelected` приходит на отпускание **любой** кнопки, но не-левая
+        кнопка ничего не выделяет (`TermScreen.allow_select`): после правого клика
+        копировать нечего, иначе в буфер уходил бы старый/чужой кусок вместо
+        выделенного человеком.
+        """
+        if getattr(self, "_last_mouse_button", 1) not in (0, 1):
+            return
         self._copy_selection_to_clipboard()
 
     def on_mouse_down(self, event: events.MouseDown) -> None:
@@ -3574,6 +3727,7 @@ class CommandRunner(App):
         мышь, вставку не перехватывают.
         """
         self._bump_screensaver_idle()
+        self._last_mouse_button = event.button
         if event.button != 3:
             return
         if getattr(self.screen, "_modal", False):
@@ -4208,6 +4362,10 @@ class CommandRunner(App):
         except Exception:
             pass
 
+    def get_default_screen(self) -> Screen:
+        """Свой экран приложения: правый клик не заводит выделение (`TermScreen`)."""
+        return TermScreen(id="_default")
+
     def compose(self) -> ComposeResult:
         """Построение UI.
 
@@ -4216,9 +4374,11 @@ class CommandRunner(App):
         подсветка фокуса — `:focus-within` (см. app.tcss).
         """
         yield Header()
-        with Horizontal(id=self.ID_INPUT_ROW):
-            yield Static("", id=self.ID_CWD_PROMPT)
-            yield CommandLineInput(id=self.ID_INPUT)
+        with Vertical(id=self.ID_INPUT_ROW):
+            with Horizontal(id=self.ID_INPUT_LINE):
+                yield Static("", id=self.ID_CWD_PROMPT)
+                yield CommandLineInput(id=self.ID_INPUT)
+            yield Static("", id=self.ID_INPUT_PREVIEW)
         self._completion_list = CompletionList()
         yield self._completion_list
         yield JournalScroll(id=self.ID_RESULTS_CONTAINER)
@@ -4239,8 +4399,39 @@ class CommandRunner(App):
         prompt.update(escape_display_markup(text))
 
     def on_resize(self, event: events.Resize) -> None:
-        """Окно изменилось — пересчитать длину пути в приглашении."""
+        """Окно изменилось — пересчитать длину пути в приглашении и превью строки."""
         self._refresh_cwd_prompt()
+        self.refresh_input_preview()
+
+    def refresh_input_preview(self) -> None:
+        """Показать длинную строку целиком: под полем — серый перенос по словам.
+
+        Поле однострочное (Textual `Input`), длинное значение оно прокручивает под
+        курсором — видно только хвост. Превью показывает всю строку сразу
+        (длинный путь, вставленный JSON, собранный пайп). Короткая строка
+        помещается в поле — превью скрыто. Секретные строки не показываем вовсе:
+        поле в этом режиме замаскировано, превью не должно их раскрывать.
+        """
+        try:
+            inp = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
+            preview = self.query_one(f"#{self.ID_INPUT_PREVIEW}", Static)
+        except Exception:
+            return
+        text = inp.value or ""
+        if inp.password or not text:
+            preview.styles.display = "none"
+            return
+        width = max(20, int(inp.content_size.width) or 20)
+        lines = wrap_display_line(self._mask_secrets(text), width)
+        if len(lines) <= 1:
+            preview.styles.display = "none"
+            return
+        limit = max(2, min(INPUT_PREVIEW_MAX_ROWS, max(2, self.size.height // 4)))
+        shown = lines[:limit]
+        if len(lines) > limit:
+            shown[-1] = shown[-1][: max(1, width - 2)] + "…"
+        preview.update(escape_display_markup("\n".join(shown)))
+        preview.styles.display = "block"
 
     def on_click(self, event: events.Click) -> None:
         """Клик по приглашению с путём — фокус в строку ввода (мышь как ускорение)."""

@@ -1,15 +1,113 @@
-"""Приглашение в строке ввода: текущий каталог серым слева (как в терминале).
+"""Строка ввода: серое приглашение с cwd и превью длинной строки.
 
 Плейсхолдера «Enter command» больше нет: путь видно и когда строка пуста, и пока
 в неё набирают команду. Укорачивание (`~`, хвост длинного пути) проверяется
 отдельно — оно не должно отдавать полю ввода меньше трети ширины окна.
+Поле однострочное, поэтому длинное значение (в т.ч. вставленное) целиком видно в
+превью под полем, а переносы строк из буфера склопываются в пробел (`paste_line`).
 """
 from __future__ import annotations
 
 import os
 
-from app import CWD_PROMPT_SEP, CommandRunner, shorten_path
-from tests.conftest import input_widget, submit, wait_command_done
+import pyperclip
+from textual import events
+from textual.widgets import Static
+
+from app import CWD_PROMPT_SEP, CommandRunner, paste_line, shorten_path
+from tests.conftest import input_widget, right_click, submit, wait_command_done
+
+
+def test_wrap_display_line_by_width():
+    from app import wrap_display_line
+
+    assert wrap_display_line("aaa bbb ccc ddd", 7) == ["aaa bbb", "ccc ddd"]
+    # Длинный токен (путь без пробелов) режется по ширине.
+    assert wrap_display_line("x" * 25, 10) == ["x" * 10, "x" * 10, "x" * 5]
+    assert wrap_display_line("short", 40) == ["short"]
+
+
+def test_paste_line_collapses_newlines():
+    assert paste_line("a\nb") == "a b"
+    assert paste_line("a\r\nb") == "a b"
+    assert paste_line("a \n  b") == "a b"
+    assert paste_line("a\n\nb") == "a b"
+    # Однострочный текст не трогаем — отступы автора сохраняются.
+    assert paste_line("one line") == "one line"
+    assert paste_line("  padded  ") == "  padded  "
+
+
+async def test_long_line_preview_shows_whole_command(isolated_home):
+    """Длинная строка не умещается в поле — её видно целиком в превью под ним."""
+    app = CommandRunner()
+    async with app.run_test(size=(80, 30)) as pilot:
+        preview = app.query_one(f"#{app.ID_INPUT_PREVIEW}", Static)
+        inp = input_widget(app)
+
+        inp.value = "echo short"
+        await pilot.pause()
+        await pilot.pause()
+        assert preview.styles.display == "none"  # короткая — превью не нужно
+
+        line = "echo " + " ".join(f"part{i:02d}" for i in range(20))
+        inp.value = line
+        await pilot.pause()
+        await pilot.pause()
+        assert preview.styles.display == "block"
+        shown = "\n".join(str(preview.content).splitlines())
+        # Ничего не потеряли: все токены строки видны в превью.
+        assert shown.split() == line.split()
+        # И строка ввода стала выше (превью заняло строки).
+        assert inp.value == line
+
+
+async def test_preview_hidden_for_secret_entries(isolated_home):
+    """Секретная строка замаскирована — превью её не раскрывает."""
+    app = CommandRunner()
+    async with app.run_test(size=(80, 30)) as pilot:
+        preview = app.query_one(f"#{app.ID_INPUT_PREVIEW}", Static)
+        input_widget(app).value = "$$TOKEN=" + "s3cr3t" * 30
+        await pilot.pause()
+        await pilot.pause()
+        assert preview.styles.display == "none"
+
+
+async def test_preview_masks_live_secret_values(isolated_home):
+    """Живой `$$`-секрет в обычной строке — в превью вместо значения маска."""
+    app = CommandRunner()
+    async with app.run_test(size=(80, 30)) as pilot:
+        preview = app.query_one(f"#{app.ID_INPUT_PREVIEW}", Static)
+        await submit(pilot, "$$TOKEN=super-secret-value")
+        secret = app.local_env.get("TOKEN") or "super-secret-value"
+        assert secret
+
+        input_widget(app).value = f"curl -H 'Authorization: Bearer {secret}' " + "x" * 60
+        await pilot.pause()
+        await pilot.pause()
+        shown = str(preview.content)
+        assert secret not in shown
+        assert "****" in shown
+
+
+async def test_terminal_paste_inserts_all_lines(isolated_home):
+    """Вставка терминалом (Paste-событие) не теряет хвост многострочного текста."""
+    app = CommandRunner()
+    async with app.run_test(size=(80, 30)) as pilot:
+        app.post_message(events.Paste("paste-one\npaste-two\npaste-three"))
+        await pilot.pause()
+        await pilot.pause()
+        assert input_widget(app).value == "paste-one paste-two paste-three"
+
+
+async def test_right_click_and_ctrl_v_agree_about_newlines(isolated_home):
+    """Правый клик и буфер дают одно и то же: переносы → пробел."""
+    app = CommandRunner()
+    async with app.run_test(size=(80, 30)) as pilot:
+        pyperclip.copy("multi\nline\ncommand")
+        await right_click(pilot, offset=(20, 20))
+        await pilot.pause()
+        assert input_widget(app).value == "multi line command"
+        assert "\n" not in input_widget(app).value
 
 
 def test_shorten_path_home_and_plain():
@@ -34,7 +132,7 @@ def test_shorten_path_without_limit_is_a_prompt_ready_path():
 
 
 def _prompt(app: CommandRunner) -> str:
-    return str(app.query_one(f"#{app.ID_CWD_PROMPT}").content)
+    return str(app.query_one(f"#{app.ID_CWD_PROMPT}", Static).content)
 
 
 async def test_prompt_shows_cwd_and_follows_cd(isolated_home):
@@ -43,7 +141,7 @@ async def test_prompt_shows_cwd_and_follows_cd(isolated_home):
         # Долгий временный путь укорачивается с начала, но хвост виден.
         assert _prompt(app).endswith(f"{os.path.basename(os.getcwd())} {CWD_PROMPT_SEP} ")
         # Плейсхолдер «Enter command» заменён путём.
-        assert app.query_one(f"#{app.ID_INPUT}").placeholder == ""
+        assert input_widget(app).placeholder == ""
         await submit(pilot, "cd /tmp")
         assert _prompt(app) == f"/tmp {CWD_PROMPT_SEP} "
         await submit(pilot, ":cd /")

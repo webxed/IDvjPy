@@ -211,9 +211,14 @@
                (htop/vim/less) lives there, in the scrollback. Any key returns.
   Shift+Insert / Ctrl+V - Paste into input (does not replace existing text)
                In line-cursor mode Ctrl+V appends the current line instead
+               Line breaks become spaces (the field is one line); a long line is
+               shown in full in the grey preview right under the field
   Right click - Paste into input wherever the focus is: in the journal or in
                the completion list you do not have to move the cursor into the
-               input first. Links (--seed, .md, :commands) are not triggered
+               input first, and the focus does not jump. Links (--seed, .md,
+               :commands) are not triggered, and the selection is not touched:
+               text selected with the mouse is copied on release, and the
+               right click pastes exactly that
   Ctrl+D     - Clear the entire input line
   (k8s) kubectl get <res> <Tab> - live cluster resource names (k8s_completion: true)
   (paths) ./ | / | ~/ <Tab> - file/dir hints; bare names after file-taking

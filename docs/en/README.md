@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.154 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.156 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -359,8 +359,8 @@ The two kinds of file are told apart: a single-tag file (`tag_filter`) means "ad
 | `F7` | The full block output in the Line-API viewer — the same as `:log` (search inside — `/`, `n`/`N`, `f` — only lines with matches) |
 | `F8` | The block label dialog (`:name`): enter a label, Enter — save, empty — remove, Esc — cancel; then `\|@label command` |
 | `F2` | Line mode in the block |
-| `Shift+Insert` / `Ctrl+V` | Paste into the input (does not overwrite what is already typed). In line mode `Ctrl+V` appends the current line |
-| Right click | Paste the clipboard into the input line — also when the focus is in the journal or the completion list (no need to put the cursor in the input first). Links (`--seed`, `.md`, `:commands`) are not triggered by a right click |
+| `Shift+Insert` / `Ctrl+V` | Paste into the input (does not overwrite what is already typed). In line mode `Ctrl+V` appends the current line. Line breaks in the pasted text become spaces (the field is single-line), and a long line is fully visible in the grey preview under the field |
+| Right click | Paste the clipboard into the input line — also when the focus is in the journal or the completion list (no need to put the cursor in the input first, and the focus does not jump). Links (`--seed`, `.md`, `:commands`) are not triggered by a right click, and it does not overwrite the selection: text selected with the mouse is already in the clipboard (copied on release), and the right click pastes exactly that |
 | `Ctrl+D` | Clear the whole input line |
 | `Ctrl+W` / `Ctrl+Backspace` | In the input: delete the word left of the cursor (handy for trimming pasted output, e.g. from `kubectl`). `Ctrl+Backspace` works where the terminal sends it as a separate key; universally — `Ctrl+W` |
 | `Ctrl+F` / `Ctrl+Delete` | In the input: delete the word right of the cursor |

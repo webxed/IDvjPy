@@ -4,12 +4,17 @@
 правый клик по журналу или по списку подсказок кладёт текст буфера в строку
 ввода, хотя курсора в ней нет. Ссылки (`--seed`, `.md`, `:команды`) от правого
 клика не срабатывают — иначе он затирал бы только что вставленный текст.
+
+Сам правый клик выделения не заводит и не снимает: выделенное мышью уже лежит
+в буфере, и правый клик только вставляет его. Иначе в буфер попадал случайный
+кусок под курсором (в приглашении — `~ ❯`), затирая выделенный человеком текст.
 """
 from __future__ import annotations
 
 import json
 
 import pyperclip
+from textual import events
 
 from app import CommandRunner, InfoBlock
 from tests.conftest import (
@@ -19,6 +24,23 @@ from tests.conftest import (
     wait_command_done,
     wait_json_viewer,
 )
+
+
+async def _drag(pilot, widget, start, end) -> None:
+    """Протяжка мышью: MouseDown → MouseMove → MouseUp (у Pilot нет drag)."""
+    await pilot._post_mouse_events([events.MouseDown], widget, offset=start)
+    await pilot._post_mouse_events([events.MouseMove], widget, offset=end)
+    await pilot._post_mouse_events([events.MouseUp], widget, offset=end)
+    await pilot.pause()
+    await pilot.pause()
+
+
+async def _right_drag(pilot, widget, start, end) -> None:
+    """Правый клик с дрогнувшей мышью — самый опасный случай."""
+    await right_click(pilot, widget=widget, offset=start)
+    await pilot._post_mouse_events([events.MouseMove], widget, offset=end)
+    await right_click(pilot, widget=widget, offset=end)
+    await pilot.pause()
 
 
 async def test_right_click_pastes_without_focus_in_input(isolated_home):
@@ -83,6 +105,29 @@ async def test_right_click_does_not_pick_completion_row(isolated_home):
         assert "./alpha.txt" not in value
 
 
+async def test_right_click_on_block_does_not_steal_focus(isolated_home):
+    """Правый клик не переводит фокус на блок: без этого вставка как бы тормозит.
+
+    Textual сам фокусирует виджет под мышью (Screen MouseDown), и правый клик по
+    журналу уводил фокус на блок, а вставка возвращала его в строку — два
+    перефокуса на каждое нажатие.
+    """
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await submit(pilot, "echo focus-keep")
+        block = await wait_command_done(app, timeout=8.0)
+        inp = input_widget(app)
+        inp.value = ""
+        inp.focus()
+        await pilot.pause()
+        pyperclip.copy("focused-paste")
+
+        await right_click(pilot, widget=block, offset=(6, 0))
+        await pilot.pause()
+        assert inp.has_focus
+        assert inp.value == "focused-paste"
+
+
 async def test_right_click_pastes_inside_block_without_focus_flip(isolated_home):
     """Клик по блоку правой кнопкой: буфер вставлен, блок не перехватывает фокус."""
     app = CommandRunner()
@@ -94,6 +139,85 @@ async def test_right_click_pastes_inside_block_without_focus_flip(isolated_home)
         await right_click(pilot, widget=block, offset=(2, 0))
         assert input_widget(app).value == "into-input"
         assert input_widget(app).has_focus  # строка ввода остаётся рабочей
+
+
+async def test_right_click_pastes_selection_and_keeps_it(isolated_home):
+    """Выделил мышью → сразу в буфере; правый клик вставляет и буфер не трогает.
+
+    Сама вставка снимает подсветку (строка ввода получает фокус, а
+    `Input._watch_selection` в Textual чистит выделение экрана) — но текст
+    остаётся в буфере, это и есть то, что нужно человеку.
+    """
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, "echo selection-for-right-click")
+        block = await wait_command_done(app, timeout=8.0)
+        pyperclip.copy("sentinel")
+
+        await _drag(pilot, block, (2, 0), (18, 0))
+        selected = app.screen.get_selected_text()
+        assert selected and selected.strip()
+        assert pyperclip.paste() == selected  # выделение уже скопировано
+
+        await right_click(pilot, widget=block, offset=(6, 0))
+        await pilot.pause()
+        assert input_widget(app).value == selected  # вставлено в строку
+        assert pyperclip.paste() == selected  # буфер не перезаписан
+
+
+async def test_right_click_on_block_keeps_clipboard_when_it_is_empty(isolated_home):
+    """Пустой буфер: правый клик не снимает выделение и ничего не ломает."""
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, "echo keep-selection")
+        block = await wait_command_done(app, timeout=8.0)
+        await _drag(pilot, block, (2, 0), (12, 0))
+        selected = app.screen.get_selected_text()
+        assert selected and selected.strip()
+        app.copy_text("")  # чистим все слои буфера: pyperclip, xclip/xsel, внутренний
+
+        await right_click(pilot, widget=block, offset=(6, 0))
+        await pilot.pause()
+        assert input_widget(app).value == ""
+        assert "Clipboard is empty" in app.sub_title
+        assert app.screen.get_selected_text() == selected  # выделение не тронуто
+
+
+async def test_right_click_never_pastes_prompt_junk(isolated_home):
+    """Дрогнувший правый клик не заводит выделение: чужое в буфере остаётся.
+
+    Регрессия: Textual заводил выделение на любую кнопку MouseDown, и на
+    отпускании приложение копировало случайный кусок под курсором — в пустой
+    строке ввода это было приглашение `~ ❯`, и оно затирало буфер.
+    """
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        row = app.query_one("#input-row")
+        pyperclip.copy("user-data")
+
+        for offset in ((3, 1), (30, 1), (60, 1)):
+            await _right_drag(pilot, row, offset, (offset[0] + 2, offset[1]))
+            assert pyperclip.paste() == "user-data", offset
+            assert app.screen.get_selected_text() is None, offset
+
+
+async def test_right_click_pastes_selection_after_prompt_clicks(isolated_home):
+    """Полный сценарий: выделил в выводе → правый клик в пустой строке → вставилось."""
+    app = CommandRunner()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await submit(pilot, "echo scenario-text-for-paste")
+        block = await wait_command_done(app, timeout=8.0)
+        await _drag(pilot, block, (2, 0), (16, 0))
+        selected = app.screen.get_selected_text()
+        assert selected and selected.strip()
+
+        # Правый клик по пустой строке ввода (там же, где приглашение с путём).
+        input_widget(app).value = ""
+        row = app.query_one("#input-row")
+        await right_click(pilot, widget=row, offset=(3, 1))
+        await pilot.pause()
+        assert input_widget(app).value == selected
+        assert pyperclip.paste() == selected
 
 
 async def test_right_click_with_empty_clipboard_reports_it(isolated_home):

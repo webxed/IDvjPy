@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.154**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.156**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -145,7 +145,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.100 (app v1.154) |
+| `test_cmd.md` | Manual plan v1.102 (app v1.156) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -186,7 +186,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.154 |
+| `src/app.py` | TUI (`CommandRunner`), v1.156 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -232,6 +232,19 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.156
+
+- **Fix: правый клик больше не тормозит.** Замер показал, что сама вставка стоит 0.3 мс, а «тормозит» клик: Textual на MouseDown сам фокусирует виджет под мышью (`Screen._forward_event` → `get_focusable_widget_at`), поэтому правый клик по журналу уводил фокус на блок, а вставка возвращала его в строку — два перефокуса на каждое нажатие. Теперь `TermScreen` отвечает `None` из `get_focusable_widget_at` и `get_widget_and_offset_at`, пока пересылается не-левое событие: фокус не трогается, и клетка→символ для кнопки, которая не выделяет, не ищется. Тест: `test_right_click_on_block_does_not_steal_focus`.
+- **Переносы строк в вставке больше не ломают строку ввода.** Поле однострочное (Textual `Input`), а из буфера приезжает многострочный текст — раньше это ломало вёрстку, а Paste-событие терминала вообще теряло всё после первой строки (`Input._on_paste`). Теперь все пути (правый клик, Ctrl+V/Shift+Insert, Paste от терминала) идут через один `CommandRunner.handle_paste`, а `paste_line` превращает `\r\n`/`\r`/`\n` (с окрестными пробелами) в один пробел — многострочная команда вставляется одной строкой целиком. `CommandLineInput._on_paste` отдаёт событие приложению и обнуляет `event.text`: Textual диспетчерит `_on_*` по всему MRO, и базовая `Input._on_paste` иначе вставила бы первую строку второй раз.
+- **Длинная строка видна целиком: превью под полем.** Поле прокручивает длинное значение под курсором — видно был только хвост. `#input-preview` (серый, перенос по словам, до `INPUT_PREVIEW_MAX_ROWS` строк, лишнее — `…`) показывает всю строку; короткая строка превью не показывает, секретная — никогда (в поле она и так замаскирована), живые `$$`-значения в превью маскируются (`_mask_secrets`). Обновляется в `_watch_value`, `on_resize` и после вставки; строка ввода стала контейнером `#input-row` → `#input-line` + превью.
+- **Тесты:** `tests/test_cwd_prompt.py` (+7: `paste_line`/`wrap_display_line`, превью длинной строки целиком, скрытие для секретов и маскировка `$$`, Paste-событие не теряет строки, правый клик и Ctrl+V дают одно и то же) и `tests/test_paste_right_click.py` (+1 про фокус). Доки: README (ru/en/zh), `:?` main.txt (en/ru/zh), `test_cmd.md` (секция 53), `CLAUDE.md`.
+
+## v1.155
+
+- **Fix: правый клик больше не затирает буфер и не мешает вставить выделенное.** Симптомы были такие: выделяешь текст в выводе, сразу правый клик — в строку ничего не вставляется; правый клик в пустой строке — и в буфере (а потом и при Ctrl+V) оказывается `~ ❯` из приглашения с путём. Причина — Textual: `Screen._forward_event` заводит выделение на **любую** кнопку MouseDown (без проверки кнопки), а на отпускании приложение копировало в буфер «выделенное» — достаточно было дрогнуть мышью на клетку, чтобы в буфер ушёл случайный кусок под курсором (в строке ввода — приглашение `~ ❯`), затирая выделенное человеком.
+- **Свой экран `TermScreen`** (`CommandRunner.get_default_screen`): пока пересылается не-левое событие мыши, `allow_select` возвращает False — выделение не заводится вообще; плюс на это время обнуляется `Screen._mouse_down_offset`, чтобы MouseUp правого клика не снял уже сделанное выделение. `on_text_selected` копирует только после левой кнопки (`_last_mouse_button`, 0 — тестовый `Pilot`, 1 — реальный терминал). Итог: выделенное мышью копируется при отпускании (как раньше, `tests/test_mouse_selection.py`), правый клик вставляет именно его и ничего не портит; подсветку снимает уже сама вставка — строка ввода получает фокус, а `Input._watch_selection` в Textual чистит выделение экрана (текст при этом остаётся в буфере).
+- Тесты: в `tests/test_paste_right_click.py` добавлены «выделил → правый клик вставил, буфер не перезаписан» (11 всего), «пустой буфер не снимает выделение» и «дрогнувший правый клик не кладёт `~ ❯` в буфер». Доки: README (ru/en/zh), `:?` main.txt (en/ru/zh), `test_cmd.md` (секция 53), `CLAUDE.md` (pitfall про выделение).
 
 ## v1.154
 
