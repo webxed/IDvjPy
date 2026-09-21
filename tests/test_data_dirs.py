@@ -34,6 +34,7 @@ EXPECTED_KEYS = {
     "kctx_vars",
     "editor",
     "md_converter",
+    "md_ocr",
 }
 
 

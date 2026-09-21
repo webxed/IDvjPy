@@ -2568,7 +2568,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.162"
+    VERSION = "v1.163"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2635,6 +2635,7 @@ class CommandRunner(App):
     KEY_MD_DIR = "md_dir"
     KEY_MD_RENDER_LINES = "md_render_lines"
     KEY_MD_CONVERTER = "md_converter"
+    KEY_MD_OCR = "md_ocr"
     HISTORY_SEARCH_LIMIT = 50
     # Сколько строк истории показывать в выпадающих подсказках при наборе.
     HISTORY_COMPLETION_LIMIT = 20
@@ -2850,6 +2851,8 @@ class CommandRunner(App):
         self.md_render_lines: int = DEFAULT_MD_RENDER_LINES
         # Конвертер документов для `:md` (docx/pdf/…): пусто — автопоиск.
         self.md_converter: str = ""
+        # Локальный OCR скан-PDF (ocrmypdf): пусто — автопоиск, off — выключено.
+        self.md_ocr: str = ""
         self._md_results: list[MdMatch] = []
         self._journal_block_cache: list[Static] | None = None
         # Пользователь увёл вид журнала вверх и читает: новый вывод не двигает
@@ -3971,6 +3974,7 @@ class CommandRunner(App):
                     )
                     self.md_dir = str(settings.get(self.KEY_MD_DIR) or "").strip()
                     self.md_converter = str(settings.get(self.KEY_MD_CONVERTER) or "").strip()
+                    self.md_ocr = self._ocr_setting(settings.get(self.KEY_MD_OCR))
                     try:
                         self.md_render_lines = int(
                             settings.get(self.KEY_MD_RENDER_LINES, DEFAULT_MD_RENDER_LINES)
@@ -6423,6 +6427,18 @@ class CommandRunner(App):
 
     # --- Документы (docx/pdf/…) → markdown ---------------------------------
 
+    @staticmethod
+    def _ocr_setting(value: Any) -> str:
+        """`md_ocr` из settings.yml в строку.
+
+        Ловушка YAML: написанные без кавычек `off` / `no` / `false` PyYAML читает
+        как булев `False` — это именно «выключено», а не «авто»; `on`/`true` (и
+        пусто) — автопоиск, как и раньше.
+        """
+        if isinstance(value, bool):
+            return "" if value else "off"
+        return str(value or "").strip()
+
     def _md_cache_dir(self) -> str:
         """Кэш конвертаций рядом с данными приложения (`<data>/mdcache`)."""
         return os.path.join(self._data_dir or os.getcwd(), md_convert.CACHE_DIR_NAME)
@@ -6445,6 +6461,7 @@ class CommandRunner(App):
                 path,
                 cache_dir=self._md_cache_dir(),
                 preferred=self.md_converter,
+                ocr=self.md_ocr,
             )
         except Exception as e:  # конвертер чужой — падать из-за него нельзя
             result = md_convert.ConvertResult(error="failed", detail=str(e))
@@ -6474,8 +6491,12 @@ class CommandRunner(App):
             return t("md.no_converter", hint=md_convert.INSTALL_HINT)
         if result.error == "converter_missing":
             return t("md.converter_missing", name=result.detail)
+        if result.error == "ocr_missing":
+            return t("md.ocr_missing", name=path.name, tool=result.detail)
+        if result.error == "ocr_language":
+            return t("md.ocr_language", name=path.name, code=result.detail)
         if result.error == "needs_ocr":
-            return t("md.needs_ocr", name=path.name)
+            return t("md.needs_ocr", name=path.name, hint=md_convert.OCR_INSTALL_HINT)
         if result.error == "timeout":
             return t("md.timeout", name=path.name, seconds=result.detail)
         if result.error == "empty":

@@ -60,6 +60,14 @@ md_render_lines: 1000
 # и читает PDF локально. Markdown кэшируется в mdcache/ (в каталоге данных).
 md_converter: ""
 
+# Локальный OCR скан-PDF для `:md` (нужен внешний `ocrmypdf`, ему — tesseract:
+# apt/dnf/apk/brew install ocrmypdf). Пусто — автопоиск (ocrmypdf, если есть);
+# off — не распознавать (останется сообщение «нужен OCR»); можно свою команду,
+# напр. "ocrmypdf -l rus" (для смешанных сканов — "-l rus+eng"): язык скана —
+# у tesseract, поэтому для русских сканов нужен и его языковой пакет
+# (apt install tesseract-ocr-rus). Работает офлайн.
+md_ocr: ""
+
 # Файл БД с тегами (относительно data-каталога).
 database_tags_file: mytags.db
 # Каталог снимков БД (:backup, --seed).

@@ -191,5 +191,7 @@ md:
   converter_missing: "转换器 '{name}' 不可用 —— 请安装它或修正 settings.yml 中的 `md_converter`。"
   empty: "{name}：转换器（{converter}）没有输出文本。"
   failed: "无法转换 {name}：{error}"
-  needs_ocr: "{name}：页面为扫描件，需要 OCR —— 离线不支持。"
+  needs_ocr: "{name}：页面为扫描件，没有文本层 —— 需要 OCR。本地引擎（不会发送到任何地方）：{hint}；settings.yml 中的 `md_ocr` 可关闭它或添加参数（例如 ocrmypdf -l rus）。"
+  ocr_missing: "{name}：OCR 工具 '{tool}' 不可用 —— 请安装它（apt/dnf/apk/brew ocrmypdf）或清除 settings.yml 中的 `md_ocr`。"
+  ocr_language: "{name}：tesseract 没有 '{code}' 的语言数据 —— 请安装语言包（apt install tesseract-ocr-{code}），或在 `md_ocr` 中指定语言（例如 ocrmypdf -l eng）。"
   timeout: "{name} 的转换超时（{seconds} 秒）。"

@@ -60,6 +60,14 @@ md_render_lines: 1000
 # and converts PDF locally. The markdown is cached in mdcache/ (data directory).
 md_converter: ""
 
+# Local OCR for scanned PDFs in `:md` (external `ocrmypdf`, which needs tesseract:
+# apt/dnf/apk/brew install ocrmypdf). Empty — auto (ocrmypdf if installed);
+# off — do not recognize (the "text layer needs OCR" message stays); a custom
+# command works too, e.g. "ocrmypdf -l rus" (or "-l rus+eng" for mixed scans) — the
+# scan language is tesseract's, so a non-English scan also needs its pack
+# (apt install tesseract-ocr-rus). Offline.
+md_ocr: ""
+
 # DB file with tags (relative to the data directory).
 database_tags_file: mytags.db
 # Directory with DB snapshots (:backup, --seed).

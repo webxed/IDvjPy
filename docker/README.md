@@ -101,6 +101,9 @@ docker run --rm -t -v idvjpy-demo-data:/data idvjpy-demo --demo short --demo-qui
   ```
   и добавить нужные монтирования (`/var/run/docker.sock`, `~/.kube/config`).
 - `:fm` / `:term` не откроются — в контейнере нет X/Wayland.
+- Скан-PDF: OCR в образе нет (`ocrmypdf` тянет tesseract, ghostscript, qpdf и другие системные пакеты) —
+  `:md` честно скажет, что нужен OCR. На хосте достаточно `apt/dnf/apk/brew install ocrmypdf`,
+  но для не-английских сканов нужен ещё языковой пакет (`tesseract-ocr-<язык>`) и язык в `md_ocr`.
 - `:i` (Ingress Analyzer) требует `kubectl` и живой кластер.
 - При старте приложение сверяет версию с GitHub (`check_updates: true` из шаблона).
   Без сети это просто сообщение; отключается в `:ed settings.yml`.

@@ -60,6 +60,13 @@ md_render_lines: 1000
 # PDF 本地解析。转换结果缓存在数据目录的 mdcache/。
 md_converter: ""
 
+# `:md` 中扫描版 PDF 的本地 OCR（需要外部 `ocrmypdf`，它还需要 tesseract：
+# apt/dnf/apk/brew install ocrmypdf）。留空 —— 自动（已安装 ocrmypdf 时）；
+# off —— 不识别（仍会显示「需要 OCR」）；也可用自定义命令，
+# 例如 "ocrmypdf -l rus"（混合扫描件用 "-l rus+eng"）：扫描件语言由 tesseract 决定，
+# 非英语扫描件还需安装对应语言包（apt install tesseract-ocr-rus）。完全离线。
+md_ocr: ""
+
 # 标签数据库文件（相对于数据目录）。
 database_tags_file: mytags.db
 # 数据库快照目录（:backup、--seed）。

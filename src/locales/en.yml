@@ -190,5 +190,7 @@ md:
   converter_missing: "Converter '{name}' is not available — install it or fix `md_converter` in settings.yml."
   empty: "{name}: the converter ({converter}) produced no text."
   failed: "Could not convert {name}: {error}"
-  needs_ocr: "{name}: the pages are scanned and need OCR — not supported offline."
+  needs_ocr: "{name}: scanned pages, no text layer — OCR is needed. Local engine (nothing leaves the machine): {hint}; `md_ocr` in settings.yml disables it or adds options (e.g. ocrmypdf -l rus)."
+  ocr_missing: "{name}: OCR tool '{tool}' is not available — install it (apt/dnf/apk/brew ocrmypdf) or clear `md_ocr` in settings.yml."
+  ocr_language: "{name}: tesseract has no language data for '{code}' — install the pack (apt install tesseract-ocr-{code}) or set your own language in `md_ocr` (e.g. ocrmypdf -l eng)."
   timeout: "Conversion of {name} timed out ({seconds}s)."

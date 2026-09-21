@@ -1,18 +1,24 @@
 """Документы → markdown для `:md` (`src/md_convert.py` + маршрут в `app.py`).
 
 Unit: детект «текст или документ» по содержимому, поиск конвертера, кэш,
-ошибки конвертера. App: `:md report.pdf` уходит в конвертер и открывает
-просмотрщик на исходном пути, `md_converter` из settings уважается, кэш
-отдаётся повторно (даже если конвертер пропал), без конвертера — подсказка.
+ошибки конвертера, локальный OCR скан-PDF (`ocrmypdf`). App: `:md report.pdf`
+уходит в конвертер и открывает просмотрщик на исходном пути, `md_converter`
+из settings уважается, кэш отдаётся повторно (даже если конвертер пропал),
+без конвертера — подсказка.
 """
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import io
 import os
+import shutil
+import subprocess
 import sys
 import time
+import types
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -213,7 +219,9 @@ def test_converter_timeout_is_bounded(tmp_path):
 
 def test_empty_converter_output_is_error(tmp_path):
     converter = _write_script(tmp_path, EMPTY_SCRIPT)
-    assert md_convert.convert(_document(tmp_path), preferred=converter).error == "empty"
+    # `md_ocr: off` — иначе установленный в системе ocrmypdf включит распознавание.
+    result = md_convert.convert(_document(tmp_path), preferred=converter, ocr="off")
+    assert result.error == "empty"
 
 
 def test_command_for_pandoc_asks_for_gfm(tmp_path):
@@ -384,3 +392,384 @@ async def test_md_command_with_anydoc_live(isolated_home):
         screen = await _wait_screen(app, HandbookMarkdownScreen)
         assert screen._path.name == "minimal.docx"
         assert "Hello minimal docx" in screen._markdown
+
+
+# --- Локальный OCR скан-PDF (`ocrmypdf`) -----------------------------------
+
+OCR_SCRIPT = """\
+#!/usr/bin/env python3
+import os
+import pathlib
+import sys
+
+runs = os.environ.get("MD_OCR_RUNS")
+if runs:
+    with open(runs, "a", encoding="utf-8") as handle:
+        handle.write("run\\n")
+
+argv = sys.argv[1:]
+source, target = pathlib.Path(argv[-2]), pathlib.Path(argv[-1])
+target.write_bytes(source.read_bytes() + b"%%OCR%%")
+if "--sidecar" in argv:  # реальный ocrmypdf пишет текстовый файл рядом с PDF
+    pathlib.Path(argv[argv.index("--sidecar") + 1]).write_text(
+        "Revenue grew by 12 percent in Q3.\\n", encoding="utf-8"
+    )
+"""
+
+SCAN_AWARE_SCRIPT = """\
+import os
+import pathlib
+import sys
+
+data = pathlib.Path(sys.argv[-1]).read_bytes()
+runs = os.environ.get("MD_CONVERT_RUNS")
+if runs:
+    with open(runs, "a", encoding="utf-8") as handle:
+        handle.write("run\\n")
+if b"%%OCR%%" not in data:  # скан без текстового слоя: как pdfplumber на скане
+    sys.exit(0)
+print("# Recognized")
+print()
+print("Revenue grew by 12 percent in Q3.")
+"""
+
+#: Фейковый `ocrmypdf` без языкового пакета: так отвечает настоящий, если у
+#: tesseract нет данных языка (ошибка сверху, пояснения ниже).
+OCR_LANGUAGE_SCRIPT = """\
+#!/usr/bin/env python3
+import sys
+
+sys.stderr.write(
+    "OCR engine does not have language data for the following requested languages:\\n"
+    "rus\\n"
+    "Please install the appropriate language data for your OCR engine.\\n"
+)
+sys.exit(2)
+"""
+
+
+def _fake_ocr_tool(tmp_path, monkeypatch, body: str = OCR_SCRIPT) -> Path:
+    """Исполняемый `ocrmypdf` в отдельном каталоге + этот каталог первым в PATH."""
+    tools = tmp_path / "tools"
+    tools.mkdir(exist_ok=True)
+    tool = tools / "ocrmypdf"
+    tool.write_text(body, encoding="utf-8")
+    tool.chmod(0o755)
+    original = os.environ.get("PATH", "")
+    monkeypatch.setenv("PATH", f"{tools}{os.pathsep}{original}")
+    return tool
+
+
+def _install_fake_anydoc(monkeypatch) -> None:
+    """`anydoc`: без текстового слоя — `NeedsOcrError`, с ним — markdown."""
+    module = types.ModuleType("anydoc")
+
+    class NeedsOcrError(Exception):
+        """Как у настоящего anydoc: скан-страницы без OCR."""
+
+    def to_markdown(path):
+        if b"%%OCR%%" in Path(path).read_bytes():
+            return "# Recognized page\n\nRevenue grew by 12 percent in Q3.\n"
+        raise NeedsOcrError("scanned pages")
+
+    # `__dict__`, а не атрибуты: для чекеров `ModuleType` не знает своих полей.
+    module.__dict__.update({"to_markdown": to_markdown, "NeedsOcrError": NeedsOcrError})
+    monkeypatch.setitem(sys.modules, "anydoc", module)
+
+
+def test_find_ocr_auto_off_env_and_explicit(monkeypatch):
+    monkeypatch.delenv(md_convert.ENV_OCR, raising=False)
+    monkeypatch.setattr(md_convert, "ocr_available", lambda name: True)
+    assert md_convert.find_ocr("") == "ocrmypdf"
+    assert md_convert.find_ocr("off") == ""
+    assert md_convert.find_ocr("NONE") == ""
+    assert md_convert.find_ocr("0") == ""
+    # «Авто» словами — то же, что пусто.
+    assert md_convert.find_ocr("auto") == "ocrmypdf"
+    assert md_convert.find_ocr("true") == "ocrmypdf"
+    # Явная команда не гасится и не подменяется.
+    assert md_convert.find_ocr("ocrmypdf -l rus+eng") == "ocrmypdf -l rus+eng"
+
+    monkeypatch.setattr(md_convert, "ocr_available", lambda name: False)
+    assert md_convert.find_ocr("") == ""  # автопоиск: движка нет — молча мимо
+    assert md_convert.find_ocr("my-ocr") == "my-ocr"  # сказали явно — сообщим
+
+    monkeypatch.setenv(md_convert.ENV_OCR, "off")
+    assert md_convert.find_ocr("") == ""
+    monkeypatch.setenv(md_convert.ENV_OCR, "ocrmypdf -l deu")
+    assert md_convert.find_ocr("") == "ocrmypdf -l deu"
+
+
+def test_failure_detail_prefers_the_error_line():
+    """Из stderr берём причину, а не хвост пояснений (у ocrmypdf он бывает про другое)."""
+    traceback = 'Traceback (most recent call last):\n  File "x.py", line 1\nValueError: bad format\n'
+    assert md_convert._failure_detail(traceback, "fail") == "ValueError: bad format"
+    languages = (
+        "OCR engine does not have language data for the following requested languages:\n"
+        "rus\nPlease install the appropriate language data.\n"
+    )
+    assert md_convert._failure_detail(languages, "fail").endswith(": rus")
+    assert md_convert._missing_language(languages) == "rus"
+    assert md_convert._missing_language("nothing here") == ""
+    assert md_convert._failure_detail("", "exit code 2") == "exit code 2"
+    assert md_convert._failure_detail("just noise\n", "fail") == "just noise"
+
+
+def test_md_ocr_setting_survives_yaml_booleans():
+    """`md_ocr: off` без кавычек YAML отдаёт булевым `False` — это «выключено»."""
+    assert CommandRunner._ocr_setting(False) == "off"
+    assert CommandRunner._ocr_setting(True) == ""  # `on` → автопоиск
+    assert CommandRunner._ocr_setting(None) == ""
+    assert CommandRunner._ocr_setting("") == ""
+    assert CommandRunner._ocr_setting("ocrmypdf -l rus") == "ocrmypdf -l rus"
+
+
+def test_ocr_command_adds_safe_flags(tmp_path):
+    source, target = tmp_path / "in.pdf", tmp_path / "out.pdf"
+    sidecar = tmp_path / "out.txt"
+    command = md_convert._ocr_command("ocrmypdf", source, target, sidecar)
+    assert command[-2:] == [str(source), str(target)]
+    assert "--skip-text" in command  # без него ocrmypdf откажется от PDF с текстом
+    assert "--optimize" in command and "--output-type" in command
+    assert command[command.index("--sidecar") + 1] == str(sidecar)
+
+    own = md_convert._ocr_command("ocrmypdf --force-ocr -l rus", source, target, sidecar)
+    assert "--force-ocr" in own and "-l" in own and "rus" in own
+    assert "--skip-text" not in own  # свой режим не перебиваем
+    assert "--sidecar" in own  # но текст забираем всё равно
+    assert own[-2:] == [str(source), str(target)]
+
+    custom = md_convert._ocr_command("my-ocr --fast", source, target, sidecar)
+    assert custom[-3:] == ["--fast", str(source), str(target)]
+    assert "--sidecar" not in custom  # чужая команда может такого флага и не знать
+
+
+def test_looks_like_pdf_reads_signature(tmp_path):
+    assert md_convert.looks_like_pdf(_document(tmp_path))
+    assert not md_convert.looks_like_pdf(tmp_path / "missing.pdf")
+    note = tmp_path / "note.md"
+    note.write_text("# hi\n", encoding="utf-8")
+    assert not md_convert.looks_like_pdf(note)
+
+
+def test_scanned_pdf_is_recognized_locally(tmp_path, monkeypatch):
+    """Пустой ответ конвертера → локальный OCR → повторная конвертация, затем кэш."""
+    monkeypatch.setenv("MD_OCR_RUNS", str(tmp_path / "ocr.runs"))
+    monkeypatch.setenv("MD_CONVERT_RUNS", str(tmp_path / "convert.runs"))
+    _fake_ocr_tool(tmp_path, monkeypatch)
+    converter = _write_script(tmp_path, SCAN_AWARE_SCRIPT)
+    source = _document(tmp_path)
+    cache_dir = tmp_path / "mdcache"
+
+    result = md_convert.convert(source, cache_dir=cache_dir, preferred=converter)
+    assert result.ok, result.error or result.detail
+    assert "Revenue grew by 12 percent" in result.markdown
+    assert result.converter.endswith("+ocrmypdf"), result.converter
+    assert (tmp_path / "ocr.runs").read_text(encoding="utf-8").count("run") == 1
+    # Конвертер звали дважды: до OCR (пусто) и после него.
+    assert (tmp_path / "convert.runs").read_text(encoding="utf-8").count("run") == 2
+
+    second = md_convert.convert(source, cache_dir=cache_dir, preferred=converter)
+    assert second.cached and second.markdown == result.markdown
+    assert second.converter.endswith("+ocrmypdf")
+    assert (tmp_path / "ocr.runs").read_text(encoding="utf-8").count("run") == 1
+
+    # `md_ocr: off` — распознавания нет, сообщение остаётся честным.
+    monkeypatch.setenv(md_convert.ENV_OCR, "off")
+    assert md_convert.convert(source, cache_dir=cache_dir, preferred=converter).error == "empty"
+
+
+def test_anydoc_needs_ocr_triggers_local_ocr(tmp_path, monkeypatch):
+    """`NeedsOcrError` от anydoc — не тупик: распознаём локально и читаем заново."""
+    monkeypatch.setenv("MD_OCR_RUNS", str(tmp_path / "ocr.runs"))
+    monkeypatch.delenv(md_convert.ENV_CONVERTER, raising=False)
+    monkeypatch.delenv(md_convert.ENV_OCR, raising=False)
+    _fake_ocr_tool(tmp_path, monkeypatch)
+    _install_fake_anydoc(monkeypatch)
+    source = _document(tmp_path)
+
+    result = md_convert.convert(source, cache_dir=tmp_path / "mdcache", preferred="anydoc")
+    assert result.ok, result.error or result.detail
+    assert result.converter == "anydoc+ocrmypdf"
+    assert "Recognized page" in result.markdown
+    assert (tmp_path / "ocr.runs").read_text(encoding="utf-8").count("run") == 1
+
+
+def test_scanned_pdf_without_engine_says_ocr_needed(tmp_path, monkeypatch):
+    """Движка нет — прежнее поведение: отказ конвертера доходит до пользователя."""
+    monkeypatch.delenv(md_convert.ENV_OCR, raising=False)
+    monkeypatch.setattr(md_convert, "ocr_available", lambda name: False)
+    converter = _write_script(tmp_path, SCAN_AWARE_SCRIPT)
+    result = md_convert.convert(_document(tmp_path), preferred=converter)
+    assert result.error == "empty"
+    assert not result.cached
+
+
+def test_explicit_ocr_tool_missing_is_reported(tmp_path):
+    converter = _write_script(tmp_path, SCAN_AWARE_SCRIPT)
+    result = md_convert.convert(
+        _document(tmp_path), preferred=converter, ocr="definitely-not-ocr"
+    )
+    assert result.error == "ocr_missing"
+    assert result.detail == "definitely-not-ocr"
+
+
+def test_missing_language_pack_is_reported(tmp_path, monkeypatch):
+    """Нет языкового пакета — отдельная ошибка с кодом языка, а не хвост stderr."""
+    _fake_ocr_tool(tmp_path, monkeypatch, OCR_LANGUAGE_SCRIPT)
+    converter = _write_script(tmp_path, SCAN_AWARE_SCRIPT)
+    result = md_convert.convert(_document(tmp_path), preferred=converter)
+    assert result.error == "ocr_language"
+    assert result.detail == "rus"
+
+
+def test_ocr_text_layer_is_used_when_converter_refuses(tmp_path, monkeypatch):
+    """`anydoc` не берёт «картиночный» PDF даже с OCR-слоем — отдаём текст от ocrmypdf."""
+    monkeypatch.setenv("MD_OCR_RUNS", str(tmp_path / "ocr.runs"))
+    _fake_ocr_tool(tmp_path, monkeypatch)
+    converter = _write_script(tmp_path, EMPTY_SCRIPT)  # пусто и до OCR, и после него
+
+    result = md_convert.convert(_document(tmp_path), preferred=converter)
+    assert result.ok, result.error or result.detail
+    assert result.converter == "ocrmypdf"  # структуры нет — текст дал только OCR
+    assert "Revenue grew by 12 percent" in result.markdown
+
+
+def test_ocr_without_text_and_without_sidecar_is_empty(tmp_path, monkeypatch):
+    """Ни текстового слоя, ни sidecar — честное «пусто», а не «поставьте ocrmypdf»."""
+    monkeypatch.setenv("MD_OCR_RUNS", str(tmp_path / "ocr.runs"))
+    _fake_ocr_tool(tmp_path, monkeypatch)
+    converter = _write_script(tmp_path, EMPTY_SCRIPT)
+    monkeypatch.setattr(md_convert, "_read_sidecar", lambda sidecar: "")
+
+    result = md_convert.convert(_document(tmp_path), preferred=converter)
+    assert result.error == "empty"
+    assert result.converter.endswith("+ocrmypdf")
+
+
+# --- Живой OCR (`ocrmypdf` + tesseract): пропускается, если их нет ----------
+
+
+def _live_ocr_ready() -> bool:
+    """Живой OCR: `ocrmypdf`, `tesseract`, Pillow (сделать скан) и `anydoc` (прочитать PDF)."""
+    if shutil.which("tesseract") is None:
+        return False
+    if not md_convert.ocr_available("ocrmypdf") or not md_convert.anydoc_available():
+        return False
+    return importlib.util.find_spec("PIL") is not None
+
+
+#: Шрифты с кириллицей для «русского скана» (есть хотя бы один — иначе тест пропускается).
+_CYRILLIC_FONTS = (
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    "/Library/Fonts/Arial Unicode.ttf",
+    "C:/Windows/Fonts/arial.ttf",
+)
+
+
+def _tesseract_languages() -> set[str]:
+    """Языковые пакеты tesseract (`tesseract --list-langs`); пусто — не спросили."""
+    try:
+        done = subprocess.run(
+            ["tesseract", "--list-langs"], capture_output=True, text=True, timeout=30
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return set()
+    return set(done.stdout.split())
+
+
+def _cyrillic_font_path() -> str:
+    return next((path for path in _CYRILLIC_FONTS if Path(path).is_file()), "")
+
+
+def _live_russian_ocr_ready() -> bool:
+    """Живой русский OCR: всё из `_live_ocr_ready` плюс пакет `rus` и шрифт с кириллицей."""
+    return _live_ocr_ready() and "rus" in _tesseract_languages() and bool(_cyrillic_font_path())
+
+
+@pytest.mark.skipif(not _live_ocr_ready(), reason="ocrmypdf + tesseract + Pillow не установлены")
+def test_scanned_pdf_is_recognized_by_real_ocr(tmp_path):
+    """Настоящий скан (картинка без текстового слоя) → `ocrmypdf` → markdown."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    image = Image.new("RGB", (1200, 400), "white")
+    draw = ImageDraw.Draw(image)
+    try:
+        font = ImageFont.load_default(size=56)
+    except TypeError:  # Pillow < 10.1: только встроенный растровый шрифт
+        font = ImageFont.load_default()
+    draw.text((60, 80), "OCR pipeline check", fill="black", font=font)
+    draw.text((60, 220), "kubectl get pods -A", fill="black", font=font)
+    scan = tmp_path / "scan.pdf"
+    image.save(scan)
+
+    result = md_convert.convert(scan, cache_dir=tmp_path / "mdcache", preferred="anydoc")
+    assert result.ok, result.error or result.detail
+    # anydoc читает крупные сканы со слоем; на мелких отказывается — тогда текст берём
+    # из sidecar ocrmypdf, поэтому проверяем результат, а не имя пары конвертеров.
+    assert "ocrmypdf" in result.converter
+    assert "pipeline" in result.markdown.lower()
+    cached = md_convert.convert(scan, cache_dir=tmp_path / "mdcache", preferred="anydoc")
+    assert cached.cached and cached.markdown == result.markdown
+
+
+@pytest.mark.skipif(
+    not _live_russian_ocr_ready(), reason="нет tesseract-ocr-rus или шрифта с кириллицей"
+)
+def test_russian_scan_needs_the_language_pack(tmp_path):
+    """`-l rus`: без языкового пакета из скана выходит латиница, с ним — русский текст."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    lines = (
+        "Квартальный отчёт",
+        "Выручка выросла на 12 процентов за третий квартал.",
+        "Ответственные: команда платформы.",
+    )
+    image = Image.new("RGB", (1200, 700), "white")
+    draw = ImageDraw.Draw(image)
+    draw.text((60, 80), lines[0], fill="black", font=ImageFont.truetype(_cyrillic_font_path(), 48))
+    draw.text((60, 220), lines[1], fill="black", font=ImageFont.truetype(_cyrillic_font_path(), 30))
+    draw.text((60, 300), lines[2], fill="black", font=ImageFont.truetype(_cyrillic_font_path(), 30))
+    scan = tmp_path / "otchet.pdf"
+    image.save(scan, resolution=150)
+
+    # По умолчанию tesseract распознаёт английским — той же строки не получится.
+    english = md_convert.convert(scan, cache_dir=tmp_path / "eng", preferred="anydoc")
+    assert english.ok, english.error or english.detail
+    assert "Квартальный" not in english.markdown
+
+    russian = md_convert.convert(
+        scan, cache_dir=tmp_path / "rus", preferred="anydoc", ocr="ocrmypdf -l rus"
+    )
+    assert russian.ok, russian.error or russian.detail
+    assert "Квартальный" in russian.markdown
+    assert "команда платформы" in russian.markdown
+
+
+async def test_md_command_ocrs_scanned_pdf(isolated_home, monkeypatch):
+    """:md <скан-PDF> в TUI: распознавание локально и открытие просмотрщика."""
+    monkeypatch.setenv("MD_OCR_RUNS", str(isolated_home / "ocr.runs"))
+    monkeypatch.setenv("MD_CONVERT_RUNS", str(isolated_home / "convert.runs"))
+    monkeypatch.setenv(md_convert.ENV_CONVERTER, _write_script(isolated_home, SCAN_AWARE_SCRIPT))
+    _fake_ocr_tool(isolated_home, monkeypatch)
+    document = _document(isolated_home)
+
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await submit(pilot, f":md {document}")
+        screen = await _wait_screen(app, HandbookMarkdownScreen)
+        assert screen._path.name == "report.pdf"
+        assert "Revenue grew by 12 percent" in screen._markdown
+
+
+async def test_md_command_reports_missing_ocr_tool(isolated_home, monkeypatch):
+    monkeypatch.setenv(md_convert.ENV_CONVERTER, _write_script(isolated_home, SCAN_AWARE_SCRIPT))
+    monkeypatch.setattr(md_convert, "find_ocr", lambda preferred="": "definitely-not-ocr")
+    document = _document(isolated_home)
+
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await submit(pilot, f":md {document}")
+        text = await _wait_info(app, "definitely-not-ocr")
+        assert "md_ocr" in text

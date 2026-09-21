@@ -13,10 +13,18 @@
 
 ``anydoc`` (`pip install firecrawl-anydoc`) — Rust-расширение **без зависимостей**
 с колесами под 3.10+ (macOS, manylinux, musllinux, win_amd64): формат определяет
-по содержимому, PDF читает локально, вызывается импортом и отпускает GIL. OCR не
-включаем: скан-PDF получает ``needs_ocr``, а не отправку в облако — сеть в
-проекте только через ``src/net.py`` и только для update/llm/import. Остальные
-конвертеры — внешние процессы «файл → markdown в stdout» (``pandoc`` — в GFM).
+по содержимому, PDF читает локально, вызывается импортом и отпускает GIL.
+Остальные конвертеры — внешние процессы «файл → markdown в stdout»
+(``pandoc`` — в GFM).
+
+3. **Скан-PDF — локальный OCR.** Если конвертер текста не нашёл (``needs_ocr``
+   или пусто), а файл действительно PDF — накладываем текстовый слой через
+   ``ocrmypdf`` и читаем PDF заново уже как обычный. Движок: `md_ocr`
+   (settings.yml) → ``$IDVJPY_MD_OCR`` → автопоиск; ``off`` выключает.
+   Наружу ничего не уходит: и `anydoc.to_markdown`, и `ocrmypdf` работают
+   локально (``ocr="hosted"`` у anydoc не используем — сеть в проекте только
+   через ``src/net.py`` и только для update/llm/import). Движка нет — честное
+   сообщение «нужен OCR» с подсказкой об установке.
 
 Результат кэшируется в ``<data>/mdcache/<имя>-<ключ>.md`` (ключ — путь, mtime,
 размер и конвертер), поэтому в просмотрщике работают ``#L<n>``, поиск ``/`` и
@@ -30,9 +38,11 @@ from __future__ import annotations
 import hashlib
 import io
 import os
+import re
 import shlex
 import shutil
 import subprocess
+import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -48,8 +58,35 @@ ENV_CONVERTER = "IDVJPY_MD_CONVERT"
 CONVERTERS: tuple[str, ...] = ("anydoc", "markitdown", "pandoc")
 #: Подстановка в сообщение «конвертера нет» (текст берётся из локали).
 INSTALL_HINT = "pip install firecrawl-anydoc   (or markitdown / pandoc)"
+#: Локальный OCR скан-PDF: инструмент, его таймаут и безопасные флаги.
+OCR_TOOL = "ocrmypdf"
+OCR_TIMEOUT = 300.0
+#: `--skip-text` — не трогать страницы с текстом (без него ocrmypdf откажется),
+#: `--optimize 0` и обычный PDF — без сжатия и PDF/A: нам нужен только текст.
+OCR_FLAGS = ("--skip-text", "--optimize", "0", "--output-type", "pdf")
+#: Режимы, заданные человеком: тогда свои флаги не добавляем.
+_OCR_OWN_FLAGS = ("--skip-text", "--force-ocr", "--redo-ocr", "--mode", "-m")
+#: Подстановка в сообщение «нужен OCR» (текст берётся из локали).
+OCR_INSTALL_HINT = (
+    "apt install ocrmypdf | dnf install ocrmypdf | apk add ocrmypdf | brew install ocrmypdf"
+)
+#: Переменная окружения — разовая замена `md_ocr` из settings.yml.
+ENV_OCR = "IDVJPY_MD_OCR"
+#: Значения `md_ocr`, выключающие распознавание (в т.ч. когда движок есть).
+_OCR_OFF = frozenset({"off", "none", "no", "false", "0"})
+#: Значения, означающие «автопоиск» (в т.ч. YAML-булев `true` в кавычках).
+_OCR_ON = frozenset({"auto", "on", "yes", "true", "1"})
+#: Отказы конвертера, которые для PDF означают «текстового слоя нет».
+_NO_TEXT_ERRORS = frozenset({"needs_ocr", "empty"})
+#: По этим словам находим строку с причиной среди stderr: у `ocrmypdf` ошибка
+#: сверху, у питоновских конвертеров (traceback) — снизу.
+_ERROR_HINT = re.compile(
+    r"error|failed|fail:|does not|cannot|can't|unknown|unsupported|not found|отказ|не удалось",
+    re.IGNORECASE,
+)
+_PDF_SIGNATURE = b"%PDF-"
 #: Сигнатуры контейнеров — текст с таких байтов не начинается.
-_DOC_SIGNATURES = (b"%PDF-", b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", b"{\\rtf")
+_DOC_SIGNATURES = (_PDF_SIGNATURE, b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", b"{\\rtf")
 #: Части ZIP-пакета: наличие любой — офисный документ, а не просто архив.
 _OFFICE_ZIP_PARTS = frozenset(
     {
@@ -70,9 +107,10 @@ _PRINTABLE_MIN_RATIO = 0.90
 class ConvertResult:
     """Итог конвертации: markdown либо причина отказа (`error` — для текста сообщения).
 
-    ``error``: ``no_converter`` · ``converter_missing`` · ``failed`` · ``timeout``
-    · ``empty`` · ``needs_ocr``. ``detail`` — текст исключения или stderr
-    конвертера; показывать его или нет, решает вызывающий.
+    ``error``: ``no_converter`` · ``converter_missing`` · ``ocr_missing`` ·
+    ``ocr_language`` · ``failed`` · ``timeout`` · ``empty`` · ``needs_ocr``.
+    ``detail`` — текст исключения или stderr инструмента; показывать его или
+    нет, решает вызывающий.
     """
 
     markdown: str = ""
@@ -203,6 +241,49 @@ def find_converter(preferred: str = "") -> str:
     return found[0] if found else ""
 
 
+def _tool_name(command: str) -> str:
+    """Короткое имя инструмента для сообщений («anydoc», «ocrmypdf», «document.pdf»)."""
+    try:
+        parts = shlex.split(command or "")
+    except ValueError:
+        parts = []
+    return os.path.basename(parts[0]) if parts else "?"
+
+
+def looks_like_pdf(path: str | os.PathLike[str]) -> bool:
+    """PDF по сигнатуре: локальный OCR имеет смысл только для него."""
+    try:
+        with Path(path).open("rb") as handle:
+            return handle.read(len(_PDF_SIGNATURE)) == _PDF_SIGNATURE
+    except OSError:
+        return False
+
+
+def ocr_available(command: str) -> bool:
+    """Есть ли OCR-команда в системе (это всегда внешний процесс)."""
+    try:
+        parts = shlex.split(command or "")
+    except ValueError:
+        return False
+    return bool(parts) and _command_exists(parts[0])
+
+
+def find_ocr(preferred: str = "") -> str:
+    """Команда локального OCR для скан-PDF: settings.yml → ``$IDVJPY_MD_OCR`` → автопоиск.
+
+    Пусто — распознавания нет (движка нет или выключено). ``off`` / ``none`` /
+    ``no`` / ``false`` / ``0`` выключают явно (в т.ч. когда `ocrmypdf` установлен),
+    ``auto`` / ``on`` / ``true`` равнозначны пустому значению. Заданная команда
+    возвращается как есть, даже если её нет: про отсутствующую сообщаем отдельно,
+    а не молча оставляем скан без текста.
+    """
+    wanted = (preferred or "").strip() or os.environ.get(ENV_OCR, "").strip()
+    lowered = wanted.lower()
+    if not wanted or lowered in _OCR_ON:
+        return OCR_TOOL if ocr_available(OCR_TOOL) else ""
+    return "" if lowered in _OCR_OFF else wanted
+
+
 def cache_key(path: Path, converter: str = "") -> str:
     """Ключ кэша: путь, mtime, размер и конвертер (изменилось что-то — конвертируем заново)."""
     try:
@@ -281,6 +362,35 @@ def _convert_with_anydoc(source: Path, converter: str) -> ConvertResult:
     return _clean(markdown, converter)
 
 
+def _failure_detail(stderr: str, fallback: str) -> str:
+    """Строка с причиной из stderr: у `ocrmypdf` и `pandoc` ошибка сверху.
+
+    Просто брать последнюю строку нельзя: `ocrmypdf` после своей ошибки печатает
+    ещё и пояснения (про коды языков и т.п.), и в сообщение попадала подсказка
+    про китайский вместо «нет данных языка».
+    """
+    lines = [line.strip() for line in (stderr or "").splitlines() if line.strip()]
+    if not lines:
+        return fallback
+    for index, line in enumerate(lines):
+        if _ERROR_HINT.search(line):
+            # У `ocrmypdf` имя языка пишется отдельной строкой — приклеиваем его.
+            following = lines[index + 1] if index + 1 < len(lines) else ""
+            if len(following.split()) == 1:
+                return f"{line} {following}"
+            return line
+    return lines[-1]
+
+
+def _missing_language(stderr: str) -> str:
+    """`ocrmypdf`: «no language data …» → код языка, которого нет у tesseract."""
+    lines = [line.strip() for line in (stderr or "").splitlines() if line.strip()]
+    for index, line in enumerate(lines):
+        if "language data" in line.lower() and index + 1 < len(lines):
+            return lines[index + 1].split()[0]
+    return ""
+
+
 def _convert_with_command(source: Path, converter: str, timeout: float) -> ConvertResult:
     """Внешний конвертер: файл в аргументах, markdown в stdout."""
     command = _command_for(converter, source)
@@ -300,10 +410,102 @@ def _convert_with_command(source: Path, converter: str, timeout: float) -> Conve
     except (OSError, ValueError) as exc:
         return ConvertResult(converter=converter, error="failed", detail=str(exc))
     if proc.returncode != 0:
-        lines = (proc.stderr or "").strip().splitlines()
-        detail = lines[-1] if lines else f"exit code {proc.returncode}"
+        detail = _failure_detail(proc.stderr, f"exit code {proc.returncode}")
         return ConvertResult(converter=converter, error="failed", detail=detail)
     return _clean(proc.stdout, converter)
+
+
+def _run_converter(source: Path, converter: str, timeout: float) -> ConvertResult:
+    """Один проход конвертера: `anydoc` — импортом, остальные — процессом."""
+    if _looks_like_anydoc(converter):
+        return _convert_with_anydoc(source, converter)
+    return _convert_with_command(source, converter, timeout)
+
+
+def _ocr_command(
+    ocr: str, source: Path, target: Path, sidecar: Path | None = None
+) -> list[str]:
+    """Команда OCR: вход, затем выход последним аргументом (так ждёт `ocrmypdf`).
+
+    Свои «безопасные» флаги добавляем только `ocrmypdf` и только если человек не
+    задал режим сам: без `--skip-text` он отказывается работать с PDF, где часть
+    страниц уже с текстом, а `--optimize 0 --output-type pdf` не тратят время
+    на сжатие и PDF/A — нам нужен только текстовый слой. `--sidecar` — текстовый
+    файл рядом с PDF: если конвертер откажется читать «картиночный» PDF (у
+    `anydoc` свой порог), отдаём распознанный текст хотя бы им.
+    """
+    parts = shlex.split(ocr)
+    executable = shutil.which(parts[0]) or os.path.expanduser(parts[0])
+    extra = parts[1:]
+    if _tool_name(ocr).lower().startswith(OCR_TOOL):
+        if not any(flag in extra for flag in _OCR_OWN_FLAGS):
+            extra = [*extra, *OCR_FLAGS]
+        if sidecar is not None and "--sidecar" not in extra:
+            extra = [*extra, "--sidecar", str(sidecar)]
+    return [executable, *extra, str(source), str(target)]
+
+
+def _read_sidecar(sidecar: Path | None) -> str:
+    """Текст, который `ocrmypdf` положил рядом с PDF (`--sidecar`); пусто — нет."""
+    if sidecar is None:
+        return ""
+    try:
+        return sidecar.read_text(encoding=TEXT_ENCODING).strip()
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+
+def _ocr_label(converter: str, ocr: str) -> str:
+    """Имя пары для сообщений: «anydoc+ocrmypdf» — видно, что текст распознан."""
+    return f"{_tool_name(converter)}+{_tool_name(ocr)}"
+
+
+def _convert_with_ocr(source: Path, converter: str, ocr: str, timeout: float) -> ConvertResult:
+    """Скан-PDF: наложить текстовый слой (`ocrmypdf`) и сконвертировать заново.
+
+    Распознанный PDF живёт во временном каталоге: он нужен только как вход для
+    конвертера, в кэш уходит markdown (см. `convert`).
+    """
+    label = _ocr_label(converter, ocr)
+    with tempfile.TemporaryDirectory(prefix="idvjpy-md-ocr-") as workdir:
+        target = Path(workdir) / "ocr.pdf"
+        sidecar = Path(workdir) / "ocr.txt"
+        command = _ocr_command(ocr, source, target, sidecar)
+        try:
+            proc = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                encoding=TEXT_ENCODING,
+                errors="replace",
+                stdin=subprocess.DEVNULL,
+                timeout=OCR_TIMEOUT,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return ConvertResult(converter=label, error="timeout", detail=f"{OCR_TIMEOUT:g}")
+        except (OSError, ValueError) as exc:
+            return ConvertResult(converter=label, error="failed", detail=str(exc))
+        if proc.returncode != 0 or not target.is_file():
+            # Нет языкового пакета — самый частый отказ у не-английских сканов.
+            if code := _missing_language(proc.stderr):
+                return ConvertResult(converter=label, error="ocr_language", detail=code)
+            detail = _failure_detail(proc.stderr, f"exit code {proc.returncode}")
+            return ConvertResult(converter=label, error="failed", detail=detail)
+        result = _run_converter(target, converter, timeout)
+        if result.ok:
+            result.converter = label
+            return result
+        text = _read_sidecar(sidecar)
+        if text:
+            # Конвертер не берёт «картиночный» PDF (у anydoc свой порог по тексту),
+            # а распознанный текст уже есть — отдаём его, это лучше отказа.
+            return ConvertResult(markdown=text, converter=_tool_name(ocr))
+        if result.error in _NO_TEXT_ERRORS:
+            # OCR прошёл, а текста всё равно нет — не советуем ставить ocrmypdf снова.
+            return ConvertResult(converter=label, error="empty")
+        result.converter = label
+        return result
 
 
 def convert(
@@ -311,12 +513,13 @@ def convert(
     *,
     cache_dir: str | os.PathLike[str] | None = None,
     preferred: str = "",
+    ocr: str = "",
     timeout: float = CONVERT_TIMEOUT,
 ) -> ConvertResult:
-    """Документ → markdown: конвертер по приоритету + кэш (см. описание модуля).
+    """Документ → markdown: конвертер по приоритету, локальный OCR скан-PDF и кэш.
 
     Синхронно: вызывать из рабочего потока приложения — файл может быть большим,
-    UI ждать не должен.
+    а распознавание идёт секундами, UI ждать не должен.
     """
     source = Path(path)
     converter = find_converter(preferred)
@@ -330,10 +533,32 @@ def convert(
         return ConvertResult(error="no_converter")
     if not converter_available(converter):
         return ConvertResult(converter=converter, error="converter_missing", detail=converter)
-    if _looks_like_anydoc(converter):
-        result = _convert_with_anydoc(source, converter)
-    else:
-        result = _convert_with_command(source, converter, timeout)
+
+    ocr_command = find_ocr(ocr)
+    is_pdf = looks_like_pdf(source)
+    ocr_cache = None
+    if is_pdf and ocr_command:
+        ocr_cache = _cache_file(cache_dir, source, cache_key(source, f"{converter}|{ocr_command}"))
+        recognized = _read_cache(ocr_cache)
+        if recognized is not None:
+            # Прошлый раз этот файл пришлось распознавать — OCR не повторяем.
+            return ConvertResult(
+                markdown=recognized,
+                converter=_ocr_label(converter, ocr_command),
+                cached=True,
+            )
+
+    result = _run_converter(source, converter, timeout)
     if result.ok:
         _write_cache(cache, result.markdown)
+        return result
+    if result.error not in _NO_TEXT_ERRORS or not is_pdf:
+        return result
+    if not ocr_command:
+        return result  # движка OCR нет — честное «нужен OCR» с подсказкой
+    if not ocr_available(ocr_command):
+        return ConvertResult(converter=ocr_command, error="ocr_missing", detail=ocr_command)
+    result = _convert_with_ocr(source, converter, ocr_command, timeout)
+    if result.ok:
+        _write_cache(ocr_cache, result.markdown)
     return result

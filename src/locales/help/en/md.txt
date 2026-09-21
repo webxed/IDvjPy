@@ -1,24 +1,78 @@
-[bold]:? md — markdown handbooks and search[/bold]
+[bold]:? md — markdown handbooks, documents and search[/bold]
 
-  :md <file|path>[#L<n>] - Open markdown with formatting: repo handbook name, or
-                an explicit path (e.g. an Obsidian-vault file); `#L<n>` opens at
-                source line n (like GitHub). Esc closes. Recorded in history (↑ / `:h`)
-                `y` copies the full path (in the formatted view also a click on
-                the name in the header). Files over `md_render_lines` (default
-                1000) open as raw source in the Line-API viewer (fast; `/` search,
-                `n`/`N`) — the formatted widget takes tens of seconds on big files
-  :rg <pat> [dir] - Search markdown files for a regex (ripgrep, or the built-in
-                scanner with an install hint). Smart case; results are clickable
-                `path:line` fragments — open them in the md viewer at that line;
-                `:rg <N>` opens result N (1-based). Base: [dir] → settings `md_dir`
-                → cwd. `:rg` / `:md` are recorded in history (↑ / `:h`)
-  :md notes.docx / report.pdf - Not markdown? `:md` converts it. The converter comes
-                from `md_converter` in settings.yml, else from the first one found:
-                anydoc → markitdown → pandoc. Recommended: `pip install firecrawl-anydoc`
-                (no dependencies; docx/xlsx/pptx/doc/ppt/xls/pdf/rtf/epub/odt; PDF read
-                locally). The markdown is cached in mdcache/ in the data directory, so
-                the viewer gets `#L<n>`, `/` search and `y` like any other file. Without
-                a converter — an install hint; a scanned PDF needs OCR (offline — no).
-  Settings: `md_dir` (search base), `md_render_lines` and `md_converter` in settings.yml.
+  :md <file|path>[#L<n>] - open markdown with formatting: a repo handbook name or an
+                explicit path (e.g. an Obsidian-vault file); `#L<n>` opens at source
+                line n (like GitHub). Esc closes, `y` copies the full path (in the
+                formatted view also a click on the name in the header). Recorded in
+                history (↑ / `:h`). Files over `md_render_lines` (default 1000) open
+                as source in the Line-API viewer — instant, with `/` search, `n`/`N`
+                and `#L<n>`
+  :rg <regex> [dir]    - search markdown files (ripgrep, else the built-in scanner with
+                an install hint). Smart case, 200 matches max, hidden/service
+                directories skipped. Base: [dir] → settings `md_dir` → cwd. Results
+                are clickable (`path:line` opens the viewer at that line), `:rg <N>`
+                opens result N (1-based). `:rg` and `:md` go to history (↑ / `:h`)
+                but are never suggested
+
+[bold]Documents: not only markdown[/bold]
+
+  Whether a file is text or a document is decided by its [bold]content[/bold], not the
+  extension: the PDF signature, an office ZIP package (docx/xlsx/pptx, odt/ods/odp,
+  epub), OLE2 (legacy .doc/.xls/.ppt), RTF, NUL bytes. A text file is opened as is —
+  no converter is needed or called.
+
+  The converter comes from `md_converter` (settings.yml), else the first installed one:
+    1. [bold]anydoc[/bold] (`pip install firecrawl-anydoc`) — recommended. A Rust
+       extension with [bold]no dependencies[/bold], ~3 MB wheel, Python 3.10+. The
+       format is read from the bytes, PDF is converted locally. Covers doc/docx/docm,
+       ppt/pps/pot/pptx/pptm, xls/xlsx/xlsm/xlsb, odt/ods/odp, rtf, epub, csv, pdf.
+    2. [bold]markitdown[/bold] (`pip install "markitdown[all]"`) — a Python package that
+       pulls pandas/lxml/pdfplumber and so on; used when it is already installed.
+    3. [bold]pandoc[/bold] — a system package; conservative about documents (mostly
+       docx/odt/rtf), but available almost everywhere and rich in output formats.
+  A custom command works too: `md_converter: "my-tool --md"` — the file is appended as
+  the last argument, markdown is expected on stdout. One run: `$IDVJPY_MD_CONVERT`.
+  An explicitly set converter is [bold]never replaced[/bold] by another: a missing tool
+  is an explicit error.
+
+[bold]Scanned PDF: local OCR[/bold]
+
+  When there is no text layer (anydoc reports `needs_ocr`, or the converter came back
+  empty), the file is a PDF and an engine is available, `:md` adds a text layer with
+  [bold]ocrmypdf[/bold] and reads the PDF again. Nothing leaves the machine: both
+  conversion and recognition are local.
+
+  Install: `apt install ocrmypdf` (Debian/Ubuntu) · `dnf install ocrmypdf tesseract-osd`
+  (Fedora) · `apk add ocrmypdf` (Alpine) · `brew install ocrmypdf` (macOS/Linux) ·
+  `pip install ocrmypdf` (needs the system [bold]tesseract[/bold] 4.1.1+ and its language
+  packs). The [bold]scan language[/bold] is tesseract's choice, English by default: for
+  Russian, install the pack (`apt install tesseract-ocr-rus`) and set the language —
+  `md_ocr: ocrmypdf -l rus` (use `-l rus+eng` for mixed documents). Without the pack
+  a Russian scan comes out in Latin letters, or `:md` names the missing language.
+
+  Key `md_ocr`: empty — auto-detect `ocrmypdf`; `off`/`none`/`no`/`false`/`0` — do not
+  recognize (the "OCR is needed" message stays); `on`/`auto` — same as empty; a custom
+  command brings its own flags (e.g. `ocrmypdf -l rus+eng --rotate-pages`). One run:
+  `$IDVJPY_MD_OCR`. Our own flags are added only to `ocrmypdf` and only when no mode was
+  set by hand: `--skip-text` (leave pages with text alone — otherwise ocrmypdf refuses),
+  `--optimize 0 --output-type pdf` (we only need the text, no compression or PDF/A) and
+  `--sidecar`: a text file next to the PDF — if the converter refuses an image-only PDF
+  with an OCR layer, `:md` shows the recognized text from there. Recognition runs in the
+  background with a 300 s timeout.
+
+[bold]Cache, settings, messages[/bold]
+
+  The result is cached in `<data>/mdcache/<name>-<key>.md` (key = path, mtime, size,
+  converter and OCR command): repeating `:md` is instant, and `#L<n>`, `/` search and `y`
+  work like for any file. The directory can be deleted by hand — everything is converted
+  again (scans are recognized again too). The cache survives uninstalling a converter.
+
+  What a message means: "OCR is needed" — no engine, with an install hint; "no language
+  data" — install `tesseract-ocr-<language>`; "converter is not available" — check
+  `md_converter`; "could not convert" — the text carries the tool's stderr line; "no
+  text" — neither the converter nor OCR produced anything; "timed out".
+
+  Settings: `md_dir` (`:rg` base), `md_render_lines` (formatting threshold),
+  `md_converter` (what converts) and `md_ocr` (what recognizes).
 
   Other topics and the full command list — :?

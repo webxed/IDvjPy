@@ -1,25 +1,70 @@
-[bold]:? md — markdown 手册与搜索[/bold]
+[bold]:? md — markdown 手册、文档与搜索[/bold]
 
-  :md <file|path>[#L<n>] - 以格式化方式打开 markdown：仓库手册名
-                或显式路径（例如来自 Obsidian 仓库的文件）；
-                `#L<n>` 打开到源文件第 n 行（类似 GitHub）。Esc 关闭。
-                会记入历史（↑ / `:h`）。`y` 复制完整路径（在
-                格式化视图中也可点击标题中的名称）。大于
-                `md_render_lines`（默认 1000）的文件会作为源文件在
-                Line-API 查看器中打开（快速；搜索 `/`、`n`/`N`）—
-                格式化组件在大文件上要花数十秒
-  :rg <pat> [dir] - 在 markdown 文件中搜索 regex（ripgrep 或内置
-                扫描器，会提示安装）。Smart case；结果为
-                可点击的 `path:line` 片段 — 在 md 查看器中打开
-                到该行；`:rg <N>` 打开第 N 个结果（从 1 开始）。基准：
-                [dir] → `md_dir` 设置 → cwd。`:rg` / `:md` 会记入
-                历史（↑ / `:h`）
-  :md notes.docx / report.pdf - 不是 markdown？`:md` 会转换它。转换器来自 settings.yml
-                的 `md_converter`，否则用第一个找到的：anydoc → markitdown → pandoc。
-                推荐 `pip install firecrawl-anydoc`（无依赖；docx/xlsx/pptx/doc/ppt/
-                xls/pdf/rtf/epub/odt；PDF 本地解析）。转换结果缓存在数据目录的
-                mdcache/，因此查看器里的 `#L<n>`、`/` 搜索和 `y` 与普通文件一样。
-                没有转换器时给出安装提示；扫描版 PDF 需要 OCR（离线不支持）。
-  设置：`md_dir`（搜索基准）、`md_render_lines` 和 `md_converter` 在 settings.yml 中。
+  :md <文件|路径>[#L<n>] - 以格式化方式打开 markdown：仓库手册名或显式路径
+                （例如 Obsidian 仓库中的文件）；`#L<n>` 直接打开到源文件第 n 行
+                （类似 GitHub）。Esc 关闭，`y` 复制完整路径（格式化视图中还可
+                点击标题中的名称）。会记入历史（↑ / `:h`）。大于
+                `md_render_lines`（默认 1000）的文件以源文件在 Line-API 查看器
+                中打开 —— 瞬间完成，支持 `/` 搜索、`n`/`N` 和 `#L<n>`
+  :rg <正则> [目录]     - 搜索 markdown 文件（ripgrep，否则用内置扫描器并提示安装）。
+                智能大小写，最多 200 条匹配，跳过隐藏/辅助目录。基准：[目录] →
+                `md_dir` → cwd。结果可点击（`路径:行号` 打开查看器到该行），
+                `:rg <N>` 打开第 N 个结果（从 1 开始）。`:rg` 与 `:md` 会记入历史
+                （↑ / `:h`），但不会出现在提示中
+
+[bold]文档：不只是 markdown[/bold]
+
+  “文本还是文档”由[bold]内容[/bold]决定，而不是扩展名：PDF 签名、办公 ZIP 包
+  （docx/xlsx/pptx、odt/ods/odp、epub）、OLE2（旧的 .doc/.xls/.ppt）、RTF、NUL 字节。
+  文本文件按原样打开 —— 不需要也不会调用转换器。
+
+  转换器取自 `md_converter`（settings.yml），否则用第一个已安装的：
+    1. [bold]anydoc[/bold]（`pip install firecrawl-anydoc`）—— 推荐。Rust 扩展，
+       [bold]无任何依赖[/bold]，wheel 约 3 MB，Python 3.10+。按内容判断格式，
+       PDF 本地解析。支持 doc/docx/docm、ppt/pps/pot/pptx/pptm、xls/xlsx/xlsm/xlsb、
+       odt/ods/odp、rtf、epub、csv、pdf。
+    2. [bold]markitdown[/bold]（`pip install "markitdown[all]"`）—— Python 包，
+       会带来 pandas/lxml/pdfplumber 等；已安装时才会使用。
+    3. [bold]pandoc[/bold] —— 系统包；对文档较保守（主要是 docx/odt/rtf），
+       但几乎处处都有，输出格式丰富。
+  也可以用自己的命令：`md_converter: "my-tool --md"` —— 文件作为最后一个参数，
+  markdown 从 stdout 读取。一次性覆盖：`$IDVJPY_MD_CONVERT`。
+  显式指定的转换器[bold]不会被[/bold]其它工具替换：工具不存在就是明确报错。
+
+[bold]扫描版 PDF：本地 OCR[/bold]
+
+  如果没有文本层（anydoc 报 `needs_ocr`，或转换器返回为空）、文件是 PDF 且存在引擎，
+  `:md` 会用 [bold]ocrmypdf[/bold] 加上文本层，再重新读取 PDF。不会发送到任何地方：
+  转换和识别都在本地。
+
+  安装：`apt install ocrmypdf`（Debian/Ubuntu）· `dnf install ocrmypdf tesseract-osd`
+  （Fedora）· `apk add ocrmypdf`（Alpine）· `brew install ocrmypdf`（macOS/Linux）·
+  `pip install ocrmypdf`（需要系统 [bold]tesseract[/bold] 4.1.1+ 及其语言包）。
+  [bold]扫描件语言[/bold]由 tesseract 决定，默认英语：俄语需安装语言包
+  （`apt install tesseract-ocr-rus`）并指定语言 —— `md_ocr: ocrmypdf -l rus`
+  （混合文档用 `-l rus+eng`）。没有语言包时，扫描件会输出拉丁字母，
+  或 `:md` 直接说明缺少哪种语言。
+
+  键 `md_ocr`：留空 —— 自动查找 `ocrmypdf`；`off`/`none`/`no`/`false`/`0` —— 不识别
+  （仍会提示「需要 OCR」）；`on`/`auto` —— 同留空；自定义命令则自带参数
+  （例如 `ocrmypdf -l rus+eng --rotate-pages`）。一次性覆盖：`$IDVJPY_MD_OCR`。
+  我们自己的参数只加给 `ocrmypdf`，且只在未手动指定模式时：
+  `--skip-text`（不动已有文字的页面 —— 否则 ocrmypdf 会拒绝）、
+  `--optimize 0 --output-type pdf`（只需要文字，不做压缩和 PDF/A）以及
+  `--sidecar`：PDF 旁边的文本文件 —— 若转换器拒绝读取带 OCR 层的“图片型”PDF，
+  `:md` 会改用它显示的识别文本。识别在后台进行，超时 300 秒。
+
+[bold]缓存、设置、消息[/bold]
+
+  结果缓存在 `<data>/mdcache/<名字>-<键>.md`（键 = 路径、mtime、大小、转换器与 OCR
+  命令）：重复 `:md` 瞬间完成，`#L<n>`、`/` 搜索和 `y` 与普通文件一样可用。
+  该目录可手动删除 —— 会重新转换（扫描件也会重新识别）。缓存不受转换器卸载影响。
+
+  消息含义：「需要 OCR」—— 没有引擎，附带安装提示；「没有语言数据」—— 安装
+  `tesseract-ocr-<语言>`；「转换器不可用」—— 检查 `md_converter`；「无法转换」——
+  文本中包含工具的 stderr 行；「为空」—— 转换器与 OCR 都没有给出文本；「超时」。
+
+  设置：`md_dir`（`:rg` 基准）、`md_render_lines`（格式化阈值）、
+  `md_converter`（用什么转换）和 `md_ocr`（用什么识别）。
 
   其他主题与完整命令列表 — :?

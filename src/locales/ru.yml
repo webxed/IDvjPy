@@ -185,5 +185,7 @@ md:
   converter_missing: "Конвертер '{name}' недоступен — установите его или поправьте `md_converter` в settings.yml."
   empty: "{name}: конвертер ({converter}) вернул пустой текст."
   failed: "Не удалось сконвертировать {name}: {error}"
-  needs_ocr: "{name}: страницы сканированы, нужен OCR — офлайн не поддерживается."
+  needs_ocr: "{name}: страницы сканированы, текстового слоя нет — нужен OCR. Локальный движок (наружу ничего не уходит): {hint}; `md_ocr` в settings.yml выключает распознавание или задаёт свои опции (напр. ocrmypdf -l rus)."
+  ocr_missing: "{name}: OCR-инструмент '{tool}' недоступен — установите его (apt/dnf/apk/brew ocrmypdf) или уберите `md_ocr` из settings.yml."
+  ocr_language: "{name}: у tesseract нет данных языка '{code}' — поставьте пакет (apt install tesseract-ocr-{code}) или задайте свой язык в `md_ocr` (напр. ocrmypdf -l eng)."
   timeout: "Конвертация {name} не уложилась в {seconds} с."

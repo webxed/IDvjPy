@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.162 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.163 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -269,7 +269,7 @@ curl -H "Bearer $TOKEN" https://api.example   # 普通的 $TOKEN 替换
 - `:h import [shell]` —— 把用户的 shell 历史追加到 `history_<instance>.txt`：会查找 `~/.bash_history`、`~/.zsh_history`、fish（`~/.local/share/fish/fish_history`）、ksh（`~/.sh_history`；`sh` 是同一个文件）、nushell（系统数据目录：`Application Support` / `%APPDATA%`）、PowerShell PSReadLine（Windows 上是 `%APPDATA%\Microsoft\…`，Linux/macOS 上是 XDG 路径）；已设置的 `$HISTFILE` 排在最前（格式按其内容判断，即使文件名不常见）。每个文件取最后 5000 行（大文件只读尾部），已有的行不会重复（再次导入不会添加任何内容），不会执行任何命令。不带名称——所有找到的 shell，`:h import zsh` —— 只导入它。失败会明确显示：文件被占用、写入错误和无法读取的来源都会被报告，而不会看起来像「新增 0 行」。导入后 ↑、`:h /text` 和提示会立即看到这些命令
 - `:c` —— 清空日志中的块
 - `:json` / `:json <file>` —— JSON viewer（最后一个块或文件）
-- `:md <file.md>[#L<n>]` —— 带格式的 Markdown 手册（在欢迎信息中点击名称；Esc 关闭）。也接受路径——绝对路径或相对于 `md_dir`/cwd 的路径，`:rg` 和 Obsidian vault 中的文件就是这样打开的；`#L<n>` 会直接打开到第 n 行（如同 GitHub）。`:md` 会写入历史（↑ / `:h`）。长度超过 `md_render_lines`（默认 1000 行）的文件会在 Line-API 查看器中以源码打开——速度快，支持 `/` 搜索和 `#L` 跳转（对超大文件做格式化渲染要耗费数十秒）。`y` 会把文件的完整路径复制到剪贴板——在格式化视图中还可以点击头部中的名称（raw 视图下只有 `y`）。不是 markdown 的文件（docx、xlsx、pptx、doc/ppt/xls、rtf、epub、odt、pdf）？`:md` 会转换它：转换器取自 `settings.yml` 的 `md_converter`，否则用第一个找到的（`anydoc` → `markitdown` → `pandoc`；推荐 `pip install firecrawl-anydoc` —— 无依赖、PDF 本地解析、也支持旧版 `.doc`/`.xls`）。转换结果缓存在数据目录的 `mdcache/`，所以查看器里的 `#L<n>`、`/` 搜索和 `y` 依然可用。没有转换器时会提示安装；扫描版 PDF 需要 OCR，离线不支持。文件是文本还是文档按内容判断，而不是按扩展名
+- `:md <file.md>[#L<n>]` —— 带格式的 Markdown 手册（在欢迎信息中点击名称；Esc 关闭）。也接受路径——绝对路径或相对于 `md_dir`/cwd 的路径，`:rg` 和 Obsidian vault 中的文件就是这样打开的；`#L<n>` 会直接打开到第 n 行（如同 GitHub）。`:md` 会写入历史（↑ / `:h`）。长度超过 `md_render_lines`（默认 1000 行）的文件会在 Line-API 查看器中以源码打开——速度快，支持 `/` 搜索和 `#L` 跳转（对超大文件做格式化渲染要耗费数十秒）。`y` 会把文件的完整路径复制到剪贴板——在格式化视图中还可以点击头部中的名称（raw 视图下只有 `y`）。不是 markdown 的文件（docx、xlsx、pptx、doc/ppt/xls、rtf、epub、odt、pdf）？`:md` 会转换它：转换器取自 `settings.yml` 的 `md_converter`，否则用第一个找到的（`anydoc` → `markitdown` → `pandoc`；推荐 `pip install firecrawl-anydoc` —— 无依赖、PDF 本地解析、也支持旧版 `.doc`/`.xls`）。转换结果缓存在数据目录的 `mdcache/`，所以查看器里的 `#L<n>`、`/` 搜索和 `y` 依然可用。没有转换器时会提示安装。**扫描版 PDF 在本地识别**：没有文本层时 `:md` 用 `ocrmypdf` 加上文本层（apt/dnf/apk/brew install ocrmypdf，它需要 tesseract）—— 不会发送到任何地方；settings.yml 中的 `md_ocr` 可关闭（`off`）或指定自定义命令（`ocrmypdf -l rus+eng`），没有引擎时仍显示明确的「需要 OCR」提示。文件是文本还是文档按内容判断，而不是按扩展名
 - `:rg <模式> [目录]` —— 搜索 markdown 文件：如果安装了 ripgrep 就用它（否则用内置扫描器 + 安装提示）。模式是正则表达式，「智能大小写」（不含大写字母时大小写不敏感）。搜索基准是 `[目录]`，否则用 `settings.yml` 中的 `md_dir`，再否则用 cwd。结果是带可点击 `路径:行号` 的片段（在内置 md 查看器中直接打开到匹配行）；`:rg <N>` 在同一处打开第 N 个结果（从 1 开始）。会跳过隐藏和辅助目录（`.git`、`.obsidian`、`node_modules`、…）；`:rg` 会写入历史（↑ / `:h`）
 - `:llm [<提供方>] <消息>` —— 按 `llm_providers.yml` 向 LLM 发请求（秘密只来自环境：`$DEEPSEEK_API_KEY`）。`@文件` 会嵌入文本，`$OUT` / `$BLOCK` —— 块的输出，`history_turns: N` 保持对话上下文。回答以格式化 markdown 呈现（`llm_render_markdown: true`；F6 —— 临时关闭）；供 F3/`|`/`$BLOCK`/`:w` 使用的纯文本副本不受此影响
 - `:llm offline <消息>` / `:llm ask offline <任务>` —— 内置离线提供方（`mock: true`）：无需网络和密钥即可回答；在任何配置中都存在，直到被自定义的 `offline:` 覆盖（用于演示、验证接线）
@@ -408,6 +408,7 @@ history_queries: [llm, cht, rg, md, run, send, send!]  # 这些 `:` 命令的调
 md_dir: ""                   # `:rg` 的文档目录（例如 Obsidian vault）；留空 —— cwd
 md_render_lines: 1000        # 格式化 `:md` 的阈值；更长则以 raw 视图在 Line-API 查看器中显示
 md_converter: ""             # `:md` 的文档转换器（docx/pdf/…）；留空 —— 自动 anydoc → markitdown → pandoc
+md_ocr: ""                   # 扫描版 PDF 的本地 OCR（ocrmypdf，需要 tesseract）；留空 —— 自动，off —— 关闭
 database_tags_file: mytags.db
 backup_dir: backups          # 数据库快照（:backup、--seed）
 command_timeout: 10          # 0 = 无超时
@@ -493,7 +494,21 @@ k8s 排查链：[`K8S_CHAINS.md`](../../K8S_CHAINS.md)。`python3 src/seed_k8s_c
 
 ## 依赖
 
-- `textual==7.3.0`, `rich==14.3.0`, `pyperclip==1.11.0`, `PyYAML==6.0.3`, `Pygments==2.19.2`, `portalocker`
+必需（在 `requirements.txt` 中）：`textual==7.3.0`、`rich==14.3.0`、`pyperclip==1.11.0`、`PyYAML==6.0.3`、`Pygments==2.19.2`、`portalocker`。
+
+可选 —— 由应用自行查找的外部工具（也可在 `md_converter` / `md_ocr` / `editor` 中显式指定）。它们不在 `requirements.txt` 中：没有它们一切照常，`:md` 会说明缺少什么。
+
+| 提供的能力 | 工具 | 安装 |
+|------------|------|------|
+| `:md` 中的文档：docx/xlsx/pptx/doc/ppt/xls/rtf/epub/odt/pdf | `anydoc` —— 推荐 | `pip install firecrawl-anydoc`（Rust，无依赖，PDF 本地解析） |
+| 同上，若 anydoc 不合适 | `markitdown` | `pip install "markitdown[all]"`（会带来 pandas/lxml/pdfplumber） |
+| 同上，通用转换器 | `pandoc` | `apt/dnf/apk/brew install pandoc` |
+| 扫描版 PDF：本地文本层 | `ocrmypdf` + `tesseract` | `apt/dnf/apk/brew install ocrmypdf`；语言 —— `tesseract-ocr-<语言>` |
+| `:rg` 的 markdown 搜索 | `ripgrep`（`rg`） | `apt/dnf/brew/pacman install ripgrep`（否则用内置扫描器） |
+| 外部编辑器 `:ed` | `nano` 或 `$EDITOR` / `$VISUAL` | `apt/dnf/apk/brew install nano` |
+| 文件管理器与终端 `:fm` / `:term` | `ranger` / `nnn` / `mc`、终端模拟器 | `$FILEMAN` / `$TERMINAL`，否则按列表查找 |
+
+`:md` 的细节（转换器、OCR、参数、缓存、每条消息的含义）—— `:? md`。
 
 ## 许可证
 
