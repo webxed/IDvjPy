@@ -15,8 +15,9 @@ docker compose run --rm idvjpy        # образ соберётся при п�
 
 При первом запуске стенд сам:
 1. создаёт `/data/settings.yml` и `/data/llm_providers.yml` из шаблонов языка (`src/settings/<lang>.yml`, `src/llm_providers/<lang>.yml`, режим `auto`);
-2. наполняет библиотеку тегов (`linux`, `k8s`, `git`, `ops` — 849 команд, ~5 с);
-3. запускает TUI.
+2. кладёт образец документа `/data/report.docx` (docx — это ZIP с XML, собирается на месте);
+3. наполняет библиотеку тегов (`linux`, `k8s`, `git`, `ops` — 849 команд, ~5 с);
+4. запускает TUI.
 
 Повторные запуски ничего не пересобирают — библиотека уже в томе.
 
@@ -41,7 +42,8 @@ docker compose run --rm idvjpy        # образ соберётся при п�
 | `:ed $OUT` | правка строки вывода во внешнем редакторе (`nano`) |
 | `:new demo ~` | второе окно приложения в отдельном терминале (своя сессия, общая БД) |
 | `:kctx` | список кластеров kubectl-журнала (нужен `kubectl`/`tsh`) |
-| `:md SEED_LINUX_COMMANDS.md` | справочник с форматированием; не-markdown файлы (docx/pdf/…) конвертируются, если в образе есть конвертер (`pip install firecrawl-anydoc`) |
+| `:md SEED_LINUX_COMMANDS.md` | справочник с форматированием |
+| `:md report.docx` | документ (docx/pdf/xlsx/rtf/…) → markdown: в образе стоит `firecrawl-anydoc`, результат кэшируется в `mdcache/` |
 | `:rg <текст>` | поиск по markdown (`md_dir`/cwd); клик по `путь:строка` открывает на строке |
 | `:stats` / `:export * catalog.md` | метрики библиотеки / каталог в Markdown |
 | `:scope add git` / `:scope clear` | область видимости окна: в списках и подсказках только выбранные группы (в файле `scope_<сессия>.json`) |
@@ -87,7 +89,9 @@ docker run --rm -t -v idvjpy-demo-data:/data idvjpy-demo --demo short --demo-qui
 
 - База `python:3.12-alpine` плюс `bash` (приложение запускает команды и TTY через
   `/bin/bash`), `ncurses-terminfo-base` (terminfo для `TERM=xterm-256color`), `nano`,
-  `git`, `curl`, `jq`, `procps`; Python-зависимости — из `requirements.txt`.
+  `git`, `curl`, `jq`, `procps`; Python-зависимости — из `requirements.txt` плюс
+  `firecrawl-anydoc` — конвертер документов для `:md` (Rust, без зависимостей; в
+  зависимости самого пакета не входит, стенд ставит его отдельно).
 - `docker` и `kubectl` **не** установлены: теги `dck`/`kpod` — это шаблоны команд, их
   можно собирать и листать, но выполнить `kubectl get pods` в контейнере нечем.
   Расширить образ:

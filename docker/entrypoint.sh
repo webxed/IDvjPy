@@ -29,6 +29,43 @@ if [ ! -f llm_providers.yml ]; then
     echo "[demo] llm_providers.yml ← src/llm_providers/$lang.yml"
 fi
 
+# Образец документа для `:md`: docx — это ZIP с XML, поэтому собираем его на месте
+# (бинарник в репозитории не нужен). Дальше — как обычные данные: `:md report.docx`.
+if [ ! -f report.docx ]; then
+python3 - <<'PY'
+import zipfile
+
+TYPES = (
+    '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    '<Default Extension="xml" ContentType="application/xml"/>'
+    '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument'
+    '.wordprocessingml.document.main+xml"/></Types>'
+)
+RELS = (
+    '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/'
+    'officeDocument" Target="word/document.xml"/></Relationships>'
+)
+LINES = (
+    'Report',
+    'Revenue grew by 12 percent in Q3.',
+    'Owners: platform team.',
+)
+BODY = (
+    '<?xml version="1.0"?>'
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
+    + ''.join('<w:p><w:r><w:t>' + line + '</w:t></w:r></w:p>' for line in LINES)
+    + '</w:body></w:document>'
+)
+with zipfile.ZipFile('report.docx', 'w') as archive:
+    archive.writestr('[Content_Types].xml', TYPES)
+    archive.writestr('_rels/.rels', RELS)
+    archive.writestr('word/document.xml', BODY)
+PY
+    echo "[demo] report.docx — образец документа для :md (docx → markdown)"
+fi
+
 has_live_commands() {
     python3 -c '
 import sys

@@ -30,6 +30,11 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Конвертер документов для `:md` (docx/pdf/xlsx/rtf/epub/odt): Rust-расширение без
+# зависимостей, есть колесо под musllinux. В зависимости пакета не входит — это
+# отдельный инструмент, но в стенде он нужен, чтобы `:md report.docx` было что показать.
+RUN pip install --no-cache-dir firecrawl-anydoc
+
 # Код приложения плюс .md-справочники (`:md`, ссылки из `?`).
 COPY app.py backup_db.py ./
 COPY src/ ./src/

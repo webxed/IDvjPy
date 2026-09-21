@@ -5,6 +5,9 @@
 именованный том, и что Dockerfile копирует код и тянет зависимости.
 """
 import re
+import subprocess
+import sys
+import zipfile
 from pathlib import Path
 
 import yaml
@@ -68,6 +71,45 @@ def test_dockerfile_installs_deps_and_copies_app():
     assert "bash" in text
     # Данные живут в томе.
     assert 'VOLUME ["/data"]' in text
+
+
+def test_dockerfile_installs_the_document_converter():
+    """`:md` в стенде показывает и документы: конвертер ставится в **образ**.
+
+    В зависимости пакета (`requirements.txt`) он не входит: это отдельный
+    инструмент, корневая установка должна работать без него.
+    """
+    text = (DOCKER / "Dockerfile").read_text(encoding="utf-8")
+    assert "pip install --no-cache-dir firecrawl-anydoc" in text
+    assert "anydoc" not in (ROOT / "requirements.txt").read_text(encoding="utf-8")
+
+
+def _entrypoint_sample_document(tmp_path: Path) -> Path:
+    """Выполнить python-вставку из entrypoint.sh, собирающую образец docx."""
+    script = (DOCKER / "entrypoint.sh").read_text(encoding="utf-8")
+    match = re.search(r"python3 - <<'PY'\n(.*?)\nPY\n", script, re.DOTALL)
+    assert match, "в entrypoint нет вставки, собирающей образец документа"
+    done = subprocess.run(
+        [sys.executable, "-c", match.group(1)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+    assert done.returncode == 0, done.stderr
+    return tmp_path / "report.docx"
+
+
+def test_entrypoint_bakes_a_sample_document(tmp_path):
+    """Образец — настоящий docx (ZIP с `word/document.xml`), а не текст."""
+    import md_convert  # src/ в sys.path добавляет tests/conftest.py
+
+    path = _entrypoint_sample_document(tmp_path)
+    assert path.is_file()
+    with zipfile.ZipFile(path) as archive:
+        names = set(archive.namelist())
+    assert {"[Content_Types].xml", "_rels/.rels", "word/document.xml"} <= names
+    # Приложение распознаёт его как документ (а не как текст).
+    assert not md_convert.is_plain_text(path.read_bytes())
 
 
 def test_dockerignore_keeps_context_small_but_keeps_requirements():

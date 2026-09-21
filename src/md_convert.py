@@ -258,9 +258,10 @@ def _command_for(converter: str, source: Path) -> list[str]:
 
 def _clean(markdown: str | None, converter: str) -> ConvertResult:
     """Пустой результат — тоже ошибка: открывать пустой просмотрщик хуже сообщения."""
-    if not (markdown or "").strip():
+    text = markdown or ""
+    if not text.strip():
         return ConvertResult(converter=converter, error="empty")
-    return ConvertResult(markdown=markdown, converter=converter)
+    return ConvertResult(markdown=text, converter=converter)
 
 
 def _convert_with_anydoc(source: Path, converter: str) -> ConvertResult:
