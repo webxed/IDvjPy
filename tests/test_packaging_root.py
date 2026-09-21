@@ -96,6 +96,18 @@ def test_handbook_resolves_from_package_root(tmp_path, monkeypatch):
     )
 
 
+def test_entry_points_report_the_final_cwd():
+    """На выходе и `python3 app.py`, и `idvjpy` говорят оболочке новый каталог.
+
+    Дочерний процесс не меняет cwd родительской оболочки — обе точки входа печатают
+    готовую строку `cd '…'` (и обёртка с `$IDVJPY_CWD_FILE` переходит сама).
+    """
+    for path in (ROOT / "app.py", ROOT / "packaging" / "idvjpy_boot" / "__init__.py"):
+        text = path.read_text(encoding="utf-8")
+        assert "exit_cwd_note" in text, path.name
+        assert "exit.cwd_note" in text, path.name
+
+
 def test_entry_points_do_the_same_bootstrap():
     """Установленный пакет (`idvjpy`) и `python3 app.py` делают одно и то же.
 

@@ -102,6 +102,21 @@ async def test_new_window_does_not_pass_secrets(isolated_home, monkeypatch):
         assert calls[0]["env"].get("TOKEN") is None
 
 
+async def test_new_window_does_not_inherit_cwd_file(isolated_home, monkeypatch):
+    """Чужой `$IDVJPY_CWD_FILE` не уезжает в новое окно.
+
+    Иначе его `on_unmount` перезапишет каталог родительской обёртки (кто вышел
+    последним — тот и «победил»). Свой каталог окно отдаёт только своей обёртке.
+    """
+    monkeypatch.setenv("IDVJPY_CWD_FILE", str(isolated_home / "cwd.txt"))
+    calls = _patch_open(monkeypatch)
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, ":new")
+        await pilot.pause()
+        assert calls[0]["env"].get("IDVJPY_CWD_FILE") is None
+
+
 async def test_new_window_with_dir(isolated_home, monkeypatch):
     calls = _patch_open(monkeypatch)
     work = isolated_home / "work"

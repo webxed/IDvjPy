@@ -7,6 +7,7 @@ src/app.py as module ``app``, so ``from app import CommandRunner`` keeps working
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -55,3 +56,8 @@ if __name__ == "__main__":
         data_dir=args.data_dir,
     )
     application.run()
+    # Сменить каталог родительской оболочки процесс не может — говорим готовую
+    # команду `cd '…'` (тихо, если каталог не менялся); обёртка — `$IDVJPY_CWD_FILE`.
+    note = application.exit_cwd_note()
+    if note:
+        print(_real.t("exit.cwd_note", cwd=os.getcwd(), hint=note), file=sys.stderr)

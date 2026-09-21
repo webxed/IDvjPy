@@ -91,6 +91,11 @@ def main() -> None:
         data_dir=args.data_dir,
     )
     application.run()
+    # Сменить каталог родительской оболочки процесс не может — говорим готовую
+    # команду `cd '…'` (тихо, если каталог не менялся); обёртка — `$IDVJPY_CWD_FILE`.
+    note = application.exit_cwd_note()
+    if note:
+        print(app.t("exit.cwd_note", cwd=os.getcwd(), hint=note), file=sys.stderr)
 
 
 if __name__ == "__main__":

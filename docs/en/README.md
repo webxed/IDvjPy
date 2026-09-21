@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.169 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.170 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -295,7 +295,16 @@ Aliases with `$1` / `$2` / `$@` substitute arguments (`alias klogin="tsh kube lo
 - `:kill [all]` — stop the running command; `:watch <sec> <command>` — repeat it in one block (`:watch stop`)
 - `:alias <tag> [file.sh]` / `:alias * [library.sh]` — dump commands as bash functions `tag_tid()`
 - `:i …` — Kubernetes Ingress Analyzer (`:i` without arguments — help)
-- `:cd [path]` — show / change the cwd for shell commands (same as `cd path`). A line that is **just a path** acts as `cd` without the word `cd`: `~/src`, `../lib`, `/var/log`, `docs/`, and `-` acts as `cd -` (previous directory; without one you get an explicit `cd: OLDPWD not set`). It also works after substitution — `$PROJ`. The rules hold no surprises: a name from `$PATH` stays a command (`test`, `time`, `ls` run even if a directory of the same name is next to you), and a path that is not a directory goes to the shell as before — `./build.sh` still **runs** the script instead of entering it. The tags DB, history and `.bashrc_term*` stay in the data directory (not in the new cwd — see "Files and settings"); an empty `mytags.db` is not created in the new folder. The current directory is always visible: in grey on the left of the input line (`~/project ❯`; clicking the path focuses the input), `~` stands for the home directory, and a long path is shortened to its tail (at most a third of the window width; the full path is in block headers)
+- `:cd [path]` — show / change the cwd for shell commands (same as `cd path`). A line that is **just a path** acts as `cd` without the word `cd`: `~/src`, `../lib`, `/var/log`, `docs/`, and `-` acts as `cd -` (previous directory; without one you get an explicit `cd: OLDPWD not set`). It also works after substitution — `$PROJ`. The rules hold no surprises: a name from `$PATH` stays a command (`test`, `time`, `ls` run even if a directory of the same name is next to you), and a path that is not a directory goes to the shell as before — `./build.sh` still **runs** the script instead of entering it. On exit the terminal is told the window's cwd (OSC 7 — the same thing a shell does, so a new tab/window opens there), and if the directory did change, stderr prints a ready `cd '…'` — a parent shell never follows a child process by itself. A shell wrapper makes it automatic (like ranger/nnn):
+
+```bash
+idvjpy() {                     # the shell's cwd follows the app
+  local f; f=$(mktemp)
+  IDVJPY_CWD_FILE=$f python3 ~/WibeCoding/Idivjopy/app.py "$@"   # or just: idvjpy
+  cd "$(cat "$f")" 2>/dev/null
+  rm -f "$f"
+}
+``` The tags DB, history and `.bashrc_term*` stay in the data directory (not in the new cwd — see "Files and settings"); an empty `mytags.db` is not created in the new folder. The current directory is always visible: in grey on the left of the input line (`~/project ❯`; clicking the path focuses the input), `~` stands for the home directory, and a long path is shortened to its tail (at most a third of the window width; the full path is in block headers)
 - `:fm [path]` — the OS file manager in a new window (cwd or a path). Linux: `xdg-open`; macOS: `open`; Windows: `explorer`. Custom: `$FILEMAN`
 - `:term [path]` — the system terminal in a new window. Linux: `xdg-terminal-exec` / `gnome-terminal` / …; macOS: Terminal.app; Windows: `wt` or `cmd`. Custom: `$TERMINAL`
 - `:env` — re-read `.bashrc_term*` (and `~/.bashrc` aliases) in the already running application. After `> cmd`, exports of **the same** bash are picked up by themselves (a nested `> bash` + `export` inside — no)

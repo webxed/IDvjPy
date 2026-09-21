@@ -1,6 +1,7 @@
 """Unit tests for extracted shell_env helpers."""
 from shell_env import (
     command_requests_placeholder,
+    cwd_followup_note,
     expand_aliases,
     last_nonempty_line,
     parse_alias_line,
@@ -155,6 +156,20 @@ def test_wrap_tty_command_dumps_exports(tmp_path):
     data = json.loads(env_path.read_text(encoding="utf-8"))
     assert data["IDVJOPY_TTY_VAR"] == "from-child"
     assert pwd_path.read_text(encoding="utf-8")
+
+
+def test_cwd_followup_note(tmp_path):
+    """После выхода оболочке отдаём готовую строку `cd '…'` ("" — каталог не менялся)."""
+    start = str(tmp_path)
+    assert cwd_followup_note(start, start) == ""
+    inside = tmp_path / "sub dir"
+    inside.mkdir()
+    assert cwd_followup_note(start, str(inside)) == f"cd '{inside}'"
+    # Дом сокращается до `~`, кавычки — те же, что в подсказках путей.
+    home = tmp_path / "home"
+    (home / "work dir").mkdir(parents=True)
+    assert cwd_followup_note("/", str(home), home=str(home)) == "cd ~"
+    assert cwd_followup_note("/", str(home / "work dir"), home=str(home)) == "cd ~/'work dir'"
 
 
 def test_parse_path_only_cd(tmp_path, monkeypatch):

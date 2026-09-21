@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.169**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.170**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.115 (app v1.169) |
+| `test_cmd.md` | Manual plan v1.116 (app v1.170) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -199,7 +199,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.169 |
+| `src/app.py` | TUI (`CommandRunner`), v1.170 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -249,6 +249,13 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.170
+
+- **Выход не теряет каталог.** Сменить cwd **родительской** оболочки дочерний процесс не может, поэтому приложение делает три вещи. (1) OSC 7: `_emit_terminal_cwd()` пишет `\x1b]7;file://localhost/<quote(cwd)>\x07` в драйвер при каждом `cd` (`_change_cwd`, `_adopt_tty_cwd`) и на `on_unmount` — терминал (новая вкладка/«открыть терминал здесь») берёт каталог оттуда; молчит, если `is_headless` (тот же приём, что у OSC 0 в заголовке). (2) Подсказка: лаунчеры (`app.py`, `packaging/idvjpy_boot.main()`) после `run()` печатают в stderr готовую строку `cd '…'` из `CommandRunner.exit_cwd_note()` → `shell_env.cwd_followup_note(self._launch_cwd)` (дом → `~`, кавычки как в подсказках; пусто, если каталог не менялся); ключ локали `exit.cwd_note`. (3) Автоматика: `_write_cwd_file()` на выходе кладёт финальный путь в `$IDVJPY_CWD_FILE`, обёртка в shell (`IDVJPY_CWD_FILE=$(mktemp) idvjpy; cd "$(cat …)"`) переходит сама — как ranger/nnn.
+- **Несколько сессий: файл не перехватывают.** `$IDVJPY_CWD_FILE` — переменная окружения процесса, а `os.environ` наследуется: без правки окно `:new` (и его собственный `on_unmount`) переписывало бы файл **родительской** обёртки, и побеждал тот, кто вышел последним. Теперь `_handle_new_window` вырезает `IDVJPY_CWD_FILE` из env дочернего запуска (`env.pop("IDVJPY_CWD_FILE", None)` рядом с вырезанием секретов): файл пишет только то окно, чья обёртка его задала. OSC 7 гонки не создаёт — у каждой сессии свой процесс и свой терминал.
+- Тесты: `tests/test_cwd_prompt.py::test_exit_cwd_note_is_ready_made_command` (готовая строка / пусто, кавычки для пробела), `::test_exit_writes_cwd_file_and_emits_osc7` (файл + мок OSC 7), `::test_cwd_followup_note_file_missing_is_silent` (нет `$IDVJPY_CWD_FILE` — тишина), `tests/test_packaging_root.py::test_entry_points_report_the_final_cwd` (обе точки входа печатают), `tests/test_new_window.py::test_new_window_does_not_inherit_cwd_file`.
+- Документация: README ×3 (обёртка с `$IDVJPY_CWD_FILE` + пометка, что окна `:new` файл не перехватывают), `:?` (в строке про `:cd` — OSC 7 и подсказка), `test_cmd.md` (секция 25: выход с каталогом, OSC 7/подсказка/файл, `:new`), `CLAUDE.md` (`src/shell_env.py`).
 
 ## v1.169
 

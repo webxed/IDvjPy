@@ -88,6 +88,7 @@ try:
     import textwrap
     import threading
     import time
+    import urllib.parse
     from collections.abc import Callable, Iterator, Mapping, Sequence
     from contextlib import contextmanager
     from dataclasses import replace
@@ -254,6 +255,7 @@ try:
         LAZY_PLACEHOLDERS,
         RE_VAR_NAME,
         command_requests_placeholder,
+        cwd_followup_note,
         diff_exported_env,
         expand_aliases,
         format_env_followup,
@@ -2575,7 +2577,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.169"
+    VERSION = "v1.170"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -4074,6 +4076,8 @@ class CommandRunner(App):
         self.db_file = self._data_path(self.db_file or self.FILE_DATABASE)
 
         # 2. Инициализация базы данных (файл создаётся, если его нет в клоне)
+        # Каталог запуска — точка отсчёта для `exit_cwd_note()` после выхода.
+        self._launch_cwd = os.getcwd()
         try:
             database.init_db(self.db_file)
             self._fresh_command_db = not database.has_live_commands(self.db_file)
@@ -4524,6 +4528,10 @@ class CommandRunner(App):
     def on_unmount(self) -> None:
         # Выход: секреты не остаются на диске после закрытия приложения.
         self._purge_secrets_file()
+        # Терминал уходит в тот же каталог, в котором осталось окно (OSC 7), а по
+        # `$IDVJPY_CWD_FILE` каталог забирает обёртка в shell (см. `:? cd`).
+        self._emit_terminal_cwd()
+        self._write_cwd_file()
         # И сессия перестаёт быть активной (реестр `session_<имя>.pid`).
         unregister_session(
             getattr(self, "_data_dir", None) or os.getcwd(),
@@ -6259,6 +6267,7 @@ class CommandRunner(App):
         os.environ["OLDPWD"] = old
         os.environ["PWD"] = os.getcwd()
         self._refresh_cwd_prompt()
+        self._emit_terminal_cwd()
         return os.getcwd()
 
     def _ingest_tty_session(self, env_path: str, pwd_path: str, before: Mapping[str, str]) -> list[str]:
@@ -6684,7 +6693,52 @@ class CommandRunner(App):
         os.environ["OLDPWD"] = old
         os.environ["PWD"] = os.getcwd()
         self._refresh_cwd_prompt()
+        self._emit_terminal_cwd()
         self.add_block(InfoBlock(f"cwd: {os.getcwd()}"))
+
+    def _emit_terminal_cwd(self) -> None:
+        """OSC 7: сказать терминалу, в каком каталоге окно.
+
+        Так делает оболочка (`\x1b]7;file://host/path\x07`): терминалы с этой
+        поддержкой берут путь для новой вкладки/окна. Ставим при каждом `cd` и при
+        выходе — тогда и вкладка «Открыть терминал здесь» открывается там же.
+        Сам каталог родительской оболочки процесс сменить не может — для этого
+        есть `$IDVJPY_CWD_FILE` и подсказка после выхода (`shell_env.cwd_followup_note`).
+        """
+        driver = getattr(self, "_driver", None)
+        if driver is None or getattr(driver, "is_headless", False):
+            return
+        # В OSC 7 путь идёт как URL: пробелы и кириллица — percent-encoding.
+        path = urllib.parse.quote(os.getcwd())
+        try:
+            driver.write(f"\x1b]7;file://localhost{path}\x07")
+            driver.flush()
+        except Exception:
+            pass
+
+    def _write_cwd_file(self) -> None:
+        """Выход: отдать каталог обёртке в shell, если она его ждёт (`$IDVJPY_CWD_FILE`).
+
+        Сам shell каталог у дочернего процесса не забирает — обёртка читает файл
+        после выхода приложения и делает `cd "$(cat …)"` (как ranger/nnn).
+        """
+        target = (os.environ.get("IDVJPY_CWD_FILE") or "").strip()
+        if not target:
+            return
+        try:
+            Path(target).write_text(os.getcwd() + "\n", encoding="utf-8")
+        except OSError:
+            pass
+
+    def exit_cwd_note(self) -> str:
+        """Строка `cd '…'` для оболочки после выхода ("" — каталог не менялся).
+
+        Печатают её **лаунчеры** после `run()`: дочерний процесс каталог родительской
+        оболочки сменить не может, а сам TUI к этому моменту терминал уже вернул —
+        поэтому готовый текст отдаём наружу (`shell_env.cwd_followup_note`, ключ
+        `exit.cwd_note`), а не пишем в журнал.
+        """
+        return cwd_followup_note(getattr(self, "_launch_cwd", os.getcwd()))
 
     def _command_from_block(self, block: Static | None) -> str:
         if block is None:
@@ -7205,6 +7259,11 @@ class CommandRunner(App):
         env = {**os.environ, **self.local_env}
         for secret in self._secret_names:
             env.pop(secret, None)  # секреты не переносим в новое окно
+        # Обёртка ждёт каталог **этого** окна: чужой `$IDVJPY_CWD_FILE` дочернему
+        # не отдаём, иначе его `on_unmount` перезапишет результат родительского
+        # (кто вышел последним — тот и «победил»). Свою переменную новое окно
+        # получит от своей обёртки, если она у него есть.
+        env.pop("IDVJPY_CWD_FILE", None)
         try:
             argv, proc = open_terminal_command(command, cwd=target_dir, environ=env)
         except GuiOpenError as exc:

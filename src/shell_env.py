@@ -323,6 +323,33 @@ def expand_aliases(command: str, aliases: Mapping[str, str]) -> str:
     return expanded
 
 
+def cwd_followup_note(
+    start_dir: str, cwd: str | None = None, *, home: str | None = None
+) -> str:
+    """Готовая строка `cd '…'` для оболочки после выхода приложения ("" — не менялся).
+
+    Дочерний процесс **не может** сменить каталог родительской оболочки, поэтому
+    приложение честно говорит готовую команду: launcher печатает её в stderr
+    уже после `run()` (когда TUI вернул терминал), а `$IDVJPY_CWD_FILE` позволяет
+    обёртке сделать это автоматически — как у ranger/nnn.
+
+    Дом сокращается до `~`, кавычки — по тем же правилам, что в подсказках
+    (`quote_shell_path`): `cd ~/w/'my dir'`.
+    """
+    current = os.path.abspath(cwd or os.getcwd())
+    if current == os.path.abspath(start_dir):
+        return ""
+    if home is None:
+        home = os.path.expanduser("~")
+    shown = current
+    if home and home != "/":
+        if current == home:
+            shown = "~"
+        elif current.startswith(home + os.sep):
+            shown = "~/" + current[len(home) + 1:]
+    return f"cd {quote_shell_path(shown)}"
+
+
 def parse_standalone_cd(command: str) -> str | None:
     """
     Если команда — одиночный cd без &&/||/|;, вернуть путь.

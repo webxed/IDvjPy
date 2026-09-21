@@ -194,3 +194,6 @@ md:
   ocr_missing: "{name}: OCR tool '{tool}' is not available — install it (apt/dnf/apk/brew ocrmypdf) or clear `md_ocr` in settings.yml."
   ocr_language: "{name}: tesseract has no language data for '{code}' — install the pack (apt install tesseract-ocr-{code}) or set your own language in `md_ocr` (e.g. ocrmypdf -l eng)."
   timeout: "Conversion of {name} timed out ({seconds}s)."
+
+exit:
+  cwd_note: "the app left you in {cwd}, your shell is still where it was — run in it: {hint} (a wrapper with $IDVJPY_CWD_FILE does this itself)"

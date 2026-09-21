@@ -31,7 +31,9 @@
   :cd [path]  - 显示或更改 shell 的 cwd（标签数据库 / 历史仍留在启动目录）
                 只包含路径的一行效果相同：`~/src`、`../lib`、`docs/`、`-`
                 （上一个目录，如同 `cd -`）。$PATH 中的名称仍是命令，而文件
-                （`./build.sh`）仍会被执行，而不是进入
+                （`./build.sh`）仍会被执行，而不是进入。退出时终端会收到窗口的
+                当前目录（OSC 7），stderr 会打印现成的 `cd '…'`；
+                配合 $IDVJPY_CWD_FILE 的包装脚本可自行进入
   :fm [path]  - 在新窗口中打开系统文件管理器（cwd 或 path）
   :term [path] - 在新窗口中打开系统终端（cwd 或 path）
                 $FILEMAN / $TERMINAL 覆盖系统默认值

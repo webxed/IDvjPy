@@ -195,3 +195,6 @@ md:
   ocr_missing: "{name}：OCR 工具 '{tool}' 不可用 —— 请安装它（apt/dnf/apk/brew ocrmypdf）或清除 settings.yml 中的 `md_ocr`。"
   ocr_language: "{name}：tesseract 没有 '{code}' 的语言数据 —— 请安装语言包（apt install tesseract-ocr-{code}），或在 `md_ocr` 中指定语言（例如 ocrmypdf -l eng）。"
   timeout: "{name} 的转换超时（{seconds} 秒）。"
+
+exit:
+  cwd_note: "当前 cwd 为 {cwd}；shell 仍留在原目录 —— 请在 shell 中执行: {hint}（或设置 $IDVJPY_CWD_FILE，在包装脚本中进入）"

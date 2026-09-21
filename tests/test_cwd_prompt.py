@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import os
+from typing import Any, cast
 
 import pyperclip
 from textual import events
@@ -75,6 +76,78 @@ async def test_bare_path_is_cd(isolated_home):
         await pilot.press("enter")
         await pilot.pause()
         assert os.path.samefile(os.getcwd(), isolated_home / "subdir")
+
+
+async def test_cd_emits_osc7_for_the_terminal(isolated_home):
+    """`cd` говорит терминалу свой каталог (OSC 7) — как это делает сама оболочка."""
+    (isolated_home / "subdir").mkdir()
+    writes: list[str] = []
+
+    class _Driver:
+        is_headless = False
+
+        def write(self, data: str) -> None:
+            writes.append(data)
+
+        def flush(self) -> None:
+            pass
+
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        real_driver = app._driver
+        cast(Any, app)._driver = _Driver()
+        try:
+            app._change_cwd(str(isolated_home / "subdir"))
+        finally:
+            cast(Any, app)._driver = real_driver
+    osc = [w for w in writes if w.startswith("\x1b]7;file://localhost/")]
+    assert osc and osc[-1].endswith("subdir\x07")
+
+
+async def test_exit_cwd_note_is_ready_made_command(isolated_home):
+    """Приложение отдаёт лаунчеру готовую строку `cd …` ("" — каталог не менялся)."""
+    (isolated_home / "sub dir").mkdir()
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        assert app.exit_cwd_note() == ""
+        await submit(pilot, "'./sub dir'")
+        target = isolated_home / "sub dir"
+        # Пробел в пути — кавычки наши (`quote_shell_path`), готовая команда без сюрпризов.
+        assert app.exit_cwd_note() == f"cd '{target}'"
+        await submit(pilot, "..")
+        assert app.exit_cwd_note() == ""
+
+
+async def test_exit_writes_cwd_file_and_emits_osc7(isolated_home, monkeypatch):
+    """Выход: каталог окна едет в `$IDVJPY_CWD_FILE` (для обёртки) и в OSC 7.
+
+    Сменить каталог родительской оболочки процесс не может — поэтому обёртка в
+    shell читает файл после выхода и делает `cd "$(cat …)"` (как ranger/nnn).
+    """
+    (isolated_home / "subdir").mkdir()
+    cwd_file = isolated_home / "cwd.txt"
+    monkeypatch.setenv("IDVJPY_CWD_FILE", str(cwd_file))
+    calls: list[str] = []
+    monkeypatch.setattr(
+        CommandRunner, "_emit_terminal_cwd", lambda self: calls.append(os.getcwd())
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        await submit(pilot, "subdir")
+        assert os.path.samefile(os.getcwd(), isolated_home / "subdir")
+    assert cwd_file.read_text(encoding="utf-8").strip() == str(isolated_home / "subdir")
+    # `cd` и выход — оба говорят терминалу про каталог.
+    assert len(calls) >= 2
+
+
+def test_cwd_followup_note_file_missing_is_silent(tmp_path, monkeypatch):
+    """Обёртки нет — приложение просто молчит (файл не создаётся)."""
+    monkeypatch.delenv("IDVJPY_CWD_FILE", raising=False)
+    app = CommandRunner()
+    app._write_cwd_file()  # не должно бросить
 
 
 def test_wrap_display_line_by_width():

@@ -189,3 +189,6 @@ md:
   ocr_missing: "{name}: OCR-инструмент '{tool}' недоступен — установите его (apt/dnf/apk/brew ocrmypdf) или уберите `md_ocr` из settings.yml."
   ocr_language: "{name}: у tesseract нет данных языка '{code}' — поставьте пакет (apt install tesseract-ocr-{code}) или задайте свой язык в `md_ocr` (напр. ocrmypdf -l eng)."
   timeout: "Конвертация {name} не уложилась в {seconds} с."
+
+exit:
+  cwd_note: "cwd теперь {cwd}; оболочка осталась в прежнем каталоге — в ней: {hint} (или задайте $IDVJPY_CWD_FILE и переходите из обёртки)"

@@ -31,7 +31,9 @@
                 A line that is just a path does the same: `~/src`, `../lib`,
                 `docs/`, `-` (previous directory, as `cd -`). A name found in
                 $PATH stays a command, and a file (`./build.sh`) is still run
-                rather than entered
+                rather than entered. On exit the terminal is told the window cwd
+                (OSC 7) and stderr prints a ready `cd '…'`; a wrapper with
+                $IDVJPY_CWD_FILE moves the shell itself
   :fm [path]  - Open the OS file manager in a new window (cwd or path)
   :term [path] - Open a system terminal in a new window (cwd or path)
                 $FILEMAN / $TERMINAL override the OS default
