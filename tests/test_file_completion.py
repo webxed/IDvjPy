@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from app import CommandRunner
-from tests.conftest import input_widget, type_keys
+from tests.conftest import input_widget, type_keys, wait_command_done
 
 
 async def test_auto_skips_cwd_files_for_subcommand_clis(isolated_home):
@@ -124,6 +124,53 @@ async def test_no_stale_hints_while_typing_another_command(isolated_home):
         await pilot.pause()
         # Enter выполнил строку, а не подставил подсказку (ввод очищен).
         assert input_widget(app).value == ""
+
+
+async def test_path_with_a_space_replaces_only_the_token(isolated_home):
+    """Путь с пробелом — один токен: Enter не теряет префикс команды.
+
+    Баг: кандидат с пробелом подставлялся **вместо всей строки** — `:md ./my`
+    превращалось в `./my report.md`; следующий Enter выполнил бы путь как
+    команду, а `:md` пропадал (заметно на документах «Еженедельный отчёт.md»).
+    """
+    (isolated_home / "my report.md").write_text("# hi\n", encoding="utf-8")
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        await type_keys(pilot, ":md ./my")
+        await pilot.pause()
+        assert app._completion_list.is_visible()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert input_widget(app).value == ":md ./my report.md"
+        # `:`-команде путь отдаётся без кавычек: она склеивает аргументы сама
+        # (`handle_colon_command` → `split()`, `:md` → `" ".join(args)`).
+        assert "./my report.md" in app.get_completion_candidates(":md ./my")
+        # Строка не выполнена — второй Enter уже открывает markdown.
+        await pilot.press("enter")
+        await pilot.pause()
+        assert input_widget(app).value == ""
+
+
+async def test_shell_command_gets_the_path_quoted_and_runs(isolated_home):
+    """Путь с пробелом у shell-команды едет в кавычках — и команда работает.
+
+    Раньше вставлялось `cat ./my report.md`, shell делил это на два аргумента,
+    и файл «не находился». У `:`-команд путь остаётся как есть — см. тест выше.
+    """
+    (isolated_home / "my report.md").write_text("hi\n", encoding="utf-8")
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        await type_keys(pilot, "cat ./my")
+        await pilot.pause()
+        assert app._completion_list.is_visible()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert input_widget(app).value == "cat './my report.md'"
+        await pilot.press("enter")
+        block = await wait_command_done(app)
+        assert block.raw_stdout.strip() == "hi"
 
 
 async def test_settings_file_completion_mode(isolated_home):

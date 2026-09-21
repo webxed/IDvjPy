@@ -5,6 +5,7 @@ from shell_env import (
     last_nonempty_line,
     parse_alias_line,
     parse_bashrc_assignment,
+    quote_shell_path,
     substitute_variables,
     unexpanded_variables,
 )
@@ -165,3 +166,21 @@ def test_parse_standalone_cd():
     assert parse_standalone_cd("cd -") == "-"
     assert parse_standalone_cd("cd foo && ls") is None
     assert parse_standalone_cd("echo cd") is None
+
+
+def test_quote_shell_path_quotes_only_when_needed():
+    """Обычный путь — как есть; пробелы и метасимволы — в кавычках."""
+    assert quote_shell_path("./plain.md") == "./plain.md"
+    assert quote_shell_path("./a-b_c/d.py") == "./a-b_c/d.py"
+    assert quote_shell_path("./отчёт.md") == "./отчёт.md"  # кириллица не метасимвол
+    assert quote_shell_path("./my report.md") == "'./my report.md'"
+    assert quote_shell_path("/tmp/a b/c.md") == "'/tmp/a b/c.md'"
+    assert quote_shell_path("./a$b;c.md") == "'./a$b;c.md'"
+    assert quote_shell_path("./it's.md") == "'./it'\"'\"'s.md'"  # форма shlex.quote
+
+
+def test_quote_shell_path_keeps_tilde_outside_quotes():
+    """Внутри кавычек тильда не раскрывается — `~` остаётся снаружи."""
+    assert quote_shell_path("~") == "~"
+    assert quote_shell_path("~/my report.md") == "~/'my report.md'"
+    assert quote_shell_path("~user/my report.md") == "~user/'my report.md'"

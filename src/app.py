@@ -262,6 +262,7 @@ try:
         load_env_dump,
         parse_bashrc_assignment,
         parse_standalone_cd,
+        quote_shell_path,
         substitute_variables,
         unexpanded_variables,
         wrap_tty_command,
@@ -2091,6 +2092,11 @@ class CommandLineInput(Input):
         app = self.app
         if not (hasattr(app, "_is_path_context") and app._is_path_context(self.value)):
             return False
+        if item is not None and item.is_path:
+            # Файл/каталог — один токен, даже если в имени есть пробел
+            # (`:md ./мой доклад.md`): заменяем именно его, а не всю строку.
+            # Иначе кандидат подменял строку целиком и префикс `:md` пропадал.
+            return True
         if any(ch.isspace() for ch in selected.strip()):
             return False
         return True
@@ -2568,7 +2574,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.165"
+    VERSION = "v1.166"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2963,6 +2969,18 @@ class CommandRunner(App):
         parts = self.RE_CMD_SEPARATORS.split(text or "")
         return parts[-1].strip() if parts else ""
 
+    def _segment_is_shell(self, text: str) -> bool:
+        """Текущий сегмент — shell-команда, а не форма приложения.
+
+        Нужно для экранирования путей: shell'у пробел в имени нужно отдать в
+        кавычках (`cat './мой отчёт.md'`), а `:`-команды разбирают аргументы
+        пробелами сами (`handle_colon_command` → `split()`, `:md` склеивает их
+        обратно), и кавычки там стали бы частью пути.
+        """
+        segment = self._current_command_segment((text or "").rstrip())
+        words = segment.split()
+        return not (words and words[0].startswith((":", "?", "!", "#", "$")))
+
     def _is_path_context(self, text: str) -> bool:
         """
         Path-контекст: последний токен похож на путь, либо аргумент cd/pushd.
@@ -3089,10 +3107,16 @@ class CommandRunner(App):
             if os.path.isdir(dir_path):
                 suggestions = [pair for pair in suggestions if pair[0] != token]
                 suggestions.insert(0, (token, True))
-        return [
-            CompletionItem(insert=path, display=path, is_path=True, is_dir=is_dir)
-            for path, is_dir in suggestions
-        ]
+        # Путь с пробелом/метасимволами отдаём shell'у в кавычках; `:`-командам
+        # (`:md`, `:cd`) — как есть: они разбирают аргументы своими правилами.
+        quote = self._segment_is_shell(text)
+        items: list[CompletionItem] = []
+        for path, is_dir in suggestions:
+            shown = quote_shell_path(path) if quote else path
+            items.append(
+                CompletionItem(insert=shown, display=shown, is_path=True, is_dir=is_dir)
+            )
+        return items
 
     def _bang_token_at_cursor(self, text: str, pos: int) -> str | None:
         """Текущий токен, если это !tag / !tag[ / !tag[tid], но не !!."""

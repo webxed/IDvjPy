@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.165 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.166 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -46,7 +46,7 @@ IDvjPy 是一个用 Python（Textual）编写、以键盘操作的终端应用�
 - 输出比较：`:diff` —— 聚焦块与前一个块的 unified diff
 - 会话输出历史：`:o [N]`、`:o /文本`、`:o clear` —— 在 `:c` 之后对以往输出做 grep
 - k8s 补全：`kubectl get pod <Tab>` —— 从集群获取名称（`k8s_completion: true`）
-- 文件提示 —— `file_completion: auto|paths|off`：默认是显式路径（`./`、`/`、`~/`）以及 `cat`/`vim`/… 之后的文件名；对 `grep`/`sed`/`awk`/`jq` 则从第二个参数开始（第一个是模式），输入 `kubectl`/`docker`/`git` 时不会混入 cwd 的杂项；上下文按当前片段计算（`cat f | grep ot` 不会列出 cwd）（`paths` —— 仅显式路径，`off` —— 关闭）。列表中**目录像链接一样带下划线，文件保持普通文本**（在 `cd` 时两者很容易混淆）；点击两者都可插入
+- 文件提示 —— `file_completion: auto|paths|off`：默认是显式路径（`./`、`/`、`~/`）以及 `cat`/`vim`/… 之后的文件名；对 `grep`/`sed`/`awk`/`jq` 则从第二个参数开始（第一个是模式），输入 `kubectl`/`docker`/`git` 时不会混入 cwd 的杂项；上下文按当前片段计算（`cat f | grep ot` 不会列出 cwd）（`paths` —— 仅显式路径，`off` —— 关闭）。列表中**目录像链接一样带下划线，文件保持普通文本**（在 `cd` 时两者很容易混淆）；点击两者都可插入。对 shell 命令，需要转义的路径会以**引号**插入（`cat './my report.md'`）；对 `:`-命令则原样插入（`:md ./my report.md`：它们自己拆分参数，引号会成为路径的一部分）
 - Markdown 搜索（`:rg <模式> [目录]`）—— 用 ripgrep 搜索 Obsidian vault 或任何含 `.md` 的目录（否则使用内置扫描器）：片段中的 `路径:行号` 可点击，并在内置 md 查看器中打开；`:rg <N>` —— 打开第 N 个结果
 - UX：`:r N` —— N 个块之前那条块的命令；`:cmd [N] [show]` —— 把块命令代入当前值（含秘密）后放入剪贴板；`:send <会话|*> <命令>` —— 把命令转发到另一个窗口（插入输入行；`:send!` —— 立即执行）；标题中的 `N running` 计数器；`:alias <tag>` —— 把命令导出为 bash 函数
 - 从 TUI 调用 LLM：`:llm [提供方] 消息`（不带名称则用 `default:`；`$OUT`/`$BLOCK` 插入块的输出；`@文件` 会嵌入文件文本（UTF-8，≤200 KB；可以多个）；对话上下文由提供方的 `history_turns: N` 控制（`:llm reset [<提供方>|*]`）；请求会写入 `history_*.txt`，但不进入提示——具体哪些 `:` 请求如此保存由 settings.yml 中的 `history_queries` 决定）。回答是 markdown，并以格式化方式显示（`llm_render_markdown`，见设置）。请求进行期间，块中会转动 `⠋ thinking… 3s / 60s` 加载指示（能看出正在等待回答，以及允许等待多久）

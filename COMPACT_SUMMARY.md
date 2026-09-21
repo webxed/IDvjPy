@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.165**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.166**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.111 (app v1.165) |
+| `test_cmd.md` | Manual plan v1.112 (app v1.166) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -198,7 +198,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.165 |
+| `src/app.py` | TUI (`CommandRunner`), v1.166 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -247,6 +247,12 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.166
+
+- **Подсказка пути с пробелом больше не съедает команду, а у shell-команды путь едет в кавычках.** `:md ./my` + Enter превращалось в `./my report.md`: префикс `:md` пропадал, а следующий Enter выполнил бы путь как shell-команду (заметно на документах вроде `Еженедельный отчёт.md`). Причина — `CommandInput._should_replace_last_token`: защита «в кандидате есть пробел → менять строку целиком» (она нужна кандидатам-**командам** из БД/истории, вроде `cat json.file`) срабатывала и на файле с пробелом в имени, и `_apply_selected_completion` делал `self.value = selected`. Теперь кандидат из файловых подсказок (`CompletionItem.is_path`) обходит эту защиту: путь — один токен независимо от пробелов, заменяется только он; многоместные кандидаты не из путей, как и раньше, подменяют строку целиком.
+- **Второй вход — экранирование: без него путь из двух слов не работал у обычных команд.** `cat ./my` + Enter вставляло `cat ./my report.md` — shell делил это на два аргумента и файл «не находился». Новая `shell_env.quote_shell_path()` (+ `RE_SHELL_NEEDS_QUOTE`): обычный путь возвращается как есть (`./отчёт.md` не обрастает кавычками), пробелы и метасимволы дают `shlex.quote` (`'./my report.md'`), ведущий `~` остаётся **вне** кавычек (`~/'my report.md'` — внутри них тильда не раскрывается), на Windows — двойные кавычки (`shell=True` → cmd.exe). Кавычки ставятся только для **shell-сегмента** (`CommandInput._segment_is_shell` — после `|`/`&&`/`;` и если строка не `:`/`?`/`!`/`#`/`$`-форма): `:`-команды разбирают аргументы сами (`handle_colon_command` → `split()`, `:md` → `" ".join(args)`), и кавычки стали бы частью пути — там путь остаётся сырым. У `:md` пробел не мешает и при выполнении.
+- Тесты: `tests/test_file_completion.py::test_path_with_a_space_replaces_only_the_token` (префикс `:md` на месте, путь без кавычек) и `::test_shell_command_gets_the_path_quoted_and_runs` (сквозной: `cat './my report.md'` действительно читает файл), `tests/test_shell_env.py::test_quote_shell_path_*` (кавычки только когда нужны, `~` снаружи, апостроф в форме `shlex.quote`). Документация: примеры `cat ./my` / `:md ./my` и оговорка про кавычки в `test_cmd.md` (секция 37), `README.md` + `docs/{en,zh}/README.md`, `CLAUDE.md`.
 
 ## v1.165
 

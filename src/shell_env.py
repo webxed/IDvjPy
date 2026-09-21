@@ -20,6 +20,9 @@ SHELL_META_CHARS = "|&;<>"
 RE_VAR_NAME = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
 RE_OUT_PLACEHOLDER = re.compile(r"\$\{OUT\}|\$OUT\b")
 LAZY_PLACEHOLDERS = frozenset({"OUT"})
+# Символы, из-за которых путь нельзя отдать shell'у как есть: пробелы и
+# метасимволы (`'`/`"`/`\`/`$`/бэктик/`!`/`*`/`?`/скобки/`|`/`&`/`;`/`#`).
+RE_SHELL_NEEDS_QUOTE = re.compile(r"[\s'\"\\$`!*?\[\]{}()<>|&;#]")
 
 # Shell/TTY bookkeeping — do not copy back into the TUI process.
 TTY_ENV_SKIP = frozenset({
@@ -135,6 +138,29 @@ def unexpanded_variables(text: str) -> list[str]:
     """
     names = {(match.group(1) or match.group(2)) for match in RE_VAR_SUBST.finditer(text or "")}
     return sorted(names)
+
+
+def quote_shell_path(path: str) -> str:
+    """Путь для shell-команды: с пробелами/метасимволами — в кавычках.
+
+    `cat ./мой отчёт.md` shell разберёт как два аргумента, поэтому кандидат
+    файловой подсказки вставляется экранированным. Обычный путь возвращается как
+    есть: лишние кавычки в строке только мешают читать и править. Ведущий `~`
+    остаётся **вне** кавычек — внутри них тильда не раскрывается, поэтому
+    `~/'мой отчёт.md'`, а не `'~/мой отчёт.md'`. На Windows (`shell=True` → cmd.exe,
+    там же PowerShell/Git Bash) подходят двойные кавычки.
+    """
+    if not RE_SHELL_NEEDS_QUOTE.search(path or ""):
+        return path
+    head, rest = "", path
+    if path.startswith("~"):
+        top, sep, tail = path[1:].partition("/")
+        if not sep:
+            return path  # просто `~`: раскрывает shell, кавычки не нужны
+        head, rest = f"~{top}/", tail
+    if os.name == "nt":
+        return f'{head}"{rest}"'
+    return head + shlex.quote(rest)
 
 
 def last_nonempty_line(text: str) -> str:
