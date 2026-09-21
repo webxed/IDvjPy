@@ -193,6 +193,7 @@
   :? send    - Forwarding commands to another session (`:send` / `:send!`)
   :? session - App instances and windows (`:session`, `:new`)
   :? import  - JSON / a shared library by URL (`:import`, `:export`, `:backup`)
+  :? mcp     - Tag library for AI clients: `mcp_server.py` (MCP, read-only)
 
 [bold]Navigation[/bold]
   ↑/↓        - Input history walk: everything typed in this session (`:`-commands,

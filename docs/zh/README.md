@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.166 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.167 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -50,6 +50,7 @@ IDvjPy 是一个用 Python（Textual）编写、以键盘操作的终端应用�
 - Markdown 搜索（`:rg <模式> [目录]`）—— 用 ripgrep 搜索 Obsidian vault 或任何含 `.md` 的目录（否则使用内置扫描器）：片段中的 `路径:行号` 可点击，并在内置 md 查看器中打开；`:rg <N>` —— 打开第 N 个结果
 - UX：`:r N` —— N 个块之前那条块的命令；`:cmd [N] [show]` —— 把块命令代入当前值（含秘密）后放入剪贴板；`:send <会话|*> <命令>` —— 把命令转发到另一个窗口（插入输入行；`:send!` —— 立即执行）；标题中的 `N running` 计数器；`:alias <tag>` —— 把命令导出为 bash 函数
 - 从 TUI 调用 LLM：`:llm [提供方] 消息`（不带名称则用 `default:`；`$OUT`/`$BLOCK` 插入块的输出；`@文件` 会嵌入文件文本（UTF-8，≤200 KB；可以多个）；对话上下文由提供方的 `history_turns: N` 控制（`:llm reset [<提供方>|*]`）；请求会写入 `history_*.txt`，但不进入提示——具体哪些 `:` 请求如此保存由 settings.yml 中的 `history_queries` 决定）。回答是 markdown，并以格式化方式显示（`llm_render_markdown`，见设置）。请求进行期间，块中会转动 `⠋ thinking… 3s / 60s` 加载指示（能看出正在等待回答，以及允许等待多久）
+- 面向 AI 客户端的 MCP 服务器：`python3 mcp_server.py` —— 通过 stdio 提供标签库（Claude Code、Cursor 等），只读（`:? mcp`）
 - 从 TUI 使用 cheat.sh：`:cht <请求>` —— 在日志中显示 [cht.sh](https://github.com/chubin/cheat.sh) 速查（命令、语言问题、`~` 搜索），不带 ANSI；输出是普通块（`$OUT`、`|`、F3、F7、搜索）
 - 运行手册（runbook）—— 半自动命令链：`:run <tag|文件.yml>` 依次执行步骤，并在需要你决定的地方停下（`run:manual` —— 把命令放进输入行，你修改后按 Enter；`run:prompt` —— 从零开始输入；空 Enter 跳过该步骤）。如果标签中没有任何 `run:` 指令，计划会警告：所有步骤都将以 `auto` 执行（过期的种子就是这样——变更可能在无确认的情况下执行）。某步出错会停止运行，`Esc` / `:run stop` 也会；`--step` —— 每步都停下，`--dry` —— 只显示计划；帮助 —— `:? run`。现成示例 —— `:run vapprole`（token → role → `role_id` → `secret_id` → login → 校验；token 和 role 步骤是带前缀的行 `$$VAULT_TOKEN=` / `$ROLE=`，值在该 `=` 之后补写）
 - 彩色命令的输出与终端一致：SGR 码（`curl wttr.in`、`ls --color=always`、彩色 `grep`）由块的颜色渲染（`ansi_colors: true`），而不会流进 TUI 画面；光标/OSC 序列和控制字符始终会被剔除，进度条的 `\r` 重绘（`docker build`、`pip`、带进度的 `curl`）会折叠为最终一行——于是看到的是结果，而不是上百帧。纯文本（`F3`、`|`、`$OUT`/`$BLOCK`、`:log`、`@key`）始终不带转义码（F6 —— 临时输出纯文本）
@@ -493,6 +494,25 @@ k8s 排查链：[`K8S_CHAINS.md`](../../K8S_CHAINS.md)。`python3 src/seed_k8s_c
 | `python3 src/seed_sqlite.py --seed` | [`SEED_SQLITE_COMMANDS.md`](../../docs/SEED_SQLITE_COMMANDS.md) | `sqlvars` `sqlite` `sqlstat` |
 
 `seed_ops.py` 不会影响 linux / k8s / git。`seed_http` / `seed_netfw` / `seed_ip` / `seed_netdbg` / `seed_rsync` / `seed_recon` / `seed_ssh` 不会覆盖 linux 标签 `net`。`seed_text` / `seed_pipe` / `seed_find` / `seed_disk` 不会覆盖 `file`。`seed_host` 不会覆盖 `smart` / `df`。`seed_systemd` / `seed_sysinfo` / `seed_sysstat` 不会覆盖 `proc` / `logs`。
+
+## MCP 服务器（面向 AI 客户端）
+
+`mcp_server.py` 是一个 Model Context Protocol 服务器：AI 客户端（Claude Code、Cursor 等）可以直接查询标签库 —— 「我有没有查看 pod 日志的命令」。传输方式为 stdio：由客户端启动该进程，不开放任何端口。只读：库不会被修改，命令不会被执行，密钥不会被读取。
+
+```bash
+claude mcp add idvjpy -- python3 /path/to/IDvjPy/mcp_server.py
+python3 mcp_server.py                     # stdio；通常由客户端启动
+python3 mcp_server.py --shell-history     # + shell 自身的历史（bash/zsh/fish/atuin）
+```
+
+```json
+{"mcpServers": {"idvjpy": {"command": "python3",
+                           "args": ["/path/to/IDvjPy/mcp_server.py"]}}}
+```
+
+工具：`search_commands`（在命令与注释中做子串匹配，如同 `?text`）、`list_tags`、`get_tag`（如同 `?tag`）、`search_history`（默认 `session`；`shells` / `all` 需配合 `--shell-history`）、`library_stats`（运行计数：真正在用的是哪些）。库与历史与 TUI 相同（`--data-dir` / `--db` / `--instance`；默认取 `settings.yml`、`$IDVJPY_DATA_DIR`、系统目录）。细节与边界 —— 应用内的 `:? mcp` 主题。
+
+服务器刻意做不到的事：写入（外部没有 `#tag` / `#tag-`）与执行（`:run`、`!tag[tid]` —— 执行留在需要人按 Enter 的地方）。工具返回的一切都会发给接入的 AI 客户端，因此不要把密钥写进标签（用 `$$`）；`$$` 的值只存在于会话中，不会进入库。
 
 ## 依赖
 

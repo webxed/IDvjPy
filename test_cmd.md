@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.166
+# План тестирования IDvjPy_term v1.167
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1612,7 +1612,28 @@ Ctrl+V в построчном режиме  # другое поведение: 
 
 ---
 
-**Версия документа**: v1.112
-**Версия приложения**: v1.166
-**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_seed_sqlite.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
+## Секция 55: MCP-сервер для AI-клиентов (`mcp_server.py`)
+
+Нужен CLI-клиент, который сам умеет MCP (Claude Code, Cursor), или проверка руками — сервер говорит JSON-RPC строками.
+
+```bash
+python3 mcp_server.py --help                 # read-only, stdio, --data-dir/--db/--instance/--shell-history
+:? mcp                                       # в приложении: что это, какие инструменты, чего не умеет
+
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"search_commands","arguments":{"query":"logs"}}}' \
+  | python3 mcp_server.py --data-dir ~/.config/idvjpy 2>/dev/null
+```
+
+**Ожидание:** `initialize` отвечает версией протокола и `serverInfo` с версией приложения; `tools/list` отдаёт пять инструментов (`search_commands`, `list_tags`, `get_tag`, `search_history`, `library_stats`) с JSON-схемами; `tools/call` возвращает текст с `tag[tid]`. База и история берутся те же, что у TUI (`--data-dir` / `$IDVJPY_DATA_DIR` / `settings.yml` / системный каталог; `database_tags_file`; `history_<instance>.txt`) — в stderr одна строка с путями. Сервер **не** создаёт и не меняет базу (нет файла — `isError` с текстом `not found`), не читает `secrets_*.json`, не открывает порт; `search_history` с `source=shells` без `--shell-history` — явная ошибка про флаг. В stdout только JSON-RPC: мусор в строке — `-32700`, неизвестный метод — `-32601`, неизвестный инструмент — `-32602`, уведомления (`notifications/initialized`) — без ответа.
+
+Автотест: `tests/test_mcp_server.py` (24: конфигурация и `settings.yml`, протокол и ошибки, пакет сообщений, все инструменты на живой базе, отсутствующая база, неизменность БД/истории/секретов, сторож по исходнику «только чтение и без сети», запуск корневого лаунчера).
+
+---
+
+**Версия документа**: v1.113
+**Версия приложения**: v1.167
+**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_seed_sqlite.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`, `tests/test_mcp_server.py`  
 **Дата**: 2026-09-21

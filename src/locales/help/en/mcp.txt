@@ -1,0 +1,49 @@
+[bold]:? mcp — the tag library for AI clients (MCP server, read-only)[/bold]
+
+  python3 mcp_server.py        - Start the MCP server (stdio; the client runs it)
+  python3 mcp_server.py --shell-history
+                - …and allow `search_history` to read the shell's own history
+                files (bash/zsh/fish/atuin) as well
+  --data-dir / --db / --instance - which library and history to read: the same
+                rules as the TUI (settings.yml cwd → $IDVJPY_DATA_DIR → system
+                dir; `database_tags_file`; history_<instance>.txt)
+
+  MCP (Model Context Protocol) is how an AI client (Claude Code, Cursor, …) plugs
+  into an outside tool: the client starts this process itself and talks JSON-RPC
+  over stdin/stdout — one message per line. No port is opened: the app never
+  listens (`:? vars`). Connection:
+
+    claude mcp add idvjpy -- python3 /path/to/IDvjPy/mcp_server.py
+
+    {"mcpServers": {"idvjpy": {"command": "python3",
+                               "args": ["/path/to/IDvjPy/mcp_server.py"]}}}
+
+  Tools — every one read-only: the library is never modified, nothing is executed.
+
+    search_commands(query, tag?, limit?) - substring over command text and
+                comments, like `?text`; answers `tag\[tid]  command  # comment`
+    list_tags(include_hidden?)  - tags with the number of live commands, comments
+    get_tag(tag, limit?)        - every live command of one tag (like `?tag`)
+    search_history(query?, source?) - what you actually typed: `session` (the file
+                history_<instance>.txt), `shells` (needs --shell-history) or `all`
+    library_stats()             - sizes and the run counters: what is really used
+
+  What the server deliberately cannot do:
+
+  - write: no `#tag`, no `#tag-`, no library edits. An AI client with write access
+    is one prompt injection away from a destroyed library
+  - run commands (`:run`, `!tag\[tid]`) — execution stays in the TUI, where a human
+    presses Enter (the same reason the `run:manual` step exists)
+  - read secrets: secrets_<instance>.json is not opened, and `$$` values live in
+    the session only — they are in neither the library nor the history file
+
+  Privacy: everything the tools return goes to the connected AI client, so the
+  library and the history travel as far as that client sends them. Keep secrets out
+  of tags (use `$$`) and out of saved commands. On start the server writes one line
+  to stderr saying which library and history it reads — stdout carries JSON-RPC
+  only, otherwise the client cannot parse the stream.
+
+  Usable for: "which of my commands follows pod logs?" — the agent finds `kpod\[tid]`
+  in your own library instead of inventing a command.
+
+  Other topics and the full command list — :?

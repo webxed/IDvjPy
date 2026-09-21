@@ -27,6 +27,7 @@ HELP_TEXTS = (
     "send",
     "session",
     "import",
+    "mcp",
 )
 
 # Темы `:? <тема>` в порядке оглавления: каноническое имя → имя текста.
@@ -42,6 +43,7 @@ HELP_TOPICS: tuple[tuple[str, str], ...] = (
     ("send", "send"),
     ("session", "session"),
     ("import", "import"),
+    ("mcp", "mcp"),
 )
 
 # Алиасы тем (лишние имена и русские слова). Ключ — то, что набрал человек,

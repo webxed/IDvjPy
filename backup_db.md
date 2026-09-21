@@ -1,6 +1,6 @@
 # backup_db.py - перенос библиотеки тегов
 
-CLI для импорта/экспорта базы тегов IDvjPy_term (**v1.166**, `mytags.db`).
+CLI для импорта/экспорта базы тегов IDvjPy_term (**v1.167**, `mytags.db`).
 Форматы: JSON (перенос и слияние) и CSV (правка в таблицах).
 
 Корневой `python3 backup_db.py` — лаунчер; код в `src/backup_db.py`. Запускать его надо из каталога репозитория; если данные живут в другом месте (типичный случай — алиас вида `idvjpy=~/WibeCoding/Idivjopy/app.py`), вызывайте по пути: `python3 ~/WibeCoding/Idivjopy/backup_db.py export library.json` — `settings.yml` и `backups/` при этом берутся из **текущего** каталога, а не из `src/`.

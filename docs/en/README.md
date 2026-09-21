@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.166 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.167 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -50,6 +50,7 @@ Launch: `python3 app.py` (launcher; code in `src/`). Tests: `python3 -m pytest t
 - Markdown search (`:rg <pattern> [directory]`) — ripgrep over an Obsidian vault or any directory with `.md` (otherwise the built-in scanner): snippets with clickable `path:line`, opened in the built-in md viewer; `:rg <N>` — open the N-th result
 - UX: `:r N` — the command of the block N back; `:cmd [N] [show]` — the block's command with values substituted (secrets included) to the clipboard; `:send <session|*> <command>` — forward a command to another window (insert into the input; `:send!` — run immediately); the `N running` counter in the header; `:alias <tag>` — commands as bash functions
 - LLM from the TUI: `:llm [provider] message` (without a name — `default:`; `$OUT`/`$BLOCK` insert the block's output; `@file` embeds the file text (UTF-8, ≤200 KB; several allowed); conversation context — `history_turns: N` on the provider (`:llm reset [<provider>|*]`); queries are written to `history_*.txt` but not into the hints — which exact `:` queries are stored that way is set by `history_queries` in settings.yml). The answer is markdown and is shown formatted (`llm_render_markdown`, see settings). While the request is in flight, a spinner `⠋ thinking… 3s / 60s` spins in the block (you can see that we are waiting for an answer and how long is allowed)
+- MCP server for AI clients: `python3 mcp_server.py` — the tag library over stdio (Claude Code, Cursor, …), read-only (`:? mcp`)
 - cheat.sh from the TUI: `:cht <query>` — [cht.sh](https://github.com/chubin/cheat.sh) cheat sheets in the journal (commands, questions about languages, search `~`), without ANSI; the output is a regular block (`$OUT`, `|`, F3, F7, search)
 - Runbook — a semi-automatic command chain: `:run <tag|file.yml>` runs the steps in order and stops where your decision is needed (`run:manual` — the line is in the input, edit it and press Enter; `run:prompt` — you type from scratch; an empty Enter skips the step). If the tag has no `run:` directives at all, the plan warns: all steps will go `auto` (this is what an outdated seed looks like — and a mutation may go through without confirmation). A step error stops the run, `Esc` / `:run stop` does too; `--step` — stop at every step, `--dry` — plan only; help — `:? run`. A ready example — `:run vapprole` (token → role → `role_id` → `secret_id` → login → check; the token and role steps are prefix lines `$$VAULT_TOKEN=` / `$ROLE=`, the value is appended after `=`)
 - Output of colored commands — as in a terminal: SGR codes (`curl wttr.in`, `ls --color=always`, colored `grep`) are drawn with the block's colors (`ansi_colors: true`) instead of flowing into the TUI frame; cursor/OSC sequences and control characters are always stripped, the `\r` redraw of progress bars (`docker build`, `pip`, `curl` with progress) is collapsed to the final line — instead of a hundred frames you see the result. Plain text (`F3`, `|`, `$OUT`/`$BLOCK`, `:log`, `@key`) is always without escape codes (F6 — plain output once)
@@ -502,6 +503,25 @@ The handbooks themselves are also per language: the base ones are in `docs/` (th
 | `python3 src/seed_sqlite.py --seed` | [`SEED_SQLITE_COMMANDS.md`](../../docs/SEED_SQLITE_COMMANDS.md) | `sqlvars` `sqlite` `sqlstat` |
 
 `seed_ops.py` does not touch linux / k8s / git. `seed_http` / `seed_netfw` / `seed_ip` / `seed_netdbg` / `seed_rsync` / `seed_recon` / `seed_ssh` do not overwrite the linux `net` tag. `seed_text` / `seed_pipe` / `seed_find` / `seed_disk` do not overwrite `file`. `seed_host` does not overwrite `smart` / `df`. `seed_systemd` / `seed_sysinfo` / `seed_sysstat` do not overwrite `proc` / `logs`.
+
+## MCP server (for AI clients)
+
+`mcp_server.py` is a Model Context Protocol server: an AI client (Claude Code, Cursor, …) asks the library directly — "do I have a command to follow pod logs". Transport is stdio: the client starts the process, no port is opened. Read-only: the library is not modified, nothing is executed, no secrets are read.
+
+```bash
+claude mcp add idvjpy -- python3 /path/to/IDvjPy/mcp_server.py
+python3 mcp_server.py                     # stdio; normally started by the client
+python3 mcp_server.py --shell-history     # + the shell's own history (bash/zsh/fish/atuin)
+```
+
+```json
+{"mcpServers": {"idvjpy": {"command": "python3",
+                           "args": ["/path/to/IDvjPy/mcp_server.py"]}}}
+```
+
+Tools: `search_commands` (substring over commands and comments, like `?text`), `list_tags`, `get_tag` (like `?tag`), `search_history` (`session` by default; `shells` / `all` with `--shell-history`), `library_stats` (run counters: what is actually used). The library and history are the same as in the TUI (`--data-dir` / `--db` / `--instance`; defaults — `settings.yml`, `$IDVJPY_DATA_DIR`, the system dir). Details and limits — the `:? mcp` topic inside the app.
+
+What the server deliberately cannot do: write (no `#tag` / `#tag-` from outside) and run (`:run`, `!tag[tid]` — execution stays where a human presses Enter). Everything the tools return goes to the connected AI client, so keep secrets out of tags (use `$$`); `$$` values live in the session only and never reach the library.
 
 ## Dependencies
 

@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.166**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.167**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.112 (app v1.166) |
+| `test_cmd.md` | Manual plan v1.113 (app v1.167) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -184,6 +184,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_tag_scope.py` | Область видимости тегов (модуль): `split_names` (пробелы/запятые), `classify` (группа побеждает одноимённый тег, известные/чужие имена), `only`/`hide`, `rm` на пустом → `hide`, `rm` из `only`, снятие последнего имени → пустой scope, смешение режимов → `ScopeModeError`, `split`/`describe`, round-trip `scope_<сессия>.json` и изоляция сессий, битый файл/нет файла |
 | `tests/test_scope_command.py` | `:scope` в TUI (инвариант «фильтр — только списки»): `?`/`??`/`!`-подсказки скрывают чужие теги, `?tag`/`!tag[tid]`/`:stats` работают при скрытом теге, `??` с секцией Scope, `rm` → hide, `clear`/`all` возвращают всё (файл удалён), статус без аргументов, ошибки неизвестного имени и смешения режимов, маркер в заголовке, переживает restart, две сессии независимы, битый файл → фильтр выключен и сообщение, лента заставки уважает scope |
 | `tests/test_ux_extras.py` | `:r N`, счётчик running в заголовке, `:alias`, консоль под TUI по Ctrl+O (suspend → ожидание клавиши → возврат, `SuspendNotSupported`) |
+| `tests/test_mcp_server.py` | MCP-сервер (24): конфигурация (settings.yml, `--data-dir`/`$IDVJPY_DATA_DIR`, абсолютный `--db`, `history_<instance>.txt`), протокол (`initialize` с эхом версии и своей для чужой, `tools/list`, уведомления без ответа, `-32700`/`-32601`/`-32602`, пакет сообщений, в stdout только JSON-RPC), все пять инструментов на живой базе (фильтр тега, `limit`, soft-delete, `source` без `--shell-history`), отсутствующая база — ошибка **без** создания файла, БД/история/`secrets_*.json` не меняются, сторож по исходнику («только чтение и без сети»), запуск корневого лаунчера (`--help` и реальный запрос) |
 
 Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then Enter.
 
@@ -198,7 +199,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.166 |
+| `src/app.py` | TUI (`CommandRunner`), v1.167 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -230,7 +231,8 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/history_import.py` | Импорт истории оболочки (`:h import`): поиск файлов по ОС и `$HISTFILE` (fish/pwsh — XDG-каталог на всех ОС, nushell — системный, на win32 только Windows-пути), разбор по содержимому (zsh extended + континуация `\`+newline, bash-метки, fish `\`/`\n` однопроходно, PSReadLine/nushell), хвост 4 МБ у больших файлов, BOM/бинарь, `sh` → `ksh`; источник `atuin` (`Source.kind`) — SQLite-база `history.db` (`$ATUIN_DB_PATH` → `config.toml` `data_dir`/`db_path` → `~/.local/share/atuin` на всех ОС), чтение `mode=ro` с таймаутом (WAL), проверка колонки `command`, `deleted_at is null`, порядок по `timestamp` |
 | `src/session_mailbox.py` | Пересылка команд между сессиями (`:send`): `inbox_<instance>.jsonl` 0600, append под lock / drain |
 | `src/session_registry.py` | Реестр активных сессий — `session_<instance>.pid` 0600: автоимя `:new` = наименьшее свободное `sN` среди работающих окон (устаревшие pid-файлы подчищаются) |
-| `src/help_texts.py` | Реестр справки `:?`: `HELP_TEXTS` + `HELP_TOPICS` (канонические имена тем → текст: `calc`, `run`, `i`, `md`, `llm`, `tags`, `vars`, `kctx`, `send`, `session`, `import`), `help_topic()` (имена и алиасы → `i18n.text()`) — файлы `src/locales/help/<lang>/{main,runbook,calc,ingress,llm,tags,vars,md,kctx,send,session,import}.txt` (`en` — источник правды) |
+| `src/help_texts.py` | Реестр справки `:?`: `HELP_TEXTS` + `HELP_TOPICS` (канонические имена тем → текст: `calc`, `run`, `i`, `md`, `llm`, `tags`, `vars`, `kctx`, `send`, `session`, `import`, `mcp`), `help_topic()` (имена и алиасы → `i18n.text()`) — файлы `src/locales/help/<lang>/{main,runbook,calc,ingress,llm,tags,vars,md,kctx,send,session,import,mcp}.txt` (`en` — источник правды) |
+| `src/mcp_server.py` | MCP-сервер (stdio) для AI-клиентов — библиотека и история без порта и демона; корневой `mcp_server.py` — лаунчер, грузящий модуль по пути (иначе имя затеняет его при `import`). JSON-RPC: `initialize` (версия из `PROTOCOL_VERSIONS`), `ping`, `tools/list`, `tools/call`, уведомления без ответа, `-32700/-32601/-32602` на мусор/метод/инструмент; в stdout — только JSON-RPC (лог в stderr). Инструменты **только чтение**: `search_commands` (как `?text`, с фильтром тега), `list_tags`, `get_tag`, `search_history` (`session`; `shells`/`all` — только с `--shell-history`), `library_stats`; конфиг — как у TUI (`--data-dir` → `$IDVJPY_DATA_DIR` → settings.yml → системный), база не создаётся и не пишется, `secrets_*.json` не читается, `server_version()` берёт `VERSION` из `src/app.py` регексом (Textual не импортируется). Тесты: `tests/test_mcp_server.py`, тема `:? mcp` |
 | `src/relang.py` | `:relang [code]` — перевод комментариев **уже засеянной** библиотеки (подписи тегов и подсказки команд) после смены языка, без повторного `--seed`: `_collect()` собирает канонический индекс из `seed_linux_commands` / `seed_k8s_chains` / `seed_git` / `seed_ops`, строка матчится по `(тег, команда)` (linux-дополнения — по `tid - 1`), правленый руками комментарий не трогается, снимок БД в `backups/` до записи; CLI `python3 src/relang.py --lang ru`. Тесты: `tests/test_relang.py` |
 | `src/i18n.py` | UI-language core: catalogue lookup (`t`/`tlist`) and long texts (`text("main")` → `locales/help/<lang>/*.txt`), language resolution (`--lang` → `$IDVJPY_LANG` → `settings.yml: language` → `en`; `auto` follows `$LANG`). Catalogues: `src/locales/<lang>.yml` plus parts in `src/locales/<lang>/*.yml` (`screensaver`, `seed`), deep-merged; `en` is the source of truth; missing keys fall back to `en`, unknown keys return themselves. Tests: `tests/test_i18n.py` (keys are strings — YAML reads bare `off`/`n`/`N` as bool; every language has all help texts and all `catalog.desc.*`) |
 | `src/example_config.py` | Локализованные шаблоны личных файлов: `available_settings_languages`/`available_llm_providers_languages`, `settings_example_path(lang)`, `llm_providers_example_path(lang)` (откат на `en`), `detect_language(explicit)` — `--lang` → `$IDVJPY_LANG` → системная локаль (auto) → `en`; шаблоны — `src/settings/<lang>.yml` и `src/llm_providers/<lang>.yml` |
@@ -247,6 +249,13 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.167
+
+- **MCP-сервер: библиотека тегов для AI-клиентов (stdio, только чтение).** `src/mcp_server.py` + корневой лаунчер `mcp_server.py` (грузит модуль по пути — иначе имя затеняет его при `import`, тот же приём, что у `app.py` / `backup_db.py`). Клиент (Claude Code, Cursor) запускает процесс сам и говорит JSON-RPC строками: `initialize` (эхо запрошенной версии из `PROTOCOL_VERSIONS`, иначе свежая), `ping`, `tools/list`, `tools/call`, уведомления без ответа, `-32700` / `-32601` / `-32602` на мусор, неизвестный метод и инструмент; в stdout — только JSON-RPC, лог одной строкой в stderr (иначе клиент не разберёт поток). Пять инструментов: `search_commands` (как `?text`, с фильтром тега и `limit`), `list_tags` (счётчики и комментарии), `get_tag` (как `?tag`), `search_history` (`session` по умолчанию; `shells` / `all` — только с явным `--shell-history`, это история самой оболочки), `library_stats` (счётчики запусков: что реально работает). Конфиг — как у TUI: `--data-dir` → `$IDVJPY_DATA_DIR` → `settings.yml` в каталоге запуска → системный каталог, `database_tags_file`, `history_<instance>.txt`.
+- **Границы закреплены тестами, а не обещаниями.** База не создаётся (нет файла → `isError` с подсказкой) и не меняется (sha256 до/после всех инструментов), в теле модуля нет ни одной write-функции `database_v2` (сторож по исходнику), `secrets_*.json` не читается (значения `$$` живут только в сессии — утечки нет по конструкции), сети и портов нет вовсе. Команд сервер не выполняет: `:run` и `!tag[tid]` остаются в TUI, где Enter нажимает человек. Версия для `serverInfo` берётся регексом из `VERSION` в `src/app.py` (Textual не импортируется), тест сверяет её с `CommandRunner.VERSION` — `bump_version.py` не разъедется.
+- **Документация.** Тема `:? mcp` (en — источник правды, ru/zh переведены): протокол, список инструментов, раздел «чего сервер намеренно не умеет», приватность; раздел «MCP-сервер (для AI-клиентов)» в README ×3 (`claude mcp add` + JSON-конфиг), `CLAUDE.md`, секция 55 в `test_cmd.md` (проверка руками пайпом JSON-RPC), таблицы Files/Tests в `COMPACT_SUMMARY.md`.
+- Тесты: новый `tests/test_mcp_server.py` (25): конфигурация и `settings.yml`, протокол и коды ошибок, пакет сообщений, «в stdout только JSON-RPC», все пять инструментов на живой базе (фильтр тега, `limit`, soft-delete, `source` без флага), отсутствующая база не создаётся, неизменность БД/истории/секретов, сторож «только чтение и без сети», запуск корневого лаунчера, экранирование `\[tid]` в теме справки.
 
 ## v1.166
 
