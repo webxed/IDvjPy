@@ -117,6 +117,7 @@ try:
     import db_transfer
     import history_import
     import ipcalc
+    import md_convert
     import remote_source
     import runbook
     from ansi_output import to_markup, to_plain
@@ -2567,7 +2568,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.160"
+    VERSION = "v1.161"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2633,6 +2634,7 @@ class CommandRunner(App):
     KEY_KCTX_VARS = "kctx_vars"
     KEY_MD_DIR = "md_dir"
     KEY_MD_RENDER_LINES = "md_render_lines"
+    KEY_MD_CONVERTER = "md_converter"
     HISTORY_SEARCH_LIMIT = 50
     # Сколько строк истории показывать в выпадающих подсказках при наборе.
     HISTORY_COMPLETION_LIMIT = 20
@@ -2846,6 +2848,8 @@ class CommandRunner(App):
         self.md_dir: str = ""
         # Порог форматированного `:md` (строк); больше — raw-вид в Line API.
         self.md_render_lines: int = DEFAULT_MD_RENDER_LINES
+        # Конвертер документов для `:md` (docx/pdf/…): пусто — автопоиск.
+        self.md_converter: str = ""
         self._md_results: list[MdMatch] = []
         self._journal_block_cache: list[Static] | None = None
         # Пользователь увёл вид журнала вверх и читает: новый вывод не двигает
@@ -3966,6 +3970,7 @@ class CommandRunner(App):
                         settings.get(self.KEY_HISTORY_QUERIES, DEFAULT_HISTORY_QUERIES)
                     )
                     self.md_dir = str(settings.get(self.KEY_MD_DIR) or "").strip()
+                    self.md_converter = str(settings.get(self.KEY_MD_CONVERTER) or "").strip()
                     try:
                         self.md_render_lines = int(
                             settings.get(self.KEY_MD_RENDER_LINES, DEFAULT_MD_RENDER_LINES)
@@ -6373,18 +6378,29 @@ class CommandRunner(App):
         self._open_md_file(path, line=line)
 
     def _open_md_file(self, path: Path, line: int | None = None) -> None:
-        """Открыть markdown-файл встроенным просмотрщиком (опц. на строке `line`).
+        """Открыть файл просмотрщиком: markdown как есть, документ — через конвертер.
+
+        Решаем по содержимому (`md_convert.is_plain_text`), а не по имени файла:
+        `.pdf` часто декодируется без ошибки, а markdown бывает с другим именем.
+        """
+        try:
+            data = path.read_bytes()
+        except OSError as e:
+            self.add_block(InfoBlock(f"Error reading {path}: {e}"))
+            return
+        if md_convert.is_plain_text(data, self.ENCODING):
+            self._show_md_text(path, md_convert.decode_text(data, self.ENCODING), line=line)
+            return
+        self._convert_document_to_md(path, line=line)
+
+    def _show_md_text(self, path: Path, text: str, line: int | None = None) -> None:
+        """Показать markdown-текст (опц. на строке `line`): форматированно или исходником.
 
         Форматированный Textual-`Markdown` держит виджет на каждый блок, т.е. на
         больших файлах монтирование занимает десятки секунд (13k строк ≈ 40 с).
         Файлы длиннее `md_render_lines` открываем исходником в ленивом Line-API
         просмотрщике (поиск `/`, `n`/`N`, переход к строке) — мгновенно.
         """
-        try:
-            text = path.read_text(encoding=self.ENCODING)
-        except OSError as e:
-            self.add_block(InfoBlock(f"Error reading {path}: {e}"))
-            return
         lines = text.splitlines()
         if len(lines) > self.md_render_lines:
             subtitle = (
@@ -6404,6 +6420,67 @@ class CommandRunner(App):
             )
             return
         self.push_screen(HandbookMarkdownScreen(path, text, line=line))
+
+    # --- Документы (docx/pdf/…) → markdown ---------------------------------
+
+    def _md_cache_dir(self) -> str:
+        """Кэш конвертаций рядом с данными приложения (`<data>/mdcache`)."""
+        return os.path.join(self._data_dir or os.getcwd(), md_convert.CACHE_DIR_NAME)
+
+    def _convert_document_to_md(self, path: Path, line: int | None = None) -> None:
+        """Документ → markdown: конвертация в фоне (UI не блокируем), результат — из кэша."""
+        self.sub_title = t("md.converting", name=path.name)
+        thread = threading.Thread(
+            target=self._md_convert_worker,
+            args=(path, line),
+            daemon=True,
+            name="md-convert",
+        )
+        thread.start()
+
+    def _md_convert_worker(self, path: Path, line: int | None) -> None:
+        """Рабочий поток: конвертация файла (чужой инструмент может быть медленным)."""
+        try:
+            result = md_convert.convert(
+                path,
+                cache_dir=self._md_cache_dir(),
+                preferred=self.md_converter,
+            )
+        except Exception as e:  # конвертер чужой — падать из-за него нельзя
+            result = md_convert.ConvertResult(error="failed", detail=str(e))
+        self.call_from_thread(self._md_convert_done, path, result, line)
+
+    def _md_convert_done(
+        self, path: Path, result: md_convert.ConvertResult, line: int | None
+    ) -> None:
+        """В UI-потоке: сообщение об итоге и открытие просмотрщика."""
+        if not result.ok:
+            self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+            self.add_block(InfoBlock(self._md_convert_error(path, result)))
+            return
+        lines = len(result.markdown.splitlines())
+        self.sub_title = t(
+            "md.converted",
+            name=path.name,
+            lines=lines,
+            converter=result.converter or t("md.from_cache"),
+        )
+        self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+        self._show_md_text(path, result.markdown, line=line)
+
+    def _md_convert_error(self, path: Path, result: md_convert.ConvertResult) -> str:
+        """Текст отказа: у каждой причины — своя формулировка (тексты в `locales`)."""
+        if result.error == "no_converter":
+            return t("md.no_converter", hint=md_convert.INSTALL_HINT)
+        if result.error == "converter_missing":
+            return t("md.converter_missing", name=result.detail)
+        if result.error == "needs_ocr":
+            return t("md.needs_ocr", name=path.name)
+        if result.error == "timeout":
+            return t("md.timeout", name=path.name, seconds=result.detail)
+        if result.error == "empty":
+            return t("md.empty", name=path.name, converter=result.converter)
+        return t("md.failed", name=path.name, error=result.detail)
 
     # --- Поиск по markdown (`:rg`) -------------------------------------
 

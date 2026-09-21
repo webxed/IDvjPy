@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.160
+# План тестирования IDvjPy_term v1.161
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -354,6 +354,20 @@ echo hist-line
 `:q` — выход (в конце сессии). `:cd`, `:r`, `:theme` — секция 25.
 
 Автотесты: `test_s12_colon_commands`, `test_colon_h_search_newest_first`, `test_colon_h_compact_uniques_old_keeps_tail`, `test_colon_md_opens_formatted_handbook`, `test_md_viewer_wheel_does_not_scroll_journal`, `tests/test_help_topics.py` (11: алиасы, неизвестная тема, `:?calc`, оглавление против реестра, подсказки тем).
+
+### 12.1. Документы в `:md` (docx / pdf / xlsx / …)
+
+Нужен конвертер: `pip install firecrawl-anydoc` (без него `:md` скажет, что поставить).
+
+```
+:md report.pdf
+:md notes.docx#L5
+:md SEED_LINUX_COMMANDS.md     # обычный markdown идёт как раньше
+```
+
+**Ожидание:** не-markdown файл открывается md-просмотрщиком (форматированно или raw-видом по `md_render_lines`); шапка и `y` показывают **исходный** файл, `#L<n>` работает, поиск `/` ищет; на секунду в шапке `Документ report.pdf → markdown: N стр., конвертер anydoc`; повторное `:md` берёт кэш (`mdcache/` в каталоге данных) мгновенно и работает даже если конвертер удалить; в `settings.yml` `md_converter: pandoc` перебивает автопоиск, а несуществующий конвертер — явная ошибка; без конвертера — подсказка `pip install firecrawl-anydoc`; скан-PDF — `страницы сканированы, нужен OCR — офлайн не поддерживается`; текстовый файл (`.txt` с markdown) конвертер не зовёт.
+
+Автотесты: `tests/test_md_convert.py` (24; два — живые, с настоящим `anydoc`, без него пропускаются).
 
 ---
 
@@ -1572,7 +1586,7 @@ Ctrl+V в построчном режиме  # другое поведение: 
 
 ---
 
-**Версия документа**: v1.106
-**Версия приложения**: v1.160
+**Версия документа**: v1.107
+**Версия приложения**: v1.161
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-15

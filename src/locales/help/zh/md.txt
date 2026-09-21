@@ -14,6 +14,12 @@
                 到该行；`:rg <N>` 打开第 N 个结果（从 1 开始）。基准：
                 [dir] → `md_dir` 设置 → cwd。`:rg` / `:md` 会记入
                 历史（↑ / `:h`）
-  设置：`md_dir`（搜索基准）和 `md_render_lines` 在 settings.yml 中。
+  :md notes.docx / report.pdf - 不是 markdown？`:md` 会转换它。转换器来自 settings.yml
+                的 `md_converter`，否则用第一个找到的：anydoc → markitdown → pandoc。
+                推荐 `pip install firecrawl-anydoc`（无依赖；docx/xlsx/pptx/doc/ppt/
+                xls/pdf/rtf/epub/odt；PDF 本地解析）。转换结果缓存在数据目录的
+                mdcache/，因此查看器里的 `#L<n>`、`/` 搜索和 `y` 与普通文件一样。
+                没有转换器时给出安装提示；扫描版 PDF 需要 OCR（离线不支持）。
+  设置：`md_dir`（搜索基准）、`md_render_lines` 和 `md_converter` 在 settings.yml 中。
 
   其他主题与完整命令列表 — :?

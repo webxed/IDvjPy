@@ -23,7 +23,7 @@
   :c          - Clear all output blocks
   :json       - Open JSON viewer (from last block)
   :json <file>- Open JSON file in viewer
-  :md <file|path>[#L<n>] - Markdown handbook with formatting, `#L<n>` — at source line n (:? md)
+  :md <file|path>[#L<n>] - Markdown handbook with formatting, `#L<n>` — at source line n; documents (docx/pdf/…) are converted (:? md)
   :rg <pat> [dir] - Search markdown files by regex, clickable results (:? md)
   :i          - Kubernetes Ingress Analyzer (:i — commands, :? i — in detail)
   :cd [path]  - Show or change the shell cwd (tags DB / history stay at launch dir)

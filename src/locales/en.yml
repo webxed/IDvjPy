@@ -115,7 +115,7 @@ cmd:
   h: "history: :h [N], :h /text, :h compact"
   c: "clear all journal blocks"
   json: "JSON viewer: last block or a file"
-  md: "markdown viewer; #L<n> — source line"
+  md: "markdown viewer; documents (docx/pdf/…) are converted; #L<n> — source line"
   rg: "search markdown files (Obsidian vault)"
   i: "Kubernetes Ingress Analyzer"
   cd: "show or change the shell cwd"
@@ -181,3 +181,14 @@ transfer:
 
 clipboard:
   empty: "Clipboard is empty"
+
+md:
+  converting: "[dim]Converting {name} → markdown…[/dim]"
+  converted: "Converted {name} → markdown: {lines} line(s) via {converter}."
+  from_cache: "cache"
+  no_converter: "Not a text file — a document needs a converter.\nInstall one: {hint}\nor set `md_converter` in settings.yml."
+  converter_missing: "Converter '{name}' is not available — install it or fix `md_converter` in settings.yml."
+  empty: "{name}: the converter ({converter}) produced no text."
+  failed: "Could not convert {name}: {error}"
+  needs_ocr: "{name}: the pages are scanned and need OCR — not supported offline."
+  timeout: "Conversion of {name} timed out ({seconds}s)."

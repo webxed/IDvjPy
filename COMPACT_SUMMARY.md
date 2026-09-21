@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.160**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.161**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.106 (app v1.160) |
+| `test_cmd.md` | Manual plan v1.107 (app v1.161) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -161,6 +161,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_version_bump.py` | `bump_version`: арифметика версии, обновление всех маркеров (включая `DATABASE.md`/`backup_db.md`), `--check`/`--dry-run`/`--set` |
 | `tests/test_cmd_scenarios.py` | Sections of `test_cmd.md` (Pilot keypresses), alias `$1` |
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
+| `tests/test_md_convert.py` | Документы → markdown для `:md` (24): детект «текст/документ» по содержимому (PDF/OLE2/RTF/ZIP-пакет/NUL/cp1251), поиск конвертера (settings → env → автопоиск; явный не подменяется), кэш и его инвалидация по mtime/размеру/конвертеру, ошибки (`converter_missing`/`no_converter`/`failed` со stderr/`timeout`/`empty`), флаги `pandoc`, в TUI — конвертация через `md_converter` из settings, кэш при пропавшем конвертере, подсказки без конвертера, текстовый файл не уходит в конвертер; 2 живых теста с настоящим `anydoc` (skip без пакета) |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!`, `:export` одного тега и `:export * file.json` (JSON всей библиотеки) |
 | `tests/test_cwd_prompt.py` | Приглашение строки ввода: `shorten_path` (`~`, хвост длинного пути, узкое окно), путь виден и обновляется после `cd`/`:cd`, плейсхолдера нет, клик по пути фокусирует ввод |
 | `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
@@ -197,7 +198,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine), `compose.yaml`, `entrypoint.sh` (шаблоны + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.160 |
+| `src/app.py` | TUI (`CommandRunner`), v1.161 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -210,6 +211,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/tag_scope.py` | Область видимости тегов у сессии (`:scope`): `TagScope` (`mode` `only`/`hide` + группы `seed_groups` + отдельные теги): `matches`/`split`/`add`/`drop`/`label`/`describe`, `classify`, `split_names`, `ScopeModeError`; файл `scope_<сессия>.json` в data-каталоге (нет файла — нет фильтра, битый — фильтр выключен и явное сообщение). Фильтр — только списки и подсказки; БД не трогает |
 | `src/seed_catalog.py` | Empty-DB welcome catalog (click `--seed` / `.md`); texts from `catalog.*` (`locales/<lang>/seed.yml`), commands/scripts never translated |
 | `src/md_viewer.py` | Modal Markdown viewer (`:md`, welcome links). Handbook lookup is language-aware: `handbook_md_path(name, lang)` prefers `docs/<lang>/NAME`, then `docs/NAME`, then `NAME` (repo root / cwd) — a language without its own copy gets the base handbook |
+| `src/md_convert.py` | Документы (docx/xlsx/pptx/doc/ppt/xls/rtf/epub/odt/pdf) → markdown для `:md`: `is_plain_text` решает «текст или контейнер» **по содержимому** (сигнатуры PDF/OLE2/RTF, NUL-байты, части офисного ZIP, доля печатных байтов у не-UTF-8), `find_converter` — `md_converter` → `$IDVJPY_MD_CONVERT` → первый из `anydoc`/`markitdown`/`pandoc` (явный не подменяется). `anydoc` (`pip install firecrawl-anydoc`, Rust, без зависимостей, GIL отпущен) вызывается импортом без `ocr` — скан-PDF даёт `needs_ocr`, а не сетевой запрос; остальные — внешние процессы (`pandoc` → `--to gfm --wrap=none`), таймаут 30 с. Кэш `<data>/mdcache/<имя>-<ключ>.md` (путь+mtime+размер+конвертер) читается **до** проверки доступности (переживает удаление конвертера), просмотрщик открывает **исходный** путь |
 | `src/k8s_complete.py` | Имена ресурсов k8s из живого кластера (`kubectl get`) |
 | `src/update_check.py` | Compare `VERSION` with GitHub main (`:update`) |
 | `src/data_dirs.py` | Data-каталог: `--data-dir` / `$IDVJPY_DATA_DIR` / portable / OS default |
@@ -245,6 +247,11 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.161
+
+- **`:md` открывает документы: docx, pdf, xlsx, rtf, epub, odt — через конвертер.** Новый модуль `src/md_convert.py` (без Textual). Решение «текст или документ» — **по содержимому**, а не по имени: сигнатуры `%PDF-` / OLE2 / `{\rtf` / NUL-байты / части офисного ZIP (docx/xlsx/pptx, odt/ods/odp, epub) / доля печатных байтов у не-UTF-8. Поэтому `.pdf`, который раньше «удачно» декодировался в ASCII-мусор (а на бинаре летел `UnicodeDecodeError` мимо `except OSError`), теперь уходит конвертеру, а markdown под другим расширением по-прежнему открывается сразу. Конвертер: `md_converter` из `settings.yml` → `$IDVJPY_MD_CONVERT` → первый найденный из `anydoc` → `markitdown` → `pandoc`; **явно заданный не подменяется** — про отсутствующий сообщаем. `anydoc` (`pip install firecrawl-anydoc`, Rust, **без зависимостей**, колесо 3.5 МБ, формат по содержимому, PDF локально, GIL отпущен) зовётся импортом; наличие проверяется по `to_markdown`, потому что имя `anydoc` на PyPI занято чужим пакетом. `ocr` не включаем никогда — скан-PDF получает `needs_ocr`, а не отправку в облако (сеть в проекте только через `src/net.py`). Остальные — внешние процессы «файл → markdown в stdout», `pandoc` принудительно `--to gfm --wrap=none`, таймаут 30 с. Результат кэшируется в `<data>/mdcache/<имя>-<ключ>.md` (путь+mtime+размер+конвертер), кэш читается **до** проверки доступности (переживает удаление конвертера), а просмотрщик открывается на **исходном** пути — значит `#L<n>`, поиск `/` и `y` работают как для обычного `.md`. Конвертация — в рабочем потоке, отказы — явными блоками (`md.no_converter` с `pip install firecrawl-anydoc`, `converter_missing`, `failed` со stderr, `needs_ocr`, `timeout`, `empty`). Живой прогон: настоящий docx → GFM с таблицей, текстовый PDF → заголовок и абзац, **~1 мс** на документ, повтор — из кэша. Тесты: `tests/test_md_convert.py` (24, включая 2 живых с настоящим `anydoc` — пропускаются, если пакета нет); настройка `md_converter` в трёх шаблонах `src/settings/*.yml`.
+- **Подсказки заставки и README — по факту, а не по памяти.** Список внизу заставки (это тоже справка) отставал на пять команд: добавлены `:h import`, `:scope add|rm|clear`, `:import`, `:name`, `:lang`/`:relang`, дописан алиас `:g` к `:/text`, а строка `:md` теперь говорит про конвертацию документов — синхронно в `COMMAND_HELP_LINES` (`src/screensaver.py`, запасной набор) и `src/locales/{en,ru,zh}/screensaver.yml` (64 строки, индексы совпадают). Догнали русскую базу и переводы README (`docs/en`, `docs/zh`): абзац про конвертацию в `:md` и ключ `md_converter`; в `DEMO.md` — строка про документ в акте 5, в `docker/README.md` — про `:scope` и честная оговорка про конвертер в образе. Сверка автоматическая: все 47 имён из `COLON_COMMAND_NAMES` против 12 текстовых поверхностей (README ×3, `COMPACT_SUMMARY.md`, темы `:?`, заставка) — других отставаний нет.
 
 ## v1.160
 

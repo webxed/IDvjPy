@@ -5,9 +5,10 @@ screensaver:
   - :w file  — 将日志写入文件
   - :h [N]  — 最近 N 条历史
   - :h /text  — 在补全中搜索历史
+  - ":h import [shell]  — 把该 shell 的历史追加进会话历史"
   - :c  — 清空日志块
   - :json  — JSON 查看器（上一个块或文件）
-  - ':md file|path[#L n]  — Markdown 查看器（手册或路径; #L n = 行号）'
+  - ':md file|path[#L n]  — Markdown：手册或路径；文档（docx/pdf/…）会被转换'
   - :rg pat [dir]  — 搜索 .md（ripgrep/内置）; 点击 path:line
   - :cd [path]  — 显示或更改 shell 的当前目录（标签库仍在启动目录）
   - :fm [path]  — 系统文件管理器（新窗口）
@@ -22,12 +23,15 @@ screensaver:
   - ':screensaver  — 立即显示矩阵雨（默认）或星空; 空闲: screensaver_idle'
   - :r [N]  — 将块命令放入输入框（N = 往前第几块）
   - :cmd [N] [show]  — 将带当前 $VAR/密钥的块命令复制到剪贴板
+  - ":name label  — 给块加标签，供 |@label 使用"
   - ':log [N]  — 完整块输出: / 搜索，f — 仅匹配项（F7）'
   - :kill [all]  — 停止正在运行的后台命令（SIGTERM 进程组）
   - :watch N cmd  — 在同一个块中每 N 秒重新运行命令
   - :stats  — 每个标签的运行次数、常用命令、从未运行
   - :mv tag[1] tag2 | :mv tag tag2  — 移动命令 / 重命名标签
+  - ":scope add|rm|clear  — 在列表与提示中只保留/隐藏标签"
   - :export <tag>|* [file]  — 单个标签 JSON / 整个库 Markdown
+  - ":import f.json|url  — 插入命令（无参数时 = library_url）"
   - :alias <tag>|* [file.sh]  — 将命令导出为 bash 函数
   - :diff  — 两个块输出的 unified diff
   - :o [N] | :o /text  — 会话输出历史 / 搜索
@@ -35,9 +39,10 @@ screensaver:
   - :llm offline msg  — 内置桩（无网络、无密钥）
   - :llm ask [provider] task  — 任务 + 标签库 → !tag[tid] 引用
   - :cht query  — 在日志中显示 cheat.sh 参考
+  - ":lang 代码  — 界面语言（会保存）；:relang —— 重译种子注释"
   - ':ed [file|$OUT|$BLOCK]  — 外部编辑器（暂停 TUI; settings.yml 中的 editor:）'
   - ':kctx [cluster] [N]  — 集群日志: 按集群保存的变量（kctx_vars）'
-  - :/text  — 搜索日志行; :n / :N 下一个/上一个
+  - :/text · :g  — 搜索日志行; :n / :N 下一个/上一个
   - :theme [name]  — TUI 主题（保存在 settings.yml）
   - :playbook [file]  — 将会话导出为 --demo YAML
   - :run tag|file.yml  — 半自动命令链; manual 步骤等待 Enter

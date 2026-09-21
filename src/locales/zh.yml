@@ -116,7 +116,7 @@ cmd:
   h: "历史: :h [N]、:h /文本、:h compact"
   c: "清空所有日志块"
   json: "JSON 查看器: 上一个块或文件"
-  md: "markdown 查看器; #L<n> — 源文件行号"
+  md: "markdown 查看器; 文档（docx/pdf/…）会被转换; #L<n> — 源文件行号"
   rg: "搜索 markdown 文件（Obsidian 仓库）"
   i: "Kubernetes Ingress 分析器"
   cd: "显示或更改 shell 的当前目录"
@@ -182,3 +182,14 @@ transfer:
 
 clipboard:
   empty: "剪贴板为空"
+
+md:
+  converting: "[dim]正在将 {name} 转换为 markdown…[/dim]"
+  converted: "{name} → markdown：{lines} 行，转换器 {converter}。"
+  from_cache: "缓存"
+  no_converter: "这不是文本文件 —— 文档需要转换器。\n安装：{hint}\n或在 settings.yml 中设置 `md_converter`。"
+  converter_missing: "转换器 '{name}' 不可用 —— 请安装它或修正 settings.yml 中的 `md_converter`。"
+  empty: "{name}：转换器（{converter}）没有输出文本。"
+  failed: "无法转换 {name}：{error}"
+  needs_ocr: "{name}：页面为扫描件，需要 OCR —— 离线不支持。"
+  timeout: "{name} 的转换超时（{seconds} 秒）。"

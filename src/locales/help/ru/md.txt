@@ -14,6 +14,14 @@
                 на этой строке; `:rg <N>` открывает результат N (с 1). База:
                 [dir] → настройка `md_dir` → cwd. `:rg` / `:md` записываются
                 в историю (↑ / `:h`)
-  Настройки: `md_dir` (база поиска) и `md_render_lines` в settings.yml.
+  :md notes.docx / report.pdf - Не markdown? `:md` его сконвертирует. Конвертер — из
+                `md_converter` в settings.yml, иначе первый найденный: anydoc →
+                markitdown → pandoc. Рекомендуемый — `pip install firecrawl-anydoc`
+                (без зависимостей; docx/xlsx/pptx/doc/ppt/xls/pdf/rtf/epub/odt; PDF
+                читается локально). Markdown кэшируется в mdcache/ в каталоге данных,
+                поэтому в просмотрщике работают `#L<n>`, поиск `/` и `y`, как для
+                обычного файла. Конвертера нет — подсказка об установке; скан-PDF
+                требует OCR (офлайн не поддерживается).
+  Настройки: `md_dir` (база поиска), `md_render_lines` и `md_converter` в settings.yml.
 
   Остальные темы и полный список команд — :?

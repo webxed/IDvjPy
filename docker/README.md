@@ -41,9 +41,10 @@ docker compose run --rm idvjpy        # образ соберётся при п�
 | `:ed $OUT` | правка строки вывода во внешнем редакторе (`nano`) |
 | `:new demo ~` | второе окно приложения в отдельном терминале (своя сессия, общая БД) |
 | `:kctx` | список кластеров kubectl-журнала (нужен `kubectl`/`tsh`) |
-| `:md SEED_LINUX_COMMANDS.md` | справочник с форматированием |
+| `:md SEED_LINUX_COMMANDS.md` | справочник с форматированием; не-markdown файлы (docx/pdf/…) конвертируются, если в образе есть конвертер (`pip install firecrawl-anydoc`) |
 | `:rg <текст>` | поиск по markdown (`md_dir`/cwd); клик по `путь:строка` открывает на строке |
 | `:stats` / `:export * catalog.md` | метрики библиотеки / каталог в Markdown |
+| `:scope add git` / `:scope clear` | область видимости окна: в списках и подсказках только выбранные группы (в файле `scope_<сессия>.json`) |
 | `:screensaver` | starfield |
 | `:q` | выход |
 

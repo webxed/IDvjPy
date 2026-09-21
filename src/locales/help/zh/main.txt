@@ -24,7 +24,7 @@
   :c          - 清空所有输出块
   :json       - 打开 JSON 查看器（来自最后一个块）
   :json <file>- 在查看器中打开 JSON 文件
-  :md <file|path>[#L<n>] - 以格式化方式打开的 markdown 手册，`#L<n>` — 源文件第 n 行（:? md）
+  :md <file|path>[#L<n>] - 以格式化方式打开的 markdown 手册，`#L<n>` — 源文件第 n 行；文档（docx/pdf/…）会被转换（:? md）
   :rg <pat> [dir] - 按 regex 搜索 markdown 文件，结果可点击（:? md）
   :i          - Kubernetes Ingress 分析器（:i — 命令，:? i — 详细）
   :cd [path]  - 显示或更改 shell 的 cwd（标签数据库 / 历史仍留在启动目录）

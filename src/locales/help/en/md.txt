@@ -12,6 +12,13 @@
                 `path:line` fragments — open them in the md viewer at that line;
                 `:rg <N>` opens result N (1-based). Base: [dir] → settings `md_dir`
                 → cwd. `:rg` / `:md` are recorded in history (↑ / `:h`)
-  Settings: `md_dir` (search base) and `md_render_lines` in settings.yml.
+  :md notes.docx / report.pdf - Not markdown? `:md` converts it. The converter comes
+                from `md_converter` in settings.yml, else from the first one found:
+                anydoc → markitdown → pandoc. Recommended: `pip install firecrawl-anydoc`
+                (no dependencies; docx/xlsx/pptx/doc/ppt/xls/pdf/rtf/epub/odt; PDF read
+                locally). The markdown is cached in mdcache/ in the data directory, so
+                the viewer gets `#L<n>`, `/` search and `y` like any other file. Without
+                a converter — an install hint; a scanned PDF needs OCR (offline — no).
+  Settings: `md_dir` (search base), `md_render_lines` and `md_converter` in settings.yml.
 
   Other topics and the full command list — :?

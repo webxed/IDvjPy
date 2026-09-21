@@ -110,7 +110,7 @@ cmd:
   h: "история: :h [N], :h /текст, :h compact"
   c: "очистить все блоки журнала"
   json: "JSON-просмотрщик: последний блок или файл"
-  md: "просмотр markdown; #L<n> — строка в исходнике"
+  md: "просмотр markdown; документы (docx/pdf/…) конвертируются; #L<n> — строка в исходнике"
   rg: "поиск по markdown-файлам (Obsidian-vault)"
   i: "Kubernetes Ingress Analyzer"
   cd: "показать/сменить cwd для shell-команд"
@@ -176,3 +176,14 @@ transfer:
 
 clipboard:
   empty: "Буфер обмена пуст"
+
+md:
+  converting: "[dim]Конвертирую {name} → markdown…[/dim]"
+  converted: "Документ {name} → markdown: {lines} стр., конвертер {converter}."
+  from_cache: "из кэша"
+  no_converter: "Это не текстовый файл — для документа нужен конвертер.\nУстановка: {hint}\nили задайте `md_converter` в settings.yml."
+  converter_missing: "Конвертер '{name}' недоступен — установите его или поправьте `md_converter` в settings.yml."
+  empty: "{name}: конвертер ({converter}) вернул пустой текст."
+  failed: "Не удалось сконвертировать {name}: {error}"
+  needs_ocr: "{name}: страницы сканированы, нужен OCR — офлайн не поддерживается."
+  timeout: "Конвертация {name} не уложилась в {seconds} с."

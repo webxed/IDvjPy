@@ -54,6 +54,12 @@ md_dir: ""
 # 如果需要格式化且文件很大（并愿意等待），请调高。
 md_render_lines: 1000
 
+# 文档转换器（`:md notes.docx`、`:md report.pdf` → markdown）。
+# 留空 —— 自动：anydoc → markitdown → pandoc。`pip install firecrawl-anydoc`
+# 支持 docx/xlsx/pptx/doc/ppt/xls/pdf/rtf/epub/odt，无需额外依赖，
+# PDF 本地解析。转换结果缓存在数据目录的 mdcache/。
+md_converter: ""
+
 # 标签数据库文件（相对于数据目录）。
 database_tags_file: mytags.db
 # 数据库快照目录（:backup、--seed）。

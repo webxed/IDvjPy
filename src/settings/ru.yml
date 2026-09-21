@@ -54,6 +54,12 @@ md_dir: ""
 # Поднимите, если нужно форматирование и большой файл (и готовы ждать).
 md_render_lines: 1000
 
+# Конвертер документов (`:md notes.docx`, `:md report.pdf` → markdown).
+# Пусто — автопоиск: anydoc → markitdown → pandoc. `pip install firecrawl-anydoc`
+# покрывает docx/xlsx/pptx/doc/ppt/xls/pdf/rtf/epub/odt без лишних зависимостей
+# и читает PDF локально. Markdown кэшируется в mdcache/ (в каталоге данных).
+md_converter: ""
+
 # Файл БД с тегами (относительно data-каталога).
 database_tags_file: mytags.db
 # Каталог снимков БД (:backup, --seed).

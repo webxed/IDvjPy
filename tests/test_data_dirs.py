@@ -33,6 +33,7 @@ EXPECTED_KEYS = {
     "k8s_completion",
     "kctx_vars",
     "editor",
+    "md_converter",
 }
 
 
