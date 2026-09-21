@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.163**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.164**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.109 (app v1.163) |
+| `test_cmd.md` | Manual plan v1.110 (app v1.164) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -171,7 +171,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_tag_ref_click.py` | Клик по `!tag[tid]` в `??`: обычный — только вставка; Ctrl+клик и двойной клик — вставить и выполнить (как «Enter, Enter», без дубля ссылки); `!tag ` без tid и чужие ссылки не выполняются |
 | `tests/test_help_topics.py` | Темы `:? <тема>`: уникальность и наличие текста на каждом языке, алиасы (в т.ч. русские слова), неизвестная тема — ошибка со списком тем, `:?calc` — подсказка пробела, оглавление `main` покрывает реестр, подсказки после `:? ` |
 | `tests/test_secrets.py` | Секреты (20): ввод/показ маскируются, файл 0600 и удаление при выходе, `.bashrc_term`/history не видят значения, `:llm` (`$OUT` и контекст библиотеки), замороженная маскировка (`:watch`, `:o`, шапка `:log`, снятый/переопределённый секрет), чужие файлы секретов не удаляются, `:cmd` с `clear_clipboard_after_secret` |
-| `tests/test_history_import.py` | Импорт истории (33): форматы (zsh extended/континуация, bash-метки, fish `\`/`\n`/кавычки, PSReadLine), распознавание zsh по содержимому, пути по linux/darwin/win32 + XDG/APPDATA, батч-запись и её ошибка, BOM/бинарь, `sh`→`ksh`, `:h import` в TUI (импорт, идемпотентность, «не найдено», нечитаемый источник, ошибка записи, лишние аргументы, незнакомая оболочка) |
+| `tests/test_history_import.py` | Импорт истории (42): форматы (zsh extended/континуация, bash-метки, fish `\`/`\n`/кавычки, PSReadLine), распознавание zsh по содержимому, пути по linux/darwin/win32 + XDG/APPDATA, батч-запись и её ошибка, BOM/бинарь, `sh`→`ksh`, `:h import` в TUI (импорт, идемпотентность, «не найдено», нечитаемый источник, ошибка записи, лишние аргументы, незнакомая оболочка); atuin: путь по умолчанию/XDG/`$ATUIN_DB_PATH`/`config.toml`, наличие базы в кандидатах (linux + win32), фильтр удалённых/пустых и хронология, хвост `limit`, старая схема без `deleted_at`, чужой SQLite и битый файл, `:h import atuin` в TUI |
 | `tests/test_stylesheet.py` | Стили — `src/app.tcss`: путь и наличие файла, Textual-синтаксис (`$surface`, `dock`), отсутствие `app.css` в коде/упаковке, попадание в wheel |
 | `tests/test_tag_query_hints.py` | Подсказки `?`: список тегов с числом команд и комментарием, фильтр, `??`/пробел не перебиваются, Tab без запуска, клик по строке выполняет запрос (путь по клику только вставляется), ссылка — только на `?tag` |
 | `tests/test_themes.py` | Тема `matrix` (палитра, выбор из settings.yml/`:theme`, класс `matrix-mode` и зелёные рамки только у неё, сохранение между запусками) и мягкая подсветка блока в фокусе |
@@ -198,7 +198,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.163 |
+| `src/app.py` | TUI (`CommandRunner`), v1.164 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -227,7 +227,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/ingress_analyzer.py` | `:i` k8s |
 | `src/command_parser_v2.py` | `!tag[tid]` / `!ID` assembly |
 | `src/history_store.py` | `history_<instance>.txt` append/read/compact, file locks; `append_history_file_lines` — пачка под одним lock’ом без дублей (импорт) и с явной ошибкой (`AppendResult.added/error`: занятый файл не пишем молча) |
-| `src/history_import.py` | Импорт истории оболочки (`:h import`): поиск файлов по ОС и `$HISTFILE` (fish/pwsh — XDG-каталог на всех ОС, nushell — системный, на win32 только Windows-пути), разбор по содержимому (zsh extended + континуация `\`+newline, bash-метки, fish `\`/`\n` однопроходно, PSReadLine/nushell), хвост 4 МБ у больших файлов, BOM/бинарь, `sh` → `ksh` |
+| `src/history_import.py` | Импорт истории оболочки (`:h import`): поиск файлов по ОС и `$HISTFILE` (fish/pwsh — XDG-каталог на всех ОС, nushell — системный, на win32 только Windows-пути), разбор по содержимому (zsh extended + континуация `\`+newline, bash-метки, fish `\`/`\n` однопроходно, PSReadLine/nushell), хвост 4 МБ у больших файлов, BOM/бинарь, `sh` → `ksh`; источник `atuin` (`Source.kind`) — SQLite-база `history.db` (`$ATUIN_DB_PATH` → `config.toml` `data_dir`/`db_path` → `~/.local/share/atuin` на всех ОС), чтение `mode=ro` с таймаутом (WAL), проверка колонки `command`, `deleted_at is null`, порядок по `timestamp` |
 | `src/session_mailbox.py` | Пересылка команд между сессиями (`:send`): `inbox_<instance>.jsonl` 0600, append под lock / drain |
 | `src/session_registry.py` | Реестр активных сессий — `session_<instance>.pid` 0600: автоимя `:new` = наименьшее свободное `sN` среди работающих окон (устаревшие pid-файлы подчищаются) |
 | `src/help_texts.py` | Реестр справки `:?`: `HELP_TEXTS` + `HELP_TOPICS` (канонические имена тем → текст: `calc`, `run`, `i`, `md`, `llm`, `tags`, `vars`, `kctx`, `send`, `session`, `import`), `help_topic()` (имена и алиасы → `i18n.text()`) — файлы `src/locales/help/<lang>/{main,runbook,calc,ingress,llm,tags,vars,md,kctx,send,session,import}.txt` (`en` — источник правды) |
@@ -247,6 +247,12 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.164
+
+- **`:h import atuin` — история читается и из базы atuin.** Кроме файлов оболочек `:h import` умеет брать историю из SQLite-базы atuin: у `Source` появился вид (`kind`: `text` / `atuin`), а `atuin_db_path` находит файл так же, как сам atuin — `$ATUIN_DB_PATH` → `config.toml` (`$ATUIN_CONFIG_DIR` или XDG; ключи `data_dir` / `db_path`, относительный `db_path` считается от `data_dir`) → каталог данных `~/.local/share/atuin/history.db` (**одинаково на всех ОС**, включая Windows). База только читается: `mode=ro` **с** таймаутом (`ATUIN_TIMEOUT`, 3 с) и **без** `immutable=1` — у atuin WAL, и «неизменяемое» чтение не увидело бы свежие записи; чужая SQLite с таблицей `history` — понятная ошибка, а не мусорные команды; строки с `deleted_at` (мягко удалённое в atuin) пропускаются, порядок задаёт SQL (`timestamp`, иначе `rowid`), и только потом список разворачивается — команды приходят в хронологическом порядке. `atuin` добавлен в `KNOWN_SHELLS`, поэтому попал и в подсказку `:h import`, и в сообщение о неизвестной оболочке; ничего не исполняется.
+- **Проверка на живом atuin.** Ручная сверка с atuin 18.22.0 (изолированные `HOME`/`$ATUIN_CONFIG_DIR`): импорт `.bash_history` → реальная база `data/history.db` (WAL, `timestamp` в наносекундах) → `read_sources("atuin")` вернул те же три команды в правильном порядке.
+- **Документация.** `:h import` в справке `:?` (en/ru/zh), в README трёх языков и в `CLAUDE.md` (`src/history_import.py`) говорит про базу atuin; в `test_cmd.md` (11.1) добавлены `:h import` со списком источников и `:h import atuin`. Тесты: `tests/test_history_import.py` — 42 (было 33): путь по умолчанию/XDG/`$ATUIN_DB_PATH`/`config.toml`, наличие базы в кандидатах (linux + win32), фильтр удалённых/пустых и хронология, хвост `limit`, старая схема без `deleted_at`, чужой SQLite и битый файл, `:h import atuin` в TUI.
 
 ## v1.163
 

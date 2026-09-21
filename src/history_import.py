@@ -13,14 +13,19 @@
   (bash пишет их при `HISTTIMEFORMAT`) пропускаются;
 * **fish** — YAML-подобный `- cmd: …` (значение может быть в кавычках, `\\n` —
   перевод строки внутри команды);
-* **PowerShell** (`PSReadLine/ConsoleHost_history.txt`) и **nushell** — обычный.
+* **PowerShell** (`PSReadLine/ConsoleHost_history.txt`) и **nushell** — обычный;
+* **atuin** — не файл, а SQLite-база (`history.db`): таблица `history` со временем,
+  кодом возврата и каталогом. Живёт в каталоге данных atuin (см. `atuin_db_path`).
 """
 from __future__ import annotations
 
 import os
 import re
+import sqlite3
 import sys
+import tomllib
 from dataclasses import dataclass, field
+from pathlib import Path
 
 # Последние N строк каждого источника (0 — без ограничения). Импорт чужой истории
 # — это хвост: тысячи строк незачем, важен недавний опыт.
@@ -35,6 +40,7 @@ KNOWN_SHELLS: tuple[str, ...] = (
     "pwsh",
     "powershell",
     "sh",
+    "atuin",
 )
 
 _RE_ZSH_EXT = re.compile(r"^: \d+:\d+;")
@@ -44,14 +50,17 @@ _FISH_CMD_PREFIXES = ("- cmd: ", "cmd: ")
 # Хвост больших историй: парсеру нужны только последние `limit` команд, поэтому
 # многомегабайтный файл целиком в память не тянем.
 MAX_READ_BYTES = 4 * 1024 * 1024
+# Сколько секунд ждать занятую базу atuin, прежде чем сообщить об ошибке (WAL).
+ATUIN_TIMEOUT = 3.0
 
 
 @dataclass(frozen=True)
 class Source:
-    """Файл истории: оболочка и путь."""
+    """Источник истории: оболочка, путь и вид (`text` — файл строк, `atuin` — база)."""
 
     shell: str
     path: str
+    kind: str = "text"
 
 
 @dataclass
@@ -85,6 +94,52 @@ def _nu_data_home(env: dict[str, str], home: str, system: str) -> str:
     if system == "darwin":
         return os.path.join(home, "Library", "Application Support")
     return data_home(env, home)
+
+
+def _atuin_config(env: dict[str, str], home: str) -> dict:
+    """`config.toml` atuin (`$ATUIN_CONFIG_DIR` или XDG); нет/битый — пусто.
+
+    Читаем из каталога, вычисленного по переданному окружению (а не по реальному
+    дому): функцию зовут и тесты, и сообщение «где искали» не должно зависеть от
+    чужих настроек.
+    """
+    config_dir = (env.get("ATUIN_CONFIG_DIR") or "").strip()
+    if not config_dir:
+        base = env.get("XDG_CONFIG_HOME") or os.path.join(home, ".config")
+        config_dir = os.path.join(base, "atuin")
+    try:
+        with open(os.path.join(config_dir, "config.toml"), "rb") as handle:
+            return tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError):
+        return {}
+
+
+def atuin_db_path(env: dict[str, str], home: str) -> str:
+    """Путь к базе истории atuin: `$ATUIN_DB_PATH` → `config.toml` → каталог данных.
+
+    atuin хранит историю в SQLite (`history.db`) и раскладывает данные одинаково
+    на всех ОС — каталог данных (`~/.local/share/atuin`, на Windows
+    `%USERPROFILE%/.local/share/atuin`). Свой путь задаётся переменной окружения
+    `$ATUIN_DB_PATH` или ключами `db_path` / `data_dir` в `config.toml`;
+    относительный `db_path` считается от `data_dir` — как у самого atuin.
+
+    Путь только вычисляется (без `abspath`): функцию зовут и для чужой ОС
+    (`platform="win32"` в тестах), а нормализация «от текущего каталога» сломала бы
+    такие пути. Приведение к абсолютному — на стороне чтения (`_read_atuin`).
+    """
+    explicit = (env.get("ATUIN_DB_PATH") or "").strip()
+    if explicit:
+        return os.path.expanduser(explicit)
+    config = _atuin_config(env, home)
+    data_dir = config.get("data_dir") or os.path.join(data_home(env, home), "atuin")
+    data_dir = os.path.expanduser(str(data_dir))
+    db_path = str(config.get("db_path") or "").strip()
+    if not db_path:
+        return os.path.join(data_dir, "history.db")
+    expanded = os.path.expanduser(db_path)
+    if not os.path.isabs(expanded):
+        expanded = os.path.join(data_dir, expanded)
+    return expanded
 
 
 def candidate_sources(
@@ -161,6 +216,9 @@ def candidate_sources(
                 os.path.abspath(os.path.expanduser(histfile)),
             ),
         )
+    # atuin идёт после файловых источников: он собирает то же самое, но ещё и с
+    # чужих машин (синк), а дубли при записи отсекаются.
+    sources.append(Source("atuin", atuin_db_path(environ, home_dir), kind="atuin"))
     return sources
 
 
@@ -291,6 +349,37 @@ def parse_history(text: str, shell: str) -> list[str]:
     return _parse_plain(text, drop_timestamps=False)
 
 
+def _read_atuin(path: str, limit: int) -> list[str]:
+    """Последние команды из базы истории atuin (SQLite, только чтение).
+
+    atuin держит базу в WAL и пишет в неё из живой оболочки, поэтому подключение
+    read-only (`mode=ro`) и с таймаутом: занятая база — понятная ошибка, а не
+    замирание UI. Колонки проверяем сами: в старых базах нет `deleted_at`,
+    а чужой SQLite с таблицей `history` не должен выдаваться за историю atuin.
+    """
+    connection = sqlite3.connect(
+        f"{Path(os.path.abspath(path)).as_uri()}?mode=ro", uri=True, timeout=ATUIN_TIMEOUT
+    )
+    try:
+        columns = {row[1] for row in connection.execute("pragma table_info(history)")}
+        if "command" not in columns:
+            raise ValueError("no history table (not an atuin database)")
+        where = ["command is not null", "trim(command) <> ''"]
+        if "deleted_at" in columns:
+            where.append("deleted_at is null")  # мягко удалённое не импортируем
+        order = "timestamp desc" if "timestamp" in columns else "rowid desc"
+        query = f"select command from history where {' and '.join(where)} order by {order}"
+        params: tuple = ()
+        if limit > 0:
+            query += " limit ?"
+            params = (limit,)
+        rows = connection.execute(query, params).fetchall()
+    finally:
+        connection.close()
+    # В базе записи по убыванию времени, а история приложения растёт вперёд.
+    return [_flatten(row[0]) for row in reversed(rows) if row[0]]
+
+
 def _read_history_text(path: str) -> str:
     """Прочитать историю: BOM снимается, бинарный файл — ошибка, большие — хвост.
 
@@ -320,17 +409,19 @@ def read_sources(
 ) -> list[SourceResult]:
     """Прочитать найденные источники: последние ``limit`` команд каждого (0 — все).
 
-    Существующий, но нечитаемый файл (права, бинарь) попадает в результат с
-    ``error`` — вызывающий решает, сообщать ли об этом.
+    Существующий, но нечитаемый источник (права, бинарь, занятая база atuin)
+    попадает в результат с ``error`` — вызывающий решает, сообщать ли об этом.
     """
     results: list[SourceResult] = []
     for source in find_sources(shell, **kwargs):
         try:
-            text = _read_history_text(source.path)
-        except (OSError, ValueError) as exc:
+            if source.kind == "atuin":
+                commands = _read_atuin(source.path, limit)
+            else:
+                commands = parse_history(_read_history_text(source.path), source.shell)
+        except (OSError, ValueError, sqlite3.Error) as exc:
             results.append(SourceResult(source.shell, source.path, [], str(exc)))
             continue
-        commands = parse_history(text, source.shell)
         if limit > 0:
             commands = commands[-limit:]
         results.append(SourceResult(source.shell, source.path, commands))

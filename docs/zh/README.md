@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.163 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.164 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -266,7 +266,7 @@ curl -H "Bearer $TOKEN" https://api.example   # 普通的 $TOKEN 替换
 - `:h [N]` —— `history_<instance>.txt` 的最后 N 行显示为一个块（默认值来自 `settings.yml`；这些行可以用逐行模式取用）。文件中只有被保存的内容：`:` 命令（`history_queries` 名单之外的）、`#tag` 保存、`?`/`!` 行和 `$VAR=…` 都不会写入其中；而按 ↑ 则会翻遍本会话中**所有**输入过的内容（`:` 命令等来自会话记录），按输入顺序——最后输入的行最先返回
 - `:h /text` —— 在提示中搜索该文件（不区分大小写，最新的在前，相同行只出现一次）。Esc+Enter —— 用同样的搜索写入日志
 - `:h compact` —— 压缩旧历史（去重为唯一行）；不动最后 `history_keep` 行。启动时——仅在文件长度超过 `2 × history_keep` 时才执行
-- `:h import [shell]` —— 把用户的 shell 历史追加到 `history_<instance>.txt`：会查找 `~/.bash_history`、`~/.zsh_history`、fish（`~/.local/share/fish/fish_history`）、ksh（`~/.sh_history`；`sh` 是同一个文件）、nushell（系统数据目录：`Application Support` / `%APPDATA%`）、PowerShell PSReadLine（Windows 上是 `%APPDATA%\Microsoft\…`，Linux/macOS 上是 XDG 路径）；已设置的 `$HISTFILE` 排在最前（格式按其内容判断，即使文件名不常见）。每个文件取最后 5000 行（大文件只读尾部），已有的行不会重复（再次导入不会添加任何内容），不会执行任何命令。不带名称——所有找到的 shell，`:h import zsh` —— 只导入它。失败会明确显示：文件被占用、写入错误和无法读取的来源都会被报告，而不会看起来像「新增 0 行」。导入后 ↑、`:h /text` 和提示会立即看到这些命令
+- `:h import [shell]` —— 把用户的 shell 历史追加到 `history_<instance>.txt`：会查找 `~/.bash_history`、`~/.zsh_history`、fish（`~/.local/share/fish/fish_history`）、ksh（`~/.sh_history`；`sh` 是同一个文件）、nushell（系统数据目录：`Application Support` / `%APPDATA%`）、PowerShell PSReadLine（Windows 上是 `%APPDATA%\Microsoft\…`，Linux/macOS 上是 XDG 路径），以及 **atuin** 数据库（`history.db`：atuin 数据目录 —— 所有系统都是 `~/.local/share/atuin`，可用 `$ATUIN_DB_PATH` 或 `config.toml` 中的 `db_path`/`data_dir` 覆盖；已软删除的记录不会导入）；已设置的 `$HISTFILE` 排在最前（格式按其内容判断，即使文件名不常见）。每个文件取最后 5000 行（大文件只读尾部）或 atuin 的 5000 条命令，已有的行不会重复（再次导入不会添加任何内容），不会执行任何命令。不带名称——所有找到的来源，`:h import zsh` —— 只导入它，`:h import atuin` —— 只导入 atuin 数据库。失败会明确显示：文件被占用、写入错误和无法读取的来源都会被报告，而不会看起来像「新增 0 行」。导入后 ↑、`:h /text` 和提示会立即看到这些命令
 - `:c` —— 清空日志中的块
 - `:json` / `:json <file>` —— JSON viewer（最后一个块或文件）
 - `:md <file.md>[#L<n>]` —— 带格式的 Markdown 手册（在欢迎信息中点击名称；Esc 关闭）。也接受路径——绝对路径或相对于 `md_dir`/cwd 的路径，`:rg` 和 Obsidian vault 中的文件就是这样打开的；`#L<n>` 会直接打开到第 n 行（如同 GitHub）。`:md` 会写入历史（↑ / `:h`）。长度超过 `md_render_lines`（默认 1000 行）的文件会在 Line-API 查看器中以源码打开——速度快，支持 `/` 搜索和 `#L` 跳转（对超大文件做格式化渲染要耗费数十秒）。`y` 会把文件的完整路径复制到剪贴板——在格式化视图中还可以点击头部中的名称（raw 视图下只有 `y`）。不是 markdown 的文件（docx、xlsx、pptx、doc/ppt/xls、rtf、epub、odt、pdf）？`:md` 会转换它：转换器取自 `settings.yml` 的 `md_converter`，否则用第一个找到的（`anydoc` → `markitdown` → `pandoc`；推荐 `pip install firecrawl-anydoc` —— 无依赖、PDF 本地解析、也支持旧版 `.doc`/`.xls`）。转换结果缓存在数据目录的 `mdcache/`，所以查看器里的 `#L<n>`、`/` 搜索和 `y` 依然可用。没有转换器时会提示安装。**扫描版 PDF 在本地识别**：没有文本层时 `:md` 用 `ocrmypdf` 加上文本层（apt/dnf/apk/brew install ocrmypdf，它需要 tesseract）—— 不会发送到任何地方；settings.yml 中的 `md_ocr` 可关闭（`off`）或指定自定义命令（`ocrmypdf -l rus+eng`），没有引擎时仍显示明确的「需要 OCR」提示。文件是文本还是文档按内容判断，而不是按扩展名

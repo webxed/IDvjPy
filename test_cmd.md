@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.163
+# План тестирования IDvjPy_term v1.164
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -319,15 +319,16 @@ PageUp / PageDown — прокрутка журнала, активен види
 # подготовка: в HOME лежит история bash/zsh (можно искусственно)
 printf '#1700000000\necho from-bash\ngit status\n' > ~/.bash_history
 :h import bash        # Shell history → …/history_default.txt: 2 line(s) from bash 2, 2 new.
-:h import             # все найденные оболочки (bash, zsh, fish, ksh, nu, pwsh)
+:h import             # все найденные источники (bash, zsh, fish, ksh, nu, pwsh, atuin)
 :h import bash        # повторно — «0 new» (уже имеющиеся строки не дублируются)
 :h import sh          # `sh` = `ksh` (тот же ~/.sh_history)
+:h import atuin       # только база atuin (SQLite history.db)
 :h import bash extra  # Usage: :h import [shell] — известные: … (лишний аргумент)
 :h import nope        # Unknown shell: nope. Known: zsh, bash, …
 Up                    # импортированные команды видны по ↑ и в :h /текст
 ```
 
-**Ожидание:** ищутся файлы истории по ОС и `$HISTFILE` (`~/.bash_history`, `~/.zsh_history`, fish, ksh, nushell, PowerShell PSReadLine — `%APPDATA%` на Windows, XDG-каталог на Linux/macOS). Берутся последние 5000 строк каждого файла (у больших — только хвост); zsh extended (`: ts:dur;cmd`) и bash-метки `#<epoch>` разбираются, многострочные записи (в т.ч. реальная zsh-континуация `\`+newline) сворачиваются в одну строку, формат определяется и по содержимому (нестандартный `$HISTFILE`). Ничего не выполняется, файлы только читаются; если истории нет — сообщение со списком искомых путей. Отказы видны явно: `chmod 000 ~/.bash_history` → `Not read: …`, read-only `history_default.txt` → `Could not write …`, а не «0 new». Проверка: `python3 -m pytest tests/test_history_import.py -q`.
+**Ожидание:** ищутся файлы истории по ОС и `$HISTFILE` (`~/.bash_history`, `~/.zsh_history`, fish, ksh, nushell, PowerShell PSReadLine — `%APPDATA%` на Windows, XDG-каталог на Linux/macOS). Берутся последние 5000 строк каждого файла (у больших — только хвост); zsh extended (`: ts:dur;cmd`) и bash-метки `#<epoch>` разбираются, многострочные записи (в т.ч. реальная zsh-континуация `\`+newline) сворачиваются в одну строку, формат определяется и по содержимому (нестандартный `$HISTFILE`). Ничего не выполняется, файлы только читаются; если истории нет — сообщение со списком искомых путей. Отдельный источник — база **atuin** (если он установлен): SQLite `history.db` из его каталога данных (`~/.local/share/atuin` на всех ОС; `$ATUIN_DB_PATH` или `db_path`/`data_dir` в `config.toml` важнее), читается `mode=ro` с таймаутом (в базе WAL), мягко удалённые записи пропускаются, чужая SQLite с таблицей `history` — ошибка, а не мусорные команды (`:h import atuin` — только она). Отказы видны явно: `chmod 000 ~/.bash_history` → `Not read: …`, read-only `history_default.txt` → `Could not write …`, а не «0 new». Проверка: `python3 -m pytest tests/test_history_import.py -q`.
 
 ---
 
@@ -1586,7 +1587,7 @@ Ctrl+V в построчном режиме  # другое поведение: 
 
 ---
 
-**Версия документа**: v1.109
-**Версия приложения**: v1.163
+**Версия документа**: v1.110
+**Версия приложения**: v1.164
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
-**Дата**: 2026-09-15
+**Дата**: 2026-09-21

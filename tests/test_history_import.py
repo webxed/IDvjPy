@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 
 import history_import
 from history_store import append_history_file_lines
@@ -198,6 +199,151 @@ def test_read_sources_limits_to_the_tail(tmp_path):
     assert results[0].commands == ["cmd7", "cmd8", "cmd9"]
 
 
+# --- atuin (SQLite-база) ----------------------------------------------------
+
+# Колонки реальной базы atuin 18 (`history.db`); остальные поля не нужны импорту.
+ATUIN_COLUMNS = (
+    "id, timestamp, duration, exit, command, cwd, session, hostname, "
+    "deleted_at, author, intent, shell, author_kind"
+)
+ATUIN_SCHEMA = """
+create table history (
+    id text primary key, timestamp integer not null, duration integer not null,
+    exit integer not null, command text not null, cwd text not null,
+    session text not null, hostname text not null, deleted_at integer,
+    author text, intent text, shell text, author_kind text
+)
+"""
+
+
+def _atuin_row(index: int, command: str, *, deleted: int | None = None) -> tuple:
+    return (
+        f"id-{index}", 100 * index, 1, 0, command, "/p", "s", "h",
+        deleted, "me", None, "bash", "user",
+    )
+
+
+def _atuin_db(path, rows, schema: str = ATUIN_SCHEMA):
+    """Мини-база atuin с настоящей схемой (колонки берём у живой базы)."""
+    connection = sqlite3.connect(path)
+    connection.execute(schema)
+    connection.executemany(
+        f"insert into history ({ATUIN_COLUMNS}) values ({','.join('?' * 13)})", rows
+    )
+    connection.commit()
+    connection.close()
+    return str(path)
+
+
+def test_atuin_db_path_default_and_overrides(tmp_path):
+    """Путь базы: `$ATUIN_DB_PATH` → `config.toml` (`db_path`/`data_dir`) → каталог данных."""
+    assert history_import.atuin_db_path({}, "/home/u") == (
+        "/home/u/.local/share/atuin/history.db"
+    )
+    assert history_import.atuin_db_path({"XDG_DATA_HOME": "/data"}, "/home/u") == (
+        "/data/atuin/history.db"
+    )
+    assert history_import.atuin_db_path({"ATUIN_DB_PATH": "/tmp/my.db"}, "/home/u") == (
+        "/tmp/my.db"
+    )
+    # atuin раскладывает данные одинаково на всех ОС (даже на Windows — не %APPDATA%).
+    assert history_import.atuin_db_path({}, "C:/Users/u") == (
+        "C:/Users/u/.local/share/atuin/history.db"
+    )
+
+    config_dir = tmp_path / "atuin"
+    config_dir.mkdir()
+    (config_dir / "config.toml").write_text(
+        'data_dir = "/data/atuin"\ndb_path = "hist.db"\n', encoding="utf-8"
+    )
+    env = {"ATUIN_CONFIG_DIR": str(config_dir)}
+    # Относительный `db_path` — от `data_dir`, как считает сам atuin.
+    assert history_import.atuin_db_path(env, "/home/u") == "/data/atuin/hist.db"
+
+    (config_dir / "config.toml").write_text("db_path = \n", encoding="utf-8")
+    assert history_import.atuin_db_path(env, "/home/u") == (
+        "/home/u/.local/share/atuin/history.db"
+    )
+
+
+def test_candidate_paths_include_atuin_database():
+    sources = {
+        source.path: source
+        for source in history_import.candidate_sources(env={"HOME": "/home/u"}, platform="linux")
+    }
+    atuin = sources["/home/u/.local/share/atuin/history.db"]
+    assert atuin.shell == "atuin" and atuin.kind == "atuin"
+    win = {
+        source.path
+        for source in history_import.candidate_sources(
+            env={}, platform="win32", home="C:/Users/u"
+        )
+    }
+    assert "C:/Users/u/.local/share/atuin/history.db" in win
+
+
+def test_read_atuin_is_chronological_and_filtered(tmp_path):
+    db = _atuin_db(
+        tmp_path / "history.db",
+        [
+            _atuin_row(1, "git status"),
+            _atuin_row(2, "kubectl get pods\n-A"),
+            _atuin_row(3, "rm -rf gone", deleted=1700),
+            _atuin_row(4, "   "),
+        ],
+    )
+    results = history_import.read_sources("atuin", env={"ATUIN_DB_PATH": db}, home=str(tmp_path))
+    assert [(r.shell, r.error, r.commands) for r in results] == [
+        ("atuin", "", ["git status", "kubectl get pods ; -A"])
+    ]
+
+
+def test_read_atuin_keeps_the_tail_in_order(tmp_path):
+    db = _atuin_db(
+        tmp_path / "history.db", [_atuin_row(i, f"cmd {i}") for i in range(1, 6)]
+    )
+    results = history_import.read_sources(
+        "atuin", limit=2, env={"ATUIN_DB_PATH": db}, home=str(tmp_path)
+    )
+    assert results[0].commands == ["cmd 4", "cmd 5"]
+
+
+def test_read_atuin_tolerates_an_old_schema(tmp_path):
+    """Старая база без `deleted_at`/`timestamp` не должна ломать импорт."""
+    db = tmp_path / "history.db"
+    connection = sqlite3.connect(db)
+    connection.execute("create table history (id text primary key, command text not null)")
+    for index, command in enumerate(("one", "two"), 1):
+        connection.execute(
+            "insert into history (id, command) values (?, ?)", (f"id-{index}", command)
+        )
+    connection.commit()
+    connection.close()
+    results = history_import.read_sources("atuin", env={"ATUIN_DB_PATH": str(db)}, home=str(tmp_path))
+    assert results[0].commands == ["one", "two"]
+
+
+def test_read_atuin_rejects_a_foreign_database(tmp_path):
+    """Чужой SQLite с таблицей `history` — явная ошибка, а не пустой импорт."""
+    db = tmp_path / "history.db"
+    connection = sqlite3.connect(db)
+    connection.execute("create table history (id integer, note text)")
+    connection.execute("insert into history (note) values ('hello')")
+    connection.commit()
+    connection.close()
+    results = history_import.read_sources("atuin", env={"ATUIN_DB_PATH": str(db)}, home=str(tmp_path))
+    assert results[0].commands == []
+    assert "not an atuin database" in results[0].error
+
+
+def test_read_atuin_reports_a_broken_file(tmp_path):
+    junk = tmp_path / "history.db"
+    junk.write_bytes(b"definitely not sqlite")
+    results = history_import.read_sources("atuin", env={"ATUIN_DB_PATH": str(junk)}, home=str(tmp_path))
+    assert results[0].commands == []
+    assert results[0].error
+
+
 # --- запись пачкой ----------------------------------------------------------
 
 def test_append_history_file_lines_skips_existing_and_empty(tmp_path):
@@ -232,6 +378,9 @@ def _isolate_history_env(monkeypatch, home) -> None:
     monkeypatch.setenv("XDG_DATA_HOME", str(home / "xdg"))
     monkeypatch.setenv("APPDATA", str(home / "appdata"))
     monkeypatch.delenv("HISTFILE", raising=False)
+    # База atuin и её конфиг — тоже личные: без явного пути их не трогаем.
+    monkeypatch.delenv("ATUIN_DB_PATH", raising=False)
+    monkeypatch.delenv("ATUIN_CONFIG_DIR", raising=False)
 
 
 async def test_h_import_appends_shell_history(isolated_home, monkeypatch):
@@ -373,3 +522,35 @@ def test_sh_is_an_alias_for_ksh(tmp_path):
         "sh", env={"HOME": str(tmp_path)}, platform="linux"
     )
     assert [r.commands for r in results] == [["ls"]]
+
+
+async def test_h_import_atuin_from_database(isolated_home, monkeypatch):
+    """`:h import atuin` — история из SQLite-базы atuin попадает в ленту приложения."""
+    from app import CommandRunner
+
+    _isolate_history_env(monkeypatch, isolated_home)
+    db = _atuin_db(
+        isolated_home / "history.db",
+        [_atuin_row(1, "git status"), _atuin_row(2, "kubectl get pods")],
+    )
+    monkeypatch.setenv("ATUIN_DB_PATH", str(db))
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await submit(pilot, ":h import atuin")
+        text = last_info(app).text_content
+        assert "atuin 2" in text
+        assert "2 new" in text
+        saved = (isolated_home / "history_default.txt").read_text(encoding="utf-8")
+        assert "git status" in saved
+        assert "kubectl get pods" in saved
+
+
+async def test_h_import_unknown_shell_lists_atuin(isolated_home, monkeypatch):
+    """Подсказка о неизвестной оболочке перечисляет и atuin."""
+    from app import CommandRunner
+
+    _isolate_history_env(monkeypatch, isolated_home)
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await submit(pilot, ":h import nope")
+        assert "atuin" in last_info(app).text_content
