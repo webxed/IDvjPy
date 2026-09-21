@@ -427,9 +427,16 @@ def is_calc_like(text: str) -> bool:
     Триггер без спец-команд: первая буква — цифра, либо '(' или '-'.
     Это безопасно: конструкции вроде '(cd … && …)' или '-la' содержат слова,
     не разбираются как арифметика и уходят в shell.
+
+    Одинокие `-` и `(` — не сюда: `-` в приложении означает «вернуться
+    в предыдущий каталог» (как `cd -`), а `(` без продолжения всё равно ошибка
+    синтаксиса shell. Раньше такой `-` получал `calc: unexpected end of expression`
+    и до перехода по каталогам не доходил.
     """
     t = (text or "").strip()
-    return bool(t) and t[0] in _CALC_START
+    if len(t) < 2:
+        return bool(t) and t[0].isdigit()
+    return t[0] in _CALC_START
 
 
 def evaluate(text: str) -> str | None:

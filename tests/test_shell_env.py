@@ -157,6 +157,51 @@ def test_wrap_tty_command_dumps_exports(tmp_path):
     assert pwd_path.read_text(encoding="utf-8")
 
 
+def test_parse_path_only_cd(tmp_path, monkeypatch):
+    """Строка целиком — путь к каталогу: это `cd` без слова `cd`."""
+    from shell_env import parse_path_only_cd
+
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "my dir").mkdir()
+    (tmp_path / "build.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    # Путь: односложное имя, кавычки, явные формы, `~`.
+    assert parse_path_only_cd("docs") == "docs"
+    assert parse_path_only_cd("docs/") == "docs/"
+    assert parse_path_only_cd("./docs") == "./docs"
+    assert parse_path_only_cd("'./my dir'") == "./my dir"
+    assert parse_path_only_cd("./my\\ dir") == "./my dir"
+    assert parse_path_only_cd(".") == "."
+    assert parse_path_only_cd("..") == ".."
+    assert parse_path_only_cd("-") == "-"  # как `cd -`, проверит `_change_cwd`
+    assert parse_path_only_cd("/tmp") == "/tmp"
+    assert parse_path_only_cd("~/..") == "~/.."
+
+    # Не путь: лишние слова, операторы, подстановки, не-каталог.
+    assert parse_path_only_cd("") is None
+    assert parse_path_only_cd("   ") is None
+    assert parse_path_only_cd("docs extra") is None
+    assert parse_path_only_cd("docs | cat") is None
+    assert parse_path_only_cd("docs > out.txt") is None
+    assert parse_path_only_cd("$HOME") is None
+    assert parse_path_only_cd("`pwd`") is None
+    assert parse_path_only_cd("'unbalanced") is None  # shlex не разобрал
+    assert parse_path_only_cd("./build.sh") is None   # файл — это команда
+    assert parse_path_only_cd("./nope") is None
+    assert parse_path_only_cd("docs/nope") is None
+
+    # Имя из PATH — всегда команда, даже если рядом лежит одноимённый каталог.
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    tool = fake_bin / "docs"
+    tool.write_text("#!/bin/sh\n", encoding="utf-8")
+    tool.chmod(0o755)
+    monkeypatch.setenv("PATH", str(fake_bin))
+    assert parse_path_only_cd("docs") is None
+    assert parse_path_only_cd("./docs") == "./docs"  # явный путь всё равно путь
+
+
 def test_parse_standalone_cd():
     from shell_env import parse_standalone_cd
 

@@ -15,7 +15,66 @@ from textual import events
 from textual.widgets import Static
 
 from app import CWD_PROMPT_SEP, CommandRunner, paste_line, shorten_path
-from tests.conftest import input_widget, right_click, submit, wait_command_done
+from tests.conftest import (
+    input_widget,
+    last_info,
+    right_click,
+    submit,
+    type_keys,
+    wait_command_done,
+)
+
+
+async def test_bare_dash_without_previous_dir_reports(isolated_home, monkeypatch):
+    """`-` без предыдущего каталога — явная ошибка, а не молчание."""
+    monkeypatch.delenv("OLDPWD", raising=False)
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await submit(pilot, "-")
+        assert "OLDPWD not set" in last_info(app).text_content
+        assert os.path.samefile(os.getcwd(), isolated_home)
+
+
+async def test_bare_path_is_cd(isolated_home):
+    """Строка целиком — путь к каталогу: это `cd` без слова `cd`.
+
+    Навигация без лишнего набора: `subdir`, `./subd` → подсказка → Enter, `..`.
+    Файл (`./run.sh`) остаётся командой — путь-не-каталог в cd не превращается.
+    """
+    (isolated_home / "subdir").mkdir()
+    script = isolated_home / "run.sh"
+    script.write_text("#!/bin/sh\necho ran\n", encoding="utf-8")
+    script.chmod(0o755)
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await submit(pilot, "subdir")
+        assert os.path.samefile(os.getcwd(), isolated_home / "subdir")
+        assert "cwd:" in last_info(app).text_content
+
+        await submit(pilot, "..")
+        assert os.path.samefile(os.getcwd(), isolated_home)
+
+        # `-` — как `cd -`: обратно в предыдущий каталог.
+        await submit(pilot, "subdir")
+        await submit(pilot, "-")
+        assert os.path.samefile(os.getcwd(), isolated_home)
+        assert "cwd:" in last_info(app).text_content
+
+        # Файл — не путь-каталог: строка уходит shell'у, а не в `cd`.
+        await submit(pilot, "./run.sh")
+        assert "ran" in (await wait_command_done(app)).raw_stdout
+        assert os.path.samefile(os.getcwd(), isolated_home)
+
+        # Та же навигация через подсказку пути: дополнили → перешли.
+        await type_keys(pilot, "./subd")
+        await pilot.pause()
+        assert app._completion_list.is_visible()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert input_widget(app).value == "./subdir/"
+        await pilot.press("enter")
+        await pilot.pause()
+        assert os.path.samefile(os.getcwd(), isolated_home / "subdir")
 
 
 def test_wrap_display_line_by_width():

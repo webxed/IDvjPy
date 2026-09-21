@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.168**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.169**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.114 (app v1.168) |
+| `test_cmd.md` | Manual plan v1.115 (app v1.169) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -199,7 +199,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.168 |
+| `src/app.py` | TUI (`CommandRunner`), v1.169 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -249,6 +249,14 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.169
+
+- **Навигация без слова `cd`: строка целиком-путь — это переход.** `~/src`, `../lib`, `/var/log`, `docs/`, `..`, а также `-` (как `cd -`, в предыдущий каталог — если его нет, явное `cd: OLDPWD not set`) меняют cwd, а не пытаются исполниться. Работает и после подстановки — `$PROJ` один в строке. Новая `shell_env.parse_path_only_cd()` вызывается в `CommandRunner.handle_submit` сразу после `parse_standalone_cd`, дальше общий `_change_cwd` — поэтому обратная связь та же, что раньше: блок `cwd: …` и серое приглашение слева. Хорошо стыкуется с подсказками: `./subd` → Enter дописывает `./subdir/` → Enter переходит.
+- **Правила без сюрпризов (и без скрытых жестов).** Переход происходит, только если в строке ровно один токен и нет операторов (`|&;<>$`, бэктик), а путь существует и является каталогом. Имя из `$PATH` всегда остаётся командой (`test`, `time`, `ls` не перебиваются одноимённым каталогом рядом), имя без `$PATH` — каталог (как решает сама оболочка); путь-не-каталог уходит shell'у, поэтому `./build.sh` по-прежнему **запускает** скрипт, а не «входит» в него. Кавычки и экранирование разбирает `shlex`. `cd x` / `:cd x` работают ровно как раньше.
+- **Побочная находка: `-` доходил до калькулятора.** Одиночный `-` (и `(`) больше не считаются арифметикой: `calc.is_calc_like` требует второй символ после `-`/`(`. Иначе строка получала `calc: unexpected end of expression` и до перехода по каталогам не доходила. `-5`, `(1+2)`, `-la` — как раньше.
+- Документация: README ×3 и `:?` (строка про `:cd`), `test_cmd.md` (секция 25: примеры + автотесты), `CLAUDE.md` (`src/shell_env.py`, `calc.is_calc_like`).
+- Тесты: `tests/test_shell_env.py::test_parse_path_only_cd` (кавычки, `~`, `-`, `..`, операторы, `$`/бэктик, файл, не-каталог, приоритет `$PATH` через подменённый PATH), `tests/test_cwd_prompt.py::test_bare_path_is_cd` (сквозной: `subdir` → переход, `..`, `-` назад, `./run.sh` выполнился, переход по подсказке) и `::test_bare_dash_without_previous_dir_reports` (явная ошибка про `OLDPWD`).
 
 ## v1.168
 

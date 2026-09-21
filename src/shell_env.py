@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 from collections.abc import Collection, Mapping
 from typing import NamedTuple
 
@@ -342,6 +343,56 @@ def parse_standalone_cd(command: str) -> str | None:
     if args[0] == "--":
         return args[1] if len(args) > 1 else ""
     return args[0]
+
+
+# После этих символов строка — уже не «просто путь» (`$`/бэктик — подстановка,
+# `|&;<>` — операторы), поэтому cd вместо неё не подставляем.
+_SHELL_OPERATOR_CHARS = "|&;<>$`"
+
+
+def _path_like_token(token: str) -> bool:
+    """Явная форма пути: `.`, `..`, `~`, `~/…`, `./…`, `../…`, `/…`, `~user/…`."""
+    return token in (".", "..", "~") or token.startswith(("./", "../", "/", "~"))
+
+
+def parse_path_only_cd(command: str) -> str | None:
+    """Строка целиком — путь к существующему каталогу; это `cd` без слова `cd`.
+
+    Навигация без лишнего набора: `~/src`, `../lib`, `/tmp`, `docs/`. Правила —
+    те же, по которым решает сама оболочка, чтобы не было сюрпризов:
+
+    * в строке ровно один токен и никаких операторов (`|&;<>$` и бэктик);
+    * `-` — как `cd -`: вернуться в предыдущий каталог (`_change_cwd` сам скажет,
+      если предыдущего нет);
+    * имя из `$PATH` всегда остаётся командой: `test`, `time`, `ls` запускаются,
+      даже если рядом лежит одноимённый каталог;
+    * путь должен существовать и быть каталогом — иначе строка уходит shell'у как
+      раньше, поэтому `./build.sh` по-прежнему **запускает** скрипт;
+    * кавычки и экранирование разбирает shlex: `'./my dir'`, `./my\\ dir`.
+
+    None — «это не путь»: строку обрабатывает обычный путь команды.
+    """
+    raw = (command or "").strip()
+    if not raw or any(ch in raw for ch in _SHELL_OPERATOR_CHARS):
+        return None
+    try:
+        tokens = shlex.split(raw, posix=True)
+    except ValueError:
+        return None
+    if len(tokens) != 1 or not tokens[0]:
+        return None
+    token = tokens[0]
+    if token == "-":
+        # `cd -`: предыдущий каталог; ошибку («OLDPWD not set») выдаст `_change_cwd`.
+        return "-"
+    if not _path_like_token(token) and "/" not in token and "\\" not in token:
+        # Одиночное имя без разделителей: сначала команда из PATH (как в shell),
+        # и только если такой команды нет — каталог с этим именем.
+        if shutil.which(token):
+            return None
+    if not os.path.isdir(os.path.expanduser(token)):
+        return None
+    return token
 
 
 def skip_tty_env_key(key: str) -> bool:

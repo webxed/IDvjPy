@@ -261,6 +261,7 @@ try:
         load_aliases_from_file,
         load_env_dump,
         parse_bashrc_assignment,
+        parse_path_only_cd,
         parse_standalone_cd,
         quote_shell_path,
         substitute_variables,
@@ -2574,7 +2575,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.168"
+    VERSION = "v1.169"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -9567,6 +9568,9 @@ class CommandRunner(App):
             self.session_history_pos = len(self.session_history)
         expanded = self._expand_aliases(self._substitute_variables(command))
         cd_path = parse_standalone_cd(expanded)
+        if cd_path is None:
+            # Строка целиком — путь к существующему каталогу: `~/src` вместо `cd ~/src`.
+            cd_path = parse_path_only_cd(expanded)
         if cd_path is not None:
             self._change_cwd(cd_path)
             return
