@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.170 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.171 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -74,6 +74,7 @@ IDvjPy 是一个用 Python（Textual）编写、以键盘操作的终端应用�
 source .venv/bin/activate
 # 或：pip install -r requirements.txt
 # 测试：pip install -r requirements-dev.txt
+# shell 包装函数（shell 的 cwd 跟随应用）：./setup.sh --shell-helper
 ```
 
 在 Linux 上，剪贴板需要 `xclip` 或 `xsel`（Wayland 下用 `wl-clipboard`）。
@@ -291,11 +292,13 @@ curl -H "Bearer $TOKEN" https://api.example   # 普通的 $TOKEN 替换
 ```bash
 idvjpy() {                     # shell 的 cwd 跟随应用
   local f; f=$(mktemp)
-  IDVJPY_CWD_FILE=$f python3 ~/WibeCoding/Idivjopy/app.py "$@"   # 或直接：idvjpy
+  IDVJPY_CWD_FILE=$f command idvjpy "$@"   # pip 包；从克隆运行 —— python3 ~/WibeCoding/Idivjopy/app.py
   cd "$(cat "$f")" 2>/dev/null
   rm -f "$f"
 }
-```标签库、历史和 `.bashrc_term*` 仍留在数据目录中（而不是新的 cwd —— 见「文件和设置」）；不会在新目录中创建空的 `mytags.db`。当前目录始终可见：在输入行左侧以灰色显示（`~/项目 ❯`，点击路径可把焦点返回输入行）；`~` 表示主目录，过长的路径会截取尾部（不超过窗口宽度的三分之一；完整路径见块标题）。
+```
+
+`./setup.sh --shell-helper` 会自动装好：代码块写入当前 shell 的 rc（`zsh` → `~/.zshrc`，否则 `~/.bashrc`；可用 `$IDVJPY_RC` 指定），原有内容保留，旧文件备份为 `<rc>.idvjpy.bak`，再次运行只更新标记之间的自己的代码块。`command idvjpy` 避免函数调用自身；没有 pip 包时，代码块里写入本克隆 `app.py` 的绝对路径。标签库、历史和 `.bashrc_term*` 仍留在数据目录中（而不是新的 cwd —— 见「文件和设置」）；不会在新目录中创建空的 `mytags.db`。当前目录始终可见：在输入行左侧以灰色显示（`~/项目 ❯`，点击路径可把焦点返回输入行）；`~` 表示主目录，过长的路径会截取尾部（不超过窗口宽度的三分之一；完整路径见块标题）。
 - `:fm [path]` —— 在新窗口中打开系统文件管理器（cwd 或路径）。Linux：`xdg-open`；macOS：`open`；Windows：`explorer`。自定义：`$FILEMAN`
 - `:term [path]` —— 在新窗口中打开系统终端。Linux：`xdg-terminal-exec` / `gnome-terminal` / …；macOS：Terminal.app；Windows：`wt` 或 `cmd`。自定义：`$TERMINAL`
 - `:env` —— 在已运行的应用中重新读取 `.bashrc_term*`（以及 `~/.bashrc` 的别名）。在 `> cmd` 之后，**同一个** bash 的导出会被自动采纳（嵌套的 `> bash` 里面再 `export` —— 则不会）

@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.170 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.171 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -74,6 +74,7 @@ Python 3.12+ is required.
 source .venv/bin/activate
 # or: pip install -r requirements.txt
 # tests: pip install -r requirements-dev.txt
+# shell wrapper (the shell's cwd follows the app): ./setup.sh --shell-helper
 ```
 
 On Linux, the clipboard needs `xclip` or `xsel` (on Wayland — `wl-clipboard`).
@@ -300,11 +301,13 @@ Aliases with `$1` / `$2` / `$@` substitute arguments (`alias klogin="tsh kube lo
 ```bash
 idvjpy() {                     # the shell's cwd follows the app
   local f; f=$(mktemp)
-  IDVJPY_CWD_FILE=$f python3 ~/WibeCoding/Idivjopy/app.py "$@"   # or just: idvjpy
+  IDVJPY_CWD_FILE=$f command idvjpy "$@"   # pip package; from a clone — python3 ~/WibeCoding/Idivjopy/app.py
   cd "$(cat "$f")" 2>/dev/null
   rm -f "$f"
 }
-``` The tags DB, history and `.bashrc_term*` stay in the data directory (not in the new cwd — see "Files and settings"); an empty `mytags.db` is not created in the new folder. The current directory is always visible: in grey on the left of the input line (`~/project ❯`; clicking the path focuses the input), `~` stands for the home directory, and a long path is shortened to its tail (at most a third of the window width; the full path is in block headers)
+```
+
+`./setup.sh --shell-helper` installs it for you: the block goes into the current shell's rc (`zsh` → `~/.zshrc`, otherwise `~/.bashrc`; override with `$IDVJPY_RC`), existing content is kept, a copy is saved as `<rc>.idvjpy.bak`, and a re-run only refreshes its own block between markers. `command idvjpy` keeps the function from calling itself; without the pip package the block gets the absolute path to this clone's `app.py`. The tags DB, history and `.bashrc_term*` stay in the data directory (not in the new cwd — see "Files and settings"); an empty `mytags.db` is not created in the new folder. The current directory is always visible: in grey on the left of the input line (`~/project ❯`; clicking the path focuses the input), `~` stands for the home directory, and a long path is shortened to its tail (at most a third of the window width; the full path is in block headers)
 - `:fm [path]` — the OS file manager in a new window (cwd or a path). Linux: `xdg-open`; macOS: `open`; Windows: `explorer`. Custom: `$FILEMAN`
 - `:term [path]` — the system terminal in a new window. Linux: `xdg-terminal-exec` / `gnome-terminal` / …; macOS: Terminal.app; Windows: `wt` or `cmd`. Custom: `$TERMINAL`
 - `:env` — re-read `.bashrc_term*` (and `~/.bashrc` aliases) in the already running application. After `> cmd`, exports of **the same** bash are picked up by themselves (a nested `> bash` + `export` inside — no)

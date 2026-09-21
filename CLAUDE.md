@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.170) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.171) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.170` → `v1.171`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.171` → `v1.172`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -35,7 +35,8 @@ In-app help: `:?`.
 ## Setup
 
 ```bash
-./setup.sh
+./setup.sh                    # .venv + dependencies
+./setup.sh --shell-helper     # shell wrapper in the shell rc (cwd follows the app), then exit
 ```
 
 The setup script handles dependencies and configuration. On Linux, clipboard needs `xclip`/`xsel` (Wayland: `wl-clipboard`).
