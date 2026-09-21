@@ -182,3 +182,9 @@
 # export CERT=~/.ssh/id_ed25519-cert.pub
 # export COMMENT=
 # export CMD='uname -a'
+
+# sqlite / the library database itself (seed_sqlite.py). $DBFILE is set by the app
+# (data dir + database_tags_file), so the handbook needs no path. A value here wins.
+# export TAG=
+# export TEXT=
+# export DBFILE=~/.config/idvjpy/mytags.db

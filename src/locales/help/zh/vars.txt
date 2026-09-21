@@ -15,6 +15,8 @@
                副标题）；在真正的 TTY 中，`> cmd` 的值可见；F3 复制
                真实输出。设置键 `clear_clipboard_after_secret: true`
                会在值插入 `$$NAME=…` 后清空剪贴板。
+  $DBFILE    - 由应用设置：它打开的 SQLite 库文件路径（`sqlite` 手册用它工作）。
+               .bashrc_term 中的值优先。
   别名       - 来自 ~/.bashrc。如果函数体中有 $1 / $2 / $@，参数会被代入
                （klogin cluster → tsh kube login cluster）。否则行的剩余部分
                会像经典别名那样追加。参数在

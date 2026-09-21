@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.164 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.165 — умный терминал для создания командных строк из тегов.
 
 Переводы: [English](docs/en/README.md) · [中文](docs/zh/README.md).
 
@@ -230,6 +230,7 @@ CI собирает этот образ и прогоняет смоук — job
 | `$VAR=val` | Локальная переменная (пишет `.bashrc_term_<instance>`) | `$EDITOR=nvim` |
 | `$$VAR=val` | Секретная переменная: ввод и вывод маскируются (`****`), файл `secrets_<instance>.json` (0600); в `:send` едет **именем**, а значение — в хранилище цели | `$$TOKEN=…` → `curl -H "Bearer $TOKEN"` |
 | `$VAR=@key` / `$$VAR=@key` | Взять значение из вывода блока: строка, первый токен которой — `key` (`@last` — последняя строка) | `vault read …` → `$$VAULT_TOKEN=@token` |
+| `$DBFILE` | Ставит приложение: файл библиотеки SQLite, который оно открыло (каталог данных + `database_tags_file`); справочник `sqlite` работает с ним. Значение в `.bashrc_term` важнее | `sqlite3 $DBFILE ".tables"` |
 
 ### Секретные переменные (`$$VAR=value`)
 
@@ -475,7 +476,7 @@ python3 -m pytest tests/ -v
 | `python3 src/seed_linux_commands.py --seed` | [`SEED_LINUX_COMMANDS.md`](docs/SEED_LINUX_COMMANDS.md) | `proc` `file` `net` `kube` |
 | `python3 src/seed_k8s_chains.py --seed` | [`K8S_CHAINS.md`](K8S_CHAINS.md) | `kpod` `klog` `kquota` … |
 | `python3 src/seed_git.py --seed` | [`SEED_GIT_COMMANDS.md`](docs/SEED_GIT_COMMANDS.md) | `git` `gstat` `gsync` … |
-| `python3 src/seed_ops.py --seed` | все ops ниже | docker + helm + ansible + http + netfw + ip + netdbg + data + host + disk + systemd + sysinfo + sysstat + vault + text + pipe + rsync + find + recon + ssh + pkg + user |
+| `python3 src/seed_ops.py --seed` | все ops ниже | docker + helm + ansible + http + netfw + ip + netdbg + data + host + disk + systemd + sysinfo + sysstat + vault + text + pipe + rsync + find + recon + ssh + pkg + user + sqlite |
 | `python3 src/seed_docker.py --seed` | [`SEED_DOCKER_COMMANDS.md`](docs/SEED_DOCKER_COMMANDS.md) | `dck` `dcmp` `dps` `dlog` |
 | `python3 src/seed_helm.py --seed` | [`SEED_HELM_COMMANDS.md`](docs/SEED_HELM_COMMANDS.md) | `helm` `hls` |
 | `python3 src/seed_ansible.py --seed` | [`SEED_ANSIBLE_COMMANDS.md`](docs/SEED_ANSIBLE_COMMANDS.md) | `ansible` `aplay` `avault` `agalaxy` `achk` `aping` |
@@ -498,6 +499,7 @@ python3 -m pytest tests/ -v
 | `python3 src/seed_ssh.py --seed` | [`SEED_SSH_COMMANDS.md`](docs/SEED_SSH_COMMANDS.md) | `ssh` `scp` `schk` `ossh` `ocert` |
 | `python3 src/seed_pkg.py --seed` | [`SEED_PKG_COMMANDS.md`](docs/SEED_PKG_COMMANDS.md) | `apt` `dnf` `rpm` `aptq` `rpmq` |
 | `python3 src/seed_user.py --seed` | [`SEED_USER_COMMANDS.md`](docs/SEED_USER_COMMANDS.md) | `ident` `perm` `uidchk` |
+| `python3 src/seed_sqlite.py --seed` | [`SEED_SQLITE_COMMANDS.md`](docs/SEED_SQLITE_COMMANDS.md) | `sqlvars` `sqlite` `sqlstat` |
 
 `seed_ops.py` не трогает linux / k8s / git. `seed_http` / `seed_netfw` / `seed_ip` / `seed_netdbg` / `seed_rsync` / `seed_recon` / `seed_ssh` не затирают linux-тег `net`. `seed_text` / `seed_pipe` / `seed_find` / `seed_disk` не затирают `file`. `seed_host` не затирает `smart` / `df`. `seed_systemd` / `seed_sysinfo` / `seed_sysstat` не затирают `proc` / `logs`.
 

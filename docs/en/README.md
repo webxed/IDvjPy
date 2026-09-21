@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.164 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.165 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -35,7 +35,7 @@ Launch: `python3 app.py` (launcher; code in `src/`). Tests: `python3 -m pytest t
 - Tag hints while typing `?`: tag name, number of commands and the tag comment (`?vault  (2)  HashiCorp Vault`), filter by letters; clicking a row inserts `?tag` and immediately runs the query. Only the `?vault` command itself becomes a link (and is highlighted) — the counter and comment remain plain text
 - Line mode in block output (copying and appending to the input)
 - JSON viewer (F5) with a `jq` draft and `$JSON`
-- Variables `$VAR` (files `.bashrc_term` / `.bashrc_term_<instance>`); `$OUT` — the last line of the block, only at command time
+- Variables `$VAR` (files `.bashrc_term` / `.bashrc_term_<instance>`); `$DBFILE` is set by the app (the library SQLite file it opened, overridable in `.bashrc_term`); `$OUT` — the last line of the block, only at command time
 - Secrets `$$VAR=value`: the value is hidden while typing and in the journal (`****`), stored in `secrets_<instance>.json` (0600) — not in `.bashrc_term`/history; in commands — `$VAR`. The `clear_clipboard_after_secret` key clears the clipboard after inserting a value into `$$NAME=…`
 - Stopping a background command without waiting for the timeout: `F4` / `:kill` (SIGTERM to the whole group)
 - Search across command contents: `?kubectl wide` — if there is no such tag, searches text/comments
@@ -229,7 +229,8 @@ idempotency of a repeated launch and TUI rendering under a real pty
 | `$OUT` | On request: the last non-empty line of the block (not stored) | `echo Hello, $OUT` |
 | `$VAR=val` | Local variable (writes `.bashrc_term_<instance>`) | `$EDITOR=nvim` |
 | `$$VAR=val` | Secret variable: input and output are masked (`****`), file `secrets_<instance>.json` (0600); in `:send` it travels **by name**, and the value — into the target's store | `$$TOKEN=…` → `curl -H "Bearer $TOKEN"` |
-| `$VAR=@key` / `$$VAR=@key` | Take the value from the block's output: the line whose first token is `key` (`@last` — the last line) | `vault read …` → `$$VAULT_TOKEN=@token` |
+| `$VAR=@key` / `$$VAR=@key` | Take the value from the block output: the line whose first token is `key` (`@last` — the last line) | `vault read …` → `$$VAULT_TOKEN=@token` |
+| `$DBFILE` | Set by the app: the library SQLite file it opened (data dir + `database_tags_file`); the `sqlite` handbook works with it. A value in `.bashrc_term` wins | `sqlite3 $DBFILE ".tables"` |
 
 ### Secret variables (`$$VAR=value`)
 
@@ -475,7 +476,7 @@ The handbooks themselves are also per language: the base ones are in `docs/` (th
 | `python3 src/seed_linux_commands.py --seed` | [`SEED_LINUX_COMMANDS.md`](../../docs/SEED_LINUX_COMMANDS.md) | `proc` `file` `net` `kube` |
 | `python3 src/seed_k8s_chains.py --seed` | [`K8S_CHAINS.md`](../../K8S_CHAINS.md) | `kpod` `klog` `kquota` … |
 | `python3 src/seed_git.py --seed` | [`SEED_GIT_COMMANDS.md`](../../docs/SEED_GIT_COMMANDS.md) | `git` `gstat` `gsync` … |
-| `python3 src/seed_ops.py --seed` | all ops below | docker + helm + ansible + http + netfw + ip + netdbg + data + host + disk + systemd + sysinfo + sysstat + vault + text + pipe + rsync + find + recon + ssh + pkg + user |
+| `python3 src/seed_ops.py --seed` | all ops below | docker + helm + ansible + http + netfw + ip + netdbg + data + host + disk + systemd + sysinfo + sysstat + vault + text + pipe + rsync + find + recon + ssh + pkg + user + sqlite |
 | `python3 src/seed_docker.py --seed` | [`SEED_DOCKER_COMMANDS.md`](../../docs/SEED_DOCKER_COMMANDS.md) | `dck` `dcmp` `dps` `dlog` |
 | `python3 src/seed_helm.py --seed` | [`SEED_HELM_COMMANDS.md`](../../docs/SEED_HELM_COMMANDS.md) | `helm` `hls` |
 | `python3 src/seed_ansible.py --seed` | [`SEED_ANSIBLE_COMMANDS.md`](../../docs/SEED_ANSIBLE_COMMANDS.md) | `ansible` `aplay` `avault` `agalaxy` `achk` `aping` |
@@ -498,6 +499,7 @@ The handbooks themselves are also per language: the base ones are in `docs/` (th
 | `python3 src/seed_ssh.py --seed` | [`SEED_SSH_COMMANDS.md`](../../docs/SEED_SSH_COMMANDS.md) | `ssh` `scp` `schk` `ossh` `ocert` |
 | `python3 src/seed_pkg.py --seed` | [`SEED_PKG_COMMANDS.md`](../../docs/SEED_PKG_COMMANDS.md) | `apt` `dnf` `rpm` `aptq` `rpmq` |
 | `python3 src/seed_user.py --seed` | [`SEED_USER_COMMANDS.md`](../../docs/SEED_USER_COMMANDS.md) | `ident` `perm` `uidchk` |
+| `python3 src/seed_sqlite.py --seed` | [`SEED_SQLITE_COMMANDS.md`](../../docs/SEED_SQLITE_COMMANDS.md) | `sqlvars` `sqlite` `sqlstat` |
 
 `seed_ops.py` does not touch linux / k8s / git. `seed_http` / `seed_netfw` / `seed_ip` / `seed_netdbg` / `seed_rsync` / `seed_recon` / `seed_ssh` do not overwrite the linux `net` tag. `seed_text` / `seed_pipe` / `seed_find` / `seed_disk` do not overwrite `file`. `seed_host` does not overwrite `smart` / `df`. `seed_systemd` / `seed_sysinfo` / `seed_sysstat` do not overwrite `proc` / `logs`.
 

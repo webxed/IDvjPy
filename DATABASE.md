@@ -1,6 +1,6 @@
 # Как приложение читает команды из базы данных
 
-IDvjPy_term хранит тегированные команды в SQLite. Этот файл описывает текущую схему, кэш в памяти и все пути чтения (состояние на **v1.164**).
+IDvjPy_term хранит тегированные команды в SQLite. Этот файл описывает текущую схему, кэш в памяти и все пути чтения (состояние на **v1.165**).
 
 Код: `src/database_v2.py` (доступ к SQLite), `src/app.py` (маршрутизация `?`, `!`, `!!`, Tab, старт).
 
@@ -184,3 +184,41 @@ SQL: `get_command_by_global_id`. Тоже только вставка во вв�
 sqlite3 mytags.db "SELECT tag, tid, id, command FROM commands WHERE deleted = 0 ORDER BY tag, tid;"
 sqlite3 mytags.db "SELECT tag, comment FROM tags ORDER BY tag;"
 ```
+
+---
+
+## Правка базы руками: soft-delete и жёсткое удаление
+
+В приложении удаление **мягкое**: `#tag-` (тег целиком), `#tag-tid` (одна команда), `#name--`
+(все теги справочника) ставят `deleted = 1`. Строка не исчезает: её видно в `??` (блок Hidden),
+её возвращает `#tag!` / `#tag!tid` / `#name!!`, она попадает в `:export --include-deleted`
+и в снимки `backups/`.
+
+Стереть **жёстко** (строка исчезает из всех чтений и из будущих экспортов) можно только SQL —
+такой команды в TUI нет намеренно: опечатка не превращается в потерю данных одним нажатием.
+
+```bash
+# тег целиком: строки + комментарий тега
+sqlite3 mytags.db "DELETE FROM commands WHERE tag = 'tegg';"
+sqlite3 mytags.db "DELETE FROM tags WHERE tag = 'tegg';"
+
+# всё мягко удалённое + «сиротские» комментарии тегов; затем вернуть место файлу
+sqlite3 mytags.db "DELETE FROM commands WHERE deleted = 1;"
+sqlite3 mytags.db "DELETE FROM tags WHERE tag NOT IN (SELECT DISTINCT tag FROM commands);"
+sqlite3 mytags.db "VACUUM;"
+```
+
+- `mytags.db` — из `database_tags_file` в каталоге данных (см. «Файл базы» выше). Полный путь
+  всегда под рукой: `$DBFILE` — переменная, которую приложение ставит при старте (`:? vars`)
+  и берут команды справочника `sqlite`.
+- Операторы в каждом вызове `sqlite3` идут по очереди, а не одной транзакцией: если упадёт второй,
+  останутся только «сиротские» комментарии тегов — данные не теряются. Надёжнее — сначала `:backup`
+  (или `python3 backup_db.py backup`), снимок ложится в `backups/`.
+- Пока окно запущено, оно показывает список из кэша в памяти (`_library`), поэтому чужие правки
+  видны не сразу: делайте это на закрытом приложении (или перезапустите окно после).
+
+Готовый набор этих же запросов — справочник **`sqlite`**
+(`python3 src/seed_sqlite.py --seed`, входит и в `seed_ops.py`): теги `sqlvars` / `sqlite` / `sqlstat`,
+где tid 11 — стереть тег, tid 12 — вычистить мягко удалённое, tid 13 — `VACUUM`,
+остальные — учебные запросы по этой самой схеме. Подробнее —
+[`docs/SEED_SQLITE_COMMANDS.md`](docs/SEED_SQLITE_COMMANDS.md).

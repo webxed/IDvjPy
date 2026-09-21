@@ -273,6 +273,7 @@
   在命令中使用 $VAR 来代入变量
   $NS 在 :i 命令中使用 -n 时自动设置
   $JSON 在 JSON 查看器中按 Enter 时设置（所选节点的 jq 路径）
+  $DBFILE 是应用打开的 SQLite 库文件（.bashrc_term 中的值优先）
   示例：jq $JSON test.json
   $OUT — 聚焦/最后一个命令块的最后一行，仅当命令包含
   $OUT / ${OUT} 时才会计算（不会作为变量存在内存中）

@@ -43,3 +43,4 @@ catalog:
     ssh: "ssh / scp, OpenSSH certificates"
     pkg: "packages: apt, dnf, rpm; aptq / rpmq"
     user: "people and permissions: ident, perm; uidchk"
+    sqlite: "SQL on the live library DB: sqlite, sqlstat"

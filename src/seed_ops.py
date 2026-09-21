@@ -7,7 +7,7 @@ Seed all operational handbooks at once:
   disk (df/du/lsblk/smartctl), systemd (systemctl/journalctl/dmesg),
   sysinfo (lsof/strace), sysstat (vmstat/iostat), vault, text (grep/awk/sed),
   pipe (sort/jq), rsync, find, recon (dig/nmap), ssh/scp, pkg (apt/dnf/rpm),
-  user (id/chmod).
+  user (id/chmod), sqlite (the library database itself).
 
 Does not run linux / k8s / git seeds.
 
@@ -32,6 +32,7 @@ import seed_pipe
 import seed_pkg
 import seed_recon
 import seed_rsync
+import seed_sqlite
 import seed_ssh
 import seed_sysinfo
 import seed_sysstat
@@ -64,6 +65,7 @@ MODULES = (
     ("ssh", seed_ssh),
     ("pkg", seed_pkg),
     ("user", seed_user),
+    ("sqlite", seed_sqlite),
 )
 
 
@@ -80,7 +82,7 @@ def run_seed(db_file: str) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Seed docker/helm/ansible/http/netfw/ip/netdbg/data/host/disk/systemd/sysinfo/sysstat/vault/text/pipe/rsync/find/recon/ssh/pkg/user handbooks"
+        description="Seed docker/helm/ansible/http/netfw/ip/netdbg/data/host/disk/systemd/sysinfo/sysstat/vault/text/pipe/rsync/find/recon/ssh/pkg/user/sqlite handbooks"
     )
     parser.add_argument(
         "--seed",

@@ -41,3 +41,4 @@ catalog:
     ssh: "ssh / scp, OpenSSH-сертификаты"
     pkg: "пакеты: apt, dnf, rpm; aptq / rpmq"
     user: "люди и права: ident, perm; uidchk"
+    sqlite: "SQL на живой базе библиотеки: sqlite, sqlstat"

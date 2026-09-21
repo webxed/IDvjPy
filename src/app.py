@@ -2568,7 +2568,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.164"
+    VERSION = "v1.165"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -4413,6 +4413,16 @@ class CommandRunner(App):
                             release_file_lock(f)
                         except Exception:
                             pass
+
+            # `$DBFILE` — база библиотеки, которую открыло приложение. Путь знает
+            # только оно (--data-dir / settings.yml), поэтому справочник `sqlite`
+            # не должен угадывать каталог данных. Своё значение в .bashrc_term*
+            # важнее; пустое считается незаданным, а прежнее (своё) значение
+            # переставляется на фактический путь — баз может быть несколько (`:session`).
+            db_file = getattr(self, "db_file", "")
+            own = (self.local_env.get("DBFILE") or "").strip()
+            if db_file and ("DBFILE" not in seen_keys or not own):
+                self.local_env["DBFILE"] = os.path.abspath(db_file)
 
         except Exception as e:
             self.add_block(InfoBlock(f"Error loading {self.FILE_BASHRC}: {e}"))

@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.164**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.165**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.110 (app v1.164) |
+| `test_cmd.md` | Manual plan v1.111 (app v1.165) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -198,7 +198,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.164 |
+| `src/app.py` | TUI (`CommandRunner`), v1.165 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -247,6 +247,14 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.165
+
+- **Справочник `sqlite` — SQL на живой базе библиотеки.** Новый сид `src/seed_sqlite.py` (входит в `seed_ops.py`, значит работают `#sqlite--` / `#sqlite!!`, `:relang`, группировка в `:welcome`): тег `sqlite` — 16 команд: `.tables` / `.schema` / `sqlite_master`, теги по числу команд (`COUNT`/`GROUP BY`), живые команды с tid, комментарии тегов, мягко удалённое, поиск по тексту (`LIKE`), `EXPLAIN QUERY PLAN` (в выводе видно `idx_tag_tid`), **жёсткое стирание тега**, вычистка мягко удалённого, `VACUUM`, `PRAGMA integrity_check`, `.dump`, интерактивный `sqlite3`; `sqlvars` — переменные, `sqlstat` — цепочка «живые теги → мягко удалённое → целостность». Мутирующие команды — только tid 11–13 и помечены в комментарии («меняет базу»), плейбук остаётся inspect-only; запросы идут по **живой** библиотеке (та же база, что приложение читает при каждом `?` / `!` / `Tab`), а не по песочнице.
+- **`$DBFILE` — путь к базе ставит само приложение.** `load_bashrc` кладёт в переменные сессии абсолютный путь к открытой базе (`_data_path(database_tags_file)`), поэтому шаблон не угадывает каталог данных и не расходится с ним; значение в `.bashrc_term*` важнее, пустое считается незаданным, устаревшее — переставляется на фактический путь (`:session`). Строка про `$DBFILE` — в `:? vars`, `:?` (раздел «Переменные»), README трёх языков и `src/.bashrc_term.example`.
+- **Жёсткое удаление наконец задокументировано.** В `DATABASE.md` — раздел «Правка базы руками: soft-delete и жёсткое удаление»: почему `#tag-` только `deleted = 1`, SQL для тега / мягко удалённых / `VACUUM`, `:backup` до правок и честная оговорка про кэш библиотеки в памяти (чужие правки видны не сразу). Отдельный справочник `docs/SEED_SQLITE_COMMANDS.md` (и его переводы в `docs/en`, `docs/zh`) — таблица приёмов SQL (что именно изучает каждая команда) и порядок действий при стирании тега; `catalog.desc.sqlite` в трёх локалях, комментарии сида — в `src/seed_text/{en,zh}/sqlite.yml`, ручной сценарий — в `test_cmd.md`.
+- **Смысл приложения зафиксирован в правилах.** `AGENTS.md`: приложение учебное (часть освоения профессии DevOps), поэтому инструменты показываются настоящие, а справочник и справка учат самой команде и её смыслу; работа с базами — такая же часть навыка, поэтому SQL идёт по живой базе, а не по выдуманной песочнице. При улучшениях держать это в виду.
+- Тесты: новый `tests/test_seed_sqlite.py` (9) — наполнение тегов, «меняют ровно tid 11–13 и они помечены», путь только через `$DBFILE`, цепочка без мутаций, присутствие в `seed_ops` / каталоге / группах, справочник есть на ru/en/zh, `$DBFILE` = путь открытой базы, своё значение в `.bashrc_term` побеждает. Живая сверка с CLI `sqlite3`: `EXPLAIN QUERY PLAN` → `SEARCH commands USING INDEX idx_tag_tid (tag=?)`, `DELETE` + `VACUUM` + `integrity_check` → `ok`.
 
 ## v1.164
 

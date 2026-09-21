@@ -14,6 +14,8 @@
                real `> cmd` TTY the value is visible; F3 copies the real output.
                settings key `clear_clipboard_after_secret: true` clears the
                clipboard after pasting a value into `$$NAME=…`.
+  $DBFILE    - Set by the app: path to the library SQLite file it opened (the
+               `sqlite` handbook works with it). A value in .bashrc_term wins.
   aliases    - From ~/.bashrc. If the body has $1 / $2 / $@, args are substituted
                (klogin cluster → tsh kube login cluster). Else the rest of the line
                is appended as in a classic alias. Arguments end at the first shell

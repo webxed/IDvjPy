@@ -67,6 +67,7 @@ SEED_HANDBOOKS_OPS = (
     ("seed_ssh.py", "SEED_SSH_COMMANDS.md"),
     ("seed_pkg.py", "SEED_PKG_COMMANDS.md"),
     ("seed_user.py", "SEED_USER_COMMANDS.md"),
+    ("seed_sqlite.py", "SEED_SQLITE_COMMANDS.md"),
 )
 
 

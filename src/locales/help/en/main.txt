@@ -273,6 +273,7 @@
   Use $VAR in commands for variable substitution
   $NS is auto-set when using -n in :i commands
   $JSON is set on Enter in JSON viewer (jq path of the selected node)
+  $DBFILE is the library SQLite file the app opened (a .bashrc_term value wins)
   Example: jq $JSON test.json
   $OUT is the last line of the focused/last command block, computed only when
   the command contains $OUT / ${OUT} (not kept in memory as a variable)

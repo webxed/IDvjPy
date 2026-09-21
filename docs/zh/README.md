@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.164 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.165 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -35,7 +35,7 @@ IDvjPy 是一个用 Python（Textual）编写、以键盘操作的终端应用�
 - 输入 `?` 时的标签提示：标签名、命令数和标签注释（`?vault  (2)  HashiCorp Vault`），按字母过滤；点击某行会插入 `?tag` 并立即执行查询。只有命令本身 `?vault` 会成为链接（并高亮）——计数和注释仍是普通文本
 - 块输出中的逐行模式（复制并追加到输入行）
 - JSON viewer（F5），带 `jq` 草稿和 `$JSON`
-- `$VAR` 变量（文件 `.bashrc_term` / `.bashrc_term_<instance>`）；`$OUT` —— 块的最后一行，仅在命令执行时
+- `$VAR` 变量（文件 `.bashrc_term` / `.bashrc_term_<instance>`）；`$DBFILE` 由应用设置（它打开的 SQLite 库文件，可在 `.bashrc_term` 中覆盖）；`$OUT` —— 块的最后一行，仅在命令执行时
 - 秘密 `$$VAR=value`：值在输入时和日志中都会隐藏（`****`），存储在 `secrets_<instance>.json`（0600）——而不是 `.bashrc_term`/history 中；在命令中使用 `$VAR`。设置键 `clear_clipboard_after_secret` 会在把值插入 `$$NAME=…` 后清空剪贴板
 - 无需等待 timeout 即可停止后台命令：`F4` / `:kill`（向整个进程组发送 SIGTERM）
 - 按命令内容搜索：`?kubectl wide` —— 如果没有这样的标签，则按文本/注释搜索
@@ -220,7 +220,8 @@ CI 会构建该镜像并运行冒烟测试 —— [`.github/workflows/tests.yml`
 | `$OUT` | 按需取用：块的最后一行非空行（不存储） | `echo Hello, $OUT` |
 | `$VAR=val` | 局部变量（写入 `.bashrc_term_<instance>`） | `$EDITOR=nvim` |
 | `$$VAR=val` | 秘密变量：输入和输出都会遮蔽（`****`），文件 `secrets_<instance>.json`（0600）；在 `:send` 中以**名称**传输，而值进入目标的存储 | `$$TOKEN=…` → `curl -H "Bearer $TOKEN"` |
-| `$VAR=@key` / `$$VAR=@key` | 从块输出中取值：第一个 token 为 `key` 的那一行（`@last` —— 最后一行） | `vault read …` → `$$VAULT_TOKEN=@token` |
+| `$VAR=@key` / `$$VAR=@key` | 从块输出取值：第一个 token 为 `key` 的行（`@last` —— 最后一行） | `vault read …` → `$$VAULT_TOKEN=@token` |
+| `$DBFILE` | 由应用设置：它打开的 SQLite 库文件（数据目录 + `database_tags_file`）；`sqlite` 手册用它工作。`.bashrc_term` 中的值优先 | `sqlite3 $DBFILE ".tables"` |
 
 ### 秘密变量（`$$VAR=value`）
 
@@ -466,7 +467,7 @@ k8s 排查链：[`K8S_CHAINS.md`](../../K8S_CHAINS.md)。`python3 src/seed_k8s_c
 | `python3 src/seed_linux_commands.py --seed` | [`SEED_LINUX_COMMANDS.md`](../../docs/SEED_LINUX_COMMANDS.md) | `proc` `file` `net` `kube` |
 | `python3 src/seed_k8s_chains.py --seed` | [`K8S_CHAINS.md`](../../K8S_CHAINS.md) | `kpod` `klog` `kquota` … |
 | `python3 src/seed_git.py --seed` | [`SEED_GIT_COMMANDS.md`](../../docs/SEED_GIT_COMMANDS.md) | `git` `gstat` `gsync` … |
-| `python3 src/seed_ops.py --seed` | 下面所有 ops | docker + helm + ansible + http + netfw + ip + netdbg + data + host + disk + systemd + sysinfo + sysstat + vault + text + pipe + rsync + find + recon + ssh + pkg + user |
+| `python3 src/seed_ops.py --seed` | 下面所有 ops | docker + helm + ansible + http + netfw + ip + netdbg + data + host + disk + systemd + sysinfo + sysstat + vault + text + pipe + rsync + find + recon + ssh + pkg + user + sqlite |
 | `python3 src/seed_docker.py --seed` | [`SEED_DOCKER_COMMANDS.md`](../../docs/SEED_DOCKER_COMMANDS.md) | `dck` `dcmp` `dps` `dlog` |
 | `python3 src/seed_helm.py --seed` | [`SEED_HELM_COMMANDS.md`](../../docs/SEED_HELM_COMMANDS.md) | `helm` `hls` |
 | `python3 src/seed_ansible.py --seed` | [`SEED_ANSIBLE_COMMANDS.md`](../../docs/SEED_ANSIBLE_COMMANDS.md) | `ansible` `aplay` `avault` `agalaxy` `achk` `aping` |
@@ -489,6 +490,7 @@ k8s 排查链：[`K8S_CHAINS.md`](../../K8S_CHAINS.md)。`python3 src/seed_k8s_c
 | `python3 src/seed_ssh.py --seed` | [`SEED_SSH_COMMANDS.md`](../../docs/SEED_SSH_COMMANDS.md) | `ssh` `scp` `schk` `ossh` `ocert` |
 | `python3 src/seed_pkg.py --seed` | [`SEED_PKG_COMMANDS.md`](../../docs/SEED_PKG_COMMANDS.md) | `apt` `dnf` `rpm` `aptq` `rpmq` |
 | `python3 src/seed_user.py --seed` | [`SEED_USER_COMMANDS.md`](../../docs/SEED_USER_COMMANDS.md) | `ident` `perm` `uidchk` |
+| `python3 src/seed_sqlite.py --seed` | [`SEED_SQLITE_COMMANDS.md`](../../docs/SEED_SQLITE_COMMANDS.md) | `sqlvars` `sqlite` `sqlstat` |
 
 `seed_ops.py` 不会影响 linux / k8s / git。`seed_http` / `seed_netfw` / `seed_ip` / `seed_netdbg` / `seed_rsync` / `seed_recon` / `seed_ssh` 不会覆盖 linux 标签 `net`。`seed_text` / `seed_pipe` / `seed_find` / `seed_disk` 不会覆盖 `file`。`seed_host` 不会覆盖 `smart` / `df`。`seed_systemd` / `seed_sysinfo` / `seed_sysstat` 不会覆盖 `proc` / `logs`。
 

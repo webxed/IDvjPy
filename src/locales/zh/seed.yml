@@ -43,3 +43,4 @@ catalog:
     ssh: "ssh / scp、OpenSSH 证书"
     pkg: "软件包: apt、dnf、rpm; aptq / rpmq"
     user: "用户与权限: ident、perm、uidchk"
+    sqlite: "在鲜活的库数据库上练习 SQL: sqlite、sqlstat"

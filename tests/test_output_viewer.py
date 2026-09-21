@@ -14,6 +14,17 @@ from output_viewer import OutputView, OutputViewerScreen
 from tests.conftest import last_info, submit, wait_command_done
 
 
+def match_line(view: OutputView) -> str:
+    """Текст строки текущего совпадения (нет совпадения — тест падает явно).
+
+    `visible_line()` принимает `int`, а `match_row` — `int | None`, поэтому
+    проверка нужна именно здесь (иначе типизатор справедливо ругается).
+    """
+    row = view.match_row
+    assert row is not None, "нет текущего совпадения поиска"
+    return view.visible_line(row)
+
+
 async def test_log_opens_full_output_without_truncation(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 30)) as pilot:
@@ -470,7 +481,7 @@ async def test_log_viewer_enter_copies_the_highlighted_line(isolated_home):
         search.value = "row-01"
         await pilot.press("enter")  # поиск; фокус уходит на вид
         await pilot.pause()
-        assert view.visible_line(view.match_row) == "row-010"
+        assert match_line(view) == "row-010"
 
         await pilot.press("enter")  # копируем строку
         await pilot.pause()
@@ -500,7 +511,7 @@ async def test_log_viewer_ctrl_c_copies_the_highlighted_line(isolated_home):
         await pilot.pause()
         await pilot.press("escape")  # закрыть поле, фокус на выводе
         await pilot.pause()
-        assert view.visible_line(view.match_row) == "row-020"
+        assert match_line(view) == "row-020"
 
         await pilot.press("ctrl+c")
         await pilot.pause()
@@ -538,24 +549,24 @@ async def test_log_viewer_filter_arrows_walk_matches(isolated_home):
         await pilot.press("f")
         await pilot.pause()
         assert view.filtered and view.visible_count == 10
-        assert view.visible_line(view.match_row) == "row-010"
+        assert match_line(view) == "row-010"
 
         await pilot.press("down")
         await pilot.pause()
-        assert view.visible_line(view.match_row) == "row-011"
+        assert match_line(view) == "row-011"
         await pilot.press("down")
         await pilot.pause()
-        assert view.visible_line(view.match_row) == "row-012"
+        assert match_line(view) == "row-012"
         await pilot.press("up")
         await pilot.pause()
-        assert view.visible_line(view.match_row) == "row-011"
+        assert match_line(view) == "row-011"
 
         # По кругу, как `n` / `N`: вверх с первой строки — последнее совпадение.
         view.set_match(0)
         await pilot.pause()
         await pilot.press("up")
         await pilot.pause()
-        assert view.visible_line(view.match_row) == "row-019"
+        assert match_line(view) == "row-019"
         assert "↑↓" in (screen.sub_title or "")
 
 

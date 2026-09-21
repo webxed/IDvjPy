@@ -1,0 +1,28 @@
+tags:
+  sqlvars:
+    comment: sqlite variables / the library database
+    commands:
+      0: test $DBFILE/$TAG/$TEXT
+  sqlite:
+    comment: 'sqlite3: schema, tags, editing the library DB (changes the DB: tid 11-13)'
+    commands:
+      0: is the sqlite3 CLI installed
+      1: database tables
+      2: 'schema: commands/tags tables and the index'
+      3: tables and index via sqlite_master
+      4: tags by number of commands (COUNT/GROUP BY)
+      5: live commands with tid
+      6: tag comments
+      7: what is soft-deleted
+      8: search command text (LIKE)
+      9: 'query plan: index idx_tag_tid'
+      10: hard-delete a tag from the DB (changes the DB)
+      11: purge soft-deleted rows (changes the DB)
+      12: shrink the file after deletion (changes the file)
+      13: database integrity
+      14: SQL dump of the DB to mytags.sql (into the current directory)
+      15: 'interactive sqlite3 (better: > sqlite3 $DBFILE)'
+  sqlstat:
+    comment: library database overview
+    commands:
+      0: live tags -> soft-deleted -> integrity

@@ -1,0 +1,28 @@
+tags:
+  sqlvars:
+    comment: sqlite 变量 / 库数据库
+    commands:
+      0: 查看 $DBFILE/$TAG/$TEXT
+  sqlite:
+    comment: 'sqlite3: 结构、标签、编辑库数据库（会修改数据库: tid 11-13）'
+    commands:
+      0: 是否安装了 sqlite3 命令行
+      1: 数据库中的表
+      2: '库结构: commands/tags 表与索引'
+      3: 通过 sqlite_master 查看表与索引
+      4: 按命令数统计标签（COUNT/GROUP BY）
+      5: 带 tid 的有效命令
+      6: 标签注释
+      7: 软删除中的内容
+      8: 按命令文本搜索（LIKE）
+      9: '查询计划: 索引 idx_tag_tid'
+      10: 从数据库中彻底删除标签（修改数据库）
+      11: 清理软删除的行（修改数据库）
+      12: 删除后压缩文件（修改文件）
+      13: 数据库完整性
+      14: 数据库导出为 SQL（mytags.sql，写入当前目录）
+      15: '交互式 sqlite3（更好: > sqlite3 $DBFILE）'
+  sqlstat:
+    comment: 库数据库概览
+    commands:
+      0: 有效标签 -> 软删除 -> 完整性

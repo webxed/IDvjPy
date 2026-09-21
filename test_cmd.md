@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.164
+# План тестирования IDvjPy_term v1.165
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1121,6 +1121,29 @@ cat history_default.txt
 
 ---
 
+## Жёсткое удаление тега (справочник `sqlite`)
+
+Мягкое удаление (`#tegg-` → `deleted = 1`) — секция 2; здесь только жёсткое.
+
+```text
+python3 src/seed_sqlite.py --seed
+:? vars                       # $DBFILE = файл базы, который открыло это окно
+$TAG=tegg
+!! sqlvars[1]                 # db=… tag=tegg text=
+!sqlite[5]                    # теги по числу команд (SELECT … GROUP BY)
+!sqlite[8]                    # что лежит в мягком удалении
+!sqlite[10]                   # EXPLAIN QUERY PLAN → индекс idx_tag_tid
+:backup
+!sqlite[11]                   # стереть тег жёстко (меняет базу)
+!sqlite[12]                   # вычистить мягко удалённое (меняет базу)
+!sqlite[13]                   # VACUUM
+!sqlite[14]                   # PRAGMA integrity_check → ok
+```
+
+**Ожидание:** нужен CLI `sqlite3` (иначе tid 1 отвечает `sqlite3 not found: install sqlite3` — само приложение работает и без него). `$TAG` подставляется в SQL из переменной сессии, `$DBFILE` ставит приложение (не угадывается) — своё значение в `.bashrc_term` важнее. После `!sqlite[11]` тег уходит из базы, но списки в этом же окне берутся из кэша: `?tegg` может показать старое до перезапуска (или до следующей мутации из UI). Снимок `:backup` до удаления — в `backups/`. Проверка после: `sqlite3 $DBFILE "SELECT COUNT(*) FROM commands WHERE tag='tegg';"` → `0`. Автотест: `python3 -m pytest tests/test_seed_sqlite.py -q`. Подробнее — `docs/SEED_SQLITE_COMMANDS.md` и `DATABASE.md`.
+
+---
+
 ---
 
 ## Секция 34: Полный вывод (`:log`, F7)
@@ -1587,7 +1610,7 @@ Ctrl+V в построчном режиме  # другое поведение: 
 
 ---
 
-**Версия документа**: v1.110
-**Версия приложения**: v1.164
-**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
+**Версия документа**: v1.111
+**Версия приложения**: v1.165
+**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_seed_sqlite.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`  
 **Дата**: 2026-09-21
