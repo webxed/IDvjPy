@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.167 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.168 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -510,6 +510,7 @@ The handbooks themselves are also per language: the base ones are in `docs/` (th
 
 ```bash
 claude mcp add idvjpy -- python3 /path/to/IDvjPy/mcp_server.py
+idvjpy mcp                                # the same after a pip install (console script)
 python3 mcp_server.py                     # stdio; normally started by the client
 python3 mcp_server.py --shell-history     # + the shell's own history (bash/zsh/fish/atuin)
 ```
@@ -519,7 +520,7 @@ python3 mcp_server.py --shell-history     # + the shell's own history (bash/zsh/
                            "args": ["/path/to/IDvjPy/mcp_server.py"]}}}
 ```
 
-Tools: `search_commands` (substring over commands and comments, like `?text`), `list_tags`, `get_tag` (like `?tag`), `search_history` (`session` by default; `shells` / `all` with `--shell-history`), `library_stats` (run counters: what is actually used). The library and history are the same as in the TUI (`--data-dir` / `--db` / `--instance`; defaults — `settings.yml`, `$IDVJPY_DATA_DIR`, the system dir). Details and limits — the `:? mcp` topic inside the app.
+Tools: `search_commands` (substring over commands and comments, like `?text`), `list_tags`, `get_tag` (like `?tag`), `search_history` (`session` — this window only, `sessions` — every `history_*.txt`, `shells` / `all` with `--shell-history`; lines carry the session name), `library_stats` (run counters: what is actually used). The library and history are the same as in the TUI (`--data-dir` / `--db` / `--instance`; defaults — `settings.yml`, `$IDVJPY_DATA_DIR`, the system dir). Details and limits — the `:? mcp` topic inside the app.
 
 What the server deliberately cannot do: write (no `#tag` / `#tag-` from outside) and run (`:run`, `!tag[tid]` — execution stays where a human presses Enter). Everything the tools return goes to the connected AI client, so keep secrets out of tags (use `$$`); `$$` values live in the session only and never reach the library.
 

@@ -43,13 +43,23 @@ def _seeded(tmp_path: pathlib.Path) -> mcp_server.Config:
     return cfg
 
 
+def _handle(cfg: mcp_server.Config, message: dict) -> dict:
+    """Ответ на сообщение — обязан быть (уведомления эти тесты не шлют).
+
+    `handle_message` возвращает `dict | None` (None — «отвечать не нужно»), поэтому
+    сужение нужно до подписки: иначе типизатор справедливо ругается на `None[...]`.
+    """
+    response = mcp_server.handle_message(message, cfg)
+    assert response is not None, f"нет ответа на {message.get('method')}"
+    return response
+
+
 def _call(cfg: mcp_server.Config, name: str, arguments: dict | None = None) -> dict:
-    response = mcp_server.handle_message(
+    response = _handle(
+        cfg,
         {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
          "params": {"name": name, "arguments": arguments or {}}},
-        cfg,
     )
-    assert response is not None
     return response
 
 
@@ -104,7 +114,7 @@ def test_server_version_matches_the_application():
 
 def test_tools_list_specs(tmp_path):
     cfg = _cfg(tmp_path)
-    response = mcp_server.handle_message({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}, cfg)
+    response = _handle(cfg, {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
     tools = response["result"]["tools"]
     names = [tool["name"] for tool in tools]
     assert names == ["search_commands", "list_tags", "get_tag", "search_history", "library_stats"]
@@ -116,10 +126,10 @@ def test_tools_list_specs(tmp_path):
 def test_initialize_echoes_known_version_and_announces_capabilities(tmp_path):
     cfg = _cfg(tmp_path)
     known = mcp_server.PROTOCOL_VERSIONS[0]
-    response = mcp_server.handle_message(
+    response = _handle(
+        cfg,
         {"jsonrpc": "2.0", "id": 1, "method": "initialize",
          "params": {"protocolVersion": known, "clientInfo": {"name": "test"}}},
-        cfg,
     )
     result = response["result"]
     assert result["protocolVersion"] == known
@@ -127,9 +137,9 @@ def test_initialize_echoes_known_version_and_announces_capabilities(tmp_path):
     assert result["serverInfo"]["name"] == "idvjpy"
     assert "Read-only" in result["instructions"]
     # Неизвестная версия протокола — отвечаем своей, а не падаем.
-    unknown = mcp_server.handle_message(
-        {"jsonrpc": "2.0", "id": 2, "method": "initialize", "params": {"protocolVersion": "1999-01-01"}},
+    unknown = _handle(
         cfg,
+        {"jsonrpc": "2.0", "id": 2, "method": "initialize", "params": {"protocolVersion": "1999-01-01"}},
     )
     assert unknown["result"]["protocolVersion"] == known
 
@@ -246,13 +256,29 @@ def test_search_history_session_file_and_shell_gate(tmp_path):
     cfg = _seeded(tmp_path)
     text = _text(_call(cfg, "search_history", {"query": "kubectl"}))
     assert "history (session): 1 line(s) matching \"kubectl\"" in text
-    assert "session  kubectl get pods -A" in text
+    assert "default  kubectl get pods -A" in text  # строки подписаны именем сессии
     assert "echo from-session" not in text
     gated = _call(cfg, "search_history", {"source": "shells"})
     assert gated["result"]["isError"] is True
     assert "--shell-history" in _text(gated)
     bad = _call(cfg, "search_history", {"source": "nope"})
     assert bad["result"]["isError"] is True and "source" in _text(bad)
+
+
+def test_search_history_can_cover_every_session(tmp_path):
+    """`sessions` — файлы всех сессий (`history_*.txt`), своя идёт первой."""
+    cfg = _seeded(tmp_path)
+    (tmp_path / "history_git.txt").write_text("git status\ngit log --oneline\n", encoding="utf-8")
+    mine = _text(_call(cfg, "search_history", {"query": "kubectl"}))
+    assert "default  kubectl get pods -A" in mine
+    assert "git" not in mine  # своё окно — без чужих сессий
+    all_sessions = _text(_call(cfg, "search_history", {"query": "git", "source": "sessions"}))
+    assert "history (sessions): 2 line(s)" in all_sessions
+    assert "git  git status" in all_sessions and "git  git log --oneline" in all_sessions
+    both = _text(_call(cfg, "search_history", {"source": "sessions", "limit": 3}))
+    lines = both.splitlines()[1:4]
+    assert lines[0].startswith("default  ")  # своя сессия первой
+    assert any(line.startswith("git  ") for line in lines)
 
 
 def test_library_stats_reports_usage(tmp_path):
@@ -357,6 +383,37 @@ def test_help_topic_escapes_literal_brackets():
     assert "[tid]" not in body.replace("\\[tid]", "")
 
 
+def test_installed_package_subcommand_starts_the_server(tmp_path):
+    """`idvjpy mcp …` — тот же сервер для pip-установки (console script → boot)."""
+    _seeded(tmp_path)
+    request = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                          "params": {"name": "search_commands", "arguments": {"query": "VACUUM"}}})
+    proc = subprocess.run(
+        [sys.executable, "-m", "idvjpy_boot", "mcp", "--data-dir", str(tmp_path)],
+        cwd=ROOT / "packaging",
+        input=request + "\n",
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout.splitlines()[-1])
+    assert "sqlite[13]" in payload["result"]["content"][0]["text"]
+    assert "mcp: idvjpy" in proc.stderr
+
+
+def test_installed_package_subcommand_shows_help(tmp_path):
+    proc = subprocess.run(
+        [sys.executable, "-m", "idvjpy_boot", "mcp", "--help"],
+        cwd=ROOT / "packaging",
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 0
+    assert "--shell-history" in proc.stdout
+
+
 def test_launcher_help_works():
     proc = subprocess.run(
         [sys.executable, str(ROOT / "mcp_server.py"), "--help"],
@@ -373,7 +430,7 @@ def test_result_shapes(tmp_path, key):
     """Минимальные требования клиентов: `tools` — список, `content` — текст."""
     cfg = _seeded(tmp_path)
     if key == "tools":
-        payload = mcp_server.handle_message({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}, cfg)
+        payload = _handle(cfg, {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
         assert isinstance(payload["result"]["tools"], list)
     else:
         payload = _call(cfg, "library_stats")

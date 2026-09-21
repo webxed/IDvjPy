@@ -58,7 +58,9 @@ DEFAULT_LIMIT = 40
 MAX_LIMIT = 500
 # Сколько строк каждой истории оболочки читать при `source=shells` из `:h import`.
 SHELL_HISTORY_LIMIT = 2000
-HISTORY_SOURCES = ("session", "shells", "all")
+HISTORY_SOURCES = ("session", "sessions", "shells", "all")
+HISTORY_PREFIX = "history_"
+HISTORY_SUFFIX = ".txt"
 
 INSTRUCTIONS = (
     "Read-only access to the IDvjPy_term tag library (commands saved under tags) "
@@ -269,6 +271,27 @@ def tool_get_tag(cfg: Config, args: dict[str, Any]) -> str:
     return header + "\n" + "\n".join(_cut([_command_line(row, tag=tag) for row in rows], limit))
 
 
+def _session_history_files(cfg: Config) -> list[tuple[str, str]]:
+    """Файлы истории всех сессий каталога данных: (имя сессии, путь).
+
+    Текущая сессия идёт первой (её ответы человек узнаёт первыми), остальные —
+    по алфавиту. Чужой каталог/права — пустой список, а не падение.
+    """
+    try:
+        entries = sorted(os.listdir(cfg.data_dir))
+    except OSError:
+        return [(cfg.instance, cfg.history_file)]
+    files: list[tuple[str, str]] = []
+    for entry in entries:
+        if not (entry.startswith(HISTORY_PREFIX) and entry.endswith(HISTORY_SUFFIX)):
+            continue
+        name = entry[len(HISTORY_PREFIX):-len(HISTORY_SUFFIX)]
+        if name:
+            files.append((name, os.path.join(cfg.data_dir, entry)))
+    files.sort(key=lambda pair: (pair[0] != cfg.instance, pair[0]))
+    return files or [(cfg.instance, cfg.history_file)]
+
+
 def tool_search_history(cfg: Config, args: dict[str, Any]) -> str:
     """Поиск по истории сессии (или по истории оболочек — с явного разрешения)."""
     query = _text(args, "query")
@@ -283,11 +306,18 @@ def tool_search_history(cfg: Config, args: dict[str, Any]) -> str:
         )
     matches: list[str] = []
     notes: list[str] = []
-    if source in ("session", "all"):
-        lines, _key = history_store.read_history_file_lines(cfg.history_file)
-        if not lines:
-            notes.append(f"no session history at {cfg.history_file}")
-        matches += [f"session  {line}" for line in lines]
+    if source in ("session", "sessions", "all"):
+        # `session` — только своё окно, `sessions`/`all` — все history_*.txt каталога.
+        pairs = (
+            [(cfg.instance, cfg.history_file)]
+            if source == "session"
+            else _session_history_files(cfg)
+        )
+        for instance, path in pairs:
+            lines, _key = history_store.read_history_file_lines(path)
+            if not lines and instance == cfg.instance:
+                notes.append(f"no session history at {path}")
+            matches += [f"{instance}  {line}" for line in lines]
     if source in ("shells", "all"):
         for result in history_import.read_sources(limit=SHELL_HISTORY_LIMIT):
             if result.error:
@@ -387,9 +417,10 @@ TOOLS: tuple[dict[str, Any], ...] = (
     {
         "name": "search_history",
         "description": (
-            "Search what the user actually typed: the current session history file by "
-            "default, or the shell's own history (bash/zsh/fish/atuin) when the server "
-            "was started with --shell-history."
+            "Search what the user actually typed: `session` — this window's history "
+            "file, `sessions` — the files of every window (history_*.txt), or the "
+            "shell's own history (bash/zsh/fish/atuin) when the server was started "
+            "with --shell-history. `all` — sessions plus shells."
         ),
         "inputSchema": _schema(
             {
@@ -397,7 +428,7 @@ TOOLS: tuple[dict[str, Any], ...] = (
                 "source": {
                     "type": "string",
                     "enum": list(HISTORY_SOURCES),
-                    "description": "session (default) | shells | all.",
+                    "description": "session (default) | sessions | shells | all.",
                 },
                 "limit": {"type": "integer", "description": f"Max lines (default {DEFAULT_LIMIT})."},
             }

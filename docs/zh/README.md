@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.167 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.168 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -501,6 +501,7 @@ k8s 排查链：[`K8S_CHAINS.md`](../../K8S_CHAINS.md)。`python3 src/seed_k8s_c
 
 ```bash
 claude mcp add idvjpy -- python3 /path/to/IDvjPy/mcp_server.py
+idvjpy mcp                                # pip 安装后等价（console script）
 python3 mcp_server.py                     # stdio；通常由客户端启动
 python3 mcp_server.py --shell-history     # + shell 自身的历史（bash/zsh/fish/atuin）
 ```
@@ -510,7 +511,7 @@ python3 mcp_server.py --shell-history     # + shell 自身的历史（bash/zsh/f
                            "args": ["/path/to/IDvjPy/mcp_server.py"]}}}
 ```
 
-工具：`search_commands`（在命令与注释中做子串匹配，如同 `?text`）、`list_tags`、`get_tag`（如同 `?tag`）、`search_history`（默认 `session`；`shells` / `all` 需配合 `--shell-history`）、`library_stats`（运行计数：真正在用的是哪些）。库与历史与 TUI 相同（`--data-dir` / `--db` / `--instance`；默认取 `settings.yml`、`$IDVJPY_DATA_DIR`、系统目录）。细节与边界 —— 应用内的 `:? mcp` 主题。
+工具：`search_commands`（在命令与注释中做子串匹配，如同 `?text`）、`list_tags`、`get_tag`（如同 `?tag`）、`search_history`（`session` —— 仅本窗口，`sessions` —— 所有 `history_*.txt`，`shells` / `all` 需配合 `--shell-history`；每行前标注会话名）、`library_stats`（运行计数：真正在用的是哪些）。库与历史与 TUI 相同（`--data-dir` / `--db` / `--instance`；默认取 `settings.yml`、`$IDVJPY_DATA_DIR`、系统目录）。细节与边界 —— 应用内的 `:? mcp` 主题。
 
 服务器刻意做不到的事：写入（外部没有 `#tag` / `#tag-`）与执行（`:run`、`!tag[tid]` —— 执行留在需要人按 Enter 的地方）。工具返回的一切都会发给接入的 AI 客户端，因此不要把密钥写进标签（用 `$$`）；`$$` 的值只存在于会话中，不会进入库。
 

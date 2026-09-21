@@ -1,6 +1,8 @@
 [bold]:? mcp — библиотека тегов для AI-клиентов (MCP-сервер, только чтение)[/bold]
 
   python3 mcp_server.py        - Запустить MCP-сервер (stdio; запускает его клиент)
+  idvjpy mcp                   - Тот же сервер после pip-установки (console script
+                понимает те же флаги: `idvjpy mcp --shell-history`)
   python3 mcp_server.py --shell-history
                 - …и разрешить `search_history` читать ещё и собственные файлы
                 истории оболочки (bash/zsh/fish/atuin)
@@ -15,6 +17,7 @@
   не слушает (`:? vars`). Подключение:
 
     claude mcp add idvjpy -- python3 /путь/к/IDvjPy/mcp_server.py
+    claude mcp add idvjpy -- idvjpy mcp        # pip-установка
 
     {"mcpServers": {"idvjpy": {"command": "python3",
                                "args": ["/путь/к/IDvjPy/mcp_server.py"]}}}
@@ -26,8 +29,9 @@
     list_tags(include_hidden?)  - теги с числом живых команд и комментариями
     get_tag(tag, limit?)        - все живые команды одного тега (как `?tag`)
     search_history(query?, source?) - что вы на самом деле набирали: `session`
-                (файл history_<instance>.txt), `shells` (нужен --shell-history)
-                или `all`
+                (свой файл history_<instance>.txt), `sessions` (файлы всех окон,
+                history_*.txt), `shells` (нужен --shell-history) или `all`. Строки
+                подписаны именем сессии (или оболочки)
     library_stats()             - размеры и счётчики запусков: что реально работает
 
   Чего сервер намеренно не умеет:

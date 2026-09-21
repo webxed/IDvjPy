@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.167 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.168 — умный терминал для создания командных строк из тегов.
 
 Переводы: [English](docs/en/README.md) · [中文](docs/zh/README.md).
 
@@ -510,6 +510,7 @@ python3 -m pytest tests/ -v
 
 ```bash
 claude mcp add idvjpy -- python3 /путь/к/IDvjPy/mcp_server.py
+idvjpy mcp                                # то же после pip-установки (console script)
 python3 mcp_server.py                     # stdio; обычно запускает клиент
 python3 mcp_server.py --shell-history     # + история оболочки (bash/zsh/fish/atuin)
 ```
@@ -519,7 +520,7 @@ python3 mcp_server.py --shell-history     # + история оболочки (b
                            "args": ["/путь/к/IDvjPy/mcp_server.py"]}}}
 ```
 
-Инструменты: `search_commands` (подстрока по командам и комментариям, как `?text`), `list_tags`, `get_tag` (как `?tag`), `search_history` (`session` по умолчанию; `shells` / `all` — с `--shell-history`), `library_stats` (счётчики запусков: что реально работает). Библиотека и история — те же, что у TUI (`--data-dir` / `--db` / `--instance`, по умолчанию — `settings.yml`, `$IDVJPY_DATA_DIR`, системный каталог). Подробности и границы — тема `:? mcp` внутри приложения.
+Инструменты: `search_commands` (подстрока по командам и комментариям, как `?text`), `list_tags`, `get_tag` (как `?tag`), `search_history` (`session` — только своё окно, `sessions` — все `history_*.txt`, `shells` / `all` — с `--shell-history`; строки подписаны именем сессии), `library_stats` (счётчики запусков: что реально работает). Библиотека и история — те же, что у TUI (`--data-dir` / `--db` / `--instance`, по умолчанию — `settings.yml`, `$IDVJPY_DATA_DIR`, системный каталог). Подробности и границы — тема `:? mcp` внутри приложения.
 
 Чего сервер не умеет — нарочно: записывать (никаких `#tag` / `#tag-` извне) и выполнять (`:run`, `!tag[tid]` — запуск остаётся там, где Enter нажимает человек). Всё, что вернули инструменты, уходит подключённому AI-клиенту, поэтому секреты в теги не пишем (для них `$$`), а значения `$$` живут только в сессии и в библиотеку не попадают.
 

@@ -1,6 +1,8 @@
 [bold]:? mcp — 供 AI 客户端使用的标签库（MCP 服务器，只读）[/bold]
 
   python3 mcp_server.py        - 启动 MCP 服务器（stdio；由客户端启动）
+  idvjpy mcp                   - pip 安装后的同一服务器（console script，
+                支持相同参数：`idvjpy mcp --shell-history`）
   python3 mcp_server.py --shell-history
                 - …并允许 `search_history` 也读取 shell 自身的历史文件
                 （bash/zsh/fish/atuin）
@@ -13,6 +15,7 @@
   一条消息。不开放任何端口 —— 应用从不监听（`:? vars`）。接入示例：
 
     claude mcp add idvjpy -- python3 /path/to/IDvjPy/mcp_server.py
+    claude mcp add idvjpy -- idvjpy mcp        # pip 安装
 
     {"mcpServers": {"idvjpy": {"command": "python3",
                                "args": ["/path/to/IDvjPy/mcp_server.py"]}}}
@@ -24,7 +27,9 @@
     list_tags(include_hidden?)  - 标签及其有效命令数与注释
     get_tag(tag, limit?)        - 某个标签的全部有效命令（如同 `?tag`）
     search_history(query?, source?) - 你实际输入过的内容：`session`
-                （history_<instance>.txt）、`shells`（需要 --shell-history）或 `all`
+                （本窗口的 history_<instance>.txt）、`sessions`（所有窗口的文件
+                history_*.txt）、`shells`（需要 --shell-history）或 `all`。
+                每行前会标注会话（或 shell）名称
     library_stats()             - 规模与运行计数：真正在用的是哪些
 
   服务器刻意做不到的事：

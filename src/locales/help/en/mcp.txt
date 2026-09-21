@@ -1,6 +1,8 @@
 [bold]:? mcp — the tag library for AI clients (MCP server, read-only)[/bold]
 
   python3 mcp_server.py        - Start the MCP server (stdio; the client runs it)
+  idvjpy mcp                   - The same server after a pip install (console
+                script takes the same flags: `idvjpy mcp --shell-history`)
   python3 mcp_server.py --shell-history
                 - …and allow `search_history` to read the shell's own history
                 files (bash/zsh/fish/atuin) as well
@@ -14,6 +16,7 @@
   listens (`:? vars`). Connection:
 
     claude mcp add idvjpy -- python3 /path/to/IDvjPy/mcp_server.py
+    claude mcp add idvjpy -- idvjpy mcp        # pip-установка
 
     {"mcpServers": {"idvjpy": {"command": "python3",
                                "args": ["/path/to/IDvjPy/mcp_server.py"]}}}
@@ -24,8 +27,10 @@
                 comments, like `?text`; answers `tag\[tid]  command  # comment`
     list_tags(include_hidden?)  - tags with the number of live commands, comments
     get_tag(tag, limit?)        - every live command of one tag (like `?tag`)
-    search_history(query?, source?) - what you actually typed: `session` (the file
-                history_<instance>.txt), `shells` (needs --shell-history) or `all`
+    search_history(query?, source?) - what you actually typed: `session` (this
+                window's history_<instance>.txt), `sessions` (every window's file,
+                history_*.txt), `shells` (needs --shell-history) or `all`. Lines
+                carry the session (or shell) name in front
     library_stats()             - sizes and the run counters: what is really used
 
   What the server deliberately cannot do:

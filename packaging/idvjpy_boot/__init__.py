@@ -20,6 +20,17 @@ _SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
 _REPO_SRC_APP = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "src", "app.py"
 )
+_REPO_SRC = os.path.normpath(os.path.dirname(_REPO_SRC_APP))
+
+
+def _src_dir() -> str:
+    """Каталог с кодом: вложенная `src/` собранного wheel'а или repo'шная (checkout).
+
+    В установленном пакете есть только первый вариант; из рабочей копии работает
+    второй — так `python3 -m idvjpy_boot` и `idvjpy mcp` проверяются и в
+    репозитории, а не только после сборки.
+    """
+    return _SRC if os.path.isdir(_SRC) else _REPO_SRC
 
 
 def _package_version() -> str:
@@ -38,16 +49,35 @@ def _package_version() -> str:
 __version__ = _package_version()
 
 
+def mcp_main(argv: list[str] | None = None) -> int:
+    """MCP-сервер (`idvjpy mcp [--data-dir …]`) — то же, что `python3 mcp_server.py`.
+
+    Транспорт stdio: клиент запускает процесс сам, портов приложение не слушает.
+    Сервер только читает (см. `src/mcp_server.py` и `:? mcp` в приложении).
+    """
+    src = _src_dir()
+    if src not in sys.path:
+        sys.path.insert(0, src)
+    server: Any = importlib.import_module("mcp_server")
+    return int(server.main(sys.argv[1:] if argv is None else argv))
+
+
 def main() -> None:
     """Console entry point: тот же запуск, что `python3 app.py` из repo.
+
+    Плюс подкоманда `idvjpy mcp […аргументы сервера]` — её разбираем до
+    `parse_arguments()`, чтобы флаг не попал в CLI приложения.
 
     Модуль ``app`` резолвится только в рантайме — из вложенной ``src/``,
     которую мы кладём в sys.path. Статическим анализаторам этот импорт
     недоступен (они видят корневой лаунчер ``app.py`` без этих имён),
     поэтому обращение идёт через importlib, а модуль типизирован как Any.
     """
-    if _SRC not in sys.path:
-        sys.path.insert(0, _SRC)
+    if len(sys.argv) > 1 and sys.argv[1] == "mcp":
+        raise SystemExit(mcp_main(sys.argv[2:]))
+    src = _src_dir()
+    if src not in sys.path:
+        sys.path.insert(0, src)
     app: Any = importlib.import_module("app")
 
     args = app.parse_arguments()
