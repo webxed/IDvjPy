@@ -107,6 +107,10 @@ screensaver_matrix: true
 # load 保留。不影响矩阵画布。也有 `:screensaver stars`。
 screensaver_stars: true
 
+# cwd 位于仓库内时，输入行提示中的 git 分支（`~/proj (main) ❯`）；
+# 分离 HEAD 显示短 SHA（`(@1a2b3c4)`）。false —— 只显示路径。
+git_prompt: true
+
 # 来自活动集群的 k8s 资源名称提示（`kubectl get pod <Tab>`）。
 k8s_completion: false
 

@@ -34,6 +34,9 @@
                 （`./build.sh`）仍会被执行，而不是进入。退出时终端会收到窗口的
                 当前目录（OSC 7），stderr 会打印现成的 `cd '…'`；
                 配合 $IDVJPY_CWD_FILE 的包装脚本可自行进入
+                输入行左侧始终显示 cwd（`~/项目 ❯`），在 git 仓库内还会显示
+                分支（`~/项目 (main) ❯`；分离 HEAD 显示短 SHA `@1a2b3c4`）。
+                `git_prompt: false` 可关闭
   :fm [path]  - 在新窗口中打开系统文件管理器（cwd 或 path）
   :term [path] - 在新窗口中打开系统终端（cwd 或 path）
                 $FILEMAN / $TERMINAL 覆盖系统默认值

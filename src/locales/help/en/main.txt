@@ -34,6 +34,10 @@
                 rather than entered. On exit the terminal is told the window cwd
                 (OSC 7) and stderr prints a ready `cd '…'`; a wrapper with
                 $IDVJPY_CWD_FILE moves the shell itself
+                The input line always shows the cwd on the left (`~/project ❯`),
+                and inside a git repository its branch too (`~/project (main) ❯`;
+                a detached HEAD gives the short SHA `@1a2b3c4`). `git_prompt:
+                false` turns it off
   :fm [path]  - Open the OS file manager in a new window (cwd or path)
   :term [path] - Open a system terminal in a new window (cwd or path)
                 $FILEMAN / $TERMINAL override the OS default

@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.171 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.172 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -307,7 +307,7 @@ idvjpy() {                     # the shell's cwd follows the app
 }
 ```
 
-`./setup.sh --shell-helper` installs it for you: the block goes into the current shell's rc (`zsh` → `~/.zshrc`, otherwise `~/.bashrc`; override with `$IDVJPY_RC`), existing content is kept, a copy is saved as `<rc>.idvjpy.bak`, and a re-run only refreshes its own block between markers. `command idvjpy` keeps the function from calling itself; without the pip package the block gets the absolute path to this clone's `app.py`. The tags DB, history and `.bashrc_term*` stay in the data directory (not in the new cwd — see "Files and settings"); an empty `mytags.db` is not created in the new folder. The current directory is always visible: in grey on the left of the input line (`~/project ❯`; clicking the path focuses the input), `~` stands for the home directory, and a long path is shortened to its tail (at most a third of the window width; the full path is in block headers)
+`./setup.sh --shell-helper` installs it for you: the block goes into the current shell's rc (`zsh` → `~/.zshrc`, otherwise `~/.bashrc`; override with `$IDVJPY_RC`), existing content is kept, a copy is saved as `<rc>.idvjpy.bak`, and a re-run only refreshes its own block between markers. `command idvjpy` keeps the function from calling itself; without the pip package the block gets the absolute path to this clone's `app.py`. The tags DB, history and `.bashrc_term*` stay in the data directory (not in the new cwd — see "Files and settings"); an empty `mytags.db` is not created in the new folder. The current directory is always visible: in grey on the left of the input line (`~/project ❯`; clicking the path focuses the input), `~` stands for the home directory, and a long path is shortened to its tail (at most a third of the window width; the full path is in block headers). **Inside a git repository the branch is shown next to the path** (`~/project (main) ❯`; a detached HEAD gives the short SHA, `(@1a2b3c4)`), and a long name is shortened to its tail. It is read from `.git/HEAD` without calling `git` (a worktree/submodule `.git` file works too) and is refreshed after every command — `git switch` changes the branch without changing the directory. Turn it off with `git_prompt: false`.
 - `:fm [path]` — the OS file manager in a new window (cwd or a path). Linux: `xdg-open`; macOS: `open`; Windows: `explorer`. Custom: `$FILEMAN`
 - `:term [path]` — the system terminal in a new window. Linux: `xdg-terminal-exec` / `gnome-terminal` / …; macOS: Terminal.app; Windows: `wt` or `cmd`. Custom: `$TERMINAL`
 - `:env` — re-read `.bashrc_term*` (and `~/.bashrc` aliases) in the already running application. After `> cmd`, exports of **the same** bash are picked up by themselves (a nested `> bash` + `export` inside — no)
@@ -443,6 +443,7 @@ library_url: ""              # static source for a bare `:import` — a shared l
 screensaver_idle: 120        # idle (keys/click/scroll/mouse) → screensaver; 0 = off. :screensaver — right away
 screensaver_matrix: true     # screensaver canvas: true — "matrix rain", false — starfield (:screensaver matrix|stars — one-off)
 screensaver_stars: true      # starfield: flying stars; false — black canvas (the clock/ribbon/load remain)
+git_prompt: true            # git branch in the input prompt (`~/proj (main) ❯`) when the cwd is inside a repo; false — path only
 k8s_completion: false        # names of k8s resources from the cluster in the hints (`kubectl get pod <Tab>`)
 file_completion: auto        # file hints: auto | paths | off (see below)
 kctx_vars: [NS, POD, DEPLOY, SVC, ING, APP, CTR, QUOTA, RELEASE, CHART, VALUES]  # cluster journal variables (:kctx); [] — off

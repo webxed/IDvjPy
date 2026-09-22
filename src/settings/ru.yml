@@ -108,6 +108,10 @@ screensaver_matrix: true
 # load остаются. На матричный холст не влияет. Также есть `:screensaver stars`.
 screensaver_stars: true
 
+# Ветка git в приглашении строки ввода, если cwd внутри репозитория
+# (`~/proj (main) ❯`); отделённый HEAD — коротким SHA (`(@1a2b3c4)`). false — только путь.
+git_prompt: true
+
 # Подсказки имён k8s-ресурсов из живого кластера (`kubectl get pod <Tab>`).
 k8s_completion: false
 

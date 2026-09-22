@@ -154,6 +154,7 @@ try:
         llm_providers_example_path,
         settings_example_path,
     )
+    from git_prompt import MAX_BRANCH_LEN, format_prompt_branch
     from gui_open import (
         GuiOpenError,
         format_opened,
@@ -2577,7 +2578,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.171"
+    VERSION = "v1.172"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2755,6 +2756,9 @@ class CommandRunner(App):
     # терминале), false — весь вывод плоский. Прочие escape-последовательности
     # вырезаются всегда.
     KEY_ANSI_COLORS = "ansi_colors"
+    # Ветка git в приглашении строки ввода: cwd внутри репозитория → `~/proj (main) ❯`.
+    # Читается из `.git/HEAD` (см. `src/git_prompt.py`), без подпроцессов.
+    KEY_GIT_PROMPT = "git_prompt"
     # `file_completion` — когда подсказывать файлы/каталоги:
     #   auto  — явные пути + голое имя файла у команд ниже (иначе `kubectl get po`
     #           и `docker co` забьют подсказки мусором из cwd);
@@ -2905,6 +2909,8 @@ class CommandRunner(App):
         self.screensaver_stars: bool = True
         # Холст заставки: «матричный дождь» (true) или звёздное поле (false).
         self.screensaver_matrix: bool = True
+        # Ветка git в приглашении строки ввода (cwd внутри репозитория).
+        self.git_prompt: bool = True
         # Время последней активности (для проверки, что простой реально есть)
         # и признак «TUI спит» (`> cmd`, Ctrl+O, `:ed` — настоящий TTY).
         self._ss_bumped_at: float = 0.0
@@ -4031,6 +4037,7 @@ class CommandRunner(App):
                     self.screensaver_matrix = bool(
                         settings.get(self.KEY_SCREENSAVER_MATRIX, True)
                     )
+                    self.git_prompt = bool(settings.get(self.KEY_GIT_PROMPT, True))
                     self.k8s_completion = bool(
                         settings.get(self.KEY_K8S_COMPLETION, False)
                     )
@@ -4065,6 +4072,10 @@ class CommandRunner(App):
                     self.editor = str(settings.get(self.KEY_EDITOR) or "").strip()
         except (FileNotFoundError, KeyError, yaml.YAMLError):
             pass
+
+        # Приглашение обновляется ещё раз: `git_prompt` из настроек мог его изменить
+        # (первый показ — до чтения settings.yml).
+        self._refresh_cwd_prompt()
 
         # Быстрый переключатель Line-API-блоков без правки settings.yml.
         # IDVJPY_LINE_BLOCKS=1 — включить, =0 — выключить (пусто — как в настройках).
@@ -4570,14 +4581,24 @@ class CommandRunner(App):
         """Показать cwd в приглашении строки ввода (серым, как промпт терминала).
 
         Ширина — треть окна: путь не должен съедать место под команду (полный
-        путь всегда виден в шапке блока).
+        путь всегда виден в шапке блока). Внутри git-репозитория рядом с путём —
+        имя ветки(`(main)`, отделённый HEAD — `(@1a2b3c4)`), если `git_prompt`
+        не выключен: это та же подсказка, что в bash-промпте, и она говорит,
+        куда уйдут команды.
         """
         try:
             prompt = self.query_one(f"#{self.ID_CWD_PROMPT}", Static)
         except Exception:
             return
         limit = max(12, int(self.size.width / 3))
-        text = f"{shorten_path(os.getcwd(), max_len=limit)} {CWD_PROMPT_SEP} "
+        parts = [shorten_path(os.getcwd(), max_len=limit)]
+        if self.git_prompt:
+            # Ветка делит строку с путём и командой: в узком окне режем её короче.
+            branch_limit = max(8, min(MAX_BRANCH_LEN, int(self.size.width / 4)))
+            branch = format_prompt_branch(os.getcwd(), max_len=branch_limit)
+            if branch:
+                parts.append(branch)
+        text = f"{' '.join(parts)} {CWD_PROMPT_SEP} "
         prompt.update(escape_display_markup(text))
 
     def on_resize(self, event: events.Resize) -> None:
@@ -9973,6 +9994,9 @@ class CommandRunner(App):
         # не подсовывали заведомо битую команду. Вывод в журнале остаётся.
         if forget_history:
             self._forget_history_line(block.source_command or "")
+        # Ветка могла смениться прямо этой командой (`git switch`): путь в
+        # приглашении тот же, а подсказка врать не должна.
+        self._refresh_cwd_prompt()
 
     def _forget_history_line(self, executed: str) -> None:
         """Убирает строку из session_history и history-файла (по всем формам)."""

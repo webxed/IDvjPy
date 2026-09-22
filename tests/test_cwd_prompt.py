@@ -313,3 +313,74 @@ async def test_click_on_prompt_focuses_input(isolated_home):
         assert not input_widget(app).has_focus
         await pilot.click(f"#{app.ID_CWD_PROMPT}")
         assert input_widget(app).has_focus
+
+
+def _git_repo(root) -> None:
+    """Каталог-репозиторий: ветку приложение читает прямо из `.git/HEAD`."""
+    (root / ".git").mkdir(parents=True, exist_ok=True)
+    (root / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+
+
+async def test_prompt_shows_git_branch(isolated_home):
+    """Внутри репозитория в приглашении видна ветка, вне — только путь."""
+    _git_repo(isolated_home / "proj")
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        assert "(main)" not in _prompt(app)  # сам tmp-каталог — не репозиторий
+        await submit(pilot, "proj")
+        assert _prompt(app).endswith(f"proj (main) {CWD_PROMPT_SEP} ")
+        await submit(pilot, "..")
+        assert "(main)" not in _prompt(app)
+
+
+async def test_prompt_git_branch_follows_a_branch_switch(isolated_home):
+    """`git switch` не меняет каталог — ветка в приглашении обновляется после команды."""
+    repo = isolated_home / "proj"
+    _git_repo(repo)
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, "proj")
+        assert "(main)" in _prompt(app)
+        # Так выглядит переключение ветки «извне»: HEAD переписан, cwd тот же.
+        head = repo / ".git" / "HEAD"
+        head.write_text("ref: refs/heads/develop-2\n", encoding="utf-8")
+        await submit(pilot, "echo branch")
+        await wait_command_done(app)
+        assert _prompt(app).endswith(f"proj (develop-2) {CWD_PROMPT_SEP} ")
+
+
+async def test_prompt_git_branch_can_be_switched_off(isolated_home):
+    """`git_prompt: false` — в приглашении только путь."""
+    settings = isolated_home / "settings.yml"
+    settings.write_text(
+        settings.read_text(encoding="utf-8") + "git_prompt: false\n", encoding="utf-8"
+    )
+    _git_repo(isolated_home / "proj")
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        assert app.git_prompt is False
+        await submit(pilot, "proj")
+        assert _prompt(app).endswith(f"proj {CWD_PROMPT_SEP} ")
+        assert "(main)" not in _prompt(app)
+
+
+async def test_prompt_git_branch_fits_a_narrow_window(isolated_home):
+    """Узкое окно: ветка делит строку с путём и командой — режем и её."""
+    _git_repo(isolated_home / "proj")
+    (isolated_home / "proj" / ".git" / "HEAD").write_text(
+        "ref: refs/heads/feature/very-long-branch-name\n", encoding="utf-8"
+    )
+    app = CommandRunner()
+    async with app.run_test(size=(48, 24)) as pilot:
+        await submit(pilot, "proj")
+        prompt = _prompt(app)
+        assert "(…" in prompt and prompt.endswith(f" {CWD_PROMPT_SEP} ")
+        assert len(prompt) <= app.size.width // 2
+
+
+async def test_prompt_git_branch_is_on_by_default(isolated_home):
+    """Ключа нет — ветка показывается (поведение по умолчанию)."""
+    _git_repo(isolated_home / "proj")
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)):
+        assert app.git_prompt is True

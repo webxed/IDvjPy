@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.171**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.172**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.117 (app v1.171) |
+| `test_cmd.md` | Manual plan v1.118 (app v1.172) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -200,10 +200,11 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.171 |
+| `src/app.py` | TUI (`CommandRunner`), v1.172 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
+| `src/git_prompt.py` | Ветка git для приглашения строки ввода (`~/proj (main) ❯`; ключ `git_prompt`): `find_git_dir` поднимается вверх от cwd (`.git`-каталог или `.git`-файл worktree/submodule с относительным `gitdir:`), `read_head` разбирает `HEAD` (`refs/heads/x` → `x`, вложенная `feature/x` целиком; отделённый HEAD → короткий SHA `@1a2b3c4`) с кэшем по `(mtime_ns, size)`; `format_prompt_branch` режет длинное имя по хвосту. Подпроцессов нет |
 | `src/database_v2.py` | SQLite tagged history — только примитивы БД (чтение/запись строк, теги, комментарии, `usage_stats`); перенос — в `src/db_transfer.py` |
 | `src/db_transfer.py` | Единственная реализация переноса библиотеки: JSON (`export_json`/`import_json` — каноническая схема, терпимое чтение обоих исторических видов, глобальные `id` из файла не берутся, `skip_existing`/`preserve_tid`/`mode=replace`), CSV команд (адресно по тег+tid) и комментариев тегов, Markdown-каталог, `library_overview` для `list`. Для внешнего импорта: `loads_payload`, `payload_only_tag`, `run_mode` (разбор `run:`-директив для плана) и `plan_import`/`ImportPlan` — что изменит импорт, без записи (`--dry`, подтверждение `:import <url>`). Один код для TUI (`:export`/`:import`) и CLI |
 | `src/net.py` | Общий сетевой слой (без Textual): HTTP(S) через stdlib + прокси с логином (`$PROXY_USER` / `$PROXY_PASS` → URL прокси), `open_url`, чистка пароля из текста ошибки, подсказка при «407». Для `:update`, `:llm`/`:cht` и `:import <url>` |
@@ -250,6 +251,11 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.172
+
+- **Ветка git в приглашении строки ввода.** Если cwd внутри репозитория, слева видно `~/проект (main) ❯` — тот же намёк, что даёт bash-промпт: понятно, куда уйдут команды. Новый модуль `src/git_prompt.py` — **без подпроцессов**: `find_git_dir` поднимается вверх от cwd и берёт `.git`-каталог, а для worktree/submodule — `.git`-файл с `gitdir:` (относительный путь считается от каталога файла); `read_head` разбирает `HEAD` (`ref: refs/heads/x` → `x`, вложенная `feature/x` целиком; отделённый HEAD — короткий SHA, в приглашении `(@1a2b3c4)`), ответ кэшируется по `(mtime_ns, size)` файла. Приглашение обновляется не только на `cd`/ресайзе, но и после **каждой** команды: `git switch` меняет ветку, не меняя каталог, и подсказка не должна врать. Ключ `git_prompt` (по умолчанию `true`) в `settings.yml` ×3; длинное имя режется по хвосту (`(…/very-long-name)`).
+- Тесты: `tests/test_git_prompt.py` (репозиторий и вложенный каталог, `.git`-файл worktree с относительным gitdir, отделённый HEAD, пустой `HEAD`, не репозиторий, инвалидация кэша после смены ветки, обрезка длинного имени) и `tests/test_cwd_prompt.py` (ветка в приглашении и её пропажа вне репозитория, обновление после `git switch`, `git_prompt: false`, дефолт). Документация: README ×3 (приглашение + пример settings.yml), `:?` (в `:cd` — что видно в строке ввода, ×3), `CLAUDE.md` (модуль), `test_cmd.md` (секция 25).
 
 ## v1.171
 

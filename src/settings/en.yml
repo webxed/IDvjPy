@@ -108,6 +108,10 @@ screensaver_matrix: true
 # load remain. Does not affect the matrix canvas. There is also `:screensaver stars`.
 screensaver_stars: true
 
+# Git branch in the input prompt when the cwd is inside a repository
+# (`~/proj (main) ❯`); detached HEAD shows the short SHA as `(@1a2b3c4)`. false — path only.
+git_prompt: true
+
 # Suggestions of k8s resource names from the live cluster (`kubectl get pod <Tab>`).
 k8s_completion: false
 
