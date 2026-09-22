@@ -167,6 +167,10 @@
                /dev/null as stdin, so it cannot read the TUI keyboard/mouse
   @ <cmd>    - Run without command_timeout (long non-TTY jobs; stdout captured,
                stdin is /dev/null). Timeout message also points here and at `> cmd`
+               Progress (`git clone`, `docker build`) is invisible in a pipe: with
+               no TTY the tool disables its bar itself (`git clone` keeps only
+               `Cloning into …`). Use the command's own `--progress` (stages as
+               separate lines) or `> <cmd>` to watch it live
   Output     - ANSI colors from a command are drawn as colors (ansi_colors: true);
                cursor/OSC escapes and control chars are stripped, progress
                redraws collapse to the final line — like a real terminal. Plain

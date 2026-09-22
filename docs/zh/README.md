@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.172 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.173 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -60,7 +60,7 @@ IDvjPy 是一个用 Python（Textual）编写、以键盘操作的终端应用�
 - :llm ask：`:llm ask [<提供方>] <任务>` —— 会把任务**连同**应用速查和标签库摘要（标签/tid/命令/注释，与任务相关的排在前，其余仅列名称）发给提供方（默认提供方，或由第一个词指定）。回答会给出可直接使用的链接 `!kpod[1]` / `!! kpod[1] && klog[1]`；已有链接还会以可点击行的形式显示（插入输入行，运行则另按 Enter）。对于普通 `:llm`，同一上下文由提供方的 `app_context: true|N` 开启（`N` —— 字符数预算，默认 6000；没有该键/false —— 关闭）。逻辑在 `src/llm_context.py`
 - 外部编辑器：`:ed <文件>`（编辑文件）、`:ed $OUT|$BLOCK`（块的输出）、`:ed`（空缓冲区）。TUI 暂停（如同 `> cmd`）。编辑器由 `settings.yml` 中的 `editor:` 指定（可带参数：`code --wait`），否则用 `$VISUAL`/`$EDITOR`，再否则用系统默认。路径中会展开 `$VAR`/`$OUT`（`:ed $TMPDIR/pod-$OUT.json`）；单行结果会改写输入行（运行 —— Enter），多行结果则保留为文件并显示其路径（`@文件` / `| cmd`）
 - 来自 `~/.bashrc` 的别名（包括 `$1` / `$2` / `$@`），后台执行命令
-- `> cmd` —— 真正的 TTY（htop、vim、ssh）；点击和 PgUp/PgDn 会激活可见的日志块。后台命令不会获得终端：`stdin` 是 `/dev/null`，因此 `read`、`tsh`、`kubectl`、`ssh` 不会「偷走」按键和鼠标（以前 `:kctx` 遇到卡住的 `tsh kube login` 会让输入失效），而超时/`F4` 后应用会把终端切回自己的模式。需要交互 —— `> cmd`；不需要 TTY 的长时间任务 —— `@ cmd`；`:kctx <cluster>` 会发起登录且不带 `command_timeout`
+- `> cmd` —— 真正的 TTY（htop、vim、ssh）；点击和 PgUp/PgDn 会激活可见的日志块。后台命令不会获得终端：`stdin` 是 `/dev/null`，因此 `read`、`tsh`、`kubectl`、`ssh` 不会「偷走」按键和鼠标（以前 `:kctx` 遇到卡住的 `tsh kube login` 会让输入失效），而超时/`F4` 后应用会把终端切回自己的模式。需要交互 —— `> cmd`；不需要 TTY 的长时间任务 —— `@ cmd`；`:kctx <cluster>` 会发起登录且不带 `command_timeout`。**这也是日志里看不到进度条的原因：**没有 TTY 时工具会自行关闭进度 —— `git clone <url>` 只打印 `Cloning into …`（以及服务器的 `remote:` 行，它们走数据通道），与普通终端里的 `git clone … | cat` 完全一样。强制打开 —— `git clone --progress …`：每个阶段（Enumerating/Counting/Receiving/…）都会单独成行。但依然不会有实时进度条：块只在命令结束时更新（`[Executing...]` → 输出），而同一行的 `\r` 重绘会折叠为最终状态（中间百分比是成百帧，故意不保留）。想看实时进度，请使用真正的 TTY：`> git clone …`（TUI 暂停；该输出不会写入日志）。
 - 无需特殊命令的计算器：以数字（或 `(` / `-`）开头且能整体解析为算术/单位换算的行会在本地计算 —— `512Mi + 20% in Gi`、`20% of 512Mi`、`2Gi/512Mi`、`500m in cores`
 - ipcalc：IPv4 网段同样如此计算，无需特殊命令 —— `192.168.1.0/24`、`300 hosts` → `/23`（与 jodies.de/ipcalc 一致）
 - Kubernetes 集群日志：`kctx_vars` 列表中的变量（默认是 bundled 模板栈：kubectl `NS POD DEPLOY SVC ING APP CTR QUOTA` 和 helm `RELEASE CHART VALUES`）会按集群记录到 `kctx.json`（data 目录）。`:kctx` —— 集群列表；`:kctx <cluster>` —— 登录（`klogin <c> || kubectl config use-context <c>`）并显示以前用过的变量集（如果恰好只有一个集合，则立即应用）；`:kctx N` 应用集合 N（变量 → `.bashrc_term_*`）；`:kctx <cluster> N` —— 一行完成登录并应用；`kctx_vars: []` 会关闭该日志

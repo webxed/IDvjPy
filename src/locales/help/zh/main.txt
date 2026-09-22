@@ -167,6 +167,9 @@
                stdin，因此无法读取 TUI 的键盘/鼠标
   @ <cmd>    - 在无 command_timeout 下运行（长时间的非 TTY 任务；stdout 会被捕获，
                stdin — /dev/null）。超时消息也会指向这里和 `> cmd`
+               管道中看不到进度（`git clone`、`docker build`）：没有 TTY 时工具
+               会自行关闭进度条（`git clone` 只剩 `Cloning into …`）。
+               可用命令自带的 `--progress`（阶段各自成行），或 `> <cmd>` 实时观看
   输出      - 命令的 ANSI 颜色会按颜色渲染（ansi_colors: true）；
                光标/OSC 转义码和控制字符会被去除，进度
                重绘会折叠到最后一行 — 如同真正的终端。纯
