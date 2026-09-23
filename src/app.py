@@ -2579,7 +2579,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.175"
+    VERSION = "v1.176"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -6094,8 +6094,34 @@ class CommandRunner(App):
         self._handle_gui_open(self.CMD_FM, args)
 
     def _handle_term_args(self, args: list[str]) -> None:
-        """`:term [path]` — системный терминал в новом окне."""
-        self._handle_gui_open(self.CMD_TERM, args)
+        """`:term [--tab|--window] [path]` — системный терминал.
+
+        Флаг — режим **на эту сессию** (как `:screensaver matrix|stars`):
+        `settings.yml`/`$IDVJPY_TERM_OPEN` не трогаем, но дальше им пользуются
+        и `:new`, и `& cmd`. Терминал открывается сразу: непонятно, сработал
+        ли переключатель, если ничего не открылось.
+        """
+        usage = "Usage: :term [--tab|--window] [path]"
+        mode = None
+        rest: list[str] = []
+        for arg in args:
+            if arg in ("--tab", "--window"):
+                mode = "tab" if arg == "--tab" else "window"
+            elif arg.startswith("--"):
+                # Опечатку не превращаем в путь: явное Usage, ничего не открываем.
+                self.add_block(InfoBlock(usage))
+                return
+            else:
+                rest.append(arg)
+        if len(rest) > 1:
+            self.add_block(InfoBlock(usage))
+            return
+        if mode is not None:
+            self.term_open = mode
+            self.add_block(InfoBlock(
+                f"term_open: {mode} (this session; settings.yml: term_open)"
+            ))
+        self._handle_gui_open(self.CMD_TERM, rest)
 
     def _show_welcome_catalog(self) -> None:
         """Same seed catalog as a fresh empty database."""

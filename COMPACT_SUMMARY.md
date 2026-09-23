@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.175**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.176**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.121 (app v1.175) |
+| `test_cmd.md` | Manual plan v1.122 (app v1.176) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -200,7 +200,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.175 |
+| `src/app.py` | TUI (`CommandRunner`), v1.176 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -251,6 +251,11 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.176
+
+- **`:term --tab` / `:term --window` — режим терминала на сессию.** Флаги разбирает `_handle_term_args`: `--tab`/`--window` меняют `self.term_open` **только для текущей сессии** (`settings.yml`/`$IDVJPY_TERM_OPEN` не трогаются) и сразу открывают терминал — как `:screensaver matrix|stars` («переключил — покажи»), в журнале строка `term_open: tab (this session; settings.yml: term_open)` и `Opened:` с флагом в argv. Ими же потом пользуются `:new` и `& cmd` (одна настройка на все три места). Флаги сочетаются с путём (`:term --tab /var/log`); неизвестный `--флаг` — явное `Usage: :term [--tab|--window] [path]`, режим не меняется и ничего не открывается; два пути — тот же `Usage:`. Ошибка открытия (нет вкладок у терминала) режим не откатывает: переключение уже случилось и видно в журнале. Подсказка в списке `:` команд (`cmd.term` ×3) дополнена флагами.
+- Тесты: `tests/test_term_mode.py` (7: переключение в обе стороны, флаг с путём, `--nope` и два пути — `Usage:`, режим сессии доезжает до `& cmd`, ошибка открытия не откатывает режим, `settings.yml` не меняется). Документация: README ×3, `:?` ×3, `CLAUDE.md` (`:term` с флагами), `test_cmd.md` (секция 32).
 
 ## v1.175
 

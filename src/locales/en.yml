@@ -120,7 +120,7 @@ cmd:
   i: "Kubernetes Ingress Analyzer"
   cd: "show or change the shell cwd"
   fm: "OS file manager in a new window"
-  term: "system terminal in a new window"
+  term: "system terminal in a new window (--tab, --window)"
   ed: "external editor: file / $OUT / $BLOCK"
   env: "re-read .bashrc_term* into this process"
   r: "focused/last block command into the input"

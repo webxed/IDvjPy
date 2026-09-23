@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.175) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.176) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.175` → `v1.176`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.176` → `v1.177`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -146,7 +146,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no exact tag) = substring search over command text + comments. Click tag in `??` inserts `!tag ` at the cursor (does not replace the line, does not run). |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble refs into the input line |
-| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:h import`, `:c`, `:json`, `:i`, `:?`, `:? <topic>` (`calc` / `run` / `i` / `md` / `llm` / `tags` / `vars` / `kctx` / `send` / `session` / `import`), `:cd`, `:fm`, `:term`, `:env`, `:session`, `:new`, `:send`, `:send!`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:cmd`, `:log`, `:name`, `:rg`, `:/`, `:n`, `:N`, `:export`, `:import`, `:md`, `:playbook`, `:run`, `:run stop`, `:update`, `:kill`, `:watch`, `:mv`, `:stats`, `:diff`, `:o`, `:kctx`, `:alias`, `:theme`, `:lang`, `:relang`, `:llm`, `:cht`, `:ed`) |
+| `:` | App commands (`:q`, `:w file`, `:h [N]`, `:h /text`, `:h import`, `:c`, `:json`, `:i`, `:?`, `:? <topic>` (`calc` / `run` / `i` / `md` / `llm` / `tags` / `vars` / `kctx` / `send` / `session` / `import`), `:cd`, `:fm`, `:term [--tab|--window] [path]`, `:env`, `:session`, `:new`, `:send`, `:send!`, `:welcome`, `:backup`, `:screensaver`, `:r`, `:cmd`, `:log`, `:name`, `:rg`, `:/`, `:n`, `:N`, `:export`, `:import`, `:md`, `:playbook`, `:run`, `:run stop`, `:update`, `:kill`, `:watch`, `:mv`, `:stats`, `:diff`, `:o`, `:kctx`, `:alias`, `:theme`, `:lang`, `:relang`, `:llm`, `:cht`, `:ed`) |
 | `\| cmd` | Pipe stdout from the focused (else last) block, add to history |
 | `\|@<label> cmd` / `\|@N cmd` | Pipe from the block labelled by `:name <label>`, or from N blocks back (0 = last). The source is not re-run; history stores the full `<source> \| <cmd>` |
 | `$OUT` | On demand: last line of focused/last block (not stored in `.bashrc_term`) |
@@ -204,7 +204,7 @@ Edit `settings.yml`:
 - `database_tags_file`: SQLite filename (default: `mytags.db`)
 - `command_timeout`: seconds; `0` = no timeout (default: 10)
 - `terminal_mouse`: `true` — click focuses a block, wheel scrolls the journal; `false` — OS text selection (clicks do not focus)
-- `term_open`: `window` (default) or `tab` — where a system terminal opens for `:term`, `:new` and `& cmd` (see `src/gui_open.py`; `$IDVJPY_TERM_OPEN` overrides it without editing the file). A terminal without tab support is an explicit error, not a window
+- `term_open`: `window` (default) or `tab` — where a system terminal opens for `:term`, `:new` and `& cmd` (see `src/gui_open.py`; `$IDVJPY_TERM_OPEN` overrides it without editing the file). A terminal without tab support is an explicit error, not a window. `:term --tab` / `:term --window` switch the mode **for this session only** (`CommandRunner._handle_term_args`: flags are parsed out of the args, an unknown `--flag` is an explicit `Usage:` and changes nothing; the switch is announced in the journal and the terminal opens right away — like `:screensaver matrix|stars`), and `:new` / `& cmd` follow it
 - `theme`: Textual theme name (`textual-dark` default). `d` toggles dark/light and writes this key; `:theme nord` picks a named theme
 - `language`: UI language for the message catalogues (`src/locales/<lang>.yml`, parts in `src/locales/<lang>/*.yml`, help files in `src/locales/help/<lang>/`; `en` is the source of truth). `:lang` shows/sets/saves it; `--lang` and `$IDVJPY_LANG` override per run; `auto` follows `$LC_ALL`/`$LC_MESSAGES`/`$LANG`. Missing keys fall back to `en`. The same key also picks the demo-tour text layer (`src/demos/text/<lang>/`) and the seed comments (`src/seed_text/<lang>/`), so the seeded library speaks the app language. `:relang [code]` re-translates an already-seeded DB without a re-seed. Parser/resolution — `src/i18n.py`
 - `check_updates`: `true` (default) — on start, compare `VERSION` with GitHub main. `:update` always checks. Tests set this to `false`. Proxy 407: `$PROXY_USER` / `$PROXY_PASS` in `.bashrc_term` (and `HTTPS_PROXY`).

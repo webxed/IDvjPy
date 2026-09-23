@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.175
+# План тестирования IDvjPy_term v1.176
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -829,11 +829,15 @@ $FILEMAN=nautilus
 :fm
 :term extra arg
 :term
+:term --nope
+:term --tab
+:term --window
+:term --tab /var/log
 ```
 
-**Ожидание:** лишние аргументы — `Usage: :fm [path]` / `Usage: :term [path]`. Без пути открывает проводник / системный терминал в cwd приложения (новое окно, TUI не ждёт). Путь — тот каталог. Нет бинарника — `not found` и `set $FILEMAN=` / `set $TERMINAL=`. `$FILEMAN` / `$TERMINAL` перекрывают дефолт ОС (Linux `xdg-open`, macOS `open`, Windows `explorer` / `wt`). В YAML-плейбук `:fm` / `:term` не пишутся.
+**Ожидание:** лишние аргументы — `Usage: :fm [path]` / `Usage: :term [--tab|--window] [path]`. Без пути открывает проводник / системный терминал в cwd приложения (новое окно, TUI не ждёт). Путь — тот каталог. **Флаги `:term`:** `--tab` / `--window` меняют режим терминала **на сессию** (`settings.yml` не трогают) и сразу открывают — дальше им пользуются и `:new`, и `& cmd`; в журнале строка `term_open: tab (this session; …)`, а `Opened:` показывает argv с флагом (`gnome-terminal --tab -- …`); можно вместе с путём. Неизвестный флаг (`--nope`) — явное `Usage:`, режим не меняется и ничего не открывается; два пути — тоже `Usage:`. Нет бинарника — `not found` и `set $FILEMAN=` / `set $TERMINAL=`. `$FILEMAN` / `$TERMINAL` перекрывают дефолт ОС (Linux `xdg-open`, macOS `open`, Windows `explorer` / `wt`). В YAML-плейбук `:fm` / `:term` не пишутся.
 
-Автотест: `tests/test_gui_open.py`, `test_colon_fm_spawns_detached`, `test_colon_fm_path_usage_and_override`, `test_colon_fm_missing_binary`, `test_colon_term_override_and_missing`, `test_colon_term_no_default_binary`, `test_session_to_playbook_heuristics`.
+Автотест: `tests/test_gui_open.py`, `tests/test_term_mode.py`, `test_colon_fm_spawns_detached`, `test_colon_fm_path_usage_and_override`, `test_colon_fm_missing_binary`, `test_colon_term_override_and_missing`, `test_colon_term_no_default_binary`, `test_session_to_playbook_heuristics`.
 
 ---
 
@@ -1655,7 +1659,7 @@ printf '%s\n' \
 
 ---
 
-**Версия документа**: v1.121
-**Версия приложения**: v1.175
+**Версия документа**: v1.122
+**Версия приложения**: v1.176
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_seed_sqlite.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`, `tests/test_mcp_server.py`  
 **Дата**: 2026-09-21

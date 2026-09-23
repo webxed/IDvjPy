@@ -953,7 +953,7 @@ async def test_colon_term_override_and_missing(isolated_home, monkeypatch):
     app = CommandRunner()
     async with app.run_test(size=(120, 40)) as pilot:
         await submit(pilot, ":term extra arg")
-        assert "Usage: :term [path]" in last_info(app).text_content
+        assert "Usage: :term [--tab|--window] [path]" in last_info(app).text_content
         await submit(pilot, ":term")
         assert captured["argv"] == ["gnome-terminal"]
         assert captured["kwargs"]["cwd"] == os.getcwd()

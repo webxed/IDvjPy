@@ -44,6 +44,8 @@
                 `term_open: tab` (or $IDVJPY_TERM_OPEN=tab) — a tab in an already
                 open window (gnome-terminal --tab, konsole --new-tab); where tabs
                 are unsupported it is an explicit error. Shared by :new and `& cmd`
+                `:term --tab` / `:term --window` — switch the mode for this session
+                (opens right away, leaves settings.yml alone); a path may follow
   :ed [<file>|$OUT|$BLOCK] - Open a file (or the block's last line / full
                 stdout / an empty buffer) in the external editor; the TUI is
                 paused while it runs. Editor: `editor:` in settings.yml, else

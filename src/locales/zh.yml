@@ -121,7 +121,7 @@ cmd:
   i: "Kubernetes Ingress 分析器"
   cd: "显示或更改 shell 的当前目录"
   fm: "在新窗口中打开系统文件管理器"
-  term: "在新窗口中打开系统终端"
+  term: "在新窗口中打开系统终端（--tab、--window）"
   ed: "外部编辑器: 文件 / $OUT / $BLOCK"
   env: "将 .bashrc_term* 重新读入本进程"
   r: "将聚焦/上一个块的命令放入输入框"
