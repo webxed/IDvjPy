@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.174 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.175 — умный терминал для создания командных строк из тегов.
 
 Переводы: [English](docs/en/README.md) · [中文](docs/zh/README.md).
 
@@ -304,7 +304,7 @@ idvjpy() {                     # каталог shell следует за при
   local f; f=$(mktemp)
   IDVJPY_CWD_FILE=$f command idvjpy "$@"   # pip-пакет; из клона — python3 ~/WibeCoding/Idivjopy/app.py
   cd "$(cat "$f")" 2>/dev/null
-  rm -f "$f"
+  command rm -f "$f"          # command — чтобы alias/функция rm не подменили уборку
 }
 ```
 

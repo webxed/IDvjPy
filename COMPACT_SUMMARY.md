@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.174**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.175**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.120 (app v1.174) |
+| `test_cmd.md` | Manual plan v1.121 (app v1.175) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -195,12 +195,12 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | File | Purpose |
 |------|---------|
 | `app.py` | Launcher (`python3 app.py`) |
-| `setup.sh` | Установщик: `.venv` + `requirements.txt` (`set -euo pipefail`, проверка 3.12+). `./setup.sh --shell-helper` — отдельное действие: кладёт функцию-обёртку `idvjpy()` в rc оболочки (zsh → `.zshrc`, иначе `.bashrc`; `$IDVJPY_RC` переопределяет), cwd shell следует за приложением; чужое содержимое не трогает, рядом `<rc>.idvjpy.bak`, повторный прогон обновляет только свой блок между маркерами |
+| `setup.sh` | Установщик: `.venv` + `requirements.txt` (`set -euo pipefail`, проверка 3.12+). `./setup.sh --shell-helper` — отдельное действие: кладёт функцию-обёртку `idvjpy()` в rc оболочки (zsh → `.zshrc`, иначе `.bashrc`; `$IDVJPY_RC` переопределяет), cwd shell следует за приложением; чужое содержимое не трогает, рядом `<rc>.idvjpy.bak`, повторный прогон обновляет только свой блок между маркерами. Уборка временного файла — `command rm` (алиас/функция `rm` в тело не попадёт) |
 | `pyproject.toml` / `setup.py` / `MANIFEST.in` | Корневая сборка: `pip install .` / `uv tool install git+…` (build_py вкладывает `src/` в `packaging/idvjpy_boot`) |
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.174 |
+| `src/app.py` | TUI (`CommandRunner`), v1.175 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -251,6 +251,11 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.175
+
+- **Уборка в обёртке — через `command rm`.** `./setup.sh --shell-helper` пишет в rc `command rm -f "$f"`. Иначе алиас пользователя «запекается» в тело функции: bash раскрывает алиасы **в момент чтения rc**, в том числе внутри определений функций — с `alias rm='rm -i'` на диске остаётся `rm -f`, а разобранная функция содержит `rm -i -f` (видно через `type idvjpy`). `command` это отсекает (он же обходит и функции, названные `rm`). Сниппет в README ×3 приведён к тому же виду; уже установленный блок освежается повторным `./setup.sh --shell-helper`.
+- Тест: `tests/test_setup_shell.py::test_shell_helper_cleanup_survives_a_rm_alias` — rc с `alias rm='rm -i'`, установка, затем проверка **результата парсинга** (`bash -ic 'declare -f idvjpy'`): есть `command rm -f`, нет `rm -i -f`. Заодно починилась потерянная кавычка в heredoc самого `setup.sh` (найдена проверкой `bash -n`).
 
 ## v1.174
 

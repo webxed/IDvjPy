@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.174 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.175 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -295,7 +295,7 @@ idvjpy() {                     # shell 的 cwd 跟随应用
   local f; f=$(mktemp)
   IDVJPY_CWD_FILE=$f command idvjpy "$@"   # pip 包；从克隆运行 —— python3 ~/WibeCoding/Idivjopy/app.py
   cd "$(cat "$f")" 2>/dev/null
-  rm -f "$f"
+  command rm -f "$f"          # command —— 避免 alias/函数 rm 干扰清理
 }
 ```
 

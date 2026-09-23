@@ -56,6 +56,16 @@ def _home(tmp_path: Path) -> Path:
     return home
 
 
+def _interactive(home: Path, script: str) -> str:
+    """Интерактивный bash с подменённым `$HOME` — то, что реально прочитается из rc."""
+    env = {k: v for k, v in os.environ.items() if k not in ("IDVJPY_RC", "ZDOTDIR")}
+    env.update({"HOME": str(home), "SHELL": "/bin/bash"})
+    result = subprocess.run(
+        [BASH, "-ic", script], env=env, capture_output=True, text=True, timeout=60
+    )
+    return result.stdout + result.stderr
+
+
 def test_shell_helper_writes_wrapper_block(tmp_path):
     """Блок дописывается в конец `.bashrc`; прежнее содержимое не тронуто."""
     home = _home(tmp_path)
@@ -68,6 +78,22 @@ def test_shell_helper_writes_wrapper_block(tmp_path):
     assert "IDVJPY_CWD_FILE" in rc
     # Копия прежнего файла — рядом (страховка перед правкой чужого rc).
     assert (home / ".bashrc.idvjpy.bak").read_text(encoding="utf-8") == "export EDITOR=vim\n"
+
+
+def test_shell_helper_cleanup_survives_a_rm_alias(tmp_path):
+    """`alias rm='rm -i'` не должен «запечься» в тело функции.
+
+    bash раскрывает алиасы в момент чтения rc — в том числе **внутри** определений
+    функций, поэтому `rm -f` в шаблоне превращался в `rm -i -f`. С `command rm`
+    разбор rc алиас не подхватывает (проверяем именно результат парсинга).
+    """
+    home = _home(tmp_path)
+    (home / ".bashrc").write_text("alias rm='rm -i'\n", encoding="utf-8")
+    assert _run(home, "--shell-helper").returncode == 0
+    assert "command rm -f" in (home / ".bashrc").read_text(encoding="utf-8")
+    parsed = _interactive(home, "declare -f idvjpy")
+    assert "command rm -f" in parsed
+    assert "rm -i -f" not in parsed
 
 
 def test_shell_helper_is_idempotent(tmp_path):

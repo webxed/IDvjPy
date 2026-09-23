@@ -15,6 +15,9 @@ REPO_DIR="$(pwd)"
 # Куда писать — `$IDVJPY_RC`, иначе rc текущего shell (zsh → `.zshrc`, остальные
 # → `.bashrc`); чужое содержимое не затирается, рядом кладётся `.idvjpy.bak`.
 # Повторный прогон обновляет только свой блок между маркерами.
+# Уборка временного файла — `command rm`: алиасы пользователя (`alias rm='rm -i'`)
+# bash раскрывает в момент чтения rc, в том числе **внутри** тела функции
+# (проверить: `type idvjpy` показывал бы `rm -i -f`), а `command` это отсекает.
 install_shell_helper() {
     local rc="${IDVJPY_RC:-}"
     if [ -z "$rc" ]; then
@@ -37,7 +40,7 @@ idvjpy() {                     # каталог shell следует за при
     local f; f="$(mktemp)"
     IDVJPY_CWD_FILE="$f" @LAUNCH@ "$@"
     cd "$(cat "$f")" 2>/dev/null
-    rm -f "$f"
+    command rm -f "$f"         # command — чтобы alias/функция rm не подменили уборку
 }
 # <<< idvjpy cwd helper <<<
 WRAPPER
