@@ -81,6 +81,14 @@ command_timeout: 10
 # If the parameter is absent, true is used.
 terminal_mouse: true
 
+# Where a system terminal opens (`:term`, `:new`, `& cmd`):
+#   window — a new window (default);
+#   tab    — a tab in an already open window (gnome-terminal --tab, konsole --new-tab,
+#           kgx/xfce4-terminal/mate-terminal). A terminal without tabs (alacritty, xterm,
+#           kitty, …) is an explicit error, not a window instead of a tab.
+# Quick switch without editing the file: $IDVJPY_TERM_OPEN=tab.
+term_open: window
+
 # TUI color theme. `d` switches textual-dark / textual-light and saves it here.
 # Other names: :theme  (nord, dracula, gruvbox, catppuccin-mocha, …).
 # matrix — the app's own theme: green phosphor on near-black (like in the screensaver),

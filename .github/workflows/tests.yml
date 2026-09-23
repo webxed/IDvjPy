@@ -5,8 +5,23 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  # Подряд идущие пуши отменяют предыдущий прогон — минуты не жгутся зря.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pytest:
+    # Один джоб на весь набор упирался в 30-минутный лимит: сейчас 1321 тест,
+    # локально ~25 минут. Раскладываем файлы по параллельным джобам — жадно,
+    # по числу собранных тестов: маркер `slow` про время больше не говорит
+    # (он всего на 430 тестах из 1321, а остальные 891, включая Pilot, — это
+    # само по себе ~15 минут). Баланс по числу тестов — прокси, а не замер:
+    # точные числа даёт `--durations=15` в логе, по ним раскладку можно уточнить.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -14,13 +29,33 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
-      - name: Run test suite
-        # --timeout bounds a single hanging test; the plugin ships in requirements-dev.txt.
-        run: python -m pytest tests/ -v --timeout=1200
+      - name: Run tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+        run: |
+          # Сбор тестов по файлам (0.6 с) + жадная раскладка по шардам:
+          # файл уходит в самый лёгкий бин. Так шарды ровные (~220 тестов)
+          # без новых зависимостей и без xdist (Pilot-тесты к параллелизму
+          # внутри одного раннера чувствительны). Число шардов берём из самого
+          # matrix (`strategy.job-total`) — иначе при правке списка шардов
+          # лишние шарды получали бы пустой список и молча пропускали тесты.
+          files=$(python3 -m pytest tests/ --collect-only -q 2>/dev/null \
+            | grep '^tests/' | cut -d: -f1 | sort | uniq -c | sort -rn \
+            | awk -v s=${{ matrix.shard }} -v n=${{ strategy.job-total }} '
+                { best = 1; for (b = 2; b <= n; b++) if (load[b] < load[best]) best = b;
+                  load[best] += $1;
+                  if (best == s) out = out " " $2 }
+                END { print out }')
+          # Пустой список — не «весь набор»: в pytest.ini есть `testpaths = tests`.
+          [ -n "$files" ] || { echo "shard ${{ matrix.shard }}: нет файлов"; exit 1; }
+          echo "shard ${{ matrix.shard }}/${{ strategy.job-total }}: $(echo "$files" | wc -w) files"
+          echo "$files" | tr ' ' '\n' | sed 's/^/  /'
+          # --timeout bounds a single hanging test; the plugin ships in requirements-dev.txt.
+          python -m pytest $files -q --timeout=600 --durations=15
 
   docker-demo:
     # Демостенд (docker/README.md): собираем образ и проверяем, что стенд

@@ -39,7 +39,10 @@
                 `git_prompt: false` 可关闭
   :fm [path]  - 在新窗口中打开系统文件管理器（cwd 或 path）
   :term [path] - 在新窗口中打开系统终端（cwd 或 path）
-                $FILEMAN / $TERMINAL 覆盖系统默认值
+                $FILEMAN / $TERMINAL 覆盖系统默认值。
+                `term_open: tab`（或 $IDVJPY_TERM_OPEN=tab）—— 在已打开的窗口中
+                开标签页（gnome-terminal --tab、konsole --new-tab）；不支持
+                标签页时给出明确错误。该模式对 :new 和 `& cmd` 共通
   :ed [<file>|$OUT|$BLOCK] - 在外部编辑器中打开文件（或块的最后一行 / 完整
                 stdout / 空缓冲区）；TUI 在运行期间
                 暂停。编辑器：settings.yml 中的 `editor:`，否则
@@ -170,6 +173,9 @@
                管道中看不到进度（`git clone`、`docker build`）：没有 TTY 时工具
                会自行关闭进度条（`git clone` 只剩 `Cloning into …`）。
                可用命令自带的 `--progress`（阶段各自成行），或 `> <cmd>` 实时观看
+  & <cmd>    - 把同一个命令放到新的终端窗口：TUI 继续工作，输出留在那个窗口
+               （日志只记录已启动）。窗口 —— `:term` 机制 + $TERMINAL；
+               `&&` 和 `&>` 属于 shell
   输出      - 命令的 ANSI 颜色会按颜色渲染（ansi_colors: true）；
                光标/OSC 转义码和控制字符会被去除，进度
                重绘会折叠到最后一行 — 如同真正的终端。纯

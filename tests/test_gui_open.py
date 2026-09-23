@@ -10,6 +10,7 @@ from gui_open import (
     build_term_argv,
     build_terminal_exec_argv,
     format_opened,
+    normalize_term_mode,
     resolve_target_dir,
     spawn_detached,
 )
@@ -239,3 +240,90 @@ def test_exec_darwin_requires_terminal(monkeypatch):
 def test_exec_empty_command():
     with pytest.raises(GuiOpenError, match="empty command"):
         build_terminal_exec_argv([], {}, platform="linux")
+
+
+# --- Режим вкладки (term_open: tab) ---------------------------------------
+
+
+def test_normalize_term_mode_falls_back_to_window():
+    assert normalize_term_mode("tab") == "tab"
+    assert normalize_term_mode(" TAB ") == "tab"
+    assert normalize_term_mode("nope") == "window"
+    assert normalize_term_mode(None) == "window"
+
+
+def test_term_tab_uses_gnome_terminal_flag(monkeypatch):
+    _which_only({"gnome-terminal"}, monkeypatch)
+    argv = build_term_argv("/tmp", {}, platform="linux", mode="tab")
+    assert argv == ["gnome-terminal", "--tab"]
+    # По умолчанию — окно, без флага.
+    assert build_term_argv("/tmp", {}, platform="linux") == ["gnome-terminal"]
+
+
+def test_term_tab_skips_terminals_without_tabs(monkeypatch):
+    """xterm вкладок не умеет — в режиме tab берём konsole, хотя xterm тоже есть."""
+    _which_only({"xterm", "konsole"}, monkeypatch)
+    argv = build_term_argv("/tmp", {}, platform="linux", mode="tab")
+    assert argv == ["konsole", "--new-tab"]
+    # А в режиме окна остаётся первый доступный по списку.
+    assert build_term_argv("/tmp", {}, platform="linux") == ["konsole"]
+
+
+def test_term_tab_without_capable_terminal_is_an_error(monkeypatch):
+    _which_only({"xterm"}, monkeypatch)
+    with pytest.raises(GuiOpenError, match="no terminal with tab support"):
+        build_term_argv("/tmp", {}, platform="linux", mode="tab")
+
+
+def test_term_tab_override_gets_the_flag_inserted(monkeypatch):
+    _which_only({"gnome-terminal"}, monkeypatch)
+    argv = build_term_argv("/tmp", {"TERMINAL": "gnome-terminal --wait"},
+                           platform="linux", mode="tab")
+    assert argv == ["gnome-terminal", "--tab", "--wait"]
+
+
+def test_term_tab_override_without_tabs_is_an_error(monkeypatch):
+    """alacritty вкладок не умеет вообще — явная ошибка, а не окно молча."""
+    _which_only({"alacritty"}, monkeypatch)
+    with pytest.raises(GuiOpenError, match="alacritty: new tab is not supported"):
+        build_term_argv("/tmp", {"TERMINAL": "alacritty -e"}, platform="linux", mode="tab")
+
+
+def test_exec_tab_gnome_and_konsole(monkeypatch):
+    _which_only({"gnome-terminal"}, monkeypatch)
+    assert build_terminal_exec_argv(
+        ["htop"], {}, platform="linux", mode="tab"
+    ) == ["gnome-terminal", "--tab", "--", "htop"]
+
+    _which_only({"konsole"}, monkeypatch)
+    assert build_terminal_exec_argv(
+        ["htop"], {}, platform="linux", mode="tab"
+    ) == ["konsole", "--new-tab", "-e", "htop"]
+
+
+def test_exec_tab_override_with_flag(monkeypatch):
+    """`$TERMINAL` используется как есть: флаг запуска (`-e`/`-x`) — в самом `$TERMINAL`,
+    к нему только дописывается флаг вкладки."""
+    _which_only({"xfce4-terminal"}, monkeypatch)
+    argv = build_terminal_exec_argv(
+        ["htop"], {"TERMINAL": "xfce4-terminal -x"}, platform="linux", mode="tab"
+    )
+    assert argv == ["xfce4-terminal", "--tab", "-x", "htop"]
+
+
+def test_term_tab_win32_needs_windows_terminal(monkeypatch):
+    _which_only({"wt"}, monkeypatch)
+    argv = build_term_argv(r"C:\tmp", {}, platform="win32", mode="tab")
+    assert argv == ["wt", "-w", "0", "nt", "-d", r"C:\tmp"]
+    assert build_terminal_exec_argv(
+        ["htop"], {}, platform="win32", mode="tab"
+    ) == ["wt", "-w", "0", "nt", "htop"]
+    _which_only(set(), monkeypatch)
+    with pytest.raises(GuiOpenError, match="needs Windows Terminal"):
+        build_term_argv(r"C:\tmp", {}, platform="win32", mode="tab")
+
+
+def test_term_tab_darwin_is_explicit(monkeypatch):
+    _which_only({"open"}, monkeypatch)
+    with pytest.raises(GuiOpenError, match="new tab is not supported"):
+        build_term_argv("/tmp", {}, platform="darwin", mode="tab")

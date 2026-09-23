@@ -80,6 +80,14 @@ command_timeout: 10
 # 如果该参数缺失，则使用 true。
 terminal_mouse: true
 
+# 系统终端在哪里打开（`:term`、`:new`、`& cmd`）：
+#   window —— 新窗口（默认）；
+#   tab    —— 已打开窗口中的标签页（gnome-terminal --tab、konsole --new-tab、
+#             kgx/xfce4-terminal/mate-terminal）。不支持标签页的终端（alacritty、
+#             xterm、kitty 等）会给出明确错误，而不是用窗口代替标签页。
+# 不改文件即可快速切换：$IDVJPY_TERM_OPEN=tab。
+term_open: window
+
 # TUI 颜色主题。`d` 在 textual-dark / textual-light 之间切换并保存到此处。
 # 其他名称：:theme  （nord、dracula、gruvbox、catppuccin-mocha，…）。
 # matrix —— 应用自带主题：近乎黑色上的绿色荧光（像屏保中那样），

@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.173 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.174 — умный терминал для создания командных строк из тегов.
 
 Переводы: [English](docs/en/README.md) · [中文](docs/zh/README.md).
 
@@ -214,6 +214,7 @@ CI собирает этот образ и прогоняет смоук — job
 | (нет) | Выполнить shell-команду | `ls -la` |
 | `> cmd` | Отдать настоящий TTY (htop, vim, ssh). После выхода — env/$PWD той же оболочки | `> htop` |
 | `@ cmd` | Выполнить без `command_timeout` (долгие не-TTY задачи; stdin — `/dev/null`) | `@ terraform apply` |
+| `& cmd` | Выполнить в **новом окне терминала** (TUI продолжает работать; вывод — в том окне, в журнале только факт запуска) | `& kubectl logs -f pod/api-1`, `& htop` |
 | `#tag cmd` | Сохранить команду с тегом (текст как есть) | `#deploy rsync -av src/ host:` |
 | `# command` | В историю, не выполнять (как `# …` в bash; пробел после `#`) | `# curl https://example.com` |
 | `#tag=` / `#tag=ID=` | Комментарий к тегу / команде | `#deploy=prod rsync` |
@@ -309,7 +310,7 @@ idvjpy() {                     # каталог shell следует за при
 
 Установить обёртку автоматически: `./setup.sh --shell-helper` — дописывает её в rc текущей оболочки (`zsh` → `~/.zshrc`, иначе `~/.bashrc`; файл задаётся `$IDVJPY_RC`), прежнее содержимое остаётся, копия — `<rc>.idvjpy.bak`, повторный прогон обновляет только свой блок между маркерами. `command idvjpy` — чтобы функция не звала саму себя; если пакет не установлен, в блок пишется абсолютный путь к `app.py` этого клона. База тегов, история и `.bashrc_term*` остаются в каталоге данных (не в новом cwd — см. «Файлы и настройки»); пустой `mytags.db` в новой папке не создаётся. **Несколько окон** (`:new`) файл не перехватывают: `$IDVJPY_CWD_FILE` в дочерний запуск не передаётся, поэтому каталог отдаёт только то окно, чья обёртка его задала (иначе побеждал бы закрывшийся последним). Текущий каталог виден всегда: серым в строке ввода слева (`~/проект ❯`, клик по пути возвращает фокус в строку), `~` — домашний каталог, длинный путь укорачивается до хвоста (не больше трети ширины окна; полный путь — в шапке блоков). **Внутри git-репозитория рядом с путём видна ветка** (`~/проект (main) ❯`; отделённый HEAD — короткий SHA, `(@1a2b3c4)`), длинное имя режется по хвосту. Читается из `.git/HEAD` без вызова `git` (`.git`-файл worktree/submodule тоже понимается) и обновляется после каждой команды — `git switch` ветку меняет, не меняя каталог. Выключить — `git_prompt: false`.
 - `:fm [path]` — проводник ОС в новом окне (cwd или путь). Linux: `xdg-open`; macOS: `open`; Windows: `explorer`. Свой: `$FILEMAN`
-- `:term [path]` — системный терминал в новом окне. Linux: `xdg-terminal-exec` / `gnome-terminal` / …; macOS: Terminal.app; Windows: `wt` или `cmd`. Свой: `$TERMINAL`
+- `:term [path]` — системный терминал в новом окне. Linux: `xdg-terminal-exec` / `gnome-terminal` / …; macOS: Terminal.app; Windows: `wt` или `cmd`. Свой: `$TERMINAL`. **Вкладка вместо окна** — `term_open: tab` в `settings.yml` (или `$IDVJPY_TERM_OPEN=tab`): `gnome-terminal --tab`, `konsole --new-tab`, `kgx`/`xfce4-terminal`/`mate-terminal`; терминал без вкладок (`alacritty`, `xterm`, `kitty` — у последних вкладка только через сервер) — явная ошибка, а не окно молча. Режим общий для `:term`, `:new` и `& cmd`
 - `:env` — перечитать `.bashrc_term*` (и алиасы `~/.bashrc`) в уже запущенном приложении. После `> cmd` экспорты **того же** bash подхватываются сами (вложенный `> bash` + `export` внутри — нет)
 - `:session` — текущий инстанс (история + `.bashrc_term_*`). `:session NAME` — переключить или создать (БД тегов общая). Имя текущей сессии видно в шапке приложения и в заголовке окна/вкладки терминала (`IDvjPy_term · NAME`, при запущенных командах — `— N running`)
 - `:new [NAME|-] [DIR]` (и `:session new …`) — запустить новое окно приложения в отдельном терминале: своя сессия (`.bashrc_term_<NAME>` / `history_<NAME>.txt`), общий data-каталог и БД тегов. `DIR` — рабочий каталог новой сессии (по умолчанию data-каталог); имя `-`/пусто — авто `sN` — наименьшее свободное **среди работающих окон** (реестр `session_<имя>.pid` в data-каталоге, см. `src/session_registry.py`): файлы закрытых сессий имя не занимают, а закрылась `s2` — имя снова свободно. Секреты `$$` не переносятся. Кнопка `New session` в футере / `Ctrl+N`. Терминал — `$TERMINAL` (напр. `kitty` / `alacritty -e`), иначе из системных; запуск — `$IDVJPY_LAUNCH`
@@ -436,6 +437,7 @@ database_tags_file: mytags.db
 backup_dir: backups          # снимки БД (:backup, --seed)
 command_timeout: 10          # 0 = без таймаута
 terminal_mouse: true         # true — мышь у приложения (клик/колесо; протяжка выделяет и копирует в буфер); false — выделение средствами терминала
+term_open: window            # где открывать терминал (`:term`, `:new`, `& cmd`): window — новое окно, tab — вкладка в открытом (gnome-terminal --tab, konsole --new-tab, …); $IDVJPY_TERM_OPEN=tab
 theme: textual-dark          # `d` / `:theme`; сохраняется при смене (matrix — зелёный фосфор на чёрном)
 language: en                 # язык интерфейса (en, ru, zh): :lang / --lang / $IDVJPY_LANG; `auto` — по $LANG; тексты в src/locales (части <lang>/*.yml, справка в help/<lang>/)
 check_updates: true          # старт: сверка VERSION с GitHub main; :update всегда

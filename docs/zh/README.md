@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.173 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.174 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -205,6 +205,7 @@ CI 会构建该镜像并运行冒烟测试 —— [`.github/workflows/tests.yml`
 | （无） | 执行 shell 命令 | `ls -la` |
 | `> cmd` | 交给真正的 TTY（htop、vim、ssh）。退出后仍是同一个 shell 的 env/$PWD | `> htop` |
 | `@ cmd` | 不带 `command_timeout` 执行（长时间的非 TTY 任务；stdin —— `/dev/null`） | `@ terraform apply` |
+| `& cmd` | 在**新的终端窗口**中执行（TUI 继续运行；输出留在那个窗口，日志只记录已启动） | `& kubectl logs -f pod/api-1`、`& htop` |
 | `#tag cmd` | 保存带标签的命令（文本原样） | `#deploy rsync -av src/ host:` |
 | `# command` | 写入历史，不执行（如同 bash 中的 `# …`；`#` 后有空格） | `# curl https://example.com` |
 | `#tag=` / `#tag=ID=` | 标签 / 命令的注释 | `#deploy=prod rsync` |
@@ -300,7 +301,7 @@ idvjpy() {                     # shell 的 cwd 跟随应用
 
 `./setup.sh --shell-helper` 会自动装好：代码块写入当前 shell 的 rc（`zsh` → `~/.zshrc`，否则 `~/.bashrc`；可用 `$IDVJPY_RC` 指定），原有内容保留，旧文件备份为 `<rc>.idvjpy.bak`，再次运行只更新标记之间的自己的代码块。`command idvjpy` 避免函数调用自身；没有 pip 包时，代码块里写入本克隆 `app.py` 的绝对路径。标签库、历史和 `.bashrc_term*` 仍留在数据目录中（而不是新的 cwd —— 见「文件和设置」）；不会在新目录中创建空的 `mytags.db`。当前目录始终可见：在输入行左侧以灰色显示（`~/项目 ❯`，点击路径可把焦点返回输入行）；`~` 表示主目录，过长的路径会截取尾部（不超过窗口宽度的三分之一；完整路径见块标题）。**在 git 仓库内，路径旁会显示分支**（`~/项目 (main) ❯`；分离 HEAD 显示短 SHA，`(@1a2b3c4)`），过长的分支名截取尾部。它直接从 `.git/HEAD` 读取，不调用 `git`（worktree/submodule 的 `.git` 文件同样支持），并在每条命令后更新 —— `git switch` 不改变目录也能换分支。关闭：`git_prompt: false`。
 - `:fm [path]` —— 在新窗口中打开系统文件管理器（cwd 或路径）。Linux：`xdg-open`；macOS：`open`；Windows：`explorer`。自定义：`$FILEMAN`
-- `:term [path]` —— 在新窗口中打开系统终端。Linux：`xdg-terminal-exec` / `gnome-terminal` / …；macOS：Terminal.app；Windows：`wt` 或 `cmd`。自定义：`$TERMINAL`
+- `:term [path]` —— 在新窗口中打开系统终端。Linux：`xdg-terminal-exec` / `gnome-terminal` / …；macOS：Terminal.app；Windows：`wt` 或 `cmd`。自定义：`$TERMINAL`。**用标签页代替窗口** —— `settings.yml` 中的 `term_open: tab`（或 `$IDVJPY_TERM_OPEN=tab`）：`gnome-terminal --tab`、`konsole --new-tab`、`kgx`/`xfce4-terminal`/`mate-terminal`；不支持标签页的终端（`alacritty`、`xterm`、`kitty`——后者的标签页只能通过其服务端）会给出明确错误，而不是默默打开窗口。该模式对 `:term`、`:new`、`& cmd` 共通
 - `:env` —— 在已运行的应用中重新读取 `.bashrc_term*`（以及 `~/.bashrc` 的别名）。在 `> cmd` 之后，**同一个** bash 的导出会被自动采纳（嵌套的 `> bash` 里面再 `export` —— 则不会）
 - `:session` —— 当前实例（历史 + `.bashrc_term_*`）。`:session NAME` —— 切换或创建（标签数据库是共用的）。当前会话名称可在应用头部和终端窗口/标签标题中看到（`IDvjPy_term · NAME`，有命令运行时为 `— N running`）
 - `:new [NAME|-] [DIR]`（以及 `:session new …`）—— 在独立终端中启动一个新的应用窗口：自己的会话（`.bashrc_term_<NAME>` / `history_<NAME>.txt`），共用的 data 目录和标签数据库。`DIR` —— 新会话的工作目录（默认是 data 目录）；名称为 `-`/空时自动取 `sN` —— **正在运行的窗口之间**最小的空闲编号（data 目录中的 `session_<名称>.pid` 注册表，见 `src/session_registry.py`）：已关闭会话的文件不会占用名称，而 `s2` 关闭后该名称又空闲了。`$$` 秘密不会迁移。页脚中的 `New session` 按钮 / `Ctrl+N`。终端 —— `$TERMINAL`（例如 `kitty` / `alacritty -e`），否则从系统终端中选择；启动 —— `$IDVJPY_LAUNCH`
@@ -427,6 +428,7 @@ database_tags_file: mytags.db
 backup_dir: backups          # 数据库快照（:backup、--seed）
 command_timeout: 10          # 0 = 无超时
 terminal_mouse: true         # true —— 鼠标由应用处理（点击/滚轮；拖动选择并复制到缓冲区）；false —— 用终端自带的选择方式
+term_open: window            # 终端在哪里打开（`:term`、`:new`、`& cmd`）：window —— 新窗口，tab —— 已打开窗口中的标签页（gnome-terminal --tab、konsole --new-tab 等）；$IDVJPY_TERM_OPEN=tab
 theme: textual-dark          # `d` / `:theme`；切换时保存（matrix —— 黑底绿色荧光）
 language: en                 # 界面语言（en、ru、zh）：:lang / --lang / $IDVJPY_LANG；`auto` —— 按 $LANG；文本在 src/locales（分片 <lang>/*.yml，帮助在 help/<lang>/）
 check_updates: true          # 启动时：把 VERSION 与 GitHub main 比较；:update 则总是比较

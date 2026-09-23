@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.173**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.174**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.119 (app v1.173) |
+| `test_cmd.md` | Manual plan v1.120 (app v1.174) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -200,7 +200,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.173 |
+| `src/app.py` | TUI (`CommandRunner`), v1.174 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -251,6 +251,14 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.174
+
+- **`& cmd` — команда в своём окне терминала.** Новый префикс строки ввода: `& kubectl logs -f pod/api-1` открывает **новое окно** (`:term`-механика, `$TERMINAL`) и сразу возвращает приложение — TUI не снимается (в отличие от `>`), вывод живёт в том окне, а в журнале — блок `Window: <команда>` + `Opened: <argv> pid N` (как `:new`). Годится для интерактива и хвостов (`& htop`, `& ssh …`), в т. ч. в демо и `run:`-шагах (`>` там запрещён именно потому, что снимает TUI). `&&`/`&>` остаются синтаксисом shell (как `>>` у `>`). Строка пишется в историю (↑ и файл — как `>`/`@`), пустой `&` — `Usage:`, нет `$TERMINAL`/терминалов — явная ошибка.
+- **Секреты в argv не уезжают.** В новое окно команда идёт в `bash -c` с `$NAME` живого `$$`-секрета **не раскрытым** (`_substitute_variables(..., keep_secrets=True)`): значение уже есть в env (`load_secrets` → `os.environ`) и его раскроет shell того окна, а в argv (`ps`, заголовок терминала) попадает только имя. Остальные `$VAR`/`$OUT`/ссылки `!tag[tid]` подставляются как обычно. У `>` наоборот: там значения раскрываются в текст — но `>` и есть «настоящий TTY, всё видно».
+- Тесты `& cmd`: `tests/test_window_command.py` (argv/cwd/env, `$VAR` раскрыт при сохранённом `$NAME`, маскировка в блоке, история, `Usage`, ошибка без терминала, `&&`/`&>` не перехватываются и выполняются shell'ом). Документация: таблица префиксов в `CLAUDE.md`, README ×3 (строка `& cmd`), `:?` ×3 (рядом с `>`/`@`), `test_cmd.md` (новая секция 14c), `src/demo.py` (`session_line_needs_wait` — блок появляется сразу).
+- **Вкладка вместо окна: `term_open`.** Терминал для `:term`, `:new` и `& cmd` открывается новым окном (по умолчанию) или **вкладкой в уже открытом** — ключ `term_open: window|tab` в `settings.yml` ×3 (быстрый переключатель — `$IDVJPY_TERM_OPEN=tab`). Флаги по терминалам: `gnome-terminal --tab`, `kgx --tab`, `konsole --new-tab`, `xfce4-terminal --tab`, `mate-terminal --tab` (в `LINUX_TERMINALS` добавлен mate-terminal); где вкладок нет вообще (alacritty, xterm, foot) или они только через сервер терминала (kitty `@ launch`, wezterm `cli`) — явная `GuiOpenError` «new tab is not supported» со списком умеющих, а не молчаливое окно. Автовыбор в режиме `tab` идёт по списку до первого терминала, который вкладку умеет (xterm пропускается); явный `$TERMINAL` получает флаг после имени (`TERMINAL="gnome-terminal --wait"` → `gnome-terminal --tab --wait`), а `-e`/`-x` пользователь по-прежнему включает сам; Windows — `wt -w 0 nt`; macOS — явная ошибка (вкладку там открывает только AppleScript). Неизвестное значение настройки — `window` (как `file_completion`).
+- Тесты: `tests/test_gui_open.py` (+10: `normalize_term_mode`, флаги вкладок по терминалам, пропуск xterm, явные ошибки без вкладок и в `$TERMINAL`, `--tab` вместе с `-x`, win32 `wt -w 0 nt`, macOS), `tests/test_window_command.py` (`term_open: tab` доезжает до `mode`, `$IDVJPY_TERM_OPEN`, дефолт `window`). Документация: README ×3 (строка про `:term` + пример settings.yml), `:?` ×3, `CLAUDE.md` (`src/gui_open.py`, `term_open`), `test_cmd.md` (секция 14c).
 
 ## v1.173
 

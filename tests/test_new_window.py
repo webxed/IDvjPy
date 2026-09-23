@@ -30,8 +30,8 @@ def _patch_open(monkeypatch, *, pid: int = 4242) -> list[dict]:
 
     calls: list[dict] = []
 
-    def fake(command, *, cwd, environ, platform=None):
-        calls.append({"command": list(command), "cwd": cwd, "env": dict(environ)})
+    def fake(command, *, cwd, environ, platform=None, mode="window"):
+        calls.append({"command": list(command), "cwd": cwd, "env": dict(environ), "mode": mode})
         return ["xterm", "-e", *command], _Proc(pid)
 
     monkeypatch.setattr(app_module, "open_terminal_command", fake)

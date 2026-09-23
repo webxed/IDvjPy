@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.173
+# План тестирования IDvjPy_term v1.174
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -441,6 +441,22 @@ klogin my-cluster
 **Ожидание:** пустой `>` — Usage. `> cmd` снимает TUI и запускает команду с настоящим TTY (stdout не пишется в журнал). После выхода — InfoBlock `TTY: … / Exit code: N`; если тот же bash сделал `export`/`cd` — строки `env:` / `cwd:`. `>>` остаётся редиректом оболочки. Вложенный `> bash` + export внутри него не виден; тогда писать `.bashrc_term*` и `:env`.
 
 Автотесты: `test_tty_prefix_empty_shows_usage`, `test_tty_prefix_runs_substituted_command` (мок `_run_in_tty`), `test_wrap_tty_command_dumps_exports`.
+
+---
+
+## Секция 14c: Команда в своём окне (`& cmd`)
+
+```
+&
+& htop
+& kubectl logs -f pod/api-1
+&& echo and-ok
+&> out.txt
+```
+
+**Ожидание:** пустой `&` — `Usage: & <command>`. `& cmd` открывает **новое окно** терминала (`:term`-механика: `$TERMINAL`, иначе системные) и сразу возвращает приложение — TUI продолжает работать, журнал не ждёт команду. **Вкладка вместо окна:** `term_open: tab` в `settings.yml` (или `$IDVJPY_TERM_OPEN=tab`) — `gnome-terminal --tab -- cmd`, `konsole --new-tab -e cmd`; у терминала без вкладок (`xterm`, `alacritty`) — явная ошибка, а не окно молча. В блоке — `Window: <команда>` (секреты — `****`) и `Opened: <argv> pid N`; вывод остаётся в том окне, а не в журнале. `$VAR`/`$OUT` подставляются как обычно, а **значения `$$`-секретов в текст не попадают** — в окно едет `$NAME`, значение приходит через env (`ps` его не покажет). Строка пишется в историю (↑ и файл). `&&` и `&>` остаются синтаксисом shell (`&> out.txt` создаёт файл, окно не открывается); без `$TERMINAL` и системных терминалов — явная ошибка `set $TERMINAL=`. Окно закрывается, когда команда закончилась. Годится в демо/`run:`-шагах — в отличие от `>` TUI не снимается.
+
+Автотесты: `tests/test_window_command.py` (argv `bash -c`, cwd, env без значения секрета, история, Usage, ошибка без терминала, `&&`/`&>`).
 
 ---
 
@@ -1639,7 +1655,7 @@ printf '%s\n' \
 
 ---
 
-**Версия документа**: v1.119
-**Версия приложения**: v1.173
+**Версия документа**: v1.120
+**Версия приложения**: v1.174
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_seed_sqlite.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`, `tests/test_mcp_server.py`  
 **Дата**: 2026-09-21

@@ -81,6 +81,14 @@ command_timeout: 10
 # Если параметр отсутствует, используется true.
 terminal_mouse: true
 
+# Где открывается системный терминал (`:term`, `:new`, `& cmd`):
+#   window — новое окно (по умолчанию);
+#   tab    — вкладка в уже открытом окне (gnome-terminal --tab, konsole --new-tab,
+#            kgx/xfce4-terminal/mate-terminal). Терминал без вкладок (alacritty,
+#            xterm, kitty, …) — явная ошибка, а не окно вместо вкладки.
+# Быстрый переключатель без правки файла: $IDVJPY_TERM_OPEN=tab.
+term_open: window
+
 # Цветовая тема TUI. `d` переключает textual-dark / textual-light и сохраняет сюда.
 # Другие имена: :theme  (nord, dracula, gruvbox, catppuccin-mocha, …).
 # matrix — своя тема приложения: зелёный фосфор на почти чёрном (как в скринсейвере),

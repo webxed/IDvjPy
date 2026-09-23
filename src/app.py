@@ -158,6 +158,7 @@ try:
     from gui_open import (
         GuiOpenError,
         format_opened,
+        normalize_term_mode,
         open_file_manager,
         open_terminal,
         open_terminal_command,
@@ -2578,7 +2579,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.173"
+    VERSION = "v1.174"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2675,6 +2676,7 @@ class CommandRunner(App):
     PREFIX_VAR = "$" # Новый префикс для переменных
     PREFIX_SECRET = "$$"  # Секретные переменные: ввод/вывод маскируются
     PREFIX_TTY = ">"
+    PREFIX_WINDOW = "&"  # run the rest of the line in a new terminal window
     PREFIX_NO_TIMEOUT = "@"  # run the rest of the line without command_timeout
     
     CMD_QUIT = "q"
@@ -2756,6 +2758,10 @@ class CommandRunner(App):
     # терминале), false — весь вывод плоский. Прочие escape-последовательности
     # вырезаются всегда.
     KEY_ANSI_COLORS = "ansi_colors"
+    # Где открывать системный терминал (`:term`, `:new`, `& cmd`): новое окно
+    # (`window`, по умолчанию) или вкладка в уже открытом (`tab`; gnome-terminal
+    # `--tab`, konsole `--new-tab`, …). Переопределяется `$IDVJPY_TERM_OPEN`.
+    KEY_TERM_OPEN = "term_open"
     # Ветка git в приглашении строки ввода: cwd внутри репозитория → `~/proj (main) ❯`.
     # Читается из `.git/HEAD` (см. `src/git_prompt.py`), без подпроцессов.
     KEY_GIT_PROMPT = "git_prompt"
@@ -2911,6 +2917,8 @@ class CommandRunner(App):
         self.screensaver_matrix: bool = True
         # Ветка git в приглашении строки ввода (cwd внутри репозитория).
         self.git_prompt: bool = True
+        # Где открывать терминал: `window` или `tab` (`term_open`).
+        self.term_open: str = "window"
         # Время последней активности (для проверки, что простой реально есть)
         # и признак «TUI спит» (`> cmd`, Ctrl+O, `:ed` — настоящий TTY).
         self._ss_bumped_at: float = 0.0
@@ -4038,6 +4046,7 @@ class CommandRunner(App):
                         settings.get(self.KEY_SCREENSAVER_MATRIX, True)
                     )
                     self.git_prompt = bool(settings.get(self.KEY_GIT_PROMPT, True))
+                    self.term_open = normalize_term_mode(settings.get(self.KEY_TERM_OPEN))
                     self.k8s_completion = bool(
                         settings.get(self.KEY_K8S_COMPLETION, False)
                     )
@@ -4082,6 +4091,12 @@ class CommandRunner(App):
         env_line_api = os.environ.get("IDVJPY_LINE_BLOCKS", "").strip().lower()
         if env_line_api:
             self._line_api_blocks = env_line_api not in ("0", "false", "no", "off")
+
+        # Терминал для `:term` / `:new` / `& cmd`: `$IDVJPY_TERM_OPEN=tab` —
+        # быстрее, чем править settings.yml (`window` — вернуть окно).
+        env_term_open = os.environ.get("IDVJPY_TERM_OPEN", "").strip()
+        if env_term_open:
+            self.term_open = normalize_term_mode(env_term_open)
 
         # Tags DB is the library, not the shell cwd. Pin before init/connect.
         self.db_file = self._data_path(self.db_file or self.FILE_DATABASE)
@@ -5536,6 +5551,7 @@ class CommandRunner(App):
         if not user_input.startswith((
             self.PREFIX_CMD, self.PREFIX_TAG, self.PREFIX_QUERY,
             self.PREFIX_BANG, self.PREFIX_PIPE, self.PREFIX_VAR, self.PREFIX_TTY,
+            self.PREFIX_WINDOW,
         )):
             login_cluster = parse_cluster_login(user_input)
             if login_cluster:
@@ -5563,6 +5579,9 @@ class CommandRunner(App):
             self.handle_variable_assignment(user_input)
         elif user_input.startswith(self.PREFIX_TTY) and not user_input.startswith(">>"):
             self.handle_tty_command(user_input)
+        elif user_input.startswith(self.PREFIX_WINDOW) and not user_input.startswith(("&&", "&>")):
+            # `&&` / `&>` — синтаксис shell, а не наш префикс (как `>>` у `> cmd`).
+            self.handle_window_command(user_input)
         elif has_command_refs:
             # Команды с ссылками (!tag[tid] или !ID), даже с операторами
             # Раскрываем ссылки и вставляем в input, НЕ выполняем
@@ -6093,7 +6112,7 @@ class CommandRunner(App):
             if command == self.CMD_FM:
                 argv, proc = open_file_manager(path_arg, env)
             else:
-                argv, proc = open_terminal(path_arg, env)
+                argv, proc = open_terminal(path_arg, env, mode=self.term_open)
         except GuiOpenError as exc:
             self.add_block(InfoBlock(str(exc)))
             return
@@ -7286,7 +7305,7 @@ class CommandRunner(App):
         # получит от своей обёртки, если она у него есть.
         env.pop("IDVJPY_CWD_FILE", None)
         try:
-            argv, proc = open_terminal_command(command, cwd=target_dir, environ=env)
+            argv, proc = open_terminal_command(command, cwd=target_dir, environ=env, mode=self.term_open)
         except GuiOpenError as exc:
             self.add_block(InfoBlock(str(exc)))
             return
@@ -9602,6 +9621,55 @@ class CommandRunner(App):
             text += "\n" + "\n".join(extra)
         self.add_block(InfoBlock(text))
         self._request_shift_enter_encoding()
+
+    def handle_window_command(self, user_input: str) -> None:
+        """`& cmd` — выполнить команду в отдельном окне терминала.
+
+        Отличие от соседей: `> cmd` отдаёт чужому процессу сам TUI (пауза, вывод
+        в терминале), `@ cmd` снимает таймаут, а `&` открывает **новое окно**
+        (`:term`-механика, `$TERMINAL`) и возвращает приложение сразу — журнал
+        не ждёт команду, а вывод остаётся в том окне (в блоке — только факт
+        запуска). Годится для интерактива и хвостов: `& htop`, `& kubectl logs -f`.
+
+        Значения `$$`-секретов в текст **не подставляются** ( `keep_secrets`):
+        иначе они уехали бы в argv нового окна (`ps`, заголовок терминала) — их
+        знает env, там shell раскроет `$NAME` сам.
+        """
+        command = user_input[len(self.PREFIX_WINDOW):].strip()
+        if not command:
+            self.add_block(InfoBlock(
+                "Usage: & <command>  (runs it in a new terminal window)"
+            ))
+            return
+
+        if RE_COMMAND_REFS.search(command):
+            resolved = self._resolve_command_references(command)
+            if not resolved:
+                self.add_block(InfoBlock("Error: Unable to resolve command references."))
+                return
+            command = resolved
+
+        final_command = self._expand_aliases(
+            self._substitute_variables(command, keep_secrets=True)
+        )
+        environ = {**os.environ, **self.local_env}
+        try:
+            argv, proc = open_terminal_command(
+                ["/bin/bash", "-c", final_command],
+                cwd=os.getcwd(),
+                environ=environ,
+                mode=self.term_open,
+            )
+        except GuiOpenError as exc:
+            self.add_block(InfoBlock(str(exc)))
+            return
+        except OSError as exc:
+            self.add_block(InfoBlock(str(exc)))
+            return
+        self.add_block(InfoBlock(
+            f"Window: {escape(self._mask_secrets(final_command))}\n"
+            f"{format_opened(argv, proc.pid)}"
+        ))
 
     def _run_in_tty(self, command: str) -> int:
         """Отдаёт терминал дочернему процессу; после выхода подхватывает env/PWD."""

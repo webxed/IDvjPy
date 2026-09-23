@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.173) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.174) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.173` → `v1.174`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.174` → `v1.175`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -113,7 +113,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/llm_client.py`**: `:llm` calls to LLM providers described in `llm_providers.yml` (env-only secrets, urllib, background thread); `expand_file_refs` turns `@file` into inlined text; `history_turns` keeps the last N pairs in memory (`%HISTORY%` in custom bodies); provider `answer_language` — `auto`/absent takes the UI language name (`llm.answer_language`), `off`/`none`/`no`/`false`/`0` disables the rule (`_answer_language`)
 - **`src/llm_context.py`**: app context for LLMs — prefix cheat-sheet plus a budgeted digest of the live tag library (`tag`/`tid`/`command`/`comment`, task-relevant tags first). Powers `:llm ask <task>` (always) and the `app_context: true|N` provider key (opt-in for plain `:llm`); `extract_refs` filters answers down to refs that really exist
 - **`src/cheat_sh.py`**: `:cht <query>` — cheat.sh (cht.sh) cheat sheets (query → URL with `+`, ANSI stripping, proxy-aware urllib fetch in a background thread). The service returns `text/plain` only to a curl-like User-Agent; settings `cheat_sh_url` / `cheat_sh_options`
-- **`src/gui_open.py`**: `:fm` / `:term` — detach a file manager or system terminal; `open_terminal_command` / `build_terminal_exec_argv` run a command inside a terminal (used by `:new` to launch another app window; Linux / macOS / Windows; `$FILEMAN` / `$TERMINAL` override)
+- **`src/gui_open.py`**: `:fm` / `:term` — detach a file manager or system terminal; `open_terminal_command` / `build_terminal_exec_argv` run a command inside a terminal (used by `:new` and `& cmd`; Linux / macOS / Windows; `$FILEMAN` / `$TERMINAL` override). `mode='tab'` (setting `term_open`, `$IDVJPY_TERM_OPEN`) asks for a **tab in an already open window** instead of a new window: per-terminal flag table `_TERMINAL_TAB_FLAG` (`gnome-terminal --tab`, `konsole --new-tab`, `kgx`/`xfce4-terminal`/`mate-terminal --tab`), the auto-pick walks `LINUX_TERMINALS` for the first terminal that *can* tab (`_pick_linux_terminal`), an explicit `$TERMINAL` gets the flag inserted after its base name, Windows uses `wt -w 0 nt`, and a terminal that cannot tab (alacritty/xterm/foot/kitty/wezterm) raises an explicit `GuiOpenError` — never a silent window; `normalize_term_mode` keeps unknown values at `window`
 - **`src/editor_open.py`**: `:ed` — external editor for a file, `$OUT` or `$BLOCK` (settings `editor:` → `$VISUAL`/`$EDITOR` → system list; runs in a real TTY via `_run_in_tty`; temp copies for block output)
 - **`src/screensaver.py`**: idle overlay (`:screensaver`) — matrix digital rain (`MatrixRain`; `screensaver_matrix: true`, default) or the NC-style starfield (`StarField`); flying live clock/date (starfield only); full-width green library ticker; bottom-left command-help typewriter and bottom-right load/RAM (1s `/proc`; may overlap when the window is narrow); `screensaver_idle` seconds, `0` = off; `screensaver_stars: false` hides flying dust/tokens in the starfield; `:screensaver matrix|stars` picks the canvas once (no settings write). Frame cost: the canvas is drawn from `cells_to_text()` (same-style neighbours in one `Text.append`, styles parsed once via `_style_object` — a per-cell build was ~9.6k appends/frame) and `_paint` is throttled to `PAINT_INTERVAL` (10 fps) while skipping frames whose `field.version` did not change; `tick()` returns whether anything visible changed (matrix counts only visible-row flicker and integer head shifts). Measured on 200×50: canvas 24.7 → 4.5 ms per built frame, 14.7 → 7.3 repaints/s, ~1.09 → 0.10 s CPU per 3 s; timer is stopped in `on_unmount`
 - **`src/seed_catalog.py`**: empty-DB welcome catalog (click `--seed` → input)
@@ -125,7 +125,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 - **`src/app.tcss`**: Textual styling (`.tcss` — расширение Textual CSS; браузерный CSS-линтер редактора не должен его разбирать — иначе ложные `property value expected` на `$surface`/`dock`). Путь читается из `CommandRunner.CSS_PATH`; сторожит `tests/test_stylesheet.py`
   - Блок в фокусе подсвечивается смешением `background: $primary 12%` (сплошной `$primary-darken-1` слепил на больших блоках; 25% тоже читалось ярко — прирост яркости над фоном блока 65 → 19 → ~9); правила `Screen.matrix-mode …` меняют рамки только у темы matrix
 - **Темы**: своя `matrix` живёт в `src/app.py` (`MATRIX_THEME` — зелёный фосфор `#00ff5f` на почти чёрном, регистрируется в `on_mount` до применения темы из settings.yml). Класс `MATRIX_CLASS` (`matrix-mode`) на `Screen` держит `watch_theme` — он ловит все три пути смены темы (settings.yml, `:theme`, клавиша `d`), по классу app.tcss красит рамки. Смена темы не трогает чужие темы: их CSS остаётся прежним. Тесты — `tests/test_themes.py`
-- **`settings.yml`**: buffer limits, timeout, DB file, `terminal_mouse`, `screensaver_idle`, `screensaver_matrix`, `screensaver_stars` (cwd)
+- **`settings.yml`**: buffer limits, timeout, DB file, `terminal_mouse`, `term_open`, `screensaver_idle`, `screensaver_matrix`, `screensaver_stars` (cwd)
 - **`.bashrc_term` / `.bashrc_term_<instance>`**: env vars from `$VAR=val` (cwd; template `src/.bashrc_term.example`)
 
 ### Command Prefix System
@@ -135,6 +135,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | (none) | Execute shell command via subprocess, add to session history |
 | `> cmd` | Suspend TUI (`App.suspend()`), run with a real TTY (`htop`, `vim`, `ssh`). No timeout, stdout not captured. `>>` is left to the shell. On exit: dump that bash's env/`$PWD` into the TUI. Nested `> bash` exports are not visible. Prompts belong here — background commands get `stdin=DEVNULL` |
 | `@ cmd` | Run without `command_timeout` (long non-TTY jobs; stdin is `/dev/null`, stdout still captured) |
+| `& cmd` | Run the command in a **new terminal window** (`:term` mechanics, `$TERMINAL`; `term_open: tab` asks for a tab in an open window instead): the TUI keeps running and the output stays in that window (the journal block only says it was opened). `&&` / `&>` are left to the shell (like `>>` for `>`). The command is handed to `bash -c` with `$NAME` of live `$$`-secrets **kept** (`_substitute_variables(..., keep_secrets=True)`) — the values travel in the child env, so they never reach that window's argv (`ps`, title); other `$VAR`/`$OUT` expand as usual. Safe in demos/`run:` steps (`session_line_needs_wait`), unlike `>` |
 | `#tag cmd` | Save command to database with tag (literal text; refs not expanded on save) |
 | `# command` | Park the line in `history_<instance>.txt` and the journal; do not run (`#` + space, like bash) |
 | `#tag=` / `#tag=ID=` | Tag / command comment (ID = tid or global `<id>`) |
@@ -192,7 +193,7 @@ Install from `requirements.txt`:
 - `Pygments==2.19.2` - Syntax highlighting
 - `portalocker` - file locking
 
-Dev/test-only packages (`pytest`, `pytest-asyncio`, `pytest-timeout`) live in `requirements-dev.txt`. GitHub Actions runs the whole suite on every push/PR to `main` (`.github/workflows/tests.yml`).
+Dev/test-only packages (`pytest`, `pytest-asyncio`, `pytest-timeout`) live in `requirements-dev.txt`. GitHub Actions runs the suite on every push/PR to `main` (`.github/workflows/tests.yml`). **One job for the whole suite used to hit the 30-minute cap**, so the `pytest` job is now a **6-shard matrix**: each shard collects test counts per file (`--collect-only`, ~0.6 s) and greedily packs files into the lightest shard — balance is by **test count**, not by time (the `slow` marker covers just 430 of 1321 tests; the remaining 891, Pilot included, are already ~15 min on their own, so splitting by that marker was the wrong lever). Measured: 221 tests / 4.3 min for the heaviest shard. `--durations=15` in the log is how the balance gets refined; `fail-fast: false`, pip cache and `concurrency` (cancel superseded pushes) are set. `tests/test_ci_shards.py` guards the invariants: more than one shard, `--timeout=600`, and a **partition** of every `tests/test_*.py` (no gaps, no duplicates). The `docker-demo` job builds the demo stand and smoke-tests it.
 
 ## Key Configuration
 
@@ -203,6 +204,7 @@ Edit `settings.yml`:
 - `database_tags_file`: SQLite filename (default: `mytags.db`)
 - `command_timeout`: seconds; `0` = no timeout (default: 10)
 - `terminal_mouse`: `true` — click focuses a block, wheel scrolls the journal; `false` — OS text selection (clicks do not focus)
+- `term_open`: `window` (default) or `tab` — where a system terminal opens for `:term`, `:new` and `& cmd` (see `src/gui_open.py`; `$IDVJPY_TERM_OPEN` overrides it without editing the file). A terminal without tab support is an explicit error, not a window
 - `theme`: Textual theme name (`textual-dark` default). `d` toggles dark/light and writes this key; `:theme nord` picks a named theme
 - `language`: UI language for the message catalogues (`src/locales/<lang>.yml`, parts in `src/locales/<lang>/*.yml`, help files in `src/locales/help/<lang>/`; `en` is the source of truth). `:lang` shows/sets/saves it; `--lang` and `$IDVJPY_LANG` override per run; `auto` follows `$LC_ALL`/`$LC_MESSAGES`/`$LANG`. Missing keys fall back to `en`. The same key also picks the demo-tour text layer (`src/demos/text/<lang>/`) and the seed comments (`src/seed_text/<lang>/`), so the seeded library speaks the app language. `:relang [code]` re-translates an already-seeded DB without a re-seed. Parser/resolution — `src/i18n.py`
 - `check_updates`: `true` (default) — on start, compare `VERSION` with GitHub main. `:update` always checks. Tests set this to `false`. Proxy 407: `$PROXY_USER` / `$PROXY_PASS` in `.bashrc_term` (and `HTTPS_PROXY`).

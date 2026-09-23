@@ -221,6 +221,9 @@ def session_line_needs_wait(text: str) -> bool:
         return True
     if s.startswith(">"):
         return False
+    # `& cmd` — окно открывается сразу, блок в журнале появляется тут же.
+    if s.startswith("&") and not s.startswith(("&&", "&>")):
+        return False
     if s.startswith((":", "?", "$")):
         return False
     if s.startswith("!!"):
