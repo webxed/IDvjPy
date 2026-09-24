@@ -100,7 +100,7 @@ docker run --rm -t -v idvjpy-demo-data:/data idvjpy-demo --demo short --demo-qui
   RUN apk add --no-cache docker-cli kubectl
   ```
   и добавить нужные монтирования (`/var/run/docker.sock`, `~/.kube/config`).
-- `:fm` / `:term` не откроются — в контейнере нет X/Wayland.
+- `:fm` / `:term` / `& cmd` не откроются — в контейнере нет X/Wayland (и терминала, в который открывать окно или вкладку).
 - Скан-PDF: OCR в образе нет (`ocrmypdf` тянет tesseract, ghostscript, qpdf и другие системные пакеты) —
   `:md` честно скажет, что нужен OCR. На хосте достаточно `apt/dnf/apk/brew install ocrmypdf`,
   но для не-английских сканов нужен ещё языковой пакет (`tesseract-ocr-<язык>`) и язык в `md_ocr`.

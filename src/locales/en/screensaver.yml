@@ -12,7 +12,7 @@ screensaver:
   - :rg pat [dir]  — search .md (ripgrep/built-in); click path:line
   - :cd [path]  — show or change shell cwd (tags DB stays at launch dir)
   - :fm [path]  — OS file manager (new window)
-  - :term [path]  — system terminal (new window)
+  - :term [--tab|--window] [path]  — system terminal (window or tab — term_open)
   - :env  — re-read .bashrc_term* into this process
   - :session [NAME]  — show or switch instance
   - :session new [NAME] [DIR]  — app window in a new terminal
@@ -50,6 +50,7 @@ screensaver:
   - :i  — Kubernetes Ingress Analyzer
   - '> cmd  — real TTY (htop, vim, ssh); env/$PWD come back'
   - '@ cmd  — run without command_timeout (long non-TTY jobs)'
+  - '& cmd  — separate terminal window or tab; the TUI keeps running'
   - '#tag cmd  — save literal template (refs not expanded)'
   - '# command  — park a line in history, do not run'
   - '#tag- / #tag!  — soft-delete / restore a tag'

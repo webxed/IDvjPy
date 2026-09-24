@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.176**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.177**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.122 (app v1.176) |
+| `test_cmd.md` | Manual plan v1.123 (app v1.177) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -163,7 +163,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_commands.py` | echo, history, vars, paste, Ctrl+D clear input, `:c`/`:q`, merge `.bashrc_term` + `_default`, `> cmd` TTY prefix, `:env`, empty-DB seed catalog, `:md`, `:backup`, `:fm`/`:term`, click `--seed` insert, history compact, `:session` |
 | `tests/test_md_convert.py` | Документы → markdown для `:md` (40): детект «текст/документ» по содержимому (PDF/OLE2/RTF/ZIP-пакет/NUL/cp1251), поиск конвертера (settings → env → автопоиск; явный не подменяется), кэш и его инвалидация по mtime/размеру/конвертеру, ошибки (`converter_missing`/`no_converter`/`failed`/`timeout`/`empty`), разбор stderr (причина, а не хвост подсказок), флаги `pandoc`, локальный OCR скан-PDF: поиск `md_ocr` (env/`off`/`on`/YAML-булев), безопасные флаги и `--sidecar`, распознавание → повторная конвертация → кэш, `NeedsOcrError` от anydoc, текст из sidecar при отказе конвертера, `ocr_missing`, `ocr_language` (нет языкового пакета), в TUI — конвертация, OCR скана, сообщение про отсутствующий движок, кэш при пропавшем конвертере, подсказки, текстовый файл не уходит в конвертер; живые тесты с настоящими `anydoc`, `ocrmypdf`+`tesseract` и русским языковым пакетом (skip, если их нет) |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!`, `:export` одного тега и `:export * file.json` (JSON всей библиотеки) |
-| `tests/test_cwd_prompt.py` | Приглашение строки ввода: `shorten_path` (`~`, хвост длинного пути, узкое окно), путь виден и обновляется после `cd`/`:cd`, плейсхолдера нет, клик по пути фокусирует ввод |
+| `tests/test_cwd_prompt.py` | Приглашение строки ввода: `shorten_path` (`~`, хвост длинного пути, узкое окно), путь виден и обновляется после `cd`/`:cd`, ветка git рядом с путём (и пропадает вне репозитория), плейсхолдера нет, клик по пути фокусирует ввод |
 | `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
 | `tests/test_journal_follow.py` | Режим чтения: колесо вверх/фокус на блоке не уводит вид и фокус; возобновление при докрутке до низа и по Enter; `:send!` во время чтения |
 | `tests/test_line_api_block.py` | Line API: включение ключом/`IDVJPY_LINE_BLOCKS`, вывод/высота/свёртка/курсор, инфоблоки действительно рисуются (`render_line`), выделение мышью по строкам + подсветка, клетка→символ (`meta['offset']`) остаётся точной |
@@ -178,7 +178,12 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_json_viewer.py` | expand, search, F5 from focused cat, bracket keys, jq draft / `$JSON` |
 | `tests/test_output_viewer.py` | Просмотр вывода (F7 / `:log`, 24): полный вывод без обрезки, выбор блока, прокрутка (стрелки без фильтра), поиск и подсветка строки целиком, фильтр «только совпадения» с исходными номерами, стрелки ↑/↓ по совпадениям в фильтре, Enter и Ctrl+C копируют подсвеченную строку (без поиска — явное «nothing selected»), Ctrl+C в поле поиска — текст поля |
 | `tests/test_demo.py` | YAML `--demo` (short/full/ip/features/all, guardrails тура `all`), `:playbook`, `loop: N` / `loop: true` |
-| `tests/test_gui_open.py` | `:fm` / `:term` argv by OS, `$FILEMAN` / `$TERMINAL`, detached spawn |
+| `tests/test_gui_open.py` | `:fm` / `:term` argv по ОС, `$FILEMAN` / `$TERMINAL`, detached spawn, режим вкладки (`normalize_term_mode`, `_TERMINAL_TAB_FLAG`, пропуск терминалов без вкладок, явные ошибки, win32 `wt -w 0 nt`) |
+| `tests/test_term_mode.py` | `:term --tab|--window`: режим терминала на сессию (`settings.yml` не меняется), флаг вместе с путём, `--nope`/два пути → `Usage:` без смены режима, режим доезжает до `& cmd`, ошибка открытия режим не откатывает |
+| `tests/test_window_command.py` | `& cmd`: argv `bash -c`, cwd, env без значения секрета (значение — в env, в argv только `$NAME`), маскировка в блоке, история, `Usage`, ошибка без терминала, `&&`/`&>` остаются синтаксисом shell, `term_open: tab` доезжает до режима |
+| `tests/test_git_prompt.py` | Ветка git для приглашения: `.git` вверх по дереву, `.git`-файл worktree с относительным `gitdir:`, отделённый HEAD → `@sha`, пустой/битый `HEAD`, не репозиторий, инвалидация кэша по `(mtime, размер)`, обрезка длинного имени |
+| `tests/test_setup_shell.py` | `./setup.sh --shell-helper`: блок в rc (маркеры, идемпотентность, `$IDVJPY_RC`, zsh, `command idvjpy` / путь клона), уборка `command rm` переживает `alias rm='rm -i'`, venv не трогается, `--help`/неизвестный флаг |
+| `tests/test_ci_shards.py` | CI-шарды: больше одного, `--timeout=600`, пустой шард — ошибка, раскладка = партиция всех `tests/test_*.py` (без потерь и дублей), баланс ≤ 1.2× |
 | `tests/test_screensaver.py` | starfield и матричный дождь (`MatrixRain`: падение/сброс, глифы, палитра), `:screensaver` и холст по `screensaver_matrix` / `:screensaver matrix|stars`, idle timer, key swallowed, `:send` снимает заставку |
 | `tests/test_docker_stand.py` | Файлы docker-стенда: seed-скрипты в entrypoint, compose-том/TTY, Dockerfile, `.dockerignore`, job CI, конвертер документов в образе и собранный образец `report.docx` |
 | `tests/test_tag_scope.py` | Область видимости тегов (модуль): `split_names` (пробелы/запятые), `classify` (группа побеждает одноимённый тег, известные/чужие имена), `only`/`hide`, `rm` на пустом → `hide`, `rm` из `only`, снятие последнего имени → пустой scope, смешение режимов → `ScopeModeError`, `split`/`describe`, round-trip `scope_<сессия>.json` и изоляция сессий, битый файл/нет файла |
@@ -200,7 +205,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.176 |
+| `src/app.py` | TUI (`CommandRunner`), v1.177 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -251,6 +256,11 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.177
+
+- **Подсказки заставки догнали приложение.** `COMMAND_HELP_LINES` (`src/screensaver.py`) и `screensaver.help` в трёх локалях (65 строк, индексы совпадают, `en` по-прежнему байт-в-байт равен встроенному набору — сторож `tests/test_i18n.py`): добавлена строка про `& cmd` («отдельное окно/вкладка терминала; TUI продолжает работать»), а `:term` теперь описывает режим (`:term [--tab|--window] [path] — system terminal (window or tab — term_open)`). Ловушка YAML: `: ` внутри plain-скаляра разбирается как маппинг (`tab: term_open`) — текст переписан без двоеточия, а не заковычен по месту. Сторож, чтобы список не отстал снова: `tests/test_screensaver.py::test_command_help_covers_every_app_command` — каждое имя из `COLON_COMMAND_NAMES` есть в подсказках на всех трёх языках (раньше эту сверку делали руками, v1.161).
+- **Актуализация документации.** `README` ×3: строки `& cmd` и `:new` теперь говорят про окно/вкладку (`term_open`). Tests-таблица `COMPACT_SUMMARY.md` дополнена файлами, созданными за последние версии (`test_term_mode.py`, `test_window_command.py`, `test_git_prompt.py`, `test_setup_shell.py`, `test_ci_shards.py`), а строки `test_gui_open.py` и `test_cwd_prompt.py` — тем, что в них появилось (режим вкладки; ветка git в приглашении). `DEMO.md`: в акт 1 добавлена реплика про `& sleep 30` и фраза про `&` в «трёх привычках». `docker/README.md`: `& cmd` попал в список того, что в контейнере не откроется (нет X/Wayland).
 
 ## v1.176
 

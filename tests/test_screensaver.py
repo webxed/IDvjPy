@@ -113,6 +113,27 @@ def test_help_typewriter_overwrites_left_to_right():
     assert tw.visible() == "BB"
 
 
+def test_command_help_covers_every_app_command():
+    """Подсказки заставки не отстают от приложения: каждая `:`-команда упомянута.
+
+    Список внизу заставки — тоже справка; раньше его сверяли руками (v1.161) и он
+    успел отстать на пять команд. Проверяем все имена из реестра `:`-команд — имена
+    префиксов (`& cmd`, `> cmd`, `| cmd`, `@ cmd`) на заставке тоже есть, но их
+    сторожит соответствующий набор префиксов, а не этот список.
+    """
+    import i18n
+    from colon_commands import COLON_COMMAND_NAMES
+
+    for lang in ("en", "ru", "zh"):
+        i18n.set_language(lang)
+        try:
+            text = "\n".join(command_help_lines())
+            missing = [name for name in COLON_COMMAND_NAMES if f":{name}" not in text]
+            assert not missing, f"нет в подсказках заставки ({lang}): {missing}"
+        finally:
+            i18n.set_language("en")
+
+
 def test_help_typewriter_shuffles_pauses_and_cycles():
     lines = tuple(f"L{i}  — d{i}" for i in range(8))
     a = HelpTypewriter(lines, seed=1, type_cps=500, pause=0.01)

@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.176 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.177 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -205,7 +205,7 @@ CI 会构建该镜像并运行冒烟测试 —— [`.github/workflows/tests.yml`
 | （无） | 执行 shell 命令 | `ls -la` |
 | `> cmd` | 交给真正的 TTY（htop、vim、ssh）。退出后仍是同一个 shell 的 env/$PWD | `> htop` |
 | `@ cmd` | 不带 `command_timeout` 执行（长时间的非 TTY 任务；stdin —— `/dev/null`） | `@ terraform apply` |
-| `& cmd` | 在**新的终端窗口**中执行（TUI 继续运行；输出留在那个窗口，日志只记录已启动） | `& kubectl logs -f pod/api-1`、`& htop` |
+| `& cmd` | 在**单独的终端**中执行（窗口或标签页，同 `:term`；TUI 继续运行；输出留在那里，日志只记录已启动） | `& kubectl logs -f pod/api-1`、`& htop` |
 | `#tag cmd` | 保存带标签的命令（文本原样） | `#deploy rsync -av src/ host:` |
 | `# command` | 写入历史，不执行（如同 bash 中的 `# …`；`#` 后有空格） | `# curl https://example.com` |
 | `#tag=` / `#tag=ID=` | 标签 / 命令的注释 | `#deploy=prod rsync` |
@@ -304,7 +304,7 @@ idvjpy() {                     # shell 的 cwd 跟随应用
 - `:term [path]` —— 在新窗口中打开系统终端。Linux：`xdg-terminal-exec` / `gnome-terminal` / …；macOS：Terminal.app；Windows：`wt` 或 `cmd`。自定义：`$TERMINAL`。**用标签页代替窗口** —— `settings.yml` 中的 `term_open: tab`（或 `$IDVJPY_TERM_OPEN=tab`）：`gnome-terminal --tab`、`konsole --new-tab`、`kgx`/`xfce4-terminal`/`mate-terminal`；不支持标签页的终端（`alacritty`、`xterm`、`kitty`——后者的标签页只能通过其服务端）会给出明确错误，而不是默默打开窗口。该模式对 `:term`、`:new`、`& cmd` 共通。**仅对本会话切换：** `:term --tab` / `:term --window`（会立即打开，不改 `settings.yml`）——可与路径同用：`:term --tab /var/log`
 - `:env` —— 在已运行的应用中重新读取 `.bashrc_term*`（以及 `~/.bashrc` 的别名）。在 `> cmd` 之后，**同一个** bash 的导出会被自动采纳（嵌套的 `> bash` 里面再 `export` —— 则不会）
 - `:session` —— 当前实例（历史 + `.bashrc_term_*`）。`:session NAME` —— 切换或创建（标签数据库是共用的）。当前会话名称可在应用头部和终端窗口/标签标题中看到（`IDvjPy_term · NAME`，有命令运行时为 `— N running`）
-- `:new [NAME|-] [DIR]`（以及 `:session new …`）—— 在独立终端中启动一个新的应用窗口：自己的会话（`.bashrc_term_<NAME>` / `history_<NAME>.txt`），共用的 data 目录和标签数据库。`DIR` —— 新会话的工作目录（默认是 data 目录）；名称为 `-`/空时自动取 `sN` —— **正在运行的窗口之间**最小的空闲编号（data 目录中的 `session_<名称>.pid` 注册表，见 `src/session_registry.py`）：已关闭会话的文件不会占用名称，而 `s2` 关闭后该名称又空闲了。`$$` 秘密不会迁移。页脚中的 `New session` 按钮 / `Ctrl+N`。终端 —— `$TERMINAL`（例如 `kitty` / `alacritty -e`），否则从系统终端中选择；启动 —— `$IDVJPY_LAUNCH`
+- `:new [NAME|-] [DIR]`（以及 `:session new …`）—— 在独立终端中启动一个新的应用窗口：自己的会话（`.bashrc_term_<NAME>` / `history_<NAME>.txt`），共用的 data 目录和标签数据库。`DIR` —— 新会话的工作目录（默认是 data 目录）；名称为 `-`/空时自动取 `sN` —— **正在运行的窗口之间**最小的空闲编号（data 目录中的 `session_<名称>.pid` 注册表，见 `src/session_registry.py`）：已关闭会话的文件不会占用名称，而 `s2` 关闭后该名称又空闲了。`$$` 秘密不会迁移。页脚中的 `New session` 按钮 / `Ctrl+N`。终端 —— `$TERMINAL`（例如 `kitty` / `alacritty -e`），否则从系统终端中选择（窗口或标签页 —— `term_open`）；启动 —— `$IDVJPY_LAUNCH`
 - `:send <会话|*> <命令>` —— 把命令转发到另一个会话（`:new` 窗口）：插入目标会话的输入行，在那里另按 Enter 运行。`:send!` —— 立即执行（`:send! <会话|*> <命令>`）。`*` —— 发给除自己以外的所有会话。命令在发送方就完成物化（`$VAR`/`$OUT`、别名，以及 `|@label`/`|@N` → `<来源> | <命令>`）；`$$` 秘密以**名称**传输（`$TOKEN`），而目标没有的值会写入它的秘密存储（`secrets_<会话>.json`，0600，退出时清理）——因此命令在那里确实能执行，而信箱、日志和历史中都不会有该值；目标已有的值不会被覆盖（发送方日志中能看到什么被传递了、什么留在了目标那边）。缓冲区标记在每个会话中各自独立，因此 `|@…` 会展开为完整调用（来源会在目标会话中重新执行）；发送方没有该标记——命令不会发送。交换通过 data 目录中的 `inbox_<会话>.jsonl`（0600）进行；发给未启动会话的消息会等它启动。即使正在输入文本时收到也会追加到末尾，不会覆盖。在 `:send ` 之后按 Tab 会提示会话名称（`*` —— 发给其余所有会话；当前会话有标记）。`:send` / `:send!` 会写入 `history_*.txt`（可用 ↑ 重复、`:h /` 搜索），但不会作为提示给出
 - `:scope [add|rm|clear] …` —— **本窗口**的标签范围：`:scope add git` 在列表中只保留 git 手册，`:scope rm k8s` —— 隐藏 k8s，`:scope clear`（或 `:scope all`）—— 重新显示全部；不带参数时显示当前状态。它过滤**列表与提示**（`?`、`??`、`?text`、`!`/Tab 补全、屏保滚动条）；显式引用与命令（`?tag`、`!tag[tid]`、`:run`、`:stats`、`:export`、`:alias`、`:send`）不看过滤器 —— 已保存的链条和其他窗口的引用不会被破坏。名称可以是手册组（`linux`、`k8s`、`git` …）或单个标签；未知名称会明确报错并列出可用的组。按会话保存：数据目录中的 `scope_<会话>.json`（不会写入 SQLite，也不会随 `:export`/`:backup` 一起走）。窗口标题带有标记（`IDvjPy_term · git · only git`）。详见 `:? tags`
 - `:welcome` —— 如同空数据库时的种子目录（点击 `--seed` / `.md`）。数据库非空时启动会显示**分区**块，列出各 handbook 的现成标签（`linux`、`k8s`、`git`、ops、`自有`）

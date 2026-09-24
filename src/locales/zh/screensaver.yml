@@ -12,7 +12,7 @@ screensaver:
   - :rg pat [dir]  — 搜索 .md（ripgrep/内置）; 点击 path:line
   - :cd [path]  — 显示或更改 shell 的当前目录（标签库仍在启动目录）
   - :fm [path]  — 系统文件管理器（新窗口）
-  - :term [path]  — 系统终端（新窗口）
+  - ':term [--tab|--window] [path]  — 系统终端（窗口或标签页 —— term_open）'
   - :env  — 将 .bashrc_term* 重新读入本进程
   - :session [NAME]  — 显示或切换实例
   - :session new [NAME] [DIR]  — 在新终端中打开应用窗口
@@ -50,6 +50,7 @@ screensaver:
   - :i  — Kubernetes Ingress 分析器
   - '> cmd  — 真实 TTY（htop、vim、ssh）; env/$PWD 会恢复'
   - '@ cmd  — 不受 command_timeout 限制运行（长时间非 TTY 任务）'
+  - '& cmd  — 单独的终端窗口/标签页；TUI 继续运行'
   - '#tag cmd  — 保存字面模板（引用不展开）'
   - '# command  — 将一行放入历史，不执行'
   - '#tag- / #tag!  — 软删除 / 恢复标签'
