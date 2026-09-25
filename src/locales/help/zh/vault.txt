@@ -1,0 +1,37 @@
+[bold]Vault —— 按密码加密的密钥保管库（`:vault`）[/bold]
+
+  长期保存密钥，与 `$$NAME=…`（仅存活于本次会话）不同。文件是数据目录中的
+  `vault.json.enc`（0600）：头部公开，条目已加密（scrypt + AES-256-GCM）。
+  密码错误或文件损坏会给出明确错误，而不是显示乱码。
+
+  每次会话解锁一次；密码只留在内存中：
+
+    :vault init               创建保管库（密码需输入两次）
+    :vault unlock | lock      本次会话解锁 / 忘记
+    :vault                    文件、锁定状态、密钥名称（从不显示值）
+
+  管理条目：
+
+    :vault add NAME [hint]    添加或替换值（输入被遮蔽）
+    :vault gen NAME [len]     生成随机值
+    :vault list               名称与提示
+    :vault rm NAME            删除条目
+
+  取出值 —— 值从不打印：
+
+    :vault cp NAME               → 剪贴板（离开 TTY 时以及 60 秒后清除）
+    :vault use NAME [VAR]        → 本次会话环境中的 $VAR
+    :vault exec NAME[=VAR] -- cmd    放入子进程 env，而非 argv
+    :vault stdin NAME -- cmd         把值送入命令的 stdin
+
+  `exec` 会为已知程序自动选择变量（sshpass → SSHPASS、psql → PGPASSWORD、
+  mysql/mysqldump → MYSQL_PWD、vault → VAULT_TOKEN、restic、borg、redis-cli）；
+  其他情况请显式写 `NAME=VAR`。
+
+  规则：值不会进入日志、`:o`、`↑`、`history_*.txt`、`:send` 或 `:export`；
+  解锁期间它们会像 `$$` 密钥一样被遮蔽。`cp` 是最薄弱环节 —— 其他程序可以读取
+  剪贴板。需要 `cryptography` 包（`pip install cryptography`）；没有它应用其余
+  部分照常工作。
+
+  示例：`:vault init`、`:vault add SSH_PROD 生产 ssh`、`:vault cp SSH_PROD`
+  再 `> ssh …`（粘贴），或者 `:vault exec sshpass -- ssh user@host`。

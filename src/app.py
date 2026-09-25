@@ -121,6 +121,7 @@ try:
     import md_convert
     import remote_source
     import runbook
+    import vault
     from ansi_output import to_markup, to_plain
     from block_label import BlockLabelScreen
     from cheat_sh import (
@@ -287,6 +288,7 @@ try:
         format_update_fetch_error,
         format_update_status,
     )
+    from vault_prompt import VaultSecretScreen
 except ImportError as e:
     print(f"Error: Missing dependency - {e}", file=sys.stderr)
     print("Please install required dependencies:", file=sys.stderr)
@@ -2579,7 +2581,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.177"
+    VERSION = "v1.178"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2652,6 +2654,9 @@ class CommandRunner(App):
     HISTORY_COMPLETION_LIMIT = 20
     ENCODING = "utf-8"
     TIMER_DELAY = 2
+    # Сколько секунд секрет хранилища может лежать в буфере обмена после
+    # `:vault cp` (по выходу из TTY-сессии буфер чистится сразу).
+    VAULT_CLIPBOARD_TTL = 60
     COMMAND_TIMEOUT = 10
     FILE_LOCK_TIMEOUT = 5  # Таймаут для получения блокировки файла (секунды)
     DB_RELOAD_INTERVAL = 5  # Интервал перезагрузки БД для актуальности (секунды)
@@ -2726,6 +2731,7 @@ class CommandRunner(App):
     CMD_SEND = "send"  # переслать команду в другую сессию (вставить во ввод)
     CMD_SEND_RUN = "send!"  # то же, но сразу выполнить в целевой сессии
     CMD_SCOPE = "scope"  # какие теги показывать в этой сессии (фильтр представления)
+    CMD_VAULT = "vault"  # хранилище секретов с шифрованием по паролю (`vault.json.enc`)
     # Colon-команды, у которых аргументы — не пути: числа и поисковые шаблоны.
     # Для них `/` — начало `:o /text` (grep по выводам) / `:h /text`, а не листинг корня.
     COLON_NO_PATH_ARGS = frozenset(
@@ -2898,6 +2904,16 @@ class CommandRunner(App):
         self.local_env: dict[str, str] = {}
         # Имена секретных переменных ($$NAME=…): значения маскируются в UI
         self._secret_names: set[str] = set()
+        # Хранилище `:vault`: пароль и записи живут только в памяти, пока сессия
+        # разблокирована (файл — `vault.json.enc`, 0600). `_vault_env` — имена
+        # переменных, которым значение отдал `:vault use` (их снимает `lock`/выход).
+        self._vault_password: str | None = None
+        self._vault_entries: dict[str, dict[str, object]] | None = None
+        self._vault_env: dict[str, str] = {}
+        # Буфер обмена с секретом хранилища: чистим его по выходу из TTY и по
+        # таймеру (`_vault_clip_pending`), чтобы значение не лежало там долго.
+        self._vault_clip_pending: bool = False
+        self._vault_clip_value: str | None = None
         # Словарь для хранения алиасов {alias: command}
         self.aliases: dict[str, str] = {}
         # v1.1.9+: Парсер команд с поддержкой ссылок
@@ -3800,6 +3816,13 @@ class CommandRunner(App):
     def copy_text(self, text: str) -> None:
         """Копирует текст в CLIPBOARD, PRIMARY и внутренний буфер Textual."""
         copy_text_to_clipboards(text or "", self)
+        # Скопировали что-то другое, пока в буфере лежал секрет хранилища, —
+        # секрета там больше нет, и таймерная чистка была бы лишней.
+        if (
+            getattr(self, "_vault_clip_pending", False)
+            and (text or "") != getattr(self, "_vault_clip_value", None)
+        ):
+            self._vault_clip_pending = False
 
     def _clear_clipboards(self) -> None:
         """Очистить CLIPBOARD, PRIMARY и внутренний буфер (best effort)."""
@@ -3937,6 +3960,7 @@ class CommandRunner(App):
         self.FILE_LLM_PROVIDERS = self._data_path("llm_providers.yml")
         self.FILE_KCTX = self._data_path("kctx.json")
         self.FILE_SECRETS = self._data_path(secrets_file_for(name))
+        self.FILE_VAULT = self._data_path(vault.DEFAULT_VAULT_FILE)
 
     def _provision_fresh_data_dir(self) -> None:
         """Первый запуск в новом (не портативном) data-каталоге — кладём шаблоны.
@@ -4554,6 +4578,9 @@ class CommandRunner(App):
     def on_unmount(self) -> None:
         # Выход: секреты не остаются на диске после закрытия приложения.
         self._purge_secrets_file()
+        # Хранилище `:vault`: пароль и значения живут только в памяти сессии,
+        # переменные, отданные `:vault use`, — тоже (в env их не оставляем).
+        self._vault_lock()
         # Терминал уходит в тот же каталог, в котором осталось окно (OSC 7), а по
         # `$IDVJPY_CWD_FILE` каталог забирает обёртка в shell (см. `:? cd`).
         self._emit_terminal_cwd()
@@ -5814,6 +5841,7 @@ class CommandRunner(App):
         CMD_TERM: "_handle_term_args",
         CMD_EDITOR: "_handle_editor_command",
         CMD_ENV: "_handle_env_reload",
+        CMD_VAULT: "_handle_vault_command",
     }
 
     COLON_NOARG_HANDLERS: dict[str, str] = {
@@ -7250,6 +7278,9 @@ class CommandRunner(App):
                 os.environ.pop(key, None)
         self.local_env.clear()
         self._secret_names = set()
+        # Переменные, взятые из хранилища (`:vault use`), — тоже уносим: смена
+        # сессии меняет и env, а значение живёт только в памяти.
+        self._vault_env.clear()
 
     def _handle_session_command(self, args: list[str]) -> None:
         """`:session` — show; `:session NAME` — switch; `:session new [NAME]` — новое окно."""
@@ -8393,10 +8424,19 @@ class CommandRunner(App):
             self._secret_names.add(name)
 
     def _mask_secrets(self, text: str) -> str:
-        """Заменить значения секретов на `****` для показа в журнале."""
-        if not text or not self._secret_names:
+        """Заменить значения секретов на `****` для показа в журнале.
+
+        Кроме `$$NAME=…` маскируются значения хранилища `:vault` (пока оно
+        разблокировано): их тоже нельзя показать в заголовке блока, `:o` или
+        выводе, даже если программа сама их напечатает.
+        """
+        if not text:
             return text
         values = {self.local_env.get(n, "") for n in self._secret_names}
+        if self._vault_entries:
+            values.update(
+                str(entry.get("value") or "") for entry in self._vault_entries.values()
+            )
         for value in sorted((v for v in values if v), key=len, reverse=True):
             text = text.replace(value, "****")
         return text
@@ -8457,6 +8497,426 @@ class CommandRunner(App):
                 os.environ.pop(name, None)
             self.local_env.pop(name, None)
         self._secret_names.clear()
+
+    # --- Хранилище секретов (`:vault`) ----------------------------------------
+    # Шифрование и файл — `src/vault.py`; ввод пароля/значения — модалка
+    # `VaultSecretScreen` (`src/vault_prompt.py`). Значение записи не появляется на
+    # экране, в журнале и в истории: наружу оно уходит только в буфер (`cp`),
+    # в env процесса (`use`/`exec`) или в stdin (`stdin`). Пока хранилище
+    # разблокировано, его значения маскируются (`_mask_secrets`), как `$$`-секреты.
+
+    def _handle_vault_command(self, args: list[str]) -> None:
+        """`:vault …` — хранилище секретов с шифрованием по паролю."""
+        if not vault.crypto_available():
+            self.add_block(InfoBlock(vault.unavailable_hint()))
+            return
+        sub = args[0].strip().lower() if args else ""
+        rest = args[1:]
+        actions = {
+            "init": self._vault_do_init,
+            "unlock": self._vault_do_unlock,
+            "lock": self._vault_do_lock,
+            "add": self._vault_do_add,
+            "gen": self._vault_do_gen,
+            "list": self._vault_do_list,
+            "ls": self._vault_do_list,
+            "rm": self._vault_do_rm,
+            "remove": self._vault_do_rm,
+            "cp": self._vault_do_cp,
+            "copy": self._vault_do_cp,
+            "use": self._vault_do_use,
+            "exec": self._vault_do_exec,
+            "stdin": self._vault_do_stdin,
+        }
+        if not sub:
+            self._vault_show_status()
+            return
+        action = actions.get(sub)
+        if action is None:
+            self.add_block(InfoBlock(t("vault.unknown_sub", name=sub)))
+            return
+        action(rest)
+
+    def _vault_show_status(self) -> None:
+        """`:vault` — файл, замок и имена записей (без значений)."""
+        if not os.path.exists(self.FILE_VAULT):
+            self.add_block(InfoBlock(t("vault.missing", file=self.FILE_VAULT)))
+            return
+        if self._vault_password is None or self._vault_entries is None:
+            self.add_block(InfoBlock(t("vault.locked", file=self.FILE_VAULT)))
+            return
+        names = vault.dump_entries(self._vault_entries)
+        if not names:
+            self.add_block(InfoBlock(t("vault.empty", file=self.FILE_VAULT)))
+            return
+        self.add_block(InfoBlock(t(
+            "vault.status",
+            file=self.FILE_VAULT,
+            count=len(names),
+            names=", ".join(names),
+        )))
+
+    def _vault_lock(self) -> int:
+        """Забыть пароль/значения и снять отданные в env переменные. Шт. снятых."""
+        cleared = 0
+        for name, value in list(self._vault_env.items()):
+            if os.environ.get(name) == value:
+                os.environ.pop(name, None)
+            self.local_env.pop(name, None)
+            cleared += 1
+        self._vault_env.clear()
+        self._vault_password = None
+        self._vault_entries = None
+        return cleared
+
+    def _vault_save(self, entries: dict[str, dict[str, object]]) -> bool:
+        """Зашифровать и записать. False — ошибка уже показана."""
+        try:
+            vault.write_entries(self.FILE_VAULT, self._vault_password or "", entries)
+        except vault.VaultError as exc:
+            self.add_block(InfoBlock(str(exc)))
+            return False
+        self._vault_entries = entries
+        return True
+
+    def _vault_ensure_unlocked(self, on_ok: Callable[[], None]) -> None:
+        """Выполнить `on_ok`, спросив пароль, если хранилище ещё заперто."""
+        if self._vault_password is not None and self._vault_entries is not None:
+            on_ok()
+            return
+        if not os.path.exists(self.FILE_VAULT):
+            self.add_block(InfoBlock(t("vault.missing", file=self.FILE_VAULT)))
+            return
+        self._vault_ask_password(
+            t("vault.pass_prompt_unlock"), confirm=False, on_ok=on_ok
+        )
+
+    def _vault_ask_password(
+        self, prompt: str, *, confirm: bool, on_ok: Callable[[], None]
+    ) -> None:
+        """Модалка пароля; верный пароль разблокирует хранилище и зовёт `on_ok`."""
+        screen = VaultSecretScreen(
+            title=t("vault.pass_title"), prompt=prompt, confirm=confirm
+        )
+
+        def done(value: str | None) -> None:
+            if value is None:
+                return
+            if confirm:
+                error = vault.check_password(value)
+                if error:
+                    self.add_block(InfoBlock(error))
+                    return
+                self._vault_password = value
+                self._vault_entries = {}
+                try:
+                    vault.write_entries(self.FILE_VAULT, value, {})
+                except vault.VaultError as exc:
+                    self._vault_password = None
+                    self._vault_entries = None
+                    self.add_block(InfoBlock(str(exc)))
+                    return
+                self.add_block(InfoBlock(t("vault.created", file=self.FILE_VAULT)))
+                return
+            try:
+                entries = vault.read_entries(self.FILE_VAULT, value)
+            except vault.VaultError as exc:
+                self.add_block(InfoBlock(str(exc)))
+                return
+            self._vault_password = value
+            self._vault_entries = entries
+            self.add_block(InfoBlock(t("vault.unlocked", count=len(entries))))
+            on_ok()
+
+        self.push_screen(screen, done)
+
+    def _vault_do_init(self, args: list[str]) -> None:
+        """`:vault init` — создать хранилище (пароль спрашиваем дважды)."""
+        if args:
+            self.add_block(InfoBlock(t("vault.usage")))
+            return
+        if os.path.exists(self.FILE_VAULT):
+            self.add_block(InfoBlock(t("vault.exists", file=self.FILE_VAULT)))
+            return
+        self._vault_ask_password(
+            t("vault.pass_prompt_new"), confirm=True, on_ok=lambda: None
+        )
+
+    def _vault_do_unlock(self, args: list[str]) -> None:
+        """`:vault unlock` — разблокировать на сессию."""
+        if args:
+            self.add_block(InfoBlock(t("vault.usage")))
+            return
+        if self._vault_password is not None:
+            count = len(self._vault_entries or {})
+            self.add_block(InfoBlock(t("vault.already_unlocked", count=count)))
+            return
+        self._vault_ensure_unlocked(lambda: None)
+
+    def _vault_do_lock(self, args: list[str]) -> None:
+        """`:vault lock` — забыть пароль и снять переменные из env."""
+        if args:
+            self.add_block(InfoBlock(t("vault.usage")))
+            return
+        if self._vault_password is None and not self._vault_env:
+            self.add_block(InfoBlock(t("vault.not_unlocked")))
+            return
+        self.add_block(InfoBlock(t("vault.locked_done", count=self._vault_lock())))
+
+    def _vault_do_add(self, args: list[str]) -> None:
+        """`:vault add NAME [hint words…]` — добавить/заменить значение (ввод маскирован)."""
+        if not args:
+            self.add_block(InfoBlock(t("vault.usage")))
+            return
+        name = vault.normalize_name(args[0])
+        error = vault.validate_name(name)
+        if error:
+            self.add_block(InfoBlock(error))
+            return
+        hint = " ".join(args[1:]).strip()
+        self._vault_ensure_unlocked(lambda: self._vault_prompt_value(name, hint))
+
+    def _vault_prompt_value(self, name: str, hint: str) -> None:
+        """Спросить значение записи и сохранить её (значения не печатаем)."""
+        current = self._vault_entries or {}
+        key = "vault.value_prompt_replace" if name in current else "vault.value_prompt"
+        screen = VaultSecretScreen(
+            title=t("vault.value_title", name=name),
+            prompt=t(key, name=name),
+            hint=t("vault.value_hint", name=name),
+        )
+
+        def done(value: str | None) -> None:
+            if value is None:
+                return
+            if not value:
+                self.add_block(InfoBlock(t("vault.empty_value")))
+                return
+            updated = {k: dict(entry) for k, entry in current.items()}
+            entry = updated.get(name) or {}
+            entry["value"] = value
+            if hint:
+                entry["hint"] = hint
+            updated[name] = entry
+            if not self._vault_save(updated):
+                return
+            self.add_block(InfoBlock(t("vault.saved", name=name, count=len(updated))))
+
+        self.push_screen(screen, done)
+
+    def _vault_do_gen(self, args: list[str]) -> None:
+        """`:vault gen NAME [len]` — сгенерировать значение и сохранить."""
+        if not args or len(args) > 2:
+            self.add_block(InfoBlock(t("vault.usage")))
+            return
+        name = vault.normalize_name(args[0])
+        error = vault.validate_name(name)
+        if error:
+            self.add_block(InfoBlock(error))
+            return
+        length = vault.DEFAULT_GENERATED_LEN
+        if len(args) == 2:
+            try:
+                length = int(args[1])
+            except ValueError:
+                self.add_block(InfoBlock(t("vault.usage")))
+                return
+        self._vault_ensure_unlocked(lambda: self._vault_generate(name, length))
+
+    def _vault_generate(self, name: str, length: int) -> None:
+        value = vault.generate_value(length)
+        entries = {k: dict(entry) for k, entry in (self._vault_entries or {}).items()}
+        entry = entries.get(name) or {}
+        entry["value"] = value
+        entries[name] = entry
+        if not self._vault_save(entries):
+            return
+        self.add_block(InfoBlock(t("vault.generated", name=name, length=len(value))))
+
+    def _vault_do_list(self, args: list[str]) -> None:
+        """`:vault list` — имена и подсказки (значения не показываем)."""
+        if args:
+            self.add_block(InfoBlock(t("vault.usage")))
+            return
+        self._vault_ensure_unlocked(self._vault_render_list)
+
+    def _vault_render_list(self) -> None:
+        entries = self._vault_entries or {}
+        if not entries:
+            self.add_block(InfoBlock(t("vault.list_empty")))
+            return
+        lines = [t("vault.list_title", count=len(entries))]
+        for name in vault.dump_entries(entries):
+            hint = str(entries[name].get("hint") or "")
+            suffix = f" — {hint}" if hint else ""
+            lines.append(t("vault.list_row", name=name, hint=suffix))
+        self.add_block(InfoBlock("\n".join(lines)))
+
+    def _vault_do_rm(self, args: list[str]) -> None:
+        """`:vault rm NAME` — удалить запись."""
+        if len(args) != 1:
+            self.add_block(InfoBlock(t("vault.usage")))
+            return
+        name = vault.normalize_name(args[0])
+        self._vault_ensure_unlocked(lambda: self._vault_remove(name))
+
+    def _vault_remove(self, name: str) -> None:
+        current = self._vault_entries or {}
+        if name not in current:
+            self.add_block(InfoBlock(t("vault.not_found", name=name)))
+            return
+        value = str(current[name].get("value") or "")
+        entries = {k: dict(entry) for k, entry in current.items()}
+        del entries[name]
+        if not self._vault_save(entries):
+            return
+        self._vault_scrub_value(value)
+        self.add_block(InfoBlock(t("vault.removed", name=name, count=len(entries))))
+
+    def _vault_scrub_value(self, value: str) -> None:
+        """Снять из env переменные, которым удалённое значение отдало `:vault use`."""
+        if not value:
+            return
+        for var, held in list(self._vault_env.items()):
+            if held != value:
+                continue
+            if os.environ.get(var) == held:
+                os.environ.pop(var, None)
+            self.local_env.pop(var, None)
+            self._vault_env.pop(var, None)
+
+    def _vault_do_cp(self, args: list[str]) -> None:
+        """`:vault cp NAME` — значение в буфер обмена (на экран не печатаем)."""
+        if len(args) != 1:
+            self.add_block(InfoBlock(t("vault.usage")))
+            return
+        name = vault.normalize_name(args[0])
+        self._vault_ensure_unlocked(lambda: self._vault_copy(name))
+
+    def _vault_copy(self, name: str) -> None:
+        value = self._vault_value(name)
+        if value is None:
+            return
+        self.copy_text(value)
+        self._vault_clip_value = value
+        self._vault_clip_pending = True
+        self.set_timer(self.VAULT_CLIPBOARD_TTL, self._vault_clear_clipboard)
+        self.add_block(InfoBlock(t(
+            "vault.copied", name=name, sec=self.VAULT_CLIPBOARD_TTL
+        )))
+
+    def _vault_value(self, name: str) -> str | None:
+        """Значение записи; None — нет записи/пусто (ошибка уже показана)."""
+        entry = (self._vault_entries or {}).get(name)
+        if entry is None:
+            self.add_block(InfoBlock(t("vault.not_found", name=name)))
+            return None
+        value = str(entry.get("value") or "")
+        if not value:
+            self.add_block(InfoBlock(t("vault.empty_value")))
+            return None
+        return value
+
+    def _vault_clear_clipboard(self) -> None:
+        """Убрать секрет хранилища из буфера (выход из TTY или таймер)."""
+        if not self._vault_clip_pending:
+            return
+        self._vault_clip_pending = False
+        self._vault_clip_value = None
+        self._clear_clipboards()
+        self.sub_title = t("vault.clip_cleared")
+        self.set_timer(3, self.clear_subtitle)
+
+    def _vault_do_use(self, args: list[str]) -> None:
+        """`:vault use NAME [VAR]` — отдать значение в env на эту сессию."""
+        if not args or len(args) > 2:
+            self.add_block(InfoBlock(t("vault.usage")))
+            return
+        name = vault.normalize_name(args[0])
+        var = (args[1] if len(args) > 1 else name).strip()
+        if not RE_VAR_NAME.match(var):
+            self.add_block(InfoBlock(t("vault.bad_var", name=var)))
+            return
+        self._vault_ensure_unlocked(lambda: self._vault_export(name, var))
+
+    def _vault_export(self, name: str, var: str) -> None:
+        value = self._vault_value(name)
+        if value is None:
+            return
+        self._vault_env[var] = value
+        self.local_env[var] = value
+        os.environ[var] = value
+        self.add_block(InfoBlock(t("vault.used", name=name, var=var)))
+
+    def _vault_do_exec(self, args: list[str]) -> None:
+        """`:vault exec NAME[=VAR] -- cmd` — значение программе через env, не в argv."""
+        parsed = self._vault_split_command(args, t("vault.usage"))
+        if parsed is None:
+            return
+        name, var, command = parsed
+        if not var:
+            var = vault.preset_env(command) or ""
+            if not var:
+                self.add_block(InfoBlock(t(
+                    "vault.exec_preset",
+                    name=name,
+                    presets=", ".join(sorted(vault.ENV_PRESETS)),
+                )))
+                return
+        if not RE_VAR_NAME.match(var):
+            self.add_block(InfoBlock(t("vault.bad_var", name=var)))
+            return
+        self._vault_ensure_unlocked(lambda: self._vault_run_env(name, var, command))
+
+    def _vault_run_env(self, name: str, var: str, command: str) -> None:
+        value = self._vault_value(name)
+        if value is None:
+            return
+        self.add_block(InfoBlock(t(
+            "vault.exec_note", name=name, var=var, command=escape(command)
+        )))
+        self.run_command(command, extra_env={var: value})
+
+    def _vault_do_stdin(self, args: list[str]) -> None:
+        """`:vault stdin NAME -- cmd` — значение программе на stdin (sudo -S и т.п.)."""
+        parsed = self._vault_split_command(args, t("vault.usage"))
+        if parsed is None:
+            return
+        name, _var, command = parsed
+        self._vault_ensure_unlocked(lambda: self._vault_run_stdin(name, command))
+
+    def _vault_run_stdin(self, name: str, command: str) -> None:
+        value = self._vault_value(name)
+        if value is None:
+            return
+        self.add_block(InfoBlock(t(
+            "vault.stdin_note", name=name, command=escape(command)
+        )))
+        self.run_command(command, stdin_data=f"{value}\n")
+
+    def _vault_split_command(
+        self, args: list[str], usage: str
+    ) -> tuple[str, str, str] | None:
+        """Разобрать `NAME[=VAR] -- cmd …`; None — ошибка уже показана."""
+        if "--" not in args:
+            self.add_block(InfoBlock(usage))
+            return None
+        split = args.index("--")
+        before, command_args = args[:split], args[split + 1:]
+        if len(before) != 1 or not command_args:
+            self.add_block(InfoBlock(usage))
+            return None
+        token = before[0]
+        if "=" in token:
+            raw_name, var = token.split("=", 1)
+        else:
+            raw_name, var = token, ""
+        name = vault.normalize_name(raw_name)
+        error = vault.validate_name(name)
+        if error:
+            self.add_block(InfoBlock(error))
+            return None
+        return name, var, " ".join(command_args)
 
     def _remember_kctx_snapshot(self) -> None:
         """Кластерный журнал: снимок переменных журнала для текущего кластера.
@@ -9642,6 +10102,9 @@ class CommandRunner(App):
             return
         extra = getattr(self, "_tty_followup_lines", None) or []
         self._tty_followup_lines = []
+        # Секрет хранилища, скопированный для этого интерактива (`:vault cp`),
+        # из буфера убираем: своё дело он уже сделал.
+        self._vault_clear_clipboard()
         text = f"TTY: {escape(self._mask_secrets(final_command))}\nExit code: {return_code}"
         if extra:
             text += "\n" + "\n".join(extra)
@@ -9959,7 +10422,7 @@ class CommandRunner(App):
     def _expand_aliases(self, command: str) -> str:
         return expand_aliases(command, self.aliases)
 
-    def _execute_in_thread(self, block: CommandBlock, command: str, stdin_data: str | None, no_timeout: bool = False) -> None:
+    def _execute_in_thread(self, block: CommandBlock, command: str, stdin_data: str | None, no_timeout: bool = False, extra_env: Mapping[str, str] | None = None) -> None:
         """
         Выполняет команду в отдельном потоке.
         Таймаут отключается при command_timeout: 0 в settings.yml или по `@ cmd`.
@@ -9967,6 +10430,10 @@ class CommandRunner(App):
         Popen вместо subprocess.run: дескриптор процесса регистрируется в
         _proc_registry, поэтому F4 / :kill могут послать SIGTERM всей группе
         (start_new_session) и не ждать command_timeout.
+
+        `extra_env` — добавить переменные только этому процессу (значение
+        `:vault exec` уходит в env, а не в текст команды: иначе было бы видно
+        в `ps` и заголовке блока).
         """
         raw_stdout, raw_stderr, return_code = "", "", 0
         proc: subprocess.Popen | None = None
@@ -9992,6 +10459,7 @@ class CommandRunner(App):
                     # а заставка не закрывается. Интерактив — `> cmd` (TTY).
                     stdin=subprocess.PIPE if stdin_data is not None else subprocess.DEVNULL,
                     start_new_session=True,
+                    env={**os.environ, **extra_env} if extra_env else None,
                 )
                 with self._proc_lock:
                     self._proc_registry[block] = proc
@@ -11158,7 +11626,7 @@ class CommandRunner(App):
             pass
         self._refresh_running_title()
 
-    def run_command(self, command: str, stdin_data: str | None = None, *, no_timeout: bool = False) -> None:
+    def run_command(self, command: str, stdin_data: str | None = None, *, no_timeout: bool = False, extra_env: Mapping[str, str] | None = None) -> None:
         """
         Инициатор выполнения команды.
         Подставляет переменные и запускает поток.
@@ -11198,7 +11666,7 @@ class CommandRunner(App):
         # Запускаем в отдельном потоке, чтобы UI не завис
         thread = threading.Thread(
             target=self._execute_in_thread,
-            args=(block, final_command, stdin_data, no_timeout),
+            args=(block, final_command, stdin_data, no_timeout, extra_env),
             daemon=True
         )
         thread.start()

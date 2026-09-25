@@ -1,0 +1,39 @@
+[bold]Vault — password-encrypted secret store (`:vault`)[/bold]
+
+  A long-lived store of secrets, unlike `$$NAME=…` (that one lives only for the
+  session). The file is `vault.json.enc` in the data dir (0600): its header is
+  public, the entries are encrypted (scrypt + AES-256-GCM). A wrong password or a
+  damaged file gives an explicit error, not garbage on screen.
+
+  Unlock once per session; the password then stays in memory only:
+
+    :vault init               create the vault (password asked twice)
+    :vault unlock | lock      unlock for this session / forget it
+    :vault                    file, lock state, the names (never the values)
+
+  Managing entries:
+
+    :vault add NAME [hint]    add or replace a value (masked input)
+    :vault gen NAME [len]     generate a random value
+    :vault list               names and hints
+    :vault rm NAME            remove an entry
+
+  Getting a value out — a value is never printed:
+
+    :vault cp NAME               → clipboard (cleared on TTY exit, and in 60 s)
+    :vault use NAME [VAR]        → $VAR in this session's environment
+    :vault exec NAME[=VAR] -- cmd    $VAR in the child env, not in argv
+    :vault stdin NAME -- cmd         feed the value to the command's stdin
+
+  `exec` guesses the variable for known programs (sshpass → SSHPASS,
+  psql → PGPASSWORD, mysql/mysqldump → MYSQL_PWD, vault → VAULT_TOKEN, restic,
+  borg, redis-cli); for anything else say `NAME=VAR` explicitly.
+
+  Rules: values never enter the journal, `:o`, `↑`, `history_*.txt`, `:send` or
+  `:export`; while the vault is unlocked they are masked like `$$`-secrets. `cp`
+  is the weakest link — other programs can read the clipboard. The `cryptography`
+  package is required (`pip install cryptography`); without it the rest of the
+  app keeps working.
+
+  Examples: `:vault init`, `:vault add SSH_PROD prod ssh`, `:vault cp SSH_PROD`
+  then `> ssh …` (paste), or `:vault exec sshpass -- ssh user@host`.

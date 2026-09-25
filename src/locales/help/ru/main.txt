@@ -72,6 +72,7 @@
                 (`IDvjPy_term · git · only git`). Подробнее: :? tags
   :welcome      - Каталог сидов (как приветствие при пустой БД; клик --seed / .md)
   :backup       - Скопировать БД команд в backups/ (тот же снимок, что у --seed)
+  :vault        - Хранилище секретов по паролю: init/unlock, add/cp/use/exec (:? vault)
   :screensaver  - Оверлей простоя: матричный цифровой дождь (screensaver_matrix,
                 по умолчанию) или звёздное поле в стиле NC; тикер во всю ширину;
                 справка внизу слева; load/mem внизу справа. `:screensaver matrix`
@@ -220,6 +221,7 @@
   :? session - Экземпляры приложения и окна (`:session`, `:new`)
   :? import  - JSON / общая библиотека по URL (`:import`, `:export`, `:backup`)
   :? mcp     - Библиотека тегов для AI-клиентов: `mcp_server.py` (MCP, только чтение)
+  :? vault   - Хранилище секретов: unlock, add/cp/use/exec — значения не на экране
 
 [bold]Навигация[/bold]
   ↑/↓        - Перелистывание истории ввода: всё, что набрано в этой сессии

@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.177**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.178**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.123 (app v1.177) |
+| `test_cmd.md` | Manual plan v1.124 (app v1.178) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -190,6 +190,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_scope_command.py` | `:scope` в TUI (инвариант «фильтр — только списки»): `?`/`??`/`!`-подсказки скрывают чужие теги, `?tag`/`!tag[tid]`/`:stats` работают при скрытом теге, `??` с секцией Scope, `rm` → hide, `clear`/`all` возвращают всё (файл удалён), статус без аргументов, ошибки неизвестного имени и смешения режимов, маркер в заголовке, переживает restart, две сессии независимы, битый файл → фильтр выключен и сообщение, лента заставки уважает scope |
 | `tests/test_ux_extras.py` | `:r N`, счётчик running в заголовке, `:alias`, консоль под TUI по Ctrl+O (suspend → ожидание клавиши → возврат, `SuspendNotSupported`) |
 | `tests/test_mcp_server.py` | MCP-сервер (28): конфигурация (settings.yml, `--data-dir`/`$IDVJPY_DATA_DIR`, абсолютный `--db`, `history_<instance>.txt`), протокол (`initialize` с эхом версии и своей для чужой, `tools/list`, уведомления без ответа, `-32700`/`-32601`/`-32602`, пакет сообщений, в stdout только JSON-RPC), все пять инструментов на живой базе (фильтр тега, `limit`, soft-delete, история всех сессий с именем в строке, `source` без `--shell-history`), отсутствующая база — ошибка **без** создания файла, БД/история/`secrets_*.json` не меняются, сторож по исходнику («только чтение и без сети»), запуск корневого лаунчера и подкоманды `idvjpy mcp` (реальный запрос и `--help`) |
+| `tests/test_vault.py` | Хранилище `:vault` (20): round-trip, неверный пароль и подмена заголовка — явная ошибка, чужой/битый файл, отказ версии новее, правила имени/пароля/генерации, пресеты env; TUI: init/unlock/lock, add/gen/list/rm, значение не в журнале/истории/файле, `cp` только в буфер (и чистка), `use` в env и снятие при `lock`, `exec` — значение в env, не в argv, пресет и явный `VAR`, `stdin`, без `cryptography` — подсказка |
 
 Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then Enter.
 
@@ -205,7 +206,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.177 |
+| `src/app.py` | TUI (`CommandRunner`), v1.178 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -238,9 +239,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/history_import.py` | Импорт истории оболочки (`:h import`): поиск файлов по ОС и `$HISTFILE` (fish/pwsh — XDG-каталог на всех ОС, nushell — системный, на win32 только Windows-пути), разбор по содержимому (zsh extended + континуация `\`+newline, bash-метки, fish `\`/`\n` однопроходно, PSReadLine/nushell), хвост 4 МБ у больших файлов, BOM/бинарь, `sh` → `ksh`; источник `atuin` (`Source.kind`) — SQLite-база `history.db` (`$ATUIN_DB_PATH` → `config.toml` `data_dir`/`db_path` → `~/.local/share/atuin` на всех ОС), чтение `mode=ro` с таймаутом (WAL), проверка колонки `command`, `deleted_at is null`, порядок по `timestamp` |
 | `src/session_mailbox.py` | Пересылка команд между сессиями (`:send`): `inbox_<instance>.jsonl` 0600, append под lock / drain |
 | `src/session_registry.py` | Реестр активных сессий — `session_<instance>.pid` 0600: автоимя `:new` = наименьшее свободное `sN` среди работающих окон (устаревшие pid-файлы подчищаются) |
-| `src/help_texts.py` | Реестр справки `:?`: `HELP_TEXTS` + `HELP_TOPICS` (канонические имена тем → текст: `calc`, `run`, `i`, `md`, `llm`, `tags`, `vars`, `kctx`, `send`, `session`, `import`, `mcp`), `help_topic()` (имена и алиасы → `i18n.text()`) — файлы `src/locales/help/<lang>/{main,runbook,calc,ingress,llm,tags,vars,md,kctx,send,session,import,mcp}.txt` (`en` — источник правды) |
+| `src/help_texts.py` | Реестр справки `:?`: `HELP_TEXTS` + `HELP_TOPICS` (канонические имена тем → текст: `calc`, `run`, `i`, `md`, `llm`, `tags`, `vars`, `kctx`, `send`, `session`, `import`, `mcp`, `vault`), `help_topic()` (имена и алиасы → `i18n.text()`) — файлы `src/locales/help/<lang>/{main,runbook,calc,ingress,llm,tags,vars,md,kctx,send,session,import,mcp,vault}.txt` (`en` — источник правды) |
 | `src/mcp_server.py` | MCP-сервер (stdio) для AI-клиентов — библиотека и история без порта и демона; корневой `mcp_server.py` — лаунчер, грузящий модуль по пути (иначе имя затеняет его при `import`), а после pip-установки то же делает подкоманда `idvjpy mcp` (разбирается в `packaging/idvjpy_boot.main` **до** `parse_arguments`). JSON-RPC: `initialize` (версия из `PROTOCOL_VERSIONS`), `ping`, `tools/list`, `tools/call`, уведомления без ответа, `-32700/-32601/-32602` на мусор/метод/инструмент; в stdout — только JSON-RPC (лог в stderr). Инструменты **только чтение**: `search_commands` (как `?text`, с фильтром тега), `list_tags`, `get_tag`, `search_history` (`session` — своё окно, `sessions` — все `history_*.txt` каталога данных, своя первой и с именем в строке; `shells`/`all` — только с `--shell-history`), `library_stats`; конфиг — как у TUI (`--data-dir` → `$IDVJPY_DATA_DIR` → settings.yml → системный), база не создаётся и не пишется, `secrets_*.json` не читается, `server_version()` берёт `VERSION` из `src/app.py` регексом (Textual не импортируется). Тесты: `tests/test_mcp_server.py`, тема `:? mcp` |
 | `src/relang.py` | `:relang [code]` — перевод комментариев **уже засеянной** библиотеки (подписи тегов и подсказки команд) после смены языка, без повторного `--seed`: `_collect()` собирает канонический индекс из `seed_linux_commands` / `seed_k8s_chains` / `seed_git` / `seed_ops`, строка матчится по `(тег, команда)` (linux-дополнения — по `tid - 1`), правленый руками комментарий не трогается, снимок БД в `backups/` до записи; CLI `python3 src/relang.py --lang ru`. Тесты: `tests/test_relang.py` |
+| `src/vault.py` / `src/vault_prompt.py` | Хранилище секретов `:vault` с шифрованием по паролю: файл `vault.json.enc` в data-каталоге (0600) — конверт с открытым заголовком (KDF-параметры, nonce) и base64-данными AES-256-GCM; заголовок — AAD, поэтому подмена соли/параметров ломает целостность. Ключ — `hashlib.scrypt` (stdlib, явный `maxmem`), шифр — `cryptography` (в `requirements.txt` **не** входит: без неё `:vault` даёт подсказку `pip install cryptography`, остальное работает). Команды: `init`/`unlock`/`lock`, `add`/`gen`/`list`/`rm`, `cp` (буфер), `use`/`exec` (env дочернего процесса, не argv), `stdin` (ввод команды); значение **никогда не печатается** и маскируется как `$$`-секрет, пароль — только в маскированной модалке `VaultSecretScreen`. Тесты: `tests/test_vault.py` |
 | `src/i18n.py` | UI-language core: catalogue lookup (`t`/`tlist`) and long texts (`text("main")` → `locales/help/<lang>/*.txt`), language resolution (`--lang` → `$IDVJPY_LANG` → `settings.yml: language` → `en`; `auto` follows `$LANG`). Catalogues: `src/locales/<lang>.yml` plus parts in `src/locales/<lang>/*.yml` (`screensaver`, `seed`), deep-merged; `en` is the source of truth; missing keys fall back to `en`, unknown keys return themselves. Tests: `tests/test_i18n.py` (keys are strings — YAML reads bare `off`/`n`/`N` as bool; every language has all help texts and all `catalog.desc.*`) |
 | `src/example_config.py` | Локализованные шаблоны личных файлов: `available_settings_languages`/`available_llm_providers_languages`, `settings_example_path(lang)`, `llm_providers_example_path(lang)` (откат на `en`), `detect_language(explicit)` — `--lang` → `$IDVJPY_LANG` → системная локаль (auto) → `en`; шаблоны — `src/settings/<lang>.yml` и `src/llm_providers/<lang>.yml` |
 | `src/ansi_output.py` | ANSI/ESC в выводе команд: SGR → цвета (`to_markup`), плоский текст без кодов (`to_plain`), терминальный `\r` (`collapse_carriage_returns`); ключ `ansi_colors` |
@@ -256,6 +258,11 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.178
+
+- **`:vault` — хранилище секретов с шифрованием по паролю.** Новый модуль `src/vault.py` (конверт `vault.json.enc`, 0600: scrypt из stdlib + AES-256-GCM из `cryptography`; заголовок — AAD) и модалка `src/vault_prompt.py` (маскированный ввод). Команды: `init`/`unlock`/`lock`, `add`/`gen`/`list`/`rm`, `cp` (в буфер), `use`/`exec` (в env дочернего процесса, не в argv), `stdin` (на ввод команды). Значение **никогда не печатается** и маскируется как `$$`-секрет, пока хранилище открыто; пароль вводится только в модалку (в истории/журнале его нет). `exec` сам подбирает переменную для известных программ (sshpass, psql, mysql, vault, restic, borg, redis-cli). `lock`, `:session` и выход снимают отданные переменные; `cp` чистит буфер при выходе из TTY и через минуту. `cryptography` — extras, не в `requirements.txt`. Справка — `:? vault`.
+- `run_command` / `_execute_in_thread` принимают `extra_env` — переменные только для одного дочернего процесса.
 
 ## v1.177
 

@@ -69,6 +69,7 @@
                 窗口标题带有标记（`IDvjPy_term · git · only git`）。详见 :? tags
   :welcome      - 种子目录（如同空数据库时的欢迎语；点击 --seed / .md）
   :backup       - 将命令数据库复制到 backups/（与 --seed 相同的快照）
+  :vault        - 密码加密的密钥保管库: init/unlock、add/cp/use/exec（:? vault）
   :screensaver  - 空闲覆盖层：矩阵数字雨（screensaver_matrix，
                 默认）或 NC 风格的星空；整宽滚动条；
                 左下角帮助；右下角 load/mem。`:screensaver matrix`
@@ -215,6 +216,7 @@
   :? session - 应用实例与窗口（`:session`、`:new`）
   :? import  - JSON / 通过链接的共享库（`:import`、`:export`、`:backup`）
   :? mcp     - 供 AI 客户端使用的标签库：`mcp_server.py`（MCP，只读）
+  :? vault   - 密钥保管库：unlock、add/cp/use/exec —— 值从不显示在屏幕上
 
 [bold]导航[/bold]
   ↑/↓        - 翻看输入历史：本会话中输入的一切

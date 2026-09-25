@@ -71,6 +71,7 @@
                 marker (`IDvjPy_term · git · only git`). Details: :? tags
   :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
+  :vault        - Password-encrypted secret store: init/unlock, add/cp/use/exec (:? vault)
   :screensaver  - Idle overlay: matrix digital rain (screensaver_matrix, default) or the
                 NC-style starfield; full-width ticker; bottom-left help; bottom-right
                 load/mem. `:screensaver matrix` / `:screensaver stars` pick the canvas
@@ -216,6 +217,7 @@
   :? session - App instances and windows (`:session`, `:new`)
   :? import  - JSON / a shared library by URL (`:import`, `:export`, `:backup`)
   :? mcp     - Tag library for AI clients: `mcp_server.py` (MCP, read-only)
+  :? vault   - Secret store: unlock, add/cp/use/exec — values never on screen
 
 [bold]Navigation[/bold]
   ↑/↓        - Input history walk: everything typed in this session (`:`-commands,

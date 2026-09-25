@@ -28,6 +28,7 @@ HELP_TEXTS = (
     "session",
     "import",
     "mcp",
+    "vault",
 )
 
 # Темы `:? <тема>` в порядке оглавления: каноническое имя → имя текста.
@@ -44,6 +45,7 @@ HELP_TOPICS: tuple[tuple[str, str], ...] = (
     ("session", "session"),
     ("import", "import"),
     ("mcp", "mcp"),
+    ("vault", "vault"),
 )
 
 # Алиасы тем (лишние имена и русские слова). Ключ — то, что набрал человек,
@@ -73,11 +75,13 @@ _HELP_TOPIC_ALIASES: dict[str, str] = {
     "sessions": "session",
     "new": "session",
     "сессии": "session",
-    "export": "import",
+    "import": "import",
     "transfer": "import",
     "экспорт": "import",
     "импорт": "import",
     "библиотека": "import",
+    "storage": "vault",
+    "хранилище": "vault",
 }
 
 
