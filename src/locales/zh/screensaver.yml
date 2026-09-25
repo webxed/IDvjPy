@@ -20,6 +20,7 @@ screensaver:
   - :send <session|*> cmd  — 将命令转发到另一个会话（:send! 会立即执行）
   - :welcome  — 种子目录
   - :backup  — 将标签数据库快照
+  - :vault  — 按密码加密的密钥保管库（init/add/cp/use/exec）
   - ':screensaver  — 立即显示矩阵雨（默认）或星空; 空闲: screensaver_idle'
   - :r [N]  — 将块命令放入输入框（N = 往前第几块）
   - :cmd [N] [show]  — 将带当前 $VAR/密钥的块命令复制到剪贴板

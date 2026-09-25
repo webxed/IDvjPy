@@ -20,6 +20,7 @@ screensaver:
   - :send <session|*> cmd  — forward a command to another session (:send! runs it)
   - :welcome  — seed catalog
   - :backup  — snapshot the tags DB
+  - :vault  — password-encrypted secret store (init/add/cp/use/exec)
   - ':screensaver  — matrix rain now (default) or stars; idle: screensaver_idle'
   - :r [N]  — block command into the input (N = how far back)
   - :cmd [N] [show]  — block command with current $VAR/secrets to clipboard
