@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.179) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.180) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.179` → `v1.180`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.180` → `v1.181`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -134,7 +134,7 @@ The TUI lives mainly in `src/app.py` (root `app.py` is a launcher). Key types:
 | Prefix | Purpose |
 |--------|---------|
 | (none) | Execute shell command via subprocess, add to session history |
-| `> cmd` | Suspend TUI (`App.suspend()`), run with a real TTY (`htop`, `vim`, `ssh`). No timeout, stdout not captured. `>>` is left to the shell. On exit: dump that bash's env/`$PWD` into the TUI. Nested `> bash` exports are not visible. Prompts belong here — background commands get `stdin=DEVNULL` |
+| `> cmd` | Suspend TUI (`App.suspend()`), run with a real TTY (`htop`, `vim`, `ssh`). No timeout, stdout not captured. `>>` is left to the shell. On exit: dump that bash's env/`$PWD` into the TUI. Nested `> bash` exports are not visible. Prompts belong here — background commands get `stdin=DEVNULL`. **Ctrl+C in the child stops the child and returns to the app, not the shell**: the child shares the app's process group, so while suspended `CommandRunner.suspend()` swallows SIGINT/SIGQUIT with a *handler* (`_ignore_interrupt_signals`) — not `SIG_IGN`, which survives `exec` and would leave the child without Ctrl+C (the TUI then hung in `suspend()`). A signal-killed child is reported shell-style (`128+sig`, e.g. `Exit code: 130`). Same for `:ed` and Ctrl+O. Tests — `tests/test_tty_signals.py` |
 | `@ cmd` | Run without `command_timeout` (long non-TTY jobs; stdin is `/dev/null`, stdout still captured) |
 | `& cmd` | Run the command in a **new terminal window** (`:term` mechanics, `$TERMINAL`; `term_open: tab` asks for a tab in an open window instead): the TUI keeps running and the output stays in that window (the journal block only says it was opened). `&&` / `&>` are left to the shell (like `>>` for `>`). The command is handed to `bash -c` with `$NAME` of live `$$`-secrets **kept** (`_substitute_variables(..., keep_secrets=True)`) — the values travel in the child env, so they never reach that window's argv (`ps`, title); other `$VAR`/`$OUT` expand as usual. Safe in demos/`run:` steps (`session_line_needs_wait`), unlike `>` |
 | `#tag cmd` | Save command to database with tag (literal text; refs not expanded on save) |

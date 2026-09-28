@@ -249,6 +249,8 @@
   Ctrl+O     - Show the console under the TUI (like Midnight Commander): the app
                steps aside so you can read the real terminal — the output of `> cmd`
                (htop/vim/less) lives there, in the scrollback. Any key returns.
+               Ctrl+C inside a `> cmd` program (or `:ed`, the console) stops that
+               program and comes back to the app, not to the shell.
   Shift+Insert / Ctrl+V - Paste into input (does not replace existing text)
                In line-cursor mode Ctrl+V appends the current line instead
                Line breaks become spaces (the field is one line); a long line is

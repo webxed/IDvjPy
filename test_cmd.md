@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.179
+# План тестирования IDvjPy_term v1.180
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -436,11 +436,13 @@ klogin my-cluster
 ```
 >
 > ssh $HOST
+> sleep 30            # затем Ctrl+C прямо в чужой программе
 ```
 
 **Ожидание:** пустой `>` — Usage. `> cmd` снимает TUI и запускает команду с настоящим TTY (stdout не пишется в журнал). После выхода — InfoBlock `TTY: … / Exit code: N`; если тот же bash сделал `export`/`cd` — строки `env:` / `cwd:`. `>>` остаётся редиректом оболочки. Вложенный `> bash` + export внутри него не виден; тогда писать `.bashrc_term*` и `:env`.
+**Ctrl+C в чужой программе** останавливает её и возвращает **в приложение, а не в shell**: пока терминал отдан ребёнку, родитель глотает SIGINT/SIGQUIT. В блоке — `TTY: sleep 30 / Exit code: 130` (128 + SIGINT, как в shell), TUI на месте, ввод работает. То же для `:ed` и консоли Ctrl+O (Ctrl+C там ничего не ломает; возврат — любая другая клавиша).
 
-Автотесты: `test_tty_prefix_empty_shows_usage`, `test_tty_prefix_runs_substituted_command` (мок `_run_in_tty`), `test_wrap_tty_command_dumps_exports`.
+Автотесты: `test_tty_prefix_empty_shows_usage`, `test_tty_prefix_runs_substituted_command` (мок `_run_in_tty`), `test_wrap_tty_command_dumps_exports`, `tests/test_tty_signals.py` (`_ignore_interrupt_signals` — обработчик, не `SIG_IGN`; `_run_in_tty` нормализует код сигнала; `suspend()` оборачивает сигналы).
 
 ---
 
@@ -1683,7 +1685,7 @@ printf '%s\n' \
 
 ---
 
-**Версия документа**: v1.125
-**Версия приложения**: v1.179
-**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_seed_sqlite.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`, `tests/test_mcp_server.py`, `tests/test_vault.py`  
+**Версия документа**: v1.126
+**Версия приложения**: v1.180
+**Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_seed_sqlite.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`, `tests/test_mcp_server.py`, `tests/test_vault.py`, `tests/test_tty_signals.py`  
 **Дата**: 2026-09-21

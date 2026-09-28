@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.179**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.180**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.125 (app v1.179) |
+| `test_cmd.md` | Manual plan v1.126 (app v1.180) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -191,6 +191,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_ux_extras.py` | `:r N`, счётчик running в заголовке, `:alias`, консоль под TUI по Ctrl+O (suspend → ожидание клавиши → возврат, `SuspendNotSupported`) |
 | `tests/test_mcp_server.py` | MCP-сервер (28): конфигурация (settings.yml, `--data-dir`/`$IDVJPY_DATA_DIR`, абсолютный `--db`, `history_<instance>.txt`), протокол (`initialize` с эхом версии и своей для чужой, `tools/list`, уведомления без ответа, `-32700`/`-32601`/`-32602`, пакет сообщений, в stdout только JSON-RPC), все пять инструментов на живой базе (фильтр тега, `limit`, soft-delete, история всех сессий с именем в строке, `source` без `--shell-history`), отсутствующая база — ошибка **без** создания файла, БД/история/`secrets_*.json` не меняются, сторож по исходнику («только чтение и без сети»), запуск корневого лаунчера и подкоманды `idvjpy mcp` (реальный запрос и `--help`) |
 | `tests/test_vault.py` | Хранилище `:vault` (20): round-trip, неверный пароль и подмена заголовка — явная ошибка, чужой/битый файл, отказ версии новее, правила имени/пароля/генерации, пресеты env; TUI: init/unlock/lock, add/gen/list/rm, значение не в журнале/истории/файле, `cp` только в буфер (и чистка), `use` в env и снятие при `lock`, `exec` — значение в env, не в argv, пресет и явный `VAR`, `stdin`, без `cryptography` — подсказка |
+| `tests/test_tty_signals.py` | Ctrl+C в чужой программе (`> cmd` / `:ed` / Ctrl+O) не роняет TUI: `_ignore_interrupt_signals` ставит **обработчик**, а не `SIG_IGN` (тот наследуется через `exec`), восстановление идемпотентно, `SIGQUIT` тоже; `_run_in_tty` глотает сигнал на время ребёнка и отдаёт shell-код (`-2` → `130`); `suspend()` оборачивает yield |
 
 Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then Enter.
 
@@ -206,7 +207,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.179 |
+| `src/app.py` | TUI (`CommandRunner`), v1.180 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -258,6 +259,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.180
+
+- **fix(tty): Ctrl+C в чужой программе возвращает в приложение, а не в shell.** `> cmd` (а также `:ed` и консоль Ctrl+O) отдаёт терминал ребёнку, который живёт в **той же группе процессов**: Ctrl+C шлёт SIGINT обоим, `KeyboardInterrupt` ничем не ловится и убивал TUI (а терминал после `:q` оставался в чужом режиме). Теперь на время паузы (`suspend()`) родитель ставит **обработчик**-заглушку на SIGINT/SIGQUIT — именно обработчик, а не `SIG_IGN`: `SIG_IGN` наследуется потомком через `exec` и оставил бы чужую программу без Ctrl+C (TUI зависал в `suspend()`). Код, убитого сигналом ребёнка, показывается по-шелловски: `Exit code: 130`. Наняты тесты `tests/test_tty_signals.py`.
 
 ## v1.179
 

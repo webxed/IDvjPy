@@ -2581,7 +2581,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.179"
+    VERSION = "v1.180"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -10183,7 +10183,13 @@ class CommandRunner(App):
             self._tty_followup_lines = self._ingest_tty_session(
                 env_path, pwd_path, before
             )
-            return completed.returncode
+            # Убитый сигналом ребёнок (Ctrl+C в `> cmd`) приходит отрицательным
+            # (SIGINT → -2) — показываем как shell: 128 + сигнал, иначе в блоке
+            # висело бы бессмысленное «Exit code: -2».
+            code = completed.returncode
+            if code < 0:
+                code = 128 + (-code)
+            return code
         finally:
             for path in (env_path, pwd_path):
                 if path:
@@ -11871,12 +11877,19 @@ class CommandRunner(App):
         `> htop`) успевала «зажечь» заставку: она открывалась сразу после возврата.
         Пока пауза активна, `_launch_screensaver` не открывает ничего, а по возврате
         простой отсчитывается заново (и уже открытый экран снимается).
+
+        На паузе родитель глотает SIGINT/SIGQUIT (`_ignore_interrupt_signals`):
+        ребёнок живёт в той же группе процессов, и Ctrl+C в нём приходит обоим.
+        Без этого `> cmd` / `:ed` / Ctrl+O выбрасывали из приложения в shell (см.
+        `handle_tty_command`), потому что `KeyboardInterrupt` ничем не ловится.
         """
         self._tty_active = True
+        restore_signals = _ignore_interrupt_signals()
         try:
             with super().suspend():
                 yield
         finally:
+            restore_signals()
             self._tty_active = False
             self._dismiss_screensaver()
             self._bump_screensaver_idle()
@@ -11890,6 +11903,52 @@ class CommandRunner(App):
         if "mouse" not in kwargs:
             kwargs["mouse"] = self._settings_terminal_mouse()
         return super().run(**kwargs)
+
+
+def _noop_signal_handler(signum: int, frame: Any) -> None:
+    """Проглотить сигнал в родителе (без `KeyboardInterrupt`)."""
+
+
+def _ignore_interrupt_signals() -> Callable[[], None]:
+    """На время TTY-сессии родителю проглотить SIGINT/SIGQUIT, ребёнку — нет.
+
+    Сигнал от Ctrl+C терминал шлёт **всей** группе процессов, а чужой процесс
+    (`> cmd`, `:ed`, консоль Ctrl+O) бежит в одной группе с приложением. Поэтому
+    без этого `KeyboardInterrupt` в родителе ронял TUI при Ctrl+C в чужой
+    программе, вместо того чтобы просто её остановить.
+
+    Именно **обработчик**, а не `SIG_IGN`: сигнал, проигнорированный через
+    `SIG_IGN`, наследуется потомком через `exec`, и тогда Ctrl+C не убил бы и
+    саму чужую программу (приложение застревало в `suspend()`). Сигнал, который
+    ловят, при `exec` сбрасывается в `SIG_DFL` — ребёнок получает обычный SIGINT.
+
+    `signal.signal` работает только в главном потоке — вызывается из UI-потока.
+    Возвращает функцию восстановления прежних обработчиков (idempotent).
+    """
+    saved: list[tuple[int, Any]] = []
+    for name in ("SIGINT", "SIGQUIT"):
+        sig = getattr(signal, name, None)
+        if sig is None:  # Windows: SIGQUIT нет
+            continue
+        try:
+            previous = signal.getsignal(sig)
+        except (ValueError, OSError):
+            continue
+        try:
+            signal.signal(sig, _noop_signal_handler)
+        except (ValueError, OSError, RuntimeError):
+            continue
+        saved.append((sig, previous))
+
+    def restore() -> None:
+        while saved:
+            sig, previous = saved.pop()
+            try:
+                signal.signal(sig, previous)
+            except (ValueError, OSError, RuntimeError):
+                pass
+
+    return restore
 
 
 def secrets_file_for(name: str) -> str:
