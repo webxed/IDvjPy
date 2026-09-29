@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.182
+# План тестирования IDvjPy_term v1.183
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1510,7 +1510,7 @@ python3 src/seed_vault.py --seed   # в data-каталоге: без него �
 :run <тег-без-директив> --dry   # в плане note: the tag has no run: directives — every step will run auto
 ```
 
-**Ожидание:** перед прогоном в журнал печатается план (шаги с режимами и подсказками), в подзаголовке — `RUN vapprole · 3/9 · auto · Esc stops`. Шаги `auto` идут сами и ждут завершения команды; `manual` вставляет строку в ввод и ждёт — её можно править и запустить Enter, а пустой Enter пропускает шаг; `prompt` оставляет ввод пустым и ждёт набранную строку. Шаги 1 и 2 в `vapprole` — префиксы (`$$VAULT_TOKEN=`, `$ROLE=`): значение надо **дописать** после `=`, иначе роль останется пустой. Если в теге нет ни одной `run:`-директивы (устаревший сид, свой тег до v1.124), план печатает `note: the tag has no run: directives — every step will run auto` — это предупреждение, а не отказ; при `--step` оно снимается (все шаги и так ждут Enter). Ошибка auto-шага (`exit ≠ 0`) останавливает прогон с сообщением о номере шага (`run:continue` в комментарии отменяет остановку); Esc останавливает на любом шаге, сама команда — F4 / `:kill`. Пока прогон идёт, заставка не всплывает, `:send` откладывается, смена сессии отклоняется; `:run` пишется в `history_*.txt` (↑ / `:h`), но не в подсказки, а вставленные прогоном шаги не попадают в `:playbook`.
+**Ожидание:** перед прогоном в журнал печатается план (шаги с режимами и подсказками), в подзаголовке — `RUN vapprole · 3/9 · auto · Esc stops`. Шаги `auto` идут сами и ждут завершения команды; `manual` вставляет строку в ввод и ждёт — её можно править и запустить Enter, а пустой Enter пропускает шаг; `prompt` оставляет ввод пустым и ждёт набранную строку. Шаги 1 и 2 в `vapprole` — префиксы (`$$VAULT_TOKEN=`, `$ROLE=`): значение надо **дописать** после `=`, иначе роль останется пустой. Если в теге нет ни одной `run:`-директивы (устаревший сид, свой тег до v1.124), план печатает `note: the tag has no run: directives — every step will run auto` — это предупреждение, а не отказ; при `--step` оно снимается (все шаги и так ждут Enter). План печатается на языке интерфейса: шапка, `источник:`/`source:` и `заметка:`/`note:` — из локалей (`runbook.plan_*`), а имена режимов `auto`/`manual`/`prompt` — ключевые слова и не переводятся. Ошибка auto-шага (`exit ≠ 0`) останавливает прогон с сообщением о номере шага (`run:continue` в комментарии отменяет остановку); Esc останавливает на любом шаге, сама команда — F4 / `:kill`. Пока прогон идёт, заставка не всплывает, `:send` откладывается, смена сессии отклоняется; `:run` пишется в `history_*.txt` (↑ / `:h`), но не в подсказки, а вставленные прогоном шаги не попадают в `:playbook`.
 
 Свой YAML (`:playbook`-файл тоже подойдёт):
 
@@ -1525,7 +1525,7 @@ steps:
   - prompt: имя AppRole
 ```
 
-Автотесты: `tests/test_runbook.py` (27: разбор директив/YAML/плана и Pilot: auto-цепочка, manual ждёт Enter, prompt ждёт набранную строку, пустой Enter пропускает шаг, тег без директив — `note:` в плане, стоп по ошибке и `run:continue`, Esc и `:run stop`, `--dry`, свой YAML, отказы при `:watch`/втором прогоне).
+Автотесты: `tests/test_runbook.py` (28: разбор директив/YAML/плана и Pilot: auto-цепочка, manual ждёт Enter, prompt ждёт набранную строку, пустой Enter пропускает шаг, тег без директив — заметка в плане, локализация плана (`runbook.plan_*`), стоп по ошибке и `run:continue`, Esc и `:run stop`, `--dry`, свой YAML, отказы при `:watch`/втором прогоне).
 
 ---
 
@@ -1689,7 +1689,7 @@ printf '%s\n' \
 
 ---
 
-**Версия документа**: v1.128
-**Версия приложения**: v1.182
+**Версия документа**: v1.129
+**Версия приложения**: v1.183
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_seed_sqlite.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`, `tests/test_mcp_server.py`, `tests/test_vault.py`, `tests/test_tty_signals.py`  
 **Дата**: 2026-09-21

@@ -68,6 +68,9 @@ runbook:
   no_directives: "the tag has no run: directives — every step will run auto; a mutating step is safer marked run:manual (see :? run)"
   plan_footer_stop: "Esc stops"
   plan_footer_dry: "[yellow]dry run — nothing executed[/yellow]"
+  plan_head: "[bold]Runbook {title}[/bold] · {steps} step(s) · {footer}"
+  plan_source: "[dim]source: {source} · pause {pause:g}s[/dim]"
+  plan_note: "[yellow]note: {warning}[/yellow]"
   usage_header: "Usage: :run <tag|file.yml> [--step] [--dry]   |   :run stop"
   usage_notes:
     - "  auto steps run one after another, manual/prompt wait for you, Esc stops."

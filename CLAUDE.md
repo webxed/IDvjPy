@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.182) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.183) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.182` → `v1.183`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.183` → `v1.184`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -172,7 +172,7 @@ Aliases load from `~/.bashrc`. If the body contains `$1` / `$2` / `$@` / `$*`, a
 9. **Bang-ref completion**: type `!` to list tags, then commands as `<id> tag[tid]`; Tab inserts `!tag[tid]`
 10. **Console view (Ctrl+O)**: `action_show_console` suspends the TUI (`App.suspend`) so the real terminal is visible — that is where `> cmd` (`htop`/`vim`/`less`) output lives, in the scrollback. `_wait_console_key` prints a hint and waits for any key on `/dev/tty` in cbreak mode (falls back to an Enter on stdin without a controlling terminal), then the app resumes. `SuspendNotSupported` becomes an explicit journal error.
 11. **`:llm` thinking animation**: the request runs in a worker thread (`_llm_worker`), so the block itself shows progress — `_start_thinking(block, timeout)` registers it in `self._thinking` (one `set_interval(THINKING_TICK=0.1)` timer for the app) and `_tick_thinking` repaints a braille spinner frame via `_thinking_markup` (`⠋ thinking… 3s / 60s`). `raw_stdout` is deliberately left at `[Consulting <provider>…]` as the stable "still waiting" marker (the `--demo all` tour waits on it); the animation only rewrites the rendered widget, so `_stop_thinking` in `_on_command_finished` (answer or error) is all the cleanup needed — the timer stops with the last waiting block.
-12. **Runbook (`:run`)**: the plan is built in the UI thread (`runbook.build_plan`: tag from the DB or a YAML file), printed as an InfoBlock, and played by one worker in group `runbook` (`_run_state` keeps `plan` + `index`). `_run_active` is the "playback in progress" flag: while it is set, Esc (`action_focus_input`) stops the chain via `_stop_runbook` (message with the step number), `:run`/`:watch` refuse to start, `:send` messages are deferred (`_poll_session_inbox`), session switching and the screensaver stand aside, `clear_subtitle` keeps the `RUN …` banner, and `on_input_submitted` counts the human's submits (`_run_submits`) without recording them into `_playbook_log`.
+12. **Runbook (`:run`)**: the plan is built in the UI thread (`runbook.build_plan`: tag from the DB or a YAML file), printed as an InfoBlock, and played by one worker in group `runbook` (`_run_state` keeps `plan` + `index`). The plan text is localized (`runbook.plan_head` / `plan_source` / `plan_note`; step-mode names `auto`/`manual`/`prompt` stay keywords) — do not hardcode it in `runbook.format_plan`. `_run_active` is the "playback in progress" flag: while it is set, Esc (`action_focus_input`) stops the chain via `_stop_runbook` (message with the step number), `:run`/`:watch` refuse to start, `:send` messages are deferred (`_poll_session_inbox`), session switching and the screensaver stand aside, `clear_subtitle` keeps the `RUN …` banner, and `on_input_submitted` counts the human's submits (`_run_submits`) without recording them into `_playbook_log`.
 
 ### Database Schema
 

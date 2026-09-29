@@ -149,7 +149,7 @@ def test_steps_from_tag_without_directives_notes_all_auto(tmp_path):
     Так выглядел `vapprole` старого сида (до v1.124): `:run vapprole` сам
     выполнял `$ROLE=custom-role` и падал на следующем шаге, а мутирующий
     `vault write -force` ушёл бы без подтверждения. Молчать нельзя —
-    предупреждение видно в плане (`format_plan` печатает его как `note:`).
+    предупреждение видно в плане (строка заметки, ключ `runbook.plan_note`).
     """
     db = _db(tmp_path)
     _add(db, "echo one")
@@ -271,6 +271,25 @@ def test_format_plan_lists_modes_and_hints(tmp_path):
     text = format_plan(build_plan(db, "chain"), dry=True)
     assert "Runbook chain" in text and "dry run" in text
     assert "manual" in text and "проверьте вывод" in text
+
+
+def test_format_plan_is_localized(tmp_path):
+    """Шапка плана, источник/пауза и заметки — из локалей (не литералы)."""
+    import i18n
+
+    db = _db(tmp_path)
+    _add(db, "echo one")
+    plan = build_plan(db, "chain")
+    try:
+        i18n.set_language("ru")
+        ru = format_plan(plan, dry=True)
+        assert "шагов: 1" in ru and "источник: chain" in ru and "пауза" in ru
+        assert "заметка:" in ru
+        i18n.set_language("zh")
+        zh = format_plan(plan, dry=True)
+        assert "1 步" in zh and "来源: chain" in zh and "提示:" in zh
+    finally:
+        i18n.set_language("en")
 
 
 # --- проигрывание -------------------------------------------------------------

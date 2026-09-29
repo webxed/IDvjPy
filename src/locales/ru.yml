@@ -61,8 +61,11 @@ watch:
 runbook:
   modes: "auto — выполнить и ждать завершения · manual — вставить и ждать Enter (пустой Enter — пропустить) · prompt — набрать строку"
   no_directives: "в теге нет run:-директив — все шаги пойдут auto; мутирующий шаг безопаснее пометить run:manual (см. :? run)"
-  plan_footer_stop: "Esc — остановить"
-  plan_footer_dry: "[yellow]пробный прогон — ничего не выполняется[/yellow]"
+  plan_footer_stop: "Esc — остановка"
+  plan_footer_dry: "[yellow]сухой прогон — ничего не выполняется[/yellow]"
+  plan_head: "[bold]Runbook {title}[/bold] · шагов: {steps} · {footer}"
+  plan_source: "[dim]источник: {source} · пауза {pause:g}с[/dim]"
+  plan_note: "[yellow]заметка: {warning}[/yellow]"
   usage_header: "Usage: :run <tag|file.yml> [--step] [--dry]   |   :run stop"
   usage_notes:
     - "  auto-шаги идут подряд, manual/prompt ждут человека, Esc — остановить."

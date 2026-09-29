@@ -51,11 +51,11 @@
     :run deploy
 
   План (`--dry`) выглядит так:
-    Runbook deploy · 3 step(s) · dry run — nothing executed
+    Runbook deploy · шагов: 3 · сухой прогон — ничего не выполняется
      1. auto   kubectl -n $NS get pods  # смотрим поды
      2. manual kubectl -n $NS rollout restart deploy/$APP  # рестарт — подтвердите Enter
      3. auto   kubectl -n $NS rollout status deploy/$APP
-    source: deploy · pause 1s
+    источник: deploy · пауза 1s
 
   На шаге 2 цепочка подставляет строку и ждёт Enter (можно сперва поправить;
   пустой Enter пропускает шаг). Шаг 3 идёт сразу после 2, а сбой останавливает

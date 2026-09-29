@@ -80,7 +80,7 @@ PLAN_KEYS = {"title", "steps", "pause", "stop_on_error",
 # так выглядит устаревший сид (директивы появились в v1.124): `:run vapprole`
 # старого набора сам выполнял `$ROLE=custom-role` и падал на следующем шаге, а
 # мутирующий `vault write -force` ушёл бы без подтверждения. Поэтому в план
-# печатается замечание (`format_plan` показывает его как `note:`).
+# печатается заметка в плане (ключ `runbook.plan_note`).
 NO_DIRECTIVES_KEY = "runbook.no_directives"
 
 
@@ -334,24 +334,26 @@ def tags_with_directives(db_file: str) -> list[tuple[str, int]]:
 
 
 def format_plan(plan: RunPlan, *, dry: bool = False) -> str:
-    """Человеческий план прогона: шаги, режимы, подсказки, предупреждения."""
+    """Человеческий план прогона: шаги, режимы, подсказки, предупреждения.
+
+    Тексты — из локалей (`runbook.plan_*`), поэтому план читается на языке UI;
+    имена режимов (`auto`/`manual`/`prompt`) — ключевые слова и не переводятся.
+    """
     total = len(plan.steps)
-    head = (
-        f"[bold]Runbook {plan.title}[/bold] · {total} step(s) · "
-        + (
-            t("runbook.plan_footer_dry")
-            if dry
-            else t("runbook.plan_footer_stop")
-        )
+    head = t(
+        "runbook.plan_head",
+        title=plan.title,
+        steps=total,
+        footer=t("runbook.plan_footer_dry" if dry else "runbook.plan_footer_stop"),
     )
     lines = [head, f"[dim]{t('runbook.modes')}[/dim]"]
     for index, step in enumerate(plan.steps, start=1):
         hint = f"  [dim]# {step.hint}[/dim]" if step.hint else ""
         lines.append(f"  {index:>2}. [bold]{step.mode:<6}[/bold] {step.text}{hint}")
     if plan.source:
-        lines.append(f"[dim]source: {plan.source} · pause {plan.pause:g}s[/dim]")
+        lines.append(t("runbook.plan_source", source=plan.source, pause=plan.pause))
     for warning in plan.warnings:
-        lines.append(f"[yellow]note: {warning}[/yellow]")
+        lines.append(t("runbook.plan_note", warning=warning))
     return "\n".join(lines)
 
 

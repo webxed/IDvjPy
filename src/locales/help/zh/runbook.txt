@@ -51,11 +51,11 @@
     :run deploy
 
   `--dry` 计划形如：
-    Runbook deploy · 3 step(s) · dry run — nothing executed
+    Runbook deploy · 3 步 · 演练 — 未执行任何命令
      1. auto   kubectl -n $NS get pods  # 先看 pod
      2. manual kubectl -n $NS rollout restart deploy/$APP  # 重启 —— 按 Enter 确认
      3. auto   kubectl -n $NS rollout status deploy/$APP
-    source: deploy · pause 1s
+    来源: deploy · 暂停 1s
 
   第 2 步会预填该行并等待 Enter（可先修改；空 Enter 跳过该步骤）。第 2 步完成
   后立即执行第 3 步；失败会停止命令链 —— 除非该步骤或标签声明 run:continue。

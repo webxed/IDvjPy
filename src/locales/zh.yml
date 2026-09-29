@@ -69,6 +69,9 @@ runbook:
   no_directives: "该标签没有 run: 指令 — 所有步骤都会自动执行；会修改状态的步骤更安全地标记为 run:manual（见 :? run）"
   plan_footer_stop: "Esc 停止"
   plan_footer_dry: "[yellow]演练 — 未执行任何命令[/yellow]"
+  plan_head: "[bold]Runbook {title}[/bold] · {steps} 步 · {footer}"
+  plan_source: "[dim]来源: {source} · 暂停 {pause:g}s[/dim]"
+  plan_note: "[yellow]提示: {warning}[/yellow]"
   usage_header: "用法: :run <tag|file.yml> [--step] [--dry]   |   :run stop"
   usage_notes:
     - "  auto 步骤依次执行，manual/prompt 等待你操作，Esc 停止。"
