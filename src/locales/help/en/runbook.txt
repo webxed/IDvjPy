@@ -31,6 +31,42 @@ A tag with NO run: directive at all gets a warning in the plan — otherwise eve
 step would run auto, mutations included; mark the mutating step run:manual.
 `--step` drops that note (every step waits for your Enter anyway).
 
+[bold]Worked example — a deploy chain[/bold]
+  # 1. Save the steps. The tag name is the chain; tid is the order:
+    #deploy kubectl -n $NS get pods
+    #deploy kubectl -n $NS rollout restart deploy/$APP
+    #deploy kubectl -n $NS rollout status deploy/$APP
+
+  # 2. Add directives to the comments (`#tag=TID=…`). What follows them is the
+  #    hint you will also see in `??` and in the plan:
+    #deploy=1=run:auto before the restart
+    #deploy=2=run:manual restart — press Enter to confirm
+    #deploy=3=run:auto wait for the rollout
+
+  # 3. Defaults for the whole tag (pause and failure policy; the mode is per step):
+    #deploy=run:pause=1 run:continue
+
+  # 4. Check the plan first, then run:
+    :run deploy --dry
+    :run deploy
+
+  The dry plan comes out as:
+    Runbook deploy · 3 step(s) · dry run — nothing executed
+     1. auto   kubectl -n $NS get pods  # before the restart
+     2. manual kubectl -n $NS rollout restart deploy/$APP  # restart — press Enter to confirm
+     3. auto   kubectl -n $NS rollout status deploy/$APP
+    source: deploy · pause 1s
+
+  At step 2 the chain pre-fills the line and waits for Enter (edit it first if
+  needed; an empty Enter skips the step). Step 3 goes as soon as step 2 is done,
+  and a failure stops the chain — unless the step or the tag says run:continue.
+
+  A step that must be typed from scratch — one value, or a whole
+  `$$VAULT_TOKEN=…` line — is `run:prompt`:
+    #deploy=4=run:prompt paste the new token as: $$VAULT_TOKEN=…
+  There the input stays empty and the chain waits for the whole line (secrets
+  remain masked while you type).
+
 [bold]YAML source[/bold] (`:playbook` writes a compatible file)
   title: vault approle
   pause: 0.3                 # pause between auto steps

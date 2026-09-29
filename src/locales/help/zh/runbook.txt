@@ -31,6 +31,39 @@
 都会以 auto 执行，包括变更操作；请把变更步骤标记为 run:manual。
 `--step` 会去掉这条提示（每一步本来都会等待你按 Enter）。
 
+[bold]完整示例 —— 部署命令链[/bold]
+  # 1. 保存各步骤。标签名就是命令链名，顺序即 tid：
+    #deploy kubectl -n $NS get pods
+    #deploy kubectl -n $NS rollout restart deploy/$APP
+    #deploy kubectl -n $NS rollout status deploy/$APP
+
+  # 2. 在注释中加入指令（`#标签=TID=…`）。其后的文字就是提示，
+  #    在 `??` 和计划中都会显示：
+    #deploy=1=run:auto 先看 pod
+    #deploy=2=run:manual 重启 —— 按 Enter 确认
+    #deploy=3=run:auto 等待 rollout
+
+  # 3. 整个标签的默认值（暂停与失败策略；模式始终由各步骤自己决定）：
+    #deploy=run:pause=1 run:continue
+
+  # 4. 先看计划，再运行：
+    :run deploy --dry
+    :run deploy
+
+  `--dry` 计划形如：
+    Runbook deploy · 3 step(s) · dry run — nothing executed
+     1. auto   kubectl -n $NS get pods  # 先看 pod
+     2. manual kubectl -n $NS rollout restart deploy/$APP  # 重启 —— 按 Enter 确认
+     3. auto   kubectl -n $NS rollout status deploy/$APP
+    source: deploy · pause 1s
+
+  第 2 步会预填该行并等待 Enter（可先修改；空 Enter 跳过该步骤）。第 2 步完成
+  后立即执行第 3 步；失败会停止命令链 —— 除非该步骤或标签声明 run:continue。
+
+  需要从零输入整行的步骤 —— 一个取值，或整行 `$$VAULT_TOKEN=…` —— 用 run:prompt：
+    #deploy=4=run:prompt 粘贴新 token，整行：$$VAULT_TOKEN=…
+  此时输入框为空，命令链等待整行输入（输入期间密钥保持掩码）。
+
 [bold]YAML 源文件[/bold]（`:playbook` 会写出兼容文件）
   title: vault approle
   pause: 0.3                 # auto 步骤之间的暂停

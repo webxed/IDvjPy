@@ -31,6 +31,42 @@
 шёл бы auto, включая мутации; помечайте мутирующий шаг run:manual.
 `--step` убирает эту заметку (каждый шаг всё равно ждёт вашего Enter).
 
+[bold]Пример целиком — цепочка деплоя[/bold]
+  # 1. Сохраните шаги. Имя тега — это и есть цепочка; порядок — tid:
+    #deploy kubectl -n $NS get pods
+    #deploy kubectl -n $NS rollout restart deploy/$APP
+    #deploy kubectl -n $NS rollout status deploy/$APP
+
+  # 2. Допишите директивы в комментарии (`#тег=TID=…`). Текст после них — подсказка,
+  #    её видно и в `??`, и в плане:
+    #deploy=1=run:auto смотрим поды
+    #deploy=2=run:manual рестарт — подтвердите Enter
+    #deploy=3=run:auto ждём rollout
+
+  # 3. Умолчания на весь тег (пауза и политика сбоя; режим — у каждого шага свой):
+    #deploy=run:pause=1 run:continue
+
+  # 4. Сначала план, потом прогон:
+    :run deploy --dry
+    :run deploy
+
+  План (`--dry`) выглядит так:
+    Runbook deploy · 3 step(s) · dry run — nothing executed
+     1. auto   kubectl -n $NS get pods  # смотрим поды
+     2. manual kubectl -n $NS rollout restart deploy/$APP  # рестарт — подтвердите Enter
+     3. auto   kubectl -n $NS rollout status deploy/$APP
+    source: deploy · pause 1s
+
+  На шаге 2 цепочка подставляет строку и ждёт Enter (можно сперва поправить;
+  пустой Enter пропускает шаг). Шаг 3 идёт сразу после 2, а сбой останавливает
+  цепочку — если шаг или тег не сказал run:continue.
+
+  Шаг, который надо набрать с нуля — одно значение или целую строку
+  `$$VAULT_TOKEN=…` — это `run:prompt`:
+    #deploy=4=run:prompt вставьте новый токен строкой: $$VAULT_TOKEN=…
+  На таком шаге ввод пуст, и цепочка ждёт всю строку целиком (секреты остаются
+  замаскированными, пока вы набираете).
+
 [bold]Исходник YAML[/bold] (`:playbook` пишет совместимый файл)
   title: vault approle
   pause: 0.3                 # пауза между шагами auto
