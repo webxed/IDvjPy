@@ -24,16 +24,25 @@
     :vault use NAME [VAR]        → $VAR in this session's environment
     :vault exec NAME[=VAR] -- cmd    $VAR in the child env, not in argv
     :vault stdin NAME -- cmd         feed the value to the command's stdin
+    :vault unuse [NAME|*]            remove exported variables (NAME, or `*` for all)
 
   `exec` guesses the variable for known programs (sshpass → SSHPASS,
   psql → PGPASSWORD, mysql/mysqldump → MYSQL_PWD, vault → VAULT_TOKEN, restic,
   borg, redis-cli); for anything else say `NAME=VAR` explicitly.
 
   Rules: values never enter the journal, `:o`, `↑`, `history_*.txt`, `:send` or
-  `:export`; while the vault is unlocked they are masked like `$$`-secrets. `cp`
+  `:export`; while the vault is unlocked they are masked like `$$`-secrets, and
+  variables exported with `use` stay masked too (even after the vault locks). `cp`
   is the weakest link — other programs can read the clipboard. The `cryptography`
   package is required (`pip install cryptography`); without it the rest of the
   app keeps working.
+
+  [bold]Auto-lock:[/bold] the store locks itself after `vault_idle_lock` minutes
+  with no vault operation (15 by default) — the password is forgotten, so the next
+  read asks for it again. Variables given to `:vault use` stay in the environment
+  (clear them explicitly with `:vault unuse`). `:vault autolock N` changes the
+  delay for this session, `0` turns it off; `vault_idle_lock: 0` in settings.yml —
+  for good.
 
   Examples: `:vault init`, `:vault add SSH_PROD prod ssh`, `:vault cp SSH_PROD`
   then `> ssh …` (paste), or `:vault exec sshpass -- ssh user@host`.

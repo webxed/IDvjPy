@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.180
+# План тестирования IDvjPy_term v1.181
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1674,18 +1674,22 @@ printf '%s\n' \
 :vault cp SSH_PROD            # → в буфер; на экране только «clipboard»
 > ssh user@host               # вставить значение из буфера, потом Ctrl+D
 :vault use SSH_PROD           # $SSH_PROD в этой сессии
+:vault unuse SSH_PROD          # снять эту переменную; `:vault unuse *` — все
 :vault exec SSH_PROD=SSHPASS -- sshpass ssh user@host   # значение в env, не в argv
 :vault stdin MY_PASS -- sudo -S true                    # значение на stdin
-:vault lock                   # env-переменные сняты, пароль забыт
+:vault lock                   # пароль забыт; переменные `use` остаются
 :vault unlock                 # снова пароль
-:vault rm SSH_PROD            # запись удалена (значение больше не достать)
+:vault autolock               # показать срок автоблокировки (по умолчанию 15 мин)
+:vault autolock 5             # на сессию: запирать после 5 мин без обращений
+:vault rm SSH_PROD            # запись удалена (переменная осталась — подсказка в блоке)
 ```
 
-**Ожидание:** значение нигде не печатается — ни в `:vault list`, ни в шапке блока, ни в `:o`, ни в `↑`, ни в `history_*.txt`; пока хранилище открыто, оно маскируется (`****`) даже в выводе чужих команд. `cp` чистит буфер по выходу из TTY и через минуту. Смена сессии (`:session`) снимает отданные переменные; закрытие приложения забывает пароль (файл `vault.json.enc`, 0600, в data-каталоге переживает перезапуск). Без пакета `cryptography` любая `:vault`-команда даёт подсказку `pip install cryptography`.
+**Ожидание:** значение нигде не печатается — ни в `:vault list`, ни в шапке блока, ни в `:o`, ни в `↑`, ни в `history_*.txt`; пока хранилище открыто, оно маскируется (`****`) даже в выводе чужих команд. `cp` чистит буфер по выходу из TTY и через минуту. `:vault lock` забывает пароль, но **не снимает** переменные `use` — их убирает `:vault unuse NAME` / `:vault unuse *` (и тогда значение перестаёт маскироваться); смена сессии (`:session`) очищает и переменные сессии; закрытие приложения забывает пароль (файл `vault.json.enc`, 0600, в data-каталоге переживает перезапуск). Без пакета `cryptography` любая `:vault`-команда даёт подсказку `pip install cryptography`.
+**Автоблокировка:** ключ `vault_idle_lock` (минуты, по умолчанию 15; `0` — выкл.). Проверить: `:vault autolock 0.05`, разблокировать, `:vault use SSH_PROD`, подождать — в журнале `Vault auto-locked`, пароль забыт (значение переменной **осталось** в окружении и маскируется), а `:vault cp SSH_PROD` снова открывает модалку пароля. `:vault autolock` показывает срок, `:vault` — строку `auto-lock: …`.
 
 ---
 
-**Версия документа**: v1.126
-**Версия приложения**: v1.180
+**Версия документа**: v1.127
+**Версия приложения**: v1.181
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_seed_sqlite.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`, `tests/test_mcp_server.py`, `tests/test_vault.py`, `tests/test_tty_signals.py`  
 **Дата**: 2026-09-21

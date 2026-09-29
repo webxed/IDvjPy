@@ -194,6 +194,13 @@ ansi_colors: true
 # false (default) — the buffer is left untouched.
 clear_clipboard_after_secret: false
 
+# Vault (`:vault`) auto-lock: minutes without any vault operation before the store
+# locks itself — the password is forgotten, so the next read asks for it again.
+# Variables given to `:vault use` stay in the environment (clear them explicitly with
+# `:vault unuse [NAME|*]`).
+# 0 — never auto-lock. `:vault autolock N` changes it for the current session.
+vault_idle_lock: 15
+
 # External editor for `:ed <file>|$OUT|$BLOCK` (launched in a TTY, the TUI paused).
 # May contain arguments: `editor: code --wait`, `editor: nvim`. Empty/absent —
 # $VISUAL / $EDITOR is taken, then the system editor (sensible-editor, nano, vi).

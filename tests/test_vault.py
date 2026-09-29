@@ -8,9 +8,11 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import stat
+import time
 
 import pytest
 from textual.widgets import Input
@@ -243,7 +245,8 @@ async def test_cp_puts_value_in_clipboard_only(isolated_home, clip_store):
         assert app._vault_clip_pending is False
 
 
-async def test_use_exports_env_and_lock_scrubs_it(isolated_home):
+async def test_use_exports_env_and_lock_keeps_it(isolated_home):
+    """`lock` забывает пароль, но переменные `use` остаются в окружении (и маскируются)."""
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
@@ -256,8 +259,123 @@ async def test_use_exports_env_and_lock_scrubs_it(isolated_home):
         assert app._mask_secrets("here: env-value") == "here: ****"
 
         await submit(pilot, ":vault lock")
+        assert app._vault_password is None, "пароль забыт"
+        assert os.environ.get("MY_SECRET") == "env-value", "переменная осталась"
+        assert app._vault_env == {"MY_SECRET": "env-value"}
+        # И после замка значение всё ещё не показывается: переменная-то жива.
+        assert app._mask_secrets("here: env-value") == "here: ****"
+        assert "Kept 1 exported" in last_info(app).text_content
+
+
+async def test_unuse_clears_exported_vars(isolated_home):
+    """Ручная очистка переменных: `:vault unuse NAME` и `:vault unuse *`."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault add MY_SECRET")
+        await _answer_modal(pilot, "v1")
+        await submit(pilot, ":vault add SSH_PROD")
+        await _answer_modal(pilot, "v2")
+        await submit(pilot, ":vault use MY_SECRET")
+        await submit(pilot, ":vault use SSH_PROD")
+        assert os.environ.get("MY_SECRET") == "v1"
+        assert os.environ.get("SSH_PROD") == "v2"
+
+        await submit(pilot, ":vault unuse MY_SECRET")
         assert "MY_SECRET" not in os.environ
+        assert os.environ.get("SSH_PROD") == "v2", "чужая переменная не тронута"
+        assert "Removed 1" in last_info(app).text_content
+
+        # Хранилище при этом не заперто — пароль не спрашивают.
+        assert app._vault_password == PW
+        await submit(pilot, ":vault unuse nope")
+        assert "No exported variable named nope" in last_info(app).text_content
+
+        await submit(pilot, ":vault unuse *")
+        assert "SSH_PROD" not in os.environ
         assert app._vault_env == {}
+        await submit(pilot, ":vault unuse *")
+        assert "No exported variables to remove" in last_info(app).text_content
+
+
+async def test_autolock_locks_after_idle_and_asks_password_again(isolated_home, clip_store):
+    """Тишина дольше `vault_idle_lock` запирает хранилище (пароль забыт), но переменные
+    `use` остаются в окружении; следующее чтение секрета снова требует пароль."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault add MY_SECRET")
+        await _answer_modal(pilot, "idle-value")
+        await submit(pilot, ":vault use MY_SECRET")
+        assert os.environ.get("MY_SECRET") == "idle-value"
+
+        # Прошло больше срока без обращений — таймер срабатывает.
+        app._vault_last_use = time.monotonic() - (app.vault_idle_lock * 60 + 5)
+        app._vault_auto_lock()
+
+        assert app._vault_password is None, "хранилище заперто по простою"
+        assert app._vault_entries is None
+        assert os.environ.get("MY_SECRET") == "idle-value", "переменная осталась"
+        assert app._mask_secrets("x idle-value") == "x ****", "и всё ещё маскируется"
+        assert "auto-locked" in last_info(app).text_content
+        assert app._vault_timer is None
+
+        # Чтение секрета снова требует пароль (а не отдаёт значение молча).
+        await submit(pilot, ":vault cp MY_SECRET")
+        assert type(pilot.app.screen).__name__ == "VaultSecretScreen"
+        await _answer_modal(pilot, PW)
+        assert clip_store.paste() == "idle-value"
+
+
+async def test_autolock_not_early_then_fires(isolated_home):
+    """Сразу после обращения не запирает (перевзводит таймер)."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        app._vault_last_use = time.monotonic()
+        app._vault_auto_lock()
+        assert app._vault_password == PW, "рано запирать нельзя"
+        assert app._vault_timer is not None, "таймер перевзведён"
+
+
+async def test_autolock_setting_and_session_override(isolated_home):
+    """`:vault autolock N` меняет срок на сессию; 0 — выключает; статус это видит."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        assert app._vault_timer is not None, "после разблокировки таймер взведён"
+        assert app.vault_idle_lock == 15  # из settings.yml по умолчанию
+
+        await submit(pilot, ":vault autolock 0")
+        assert app.vault_idle_lock == 0
+        assert app._vault_timer is None
+        assert "auto-lock off" in last_info(app).text_content
+        await submit(pilot, ":vault")
+        assert "auto-lock: off" in last_info(app).text_content
+
+        await submit(pilot, ":vault autolock 5")
+        assert app.vault_idle_lock == 5
+        assert app._vault_timer is not None
+        assert "5 min" in last_info(app).text_content
+        await submit(pilot, ":vault autolock")
+        assert "5 min" in last_info(app).text_content  # без аргумента — показать
+        await submit(pilot, ":vault")
+        assert "auto-lock: 5 min" in last_info(app).text_content
+
+
+async def test_autolock_timer_fires_by_itself(isolated_home):
+    """Настоящий таймер Textual: по тишине хранилище запирается без ручного вызова."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault autolock 0.003")  # ≈ 0.18 с
+        assert app.vault_idle_lock > 0
+        for _ in range(60):
+            if app._vault_password is None:
+                break
+            await asyncio.sleep(0.05)
+        assert app._vault_password is None, "таймер автоблокировки не сработал"
+        assert "auto-locked" in last_info(app).text_content
 
 
 async def test_remove_entry(isolated_home):
@@ -270,6 +388,21 @@ async def test_remove_entry(isolated_home):
         assert "Removed TMP_SEC" in last_info(app).text_content
         await submit(pilot, ":vault rm TMP_SEC")
         assert "No secret named TMP_SEC" in last_info(app).text_content
+
+
+async def test_remove_warns_about_exported_var(isolated_home):
+    """Удаление записи не трогает переменные `use`, но говорит, что значение осталось."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault add MY_SECRET")
+        await _answer_modal(pilot, "keep-value")
+        await submit(pilot, ":vault use MY_SECRET")
+        await submit(pilot, ":vault rm MY_SECRET")
+        text = last_info(app).text_content
+        assert "Removed MY_SECRET" in text
+        assert "unuse" in text and "MY_SECRET" in text
+        assert os.environ.get("MY_SECRET") == "keep-value", "переменная не снята"
 
 
 async def test_exec_uses_env_not_argv(isolated_home, monkeypatch):

@@ -23,15 +23,21 @@
     :vault use NAME [VAR]        → 本次会话环境中的 $VAR
     :vault exec NAME[=VAR] -- cmd    放入子进程 env，而非 argv
     :vault stdin NAME -- cmd         把值送入命令的 stdin
+    :vault unuse [NAME|*]            移除已导出的变量（NAME，或 `*` 表示全部）
 
   `exec` 会为已知程序自动选择变量（sshpass → SSHPASS、psql → PGPASSWORD、
   mysql/mysqldump → MYSQL_PWD、vault → VAULT_TOKEN、restic、borg、redis-cli）；
   其他情况请显式写 `NAME=VAR`。
 
   规则：值不会进入日志、`:o`、`↑`、`history_*.txt`、`:send` 或 `:export`；
-  解锁期间它们会像 `$$` 密钥一样被遮蔽。`cp` 是最薄弱环节 —— 其他程序可以读取
-  剪贴板。需要 `cryptography` 包（`pip install cryptography`）；没有它应用其余
-  部分照常工作。
+  解锁期间它们会像 `$$` 密钥一样被遮蔽，`use` 导出的变量也同样被遮蔽（即使
+  保管库已上锁）。`cp` 是最薄弱环节 —— 其他程序可以读取剪贴板。需要
+  `cryptography` 包（`pip install cryptography`）；没有它应用其余部分照常工作。
+
+  [bold]自动锁定：[/bold] `vault_idle_lock` 分钟内没有任何保管库操作后自动上锁
+  （默认 15）—— 忘记密码，下次读取会重新要求输入密码。`:vault use` 给出的
+  变量会**留在**环境中（如需清除：`:vault unuse`）。`:vault autolock N` 修改本次
+  会话的时长，`0` 关闭；settings.yml 中的 `vault_idle_lock: 0` —— 永久关闭。
 
   示例：`:vault init`、`:vault add SSH_PROD 生产 ssh`、`:vault cp SSH_PROD`
   再 `> ssh …`（粘贴），或者 `:vault exec sshpass -- ssh user@host`。

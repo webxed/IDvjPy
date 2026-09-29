@@ -35,6 +35,7 @@ EXPECTED_KEYS = {
     "editor",
     "md_converter",
     "md_ocr",
+    "vault_idle_lock",
 }
 
 
