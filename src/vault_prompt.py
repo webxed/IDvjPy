@@ -1,12 +1,17 @@
 """Модалка секретов хранилища: маскированный ввод (`:vault …`).
 
-Пароль хранилища и значения записей вводятся точками (Textual
-`Input(password=True)`), на экране и в журнале не появляются. Enter — принять,
-Esc — отмена. С `confirm=True` спрашиваем дважды: при создании хранилища опечатка
-в пароле стоила бы всех записей (в отличие от `$$NAME=…`, где значение можно
-переписать).
+Пароль хранилища и значения записей вводятся точками (Textual `Input(password=True)`),
+на экране и в журнале не появляются. Enter — принять, Esc — отмена. С
+`confirm=True` спрашиваем дважды: при создании хранилища опечатка в пароле стоила
+бы всех записей (в отличие от `$$NAME=…`, где значение можно переписать).
+
+С `comment=True` у поля значения появляется второе, обычное (не маскированное)
+поле комментария — ссылки/пометки к ключу. Результат такой модалки — `VaultInput`
+(значение + комментарий), а не простая строка.
 """
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -20,8 +25,17 @@ def _escape_markup(text: str) -> str:
     return (text or "").replace("[", "\\[")
 
 
-class VaultSecretScreen(ModalScreen[str | None]):
-    """Ввод секрета. Возвращает строку или None (отмена)."""
+@dataclass
+class VaultInput:
+    """Результат модалки записи: значение (скрытое) и комментарий."""
+
+    value: str
+    comment: str = ""
+
+
+class VaultSecretScreen(ModalScreen[str | VaultInput | None]):
+    """Ввод секрета (и, если `comment=True`, комментария). Возвращает строку,
+    `VaultInput` или None (отмена)."""
 
     _modal = True
 
@@ -48,6 +62,14 @@ class VaultSecretScreen(ModalScreen[str | None]):
         margin: 1 0;
         border: tall $primary-darken-1;
     }
+    VaultSecretScreen #vault-comment-label {
+        color: $text-muted;
+        margin: 1 0 0 0;
+    }
+    VaultSecretScreen #vault-comment {
+        margin: 0 0 1 0;
+        border: tall $primary-darken-1;
+    }
     VaultSecretScreen #vault-hint {
         color: $text-muted;
     }
@@ -63,6 +85,9 @@ class VaultSecretScreen(ModalScreen[str | None]):
         prompt: str,
         confirm: bool = False,
         hint: str = "",
+        comment: bool = False,
+        comment_value: str = "",
+        comment_label: str = "Comment (optional)",
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -70,15 +95,24 @@ class VaultSecretScreen(ModalScreen[str | None]):
         self._prompt = prompt
         self._confirm = bool(confirm)
         self._hint = hint
+        self._comment = bool(comment)
+        self._comment_value = comment_value or ""
+        self._comment_label = comment_label
         self._first: str | None = None
-        self._error = ""
 
     def compose(self) -> ComposeResult:
         with Vertical(id="vault-box"):
             yield Static(_escape_markup(self._title), id="vault-title")
             yield Static(_escape_markup(self._prompt), id="vault-prompt")
             yield Input(password=True, id="vault-input")
+            if self._comment:
+                yield Static(
+                    _escape_markup(self._comment_label), id="vault-comment-label"
+                )
+                yield Input(value=self._comment_value, id="vault-comment")
             hint = "Enter — accept · Esc — cancel"
+            if self._comment:
+                hint = "Enter — accept · Tab — comment · Esc — cancel"
             if self._hint:
                 hint = f"{_escape_markup(self._hint)}\n{hint}"
             yield Static(hint, id="vault-hint")
@@ -89,11 +123,20 @@ class VaultSecretScreen(ModalScreen[str | None]):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         event.stop()
-        value = event.value or ""
-        if not self._confirm or self._first is None:
-            if not self._confirm:
-                self.dismiss(value)
+        # Всегда читаем поле значения по id: Enter мог прийти и из поля комментария
+        # (там в `event.value` — комментарий, а не значение).
+        value = self.query_one("#vault-input", Input).value or ""
+        if self._comment:
+            if not value:
+                self._show_error("Value is empty")
                 return
+            comment = self.query_one("#vault-comment", Input).value or ""
+            self.dismiss(VaultInput(value=value, comment=comment.strip()))
+            return
+        if not self._confirm:
+            self.dismiss(value)
+            return
+        if self._first is None:
             if not value:
                 self._show_error("Empty password")
                 return
@@ -117,7 +160,6 @@ class VaultSecretScreen(ModalScreen[str | None]):
         self.dismiss(self._first)
 
     def _show_error(self, text: str) -> None:
-        self._error = text
         try:
             self.query_one("#vault-error", Static).update(_escape_markup(text))
         except Exception:

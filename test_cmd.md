@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.183
+# План тестирования IDvjPy_term v1.184
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1669,9 +1669,10 @@ printf '%s\n' \
 :vault                        # нет файла → «No vault file yet»
 :vault init                   # пароль дважды (минимум 8 символов)
 :vault                        # открыто, записей нет
-:vault add SSH_PROD прод      # значение вводится точками, в журнале «****»
-:vault list                   # имя и подсказка, значения нет
-:vault cp SSH_PROD            # → в буфер; на экране только «clipboard»
+:vault add SSH_PROD прод      # значение вводится точками; в окне есть и поле комментария
+:vault comment SSH_PROD прод ssh;https://gitlab.example/proj   # комментарий/ссылки, значения не трогает
+:vault list                   # имя и комментарий; каждая ссылка — своей строкой
+:vault cp SSH_PROD            # → в буфер; в блоке виден комментарий (что именно скопировали)
 > ssh user@host               # вставить значение из буфера, потом Ctrl+D
 :vault use SSH_PROD           # $SSH_PROD в этой сессии
 :vault unuse SSH_PROD          # снять эту переменную; `:vault unuse *` — все
@@ -1685,11 +1686,12 @@ printf '%s\n' \
 ```
 
 **Ожидание:** значение нигде не печатается — ни в `:vault list`, ни в шапке блока, ни в `:o`, ни в `↑`, ни в `history_*.txt`; пока хранилище открыто, оно маскируется (`****`) даже в выводе чужих команд. `cp` чистит буфер по выходу из TTY и через минуту. `:vault lock` забывает пароль, но **не снимает** переменные `use` — их убирает `:vault unuse NAME` / `:vault unuse *` (и тогда значение перестаёт маскироваться); смена сессии (`:session`) очищает и переменные сессии; закрытие приложения забывает пароль (файл `vault.json.enc`, 0600, в data-каталоге переживает перезапуск). Без пакета `cryptography` любая `:vault`-команда даёт подсказку `pip install cryptography`.
+**Комментарий:** поле `hint` — пометка к записи (ссылки через `;`, каждая в `list` — своей строкой); в окне `:vault add` есть отдельное **немаскированное** поле комментария, `:vault comment NAME [текст]` правит его без переспроса значения (без текста — показать, `-` — снять). Он виден в блоках `cp`/`use`, но не в `:vault`. Это **не секрет**: набирается в строке ввода и попадает в журнал/`↑`/`history_*.txt` как есть — пароль и URL с токеном туда не пишем.
 **Автоблокировка:** ключ `vault_idle_lock` (минуты, по умолчанию 15; `0` — выкл.). Проверить: `:vault autolock 0.05`, разблокировать, `:vault use SSH_PROD`, подождать — в журнале `Vault auto-locked`, пароль забыт (значение переменной **осталось** в окружении и маскируется), а `:vault cp SSH_PROD` снова открывает модалку пароля. `:vault autolock` показывает срок, `:vault` — строку `auto-lock: …`.
 
 ---
 
-**Версия документа**: v1.129
-**Версия приложения**: v1.183
+**Версия документа**: v1.130
+**Версия приложения**: v1.184
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_seed_sqlite.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_history_import.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`, `tests/test_mcp_server.py`, `tests/test_vault.py`, `tests/test_tty_signals.py`  
 **Дата**: 2026-09-21

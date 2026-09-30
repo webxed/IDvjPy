@@ -126,6 +126,18 @@ async def _answer_modal(pilot, *values: str) -> None:
         await pilot.pause()
 
 
+async def _answer_value_modal(pilot, value: str, comment: str | None = None) -> None:
+    """Окно значения (`:vault add`): значение и (опционально) поле комментария."""
+    field = pilot.app.screen.query_one("#vault-input", Input)
+    field.value = value
+    field.focus()
+    if comment is not None:
+        pilot.app.screen.query_one("#vault-comment", Input).value = comment
+    await pilot.pause()
+    await pilot.press("enter")
+    await pilot.pause()
+
+
 def _journal_text(app: CommandRunner) -> str:
     parts = [block.text_content for block in app.query(InfoBlock)]
     parts += [block.text_content for block in app.query(CommandBlock)]
@@ -388,6 +400,86 @@ async def test_remove_entry(isolated_home):
         assert "Removed TMP_SEC" in last_info(app).text_content
         await submit(pilot, ":vault rm TMP_SEC")
         assert "No secret named TMP_SEC" in last_info(app).text_content
+
+
+async def test_add_modal_has_comment_field_prefilled(isolated_home):
+    """В окне значения есть поле комментария; из `add NAME …` оно предзаполнено."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault add API_KEY прод api")
+        comment_field = pilot.app.screen.query_one("#vault-comment", Input)
+        assert comment_field.value == "прод api"
+        await _answer_value_modal(pilot, "k-123", "прод api;https://api.example/key")
+        entry = (app._vault_entries or {})["API_KEY"]
+        assert entry["value"] == "k-123"
+        assert entry["hint"] == "прод api;https://api.example/key"
+        # Значение — по-прежнему только в маске, в журнал не попадает.
+        assert "k-123" not in _journal_text(app)
+        await submit(pilot, ":vault list")
+        text = last_info(app).text_content
+        assert "API_KEY" in text
+        assert "      прод api" in text and "      https://api.example/key" in text
+
+
+async def test_add_modal_blocks_empty_value(isolated_home):
+    """Enter с пустым значением окно не закрывает (иначе теряется комментарий)."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault add NO_VALUE")
+        await _answer_value_modal(pilot, "")
+        assert type(pilot.app.screen).__name__ == "VaultSecretScreen"
+
+
+async def test_comment_command_edits_without_value(isolated_home):
+    """`:vault comment` — правит/показывает/снимает комментарий, значения не трогает."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault add SSH_PROD")
+        await _answer_value_modal(pilot, "s3cret")
+
+        await submit(pilot, ":vault comment SSH_PROD прод ssh;ssh://deploy@host")
+        entry = (app._vault_entries or {})["SSH_PROD"]
+        assert entry["value"] == "s3cret", "значение не тронуто"
+        assert entry["hint"] == "прод ssh;ssh://deploy@host"
+        assert "s3cret" not in _journal_text(app)
+
+        await submit(pilot, ":vault comment SSH_PROD")
+        assert "прод ssh;ssh://deploy@host" in last_info(app).text_content
+
+        # В списке несколько ссылок — каждая с новой строки.
+        await submit(pilot, ":vault list")
+        text = last_info(app).text_content
+        assert "      прод ssh" in text and "      ssh://deploy@host" in text
+
+        await submit(pilot, ":vault comment SSH_PROD -")
+        assert "hint" not in (app._vault_entries or {})["SSH_PROD"]
+        await submit(pilot, ":vault comment SSH_PROD")
+        assert "(none)" in last_info(app).text_content
+
+        await submit(pilot, ":vault comment NOPE x")
+        assert "No secret named NOPE" in last_info(app).text_content
+
+
+async def test_comment_shown_in_cp_and_use_not_in_status(isolated_home, clip_store):
+    """Комментарий виден в `cp`/`use` (чтобы не копировать наугад), но не в `:vault`."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault add SSH_PROD")
+        await _answer_value_modal(pilot, "s3cret", "прод ssh")
+
+        await submit(pilot, ":vault cp SSH_PROD")
+        assert clip_store.paste() == "s3cret"
+        assert "прод ssh" in last_info(app).text_content
+
+        await submit(pilot, ":vault use SSH_PROD")
+        assert "прод ssh" in last_info(app).text_content
+
+        await submit(pilot, ":vault")
+        assert "прод ssh" not in last_info(app).text_content, "статус короткий"
 
 
 async def test_remove_warns_about_exported_var(isolated_home):

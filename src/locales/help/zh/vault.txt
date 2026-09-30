@@ -12,9 +12,11 @@
 
   管理条目：
 
-    :vault add NAME [hint]    添加或替换值（输入被遮蔽）
+    :vault add NAME [hint]    添加或替换值；窗口中还有备注输入框
+    :vault comment NAME [text]  只修改备注（值保持不变）；
+                              `;` 分隔链接，不带文本则显示，`-` 清除
     :vault gen NAME [len]     生成随机值
-    :vault list               名称与提示
+    :vault list               名称与备注（每条链接单独一行）
     :vault rm NAME            删除条目
 
   取出值 —— 值从不打印：
@@ -28,6 +30,12 @@
   `exec` 会为已知程序自动选择变量（sshpass → SSHPASS、psql → PGPASSWORD、
   mysql/mysqldump → MYSQL_PWD、vault → VAULT_TOKEN、restic、borg、redis-cli）；
   其他情况请显式写 `NAME=VAR`。
+
+  备注是每条记录的标注：密钥属于哪里、相关链接、提醒：
+  `:vault comment SSH_PROD prod ssh;https://gitlab.example/proj;ssh://u@host`。
+  它**不是**密钥，也不会被遮蔽：会按原样进入日志、`↑` 和 `history_*.txt` ——
+  不要把值本身（或带 token 的 URL）写进备注。在 `cp`/`use` 的
+  消息中备注会显示在名称旁边。
 
   规则：值不会进入日志、`:o`、`↑`、`history_*.txt`、`:send` 或 `:export`；
   解锁期间它们会像 `$$` 密钥一样被遮蔽，`use` 导出的变量也同样被遮蔽（即使

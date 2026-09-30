@@ -288,7 +288,7 @@ try:
         format_update_fetch_error,
         format_update_status,
     )
-    from vault_prompt import VaultSecretScreen
+    from vault_prompt import VaultInput, VaultSecretScreen
 except ImportError as e:
     print(f"Error: Missing dependency - {e}", file=sys.stderr)
     print("Please install required dependencies:", file=sys.stderr)
@@ -2588,7 +2588,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.183"
+    VERSION = "v1.184"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -8556,6 +8556,8 @@ class CommandRunner(App):
             "stdin": self._vault_do_stdin,
             "autolock": self._vault_do_autolock,
             "unuse": self._vault_do_unuse,
+            "comment": self._vault_do_comment,
+            "note": self._vault_do_comment,
         }
         if not sub:
             self._vault_show_status()
@@ -8748,9 +8750,12 @@ class CommandRunner(App):
             title=t("vault.pass_title"), prompt=prompt, confirm=confirm
         )
 
-        def done(value: str | None) -> None:
-            if value is None:
+        def done(result: str | VaultInput | None) -> None:
+            # Пароль — всегда строка; `VaultInput` тут не бывает (поле комментария
+            # есть только у `add`), `None` — отмена.
+            if not isinstance(result, str):
                 return
+            value = result
             if confirm:
                 error = vault.check_password(value)
                 if error:
@@ -8832,6 +8837,48 @@ class CommandRunner(App):
         else:
             self.add_block(InfoBlock(t("vault.unuse_none")))
 
+    def _vault_do_comment(self, args: list[str]) -> None:
+        """`:vault comment NAME [текст…]` — комментарий к записи (значение не тронуто).
+
+        Ссылки разделяются `;`; без текста — показать текущий, `-` — снять.
+        """
+        if not args:
+            self.add_block(InfoBlock(t("vault.usage")))
+            return
+        name = vault.normalize_name(args[0])
+        error = vault.validate_name(name)
+        if error:
+            self.add_block(InfoBlock(error))
+            return
+        text = " ".join(args[1:]).strip()
+        self._vault_ensure_unlocked(lambda: self._vault_set_comment(name, text))
+
+    def _vault_set_comment(self, name: str, text: str) -> None:
+        current = self._vault_entries or {}
+        if name not in current:
+            self.add_block(InfoBlock(t("vault.not_found", name=name)))
+            return
+        if not text:
+            have = str(current[name].get("hint") or "")
+            self.add_block(InfoBlock(
+                t("vault.comment_current", name=name, comment=have)
+                if have
+                else t("vault.comment_none", name=name)
+            ))
+            return
+        entries = {key: dict(entry) for key, entry in current.items()}
+        entry = entries[name]
+        if text == "-":
+            entry.pop("hint", None)
+            if not self._vault_save(entries):
+                return
+            self.add_block(InfoBlock(t("vault.comment_cleared", name=name)))
+            return
+        entry["hint"] = text
+        if not self._vault_save(entries):
+            return
+        self.add_block(InfoBlock(t("vault.comment_set", name=name)))
+
     def _vault_do_add(self, args: list[str]) -> None:
         """`:vault add NAME [hint words…]` — добавить/заменить значение (ввод маскирован)."""
         if not args:
@@ -8846,26 +8893,37 @@ class CommandRunner(App):
         self._vault_ensure_unlocked(lambda: self._vault_prompt_value(name, hint))
 
     def _vault_prompt_value(self, name: str, hint: str) -> None:
-        """Спросить значение записи и сохранить её (значения не печатаем)."""
+        """Спросить значение и комментарий записи (значение — в маске).
+
+        Комментарий предзаполнен: тем, что набрали в `:vault add NAME …`, иначе
+        уже сохранённым (при замене значения его не надо вводить заново). Второе
+        поле — обычное, не маскированное: это пометка/ссылки, а не секрет.
+        """
         current = self._vault_entries or {}
         key = "vault.value_prompt_replace" if name in current else "vault.value_prompt"
+        existing = str((current.get(name) or {}).get("hint") or "")
         screen = VaultSecretScreen(
             title=t("vault.value_title", name=name),
             prompt=t(key, name=name),
             hint=t("vault.value_hint", name=name),
+            comment=True,
+            comment_value=hint or existing,
+            comment_label=t("vault.comment_label"),
         )
 
-        def done(value: str | None) -> None:
-            if value is None:
+        def done(result: str | VaultInput | None) -> None:
+            if not isinstance(result, VaultInput):
                 return
-            if not value:
+            if not result.value:
                 self.add_block(InfoBlock(t("vault.empty_value")))
                 return
             updated = {k: dict(entry) for k, entry in current.items()}
             entry = updated.get(name) or {}
-            entry["value"] = value
-            if hint:
-                entry["hint"] = hint
+            entry["value"] = result.value
+            if result.comment:
+                entry["hint"] = result.comment
+            else:
+                entry.pop("hint", None)
             updated[name] = entry
             if not self._vault_save(updated):
                 return
@@ -8916,10 +8974,30 @@ class CommandRunner(App):
             return
         lines = [t("vault.list_title", count=len(entries))]
         for name in vault.dump_entries(entries):
-            hint = str(entries[name].get("hint") or "")
-            suffix = f" — {hint}" if hint else ""
-            lines.append(t("vault.list_row", name=name, hint=suffix))
+            links = self._vault_comment_segments(name)
+            if len(links) <= 1:
+                suffix = f" — {links[0]}" if links else ""
+                lines.append(t("vault.list_row", name=name, hint=suffix))
+                continue
+            # Несколько ссылок — каждая с новой строки: в одну строку они сливаются.
+            lines.append(t("vault.list_row", name=name, hint=""))
+            lines.extend(t("vault.list_link", link=link) for link in links)
         self.add_block(InfoBlock("\n".join(lines)))
+
+    def _vault_comment_segments(self, name: str) -> list[str]:
+        """Комментарий записи, разрезанный по `;` (пустые куски выброшены)."""
+        raw = str(((self._vault_entries or {}).get(name) or {}).get("hint") or "")
+        return [part.strip() for part in raw.split(";") if part.strip()]
+
+    def _vault_comment_suffix(self, name: str, limit: int = 160) -> str:
+        """` · комментарий` для сообщений cp/use (одной строкой, с обрезкой)."""
+        links = self._vault_comment_segments(name)
+        if not links:
+            return ""
+        text = " · ".join(links)
+        if len(text) > limit:
+            text = text[: limit - 1].rstrip() + "…"
+        return " · " + text
 
     def _vault_do_rm(self, args: list[str]) -> None:
         """`:vault rm NAME` — удалить запись."""
@@ -8964,7 +9042,10 @@ class CommandRunner(App):
         self._vault_clip_pending = True
         self.set_timer(self.VAULT_CLIPBOARD_TTL, self._vault_clear_clipboard)
         self.add_block(InfoBlock(t(
-            "vault.copied", name=name, sec=self.VAULT_CLIPBOARD_TTL
+            "vault.copied",
+            name=name,
+            comment=self._vault_comment_suffix(name),
+            sec=self.VAULT_CLIPBOARD_TTL,
         )))
 
     def _vault_value(self, name: str) -> str | None:
@@ -9008,7 +9089,9 @@ class CommandRunner(App):
         self._vault_env[var] = value
         self.local_env[var] = value
         os.environ[var] = value
-        self.add_block(InfoBlock(t("vault.used", name=name, var=var)))
+        self.add_block(InfoBlock(t(
+            "vault.used", name=name, var=var, comment=self._vault_comment_suffix(name)
+        )))
 
     def _vault_do_exec(self, args: list[str]) -> None:
         """`:vault exec NAME[=VAR] -- cmd` — значение программе через env, не в argv."""
