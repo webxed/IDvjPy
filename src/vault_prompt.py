@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from textual.app import ComposeResult
@@ -31,6 +32,16 @@ class VaultInput:
 
     value: str
     comment: str = ""
+
+
+@dataclass(frozen=True)
+class TotpView:
+    """Что показать в окошке TOTP: `raw` — для буфера, `shown` — для экрана."""
+
+    raw: str
+    shown: str
+    seconds: int
+    bar: str = ""
 
 
 class VaultSecretScreen(ModalScreen[str | VaultInput | None]):
@@ -164,6 +175,103 @@ class VaultSecretScreen(ModalScreen[str | VaultInput | None]):
             self.query_one("#vault-error", Static).update(_escape_markup(text))
         except Exception:
             pass
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+class VaultTotpScreen(ModalScreen[str | None]):
+    """Живой TOTP-код: обновляется каждую секунду; Enter/`c` — копировать, Esc — закрыть.
+
+    Секрет сюда не попадает — только текущий одноразовый код (и комментарий
+    записи). Код пересчитывается на каждый тик и в момент копирования: если окно
+    времени перевернулось, в буфер уйдёт свежий код, а не тот, что нарисован.
+    """
+
+    _modal = True
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Close", show=False),
+        Binding("enter", "copy", "Copy", show=False),
+        Binding("c", "copy", "Copy", show=False),
+    ]
+
+    DEFAULT_CSS = """
+    VaultTotpScreen {
+        align: center middle;
+        background: $background 60%;
+    }
+    VaultTotpScreen #totp-box {
+        width: 48;
+        max-width: 92%;
+        height: auto;
+        border: round $primary;
+        background: $surface;
+        padding: 1 2;
+    }
+    VaultTotpScreen #totp-title {
+        text-style: bold;
+        color: $accent;
+    }
+    VaultTotpScreen #totp-code {
+        text-style: bold;
+        color: $success;
+        padding: 1 0;
+    }
+    VaultTotpScreen #totp-bar {
+        color: $text-muted;
+    }
+    VaultTotpScreen #totp-comment {
+        color: $text-muted;
+    }
+    VaultTotpScreen #totp-hint {
+        color: $text-muted;
+    }
+    """
+
+    def __init__(
+        self,
+        *,
+        title: str,
+        provider: Callable[[], TotpView],
+        comment: str = "",
+        hint: str = "",
+        left_template: str = "{sec}s left",
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+        self._title = title
+        self._provider = provider
+        self._comment = comment or ""
+        self._hint = hint
+        self._left_template = left_template
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="totp-box"):
+            yield Static(_escape_markup(self._title), id="totp-title")
+            yield Static("", id="totp-code")
+            yield Static("", id="totp-bar")
+            if self._comment:
+                yield Static(_escape_markup(self._comment), id="totp-comment")
+            yield Static(_escape_markup(self._hint), id="totp-hint")
+
+    def on_mount(self) -> None:
+        self._refresh()
+        self.set_interval(1.0, self._refresh)
+
+    def _refresh(self) -> None:
+        view = self._provider()
+        try:
+            self.query_one("#totp-code", Static).update(_escape_markup(view.shown))
+            self.query_one("#totp-bar", Static).update(_escape_markup(
+                f"{view.bar}  {self._left_template.format(sec=view.seconds)}"
+            ))
+        except Exception:
+            pass
+
+    def action_copy(self) -> None:
+        # Свежий код, а не тот, что успел устареть между тиками.
+        self.dismiss(self._provider().raw)
 
     def action_cancel(self) -> None:
         self.dismiss(None)

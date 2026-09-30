@@ -22,6 +22,9 @@ AEAD из кубиков самим ради экономии одной зав�
 Записи — словарь `{имя: {"value": …, "hint": …, "prompt": …, "uses": …}}`.
 `prompt` (шаблон приглашения) и `uses` (сколько раз можно подставить) сейчас
 только хранятся: режим подстановки в чужое приглашение — отдельный шаг.
+`kind` ("totp" и т.п.) и `meta` (плоские параметры записи: цифры/период/алгоритм)
+— для типизированных записей; толкует их владелец типа (`src/totp.py`), а не
+сам vault.
 """
 from __future__ import annotations
 
@@ -265,6 +268,21 @@ def sanitize_entry(raw: Mapping[str, object]) -> dict[str, object]:
         uses = 0
     if uses > 0:
         entry["uses"] = uses
+    # Тип записи и её параметры: `:vault` сам их не толкует (это делает модуль
+    # владельца, напр. `totp.py`), но должен сохранить — иначе тип потеряется
+    # при первой же перезаписи файла.
+    kind = str(raw.get("kind") or "").strip().lower()
+    if kind:
+        entry["kind"] = kind[:16]
+    meta = raw.get("meta")
+    if isinstance(meta, Mapping):
+        clean = {
+            str(key)[:32]: value
+            for key, value in meta.items()
+            if isinstance(value, (str, int, float, bool))
+        }
+        if clean:
+            entry["meta"] = clean
     return entry
 
 

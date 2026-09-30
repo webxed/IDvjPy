@@ -45,6 +45,22 @@
   package is required (`pip install cryptography`); without it the rest of the
   app keeps working.
 
+  [bold]TOTP codes:[/bold] two-factor codes without a phone app. The secret is kept
+  encrypted like any other entry; only the current one-time code reaches the
+  screen, so the secret itself is never printed:
+
+    :vault add GITHUB --totp      paste a base32 secret or an otpauth:// link
+    :vault totp GITHUB            live code: updates every second, Enter/`c` copies
+                                  the fresh code, Esc closes without copying
+
+  The `--totp` value takes a bare base32 key (`jbsw y3dp ehpk 3pxp`) or a link from
+  a QR code (`otpauth://totp/Issuer:acct?secret=…&issuer=…&digits=…`): digits
+  (6–8), period and algorithm (SHA1/256/512) are stored per entry. The code is
+  **not** a secret — it can be shown and copied (it lives 30 s and may land in the
+  journal / `:o`, unlike the secret). The counter comes from the system clock, so
+  a wrong clock gives wrong codes. Both factors end up in one store here — handy
+  for keeping codes around, but not a reason to trust a borrowed password.
+
   [bold]Auto-lock:[/bold] the store locks itself after `vault_idle_lock` minutes
   with no vault operation (15 by default) — the password is forgotten, so the next
   read asks for it again. Variables given to `:vault use` stay in the environment

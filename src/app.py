@@ -121,6 +121,7 @@ try:
     import md_convert
     import remote_source
     import runbook
+    import totp
     import vault
     from ansi_output import to_markup, to_plain
     from block_label import BlockLabelScreen
@@ -288,7 +289,7 @@ try:
         format_update_fetch_error,
         format_update_status,
     )
-    from vault_prompt import VaultInput, VaultSecretScreen
+    from vault_prompt import TotpView, VaultInput, VaultSecretScreen, VaultTotpScreen
 except ImportError as e:
     print(f"Error: Missing dependency - {e}", file=sys.stderr)
     print("Please install required dependencies:", file=sys.stderr)
@@ -2588,7 +2589,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.184"
+    VERSION = "v1.185"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -8558,6 +8559,7 @@ class CommandRunner(App):
             "unuse": self._vault_do_unuse,
             "comment": self._vault_do_comment,
             "note": self._vault_do_comment,
+            "totp": self._vault_do_totp,
         }
         if not sub:
             self._vault_show_status()
@@ -8879,33 +8881,103 @@ class CommandRunner(App):
             return
         self.add_block(InfoBlock(t("vault.comment_set", name=name)))
 
-    def _vault_do_add(self, args: list[str]) -> None:
-        """`:vault add NAME [hint words…]` — добавить/заменить значение (ввод маскирован)."""
-        if not args:
+    def _vault_do_totp(self, args: list[str]) -> None:
+        """`:vault totp NAME` — живой код двухфакторной аутентификации."""
+        if len(args) != 1:
             self.add_block(InfoBlock(t("vault.usage")))
             return
         name = vault.normalize_name(args[0])
+        self._vault_ensure_unlocked(lambda: self._vault_show_totp(name))
+
+    def _vault_show_totp(self, name: str) -> None:
+        entry = (self._vault_entries or {}).get(name)
+        if entry is None:
+            self.add_block(InfoBlock(t("vault.not_found", name=name)))
+            return
+        try:
+            spec = totp.spec_from_entry(entry)
+        except totp.TotpError as exc:
+            self.add_block(InfoBlock(t("vault.totp_bad_secret", error=str(exc))))
+            return
+        if spec is None:
+            self.add_block(InfoBlock(t("vault.totp_not_totp", name=name)))
+            return
+        screen = VaultTotpScreen(
+            title=t("vault.totp_title", name=name),
+            provider=lambda: self._vault_totp_view(spec),
+            comment=" · ".join(self._vault_comment_segments(name)),
+            hint=t("vault.totp_hint"),
+            left_template=t("vault.totp_left"),
+        )
+        self.push_screen(screen, lambda code: self._vault_totp_copied(name, code))
+
+    def _vault_totp_view(self, spec: totp.TotpSpec) -> TotpView:
+        """Код на текущее окно + остаток и полоска (для окошка и буфера)."""
+        code = totp.code_at(
+            spec.secret,
+            digits=spec.digits,
+            period=spec.period,
+            algorithm=spec.algorithm,
+        )
+        return TotpView(
+            raw=code,
+            shown=totp.grouped(code),
+            seconds=totp.remaining(period=spec.period),
+            bar=totp.progress_bar(period=spec.period),
+        )
+
+    def _vault_totp_copied(self, name: str, code: str | None) -> None:
+        """Окошко закрылось: Enter/`c` — код в буфер, Esc — ничего."""
+        if not code:
+            return
+        self.copy_text(code)
+        self._vault_clip_value = code
+        self._vault_clip_pending = True
+        self.set_timer(self.VAULT_CLIPBOARD_TTL, self._vault_clear_clipboard)
+        self.add_block(InfoBlock(t("vault.totp_copied", name=name)))
+
+    def _vault_do_add(self, args: list[str]) -> None:
+        """`:vault add NAME [hint words…] [--totp]` — добавить/заменить значение.
+
+        `--totp` — запись со секретом двухфакторной аутентификации: значение
+        вводится в маске, но может быть и ссылкой `otpauth://`.
+        """
+        kind = "totp" if "--totp" in args else ""
+        words = [arg for arg in args if arg != "--totp"]
+        if not words:
+            self.add_block(InfoBlock(t("vault.usage")))
+            return
+        name = vault.normalize_name(words[0])
         error = vault.validate_name(name)
         if error:
             self.add_block(InfoBlock(error))
             return
-        hint = " ".join(args[1:]).strip()
-        self._vault_ensure_unlocked(lambda: self._vault_prompt_value(name, hint))
+        hint = " ".join(words[1:]).strip()
+        self._vault_ensure_unlocked(lambda: self._vault_prompt_value(name, hint, kind))
 
-    def _vault_prompt_value(self, name: str, hint: str) -> None:
+    def _vault_prompt_value(self, name: str, hint: str, kind: str = "") -> None:
         """Спросить значение и комментарий записи (значение — в маске).
 
         Комментарий предзаполнен: тем, что набрали в `:vault add NAME …`, иначе
         уже сохранённым (при замене значения его не надо вводить заново). Второе
         поле — обычное, не маскированное: это пометка/ссылки, а не секрет.
+
+        `kind="totp"` — значение это TOTP-секрет: принимаем и base32, и ссылку
+        `otpauth://`, а в записи сохраняем нормализованный секрет + параметры.
         """
         current = self._vault_entries or {}
         key = "vault.value_prompt_replace" if name in current else "vault.value_prompt"
         existing = str((current.get(name) or {}).get("hint") or "")
+        if kind == "totp":
+            prompt = t("vault.totp_prompt", name=name)
+            value_hint = t("vault.totp_value_hint", name=name)
+        else:
+            prompt = t(key, name=name)
+            value_hint = t("vault.value_hint", name=name)
         screen = VaultSecretScreen(
             title=t("vault.value_title", name=name),
-            prompt=t(key, name=name),
-            hint=t("vault.value_hint", name=name),
+            prompt=prompt,
+            hint=value_hint,
             comment=True,
             comment_value=hint or existing,
             comment_label=t("vault.comment_label"),
@@ -8917,13 +8989,23 @@ class CommandRunner(App):
             if not result.value:
                 self.add_block(InfoBlock(t("vault.empty_value")))
                 return
-            updated = {k: dict(entry) for k, entry in current.items()}
-            entry = updated.get(name) or {}
-            entry["value"] = result.value
+            entry: dict[str, object] = {}
+            if kind == "totp":
+                try:
+                    spec = totp.spec_from_input(result.value)
+                except totp.TotpError as exc:
+                    self.add_block(InfoBlock(t("vault.totp_bad_secret", error=str(exc))))
+                    return
+                entry["kind"] = "totp"
+                entry["value"] = totp.encode_secret(spec.secret)
+                meta = totp.meta_from_spec(spec)
+                if meta:
+                    entry["meta"] = meta
+            else:
+                entry["value"] = result.value
             if result.comment:
                 entry["hint"] = result.comment
-            else:
-                entry.pop("hint", None)
+            updated = {k: dict(item) for k, item in current.items()}
             updated[name] = entry
             if not self._vault_save(updated):
                 return
@@ -8975,12 +9057,17 @@ class CommandRunner(App):
         lines = [t("vault.list_title", count=len(entries))]
         for name in vault.dump_entries(entries):
             links = self._vault_comment_segments(name)
+            marker = (
+                t("vault.list_totp_marker")
+                if str(entries[name].get("kind") or "") == "totp"
+                else ""
+            )
             if len(links) <= 1:
                 suffix = f" — {links[0]}" if links else ""
-                lines.append(t("vault.list_row", name=name, hint=suffix))
+                lines.append(t("vault.list_row", name=name, hint=marker + suffix))
                 continue
             # Несколько ссылок — каждая с новой строки: в одну строку они сливаются.
-            lines.append(t("vault.list_row", name=name, hint=""))
+            lines.append(t("vault.list_row", name=name, hint=marker))
             lines.extend(t("vault.list_link", link=link) for link in links)
         self.add_block(InfoBlock("\n".join(lines)))
 

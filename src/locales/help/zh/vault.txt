@@ -42,6 +42,20 @@
   保管库已上锁）。`cp` 是最薄弱环节 —— 其他程序可以读取剪贴板。需要
   `cryptography` 包（`pip install cryptography`）；没有它应用其余部分照常工作。
 
+  [bold]TOTP 验证码：[/bold] 无需手机的两步验证码。密钥本身和其它条目一样加密
+  保存；屏幕上只显示当前一次性验证码，密钥从不打印：
+
+    :vault add GITHUB --totp      粘贴 base32 密钥或 otpauth:// 链接
+    :vault totp GITHUB            实时验证码：每秒刷新，Enter/`c` 复制最新的码，
+                                  Esc 关闭而不复制
+
+  `--totp` 的值可以是裸 base32 密钥（`jbsw y3dp ehpk 3pxp`），也可以是二维码里的
+  链接（`otpauth://totp/Issuer:acct?secret=…&issuer=…&digits=…`）：位数（6–8）、
+  周期和算法（SHA1/256/512）按条目保存。验证码 **不是** 密钥：可以显示和复制
+  （有效期 30 秒，可能进入日志和 `:o`，与密钥不同）。计数来自系统时钟，时钟不准
+  验证码就不准。这里两个因素放在同一存储里 —— 用来随手保存验证码很方便，但不是
+  信任别人密码的理由。
+
   [bold]自动锁定：[/bold] `vault_idle_lock` 分钟内没有任何保管库操作后自动上锁
   （默认 15）—— 忘记密码，下次读取会重新要求输入密码。`:vault use` 给出的
   变量会**留在**环境中（如需清除：`:vault unuse`）。`:vault autolock N` 修改本次

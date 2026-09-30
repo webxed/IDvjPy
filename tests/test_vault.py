@@ -15,8 +15,9 @@ import stat
 import time
 
 import pytest
-from textual.widgets import Input
+from textual.widgets import Input, Static
 
+import totp
 import vault
 from app import CommandBlock, CommandRunner, InfoBlock
 from tests.conftest import last_info, submit
@@ -563,3 +564,138 @@ async def test_usage_and_unknown_subcommand(isolated_home):
         assert "Usage: :vault" in last_info(app).text_content
         await submit(pilot, ":vault add 1bad")
         assert "letters, digits" in last_info(app).text_content
+
+
+# --- TOTP-записи (`:vault add NAME --totp`, `:vault totp NAME`) ------------
+
+SECRET = "JBSWY3DPEHPK3PXP"
+OPAUTH = (
+    "otpauth://totp/ACME%20Co:john@example.com"
+    "?secret=JBSWY3DPEHPK3PXP&issuer=ACME&algorithm=SHA256&digits=7&period=45"
+)
+
+
+def _stored_code(entry: dict) -> str:
+    """Код, который обязан положить в буфер `:vault totp` (для сверки)."""
+    spec = totp.spec_from_entry(entry)
+    assert spec is not None
+    return totp.code_at(
+        spec.secret, digits=spec.digits, period=spec.period, algorithm=spec.algorithm
+    )
+
+
+async def test_totp_add_stores_secret_and_defaults(isolated_home):
+    """`--totp` с base32-секретом: канон в `value`, лишних `meta` нет."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault add OTP_PROD --totp")
+        await _answer_value_modal(pilot, "jbsw y3dp ehpk 3pxp", "prod 2fa")
+        assert "Saved OTP_PROD" in last_info(app).text_content
+        entry = (app._vault_entries or {})["OTP_PROD"]
+        assert entry["kind"] == "totp"
+        assert entry["value"] == SECRET, "секрет хранится в каноне base32"
+        assert "meta" not in entry, "умолчания в meta не пишем"
+        assert entry["hint"] == "prod 2fa"
+        # Инвариант: секрет не появляется ни в журнале, ни в файле.
+        assert SECRET not in _journal_text(app)
+        assert SECRET not in (isolated_home / "vault.json.enc").read_text(
+            encoding="utf-8"
+        )
+
+
+async def test_totp_add_accepts_otpauth_link(isolated_home):
+    """`--totp` со ссылкой: секрет + параметры (digits/period/algorithm/issuer)."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault add OTP_ACME --totp")
+        await _answer_value_modal(pilot, OPAUTH, "prod 2fa;https://acme.example")
+        entry = (app._vault_entries or {})["OTP_ACME"]
+        assert entry["kind"] == "totp"
+        assert entry["value"] == SECRET
+        assert entry["meta"] == {
+            "digits": 7,
+            "period": 45,
+            "algorithm": "sha256",
+            "issuer": "ACME",
+            "label": "ACME Co:john@example.com",
+        }
+
+
+async def test_totp_add_rejects_bad_secret(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault add OTP_BAD --totp")
+        await _answer_value_modal(pilot, "not-base32")
+        assert "Not a TOTP secret" in last_info(app).text_content
+        assert "OTP_BAD" not in (app._vault_entries or {}), "битая запись не сохраняется"
+
+
+async def test_totp_list_marks_entry(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault add OTP --totp")
+        await _answer_value_modal(pilot, SECRET, "prod 2fa")
+        await submit(pilot, ":vault add PLAIN")
+        await _answer_value_modal(pilot, "just-a-value")
+        await submit(pilot, ":vault list")
+        text = last_info(app).text_content
+        assert "OTP (totp)" in text
+        assert "PLAIN" in text and "PLAIN (totp)" not in text
+        assert SECRET not in text
+
+
+async def test_totp_screen_copies_code_not_secret(isolated_home, clip_store):
+    """Enter/`c` кладут в буфер код, а не секрет; сам секрет в журнал не идёт."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault add OTP --totp")
+        await _answer_value_modal(pilot, SECRET, "prod 2fa")
+        await submit(pilot, ":vault totp OTP")
+        assert type(pilot.app.screen).__name__ == "VaultTotpScreen"
+        # На экране — код, не секрет.
+        shown = pilot.app.screen.query_one("#totp-code", Static).content
+        assert SECRET not in str(shown)
+
+        entry = (app._vault_entries or {})["OTP"]
+        await pilot.press("enter")
+        await pilot.pause()
+        assert clip_store.paste() == _stored_code(entry)
+        assert clip_store.paste() != SECRET
+        assert app._vault_clip_pending is True
+        assert SECRET not in _journal_text(app)
+
+        # Esc — закрыть, ничего не копируя; `c` — тоже копирует.
+        app._vault_clear_clipboard()
+        await submit(pilot, ":vault totp OTP")
+        await pilot.press("escape")
+        await pilot.pause()
+        assert clip_store.paste() == "", "Esc не копирует"
+
+        await submit(pilot, ":vault totp OTP")
+        await pilot.press("c")
+        await pilot.pause()
+        assert clip_store.paste() == _stored_code(entry)
+
+
+async def test_totp_on_plain_entry_is_explicit(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault add PLAIN")
+        await _answer_value_modal(pilot, "just-a-value")
+        await submit(pilot, ":vault totp PLAIN")
+        assert "is not a TOTP entry" in last_info(app).text_content
+        assert type(pilot.app.screen).__name__ != "VaultTotpScreen"
+
+
+async def test_totp_missing_entry_is_explicit(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault totp NOPE")
+        assert "No secret named NOPE" in last_info(app).text_content
