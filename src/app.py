@@ -1052,11 +1052,11 @@ class CommandBlock(LineNavigable, Static):
         prefix = self._label_prefix(display)
         header_text = self.masked_header
         if self.collapsed:
-            # Свернутый вид — только заголовок
-            if self._simple_mode():
-                return f"▶ {prefix}{escape_header(header_text)}\n"
-            indicator = "[dim]▶[/dim]"
-            return f"{indicator} {prefix}{escape_header(header_text)}\n"
+            # Свернутый вид — только заголовок. Разметку (цветной ▶) — только в
+            # display-версии: плоская идёт в копирование/пайп/`:w`.
+            if display and not self._simple_mode():
+                return f"[dim]▶[/dim] {prefix}{escape_header(header_text)}\n"
+            return f"▶ {prefix}{escape_header(header_text)}\n"
 
         parts = [prefix + escape_header(header_text)]
 
@@ -1067,17 +1067,17 @@ class CommandBlock(LineNavigable, Static):
         # Stderr внизу с подсветкой ошибки
         if self.raw_stderr and self.raw_stderr.strip():
             masked_err = self.masked_stderr
-            if self._simple_mode():
-                parts.append(f"STDERR:\n{safe(masked_err)}")
-            else:
+            if display and not self._simple_mode():
                 parts.append(f"[bold red]STDERR:[/bold red]\n{safe(masked_err)}")
+            else:
+                parts.append(f"STDERR:\n{safe(masked_err)}")
 
         # Return code если != 0
         if self.return_code != 0:
-            if self._simple_mode():
-                parts.append(f"Exit code: {self.return_code}")
-            else:
+            if display and not self._simple_mode():
                 parts.append(f"[bold yellow]Exit code: {self.return_code}[/bold yellow]")
+            else:
+                parts.append(f"Exit code: {self.return_code}")
 
         return "\n".join(parts) + "\n\n"
 
@@ -2589,7 +2589,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.185"
+    VERSION = "v1.186"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,

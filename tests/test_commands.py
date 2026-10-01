@@ -5,6 +5,7 @@ pytestmark = pytest.mark.slow
 
 from app import CommandBlock, CommandRunner, InfoBlock, escape_help_markup
 from i18n import t
+from seed_catalog import seed_invoke
 from tests.conftest import input_widget, last_info, submit, type_keys, wait_command_done
 
 
@@ -146,10 +147,10 @@ async def test_insert_seed_command_puts_draft_in_input(isolated_home):
         app.action_insert_seed_command("seed_ops.py")
         await pilot.pause()
         inp = input_widget(app)
-        assert inp.value == "python3 src/seed_ops.py --seed"
+        assert inp.value == seed_invoke("seed_ops.py")
         app.action_insert_seed_command("not_a_seed.py")
         await pilot.pause()
-        assert inp.value == "python3 src/seed_ops.py --seed"
+        assert inp.value == seed_invoke("seed_ops.py")
 
 
 async def test_md_viewer_wheel_does_not_scroll_journal(isolated_home):

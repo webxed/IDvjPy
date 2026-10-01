@@ -30,7 +30,10 @@
 
   `exec` guesses the variable for known programs (sshpass → SSHPASS,
   psql → PGPASSWORD, mysql/mysqldump → MYSQL_PWD, vault → VAULT_TOKEN, restic,
-  borg, redis-cli); for anything else say `NAME=VAR` explicitly.
+  borg, redis-cli); for anything else say `NAME=VAR` explicitly. The program
+  itself must be installed (`apt install sshpass` and the like) — the vault only
+  supplies the variable. For sshpass use `-e` (it reads `$SSHPASS`), never `-p`:
+  `-p` puts the value into argv, where `ps` can see it.
 
   Comments are a note per entry — where the key belongs, links, a reminder:
   `:vault comment SSH_PROD prod ssh;https://gitlab.example/proj;ssh://u@host`.
@@ -69,4 +72,5 @@
   for good.
 
   Examples: `:vault init`, `:vault add SSH_PROD prod ssh`, `:vault cp SSH_PROD`
-  then `> ssh …` (paste), or `:vault exec sshpass -- ssh user@host`.
+  then `> ssh …` (paste), or `:vault exec SSH_PROD -- sshpass -e ssh user@host`
+  (with sshpass installed).

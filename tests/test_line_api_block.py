@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 from textual import events
+from textual.geometry import Offset
+from textual.selection import Selection
 from textual.widgets import Static
 
 from app import CommandLineBlock, CommandRunner, InfoBlock
@@ -60,6 +62,37 @@ async def test_line_api_block_used_when_enabled(isolated_home, monkeypatch):
         block._ensure_strips(width)
         assert block._strips
         assert block.get_content_height(block.size, block.size, width) == len(block._strips)
+
+
+async def test_line_api_selection_of_exit_code_is_plain(isolated_home, monkeypatch):
+    """Выделение строки «Exit code» копирует текст, а не Rich-разметку.
+
+    Регрессия: плоская версия блока (`_format_output()`/`_nav_plain_text`)
+    содержала `[bold yellow]`/`[bold red]`, а Line-API `get_selection` берёт
+    выделение именно из неё — в буфер уезжал тег вместо строки.
+    """
+    _enable_line_api(monkeypatch)
+    app = CommandRunner()
+    async with app.run_test(size=(200, 40)) as pilot:
+        await submit(pilot, "sh -c 'echo boom >&2; exit 6'")
+        block = await wait_command_done(app)
+        assert isinstance(block, CommandLineBlock)
+        plain = block._format_output()
+        assert "[bold yellow]" not in plain and "[bold red]" not in plain
+        assert "Exit code: 6" in plain and "STDERR:" in plain
+        # display-версия разметку сохраняет (цвета в журнале).
+        assert "[bold yellow]" in block._format_output(display=True)
+
+        width = int(block.size.width)
+        height = block.get_content_height(block.size, block.size, width)
+        row = next(
+            y for y in range(height) if "Exit code" in block.render_line(y).text
+        )
+        lines = block._nav_plain_text().splitlines()
+        selected = block.get_selection(
+            Selection(Offset(0, row), Offset(len(lines[row]), row))
+        )
+        assert selected is not None and selected[0] == "Exit code: 6"
 
 
 async def test_line_api_block_disabled_by_default(isolated_home):

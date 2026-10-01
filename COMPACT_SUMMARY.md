@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.185**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.186**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.131 (app v1.185) |
+| `test_cmd.md` | Manual plan v1.132 (app v1.186) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -190,7 +190,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_scope_command.py` | `:scope` в TUI (инвариант «фильтр — только списки»): `?`/`??`/`!`-подсказки скрывают чужие теги, `?tag`/`!tag[tid]`/`:stats` работают при скрытом теге, `??` с секцией Scope, `rm` → hide, `clear`/`all` возвращают всё (файл удалён), статус без аргументов, ошибки неизвестного имени и смешения режимов, маркер в заголовке, переживает restart, две сессии независимы, битый файл → фильтр выключен и сообщение, лента заставки уважает scope |
 | `tests/test_ux_extras.py` | `:r N`, счётчик running в заголовке, `:alias`, консоль под TUI по Ctrl+O (suspend → ожидание клавиши → возврат, `SuspendNotSupported`) |
 | `tests/test_mcp_server.py` | MCP-сервер (28): конфигурация (settings.yml, `--data-dir`/`$IDVJPY_DATA_DIR`, абсолютный `--db`, `history_<instance>.txt`), протокол (`initialize` с эхом версии и своей для чужой, `tools/list`, уведомления без ответа, `-32700`/`-32601`/`-32602`, пакет сообщений, в stdout только JSON-RPC), все пять инструментов на живой базе (фильтр тега, `limit`, soft-delete, история всех сессий с именем в строке, `source` без `--shell-history`), отсутствующая база — ошибка **без** создания файла, БД/история/`secrets_*.json` не меняются, сторож по исходнику («только чтение и без сети»), запуск корневого лаунчера и подкоманды `idvjpy mcp` (реальный запрос и `--help`) |
-| `tests/test_vault.py` | Хранилище `:vault` (38): round-trip, неверный пароль и подмена заголовка — явная ошибка, чужой/битый файл, отказ версии новее, правила имени/пароля/генерации, пресеты env; TUI: init/unlock/lock, add/gen/list/rm, значение не в журнале/истории/файле, `cp` только в буфер (и чистка), `use` в env (и маскировка после `lock`), `exec` — значение в env, не в argv, пресет и явный `VAR`, `stdin`, без `cryptography` — подсказка; автоблокировка: по простою забывает пароль, но переменные `use` остаются и маскируются, чтение снова спрашивает пароль, ранняя активность не запирает, `:vault autolock N`/`0`, настоящий таймер; `:vault unuse NAME`/`*`; комментарий: поле в окне `add` (предзаполнение, защита от пустого значения), `:vault comment` правит/показывает/снимает без значения, ссылки через `;` — построчно в `list`, комментарий в `cp`/`use`, но не в статусе; TOTP: `--totp` сохраняет base32-секрет и `meta` (ссылка `otpauth://`), битый секрет отклоняется, `list` помечает `(totp)`, `:vault totp` открывает `VaultTotpScreen` и кладёт в буфер код (не секрет), Esc не копирует, обычная запись/несуществующая — явное сообщение |
+| `tests/test_vault.py` | Хранилище `:vault` (39): round-trip, неверный пароль и подмена заголовка — явная ошибка, чужой/битый файл, отказ версии новее, правила имени/пароля/генерации, пресеты env; TUI: init/unlock/lock, add/gen/list/rm, значение не в журнале/истории/файле, `cp` только в буфер (и чистка), `use` в env (и маскировка после `lock`), `exec` — значение в env, не в argv, пресет и явный `VAR`, `stdin`, без `cryptography` — подсказка; автоблокировка: по простою забывает пароль, но переменные `use` остаются и маскируются, чтение снова спрашивает пароль, ранняя активность не запирает, `:vault autolock N`/`0`, настоящий таймер; `:vault unuse NAME`/`*`; комментарий: поле в окне `add` (предзаполнение, защита от пустого значения), `:vault comment` правит/показывает/снимает без значения, ссылки через `;` — построчно в `list`, комментарий в `cp`/`use`, но не в статусе; TOTP: `--totp` сохраняет base32-секрет и `meta` (ссылка `otpauth://`), битый секрет отклоняется, `list` помечает `(totp)`, `:vault totp` открывает `VaultTotpScreen` и кладёт в буфер код (не секрет), Esc не копирует, обычная запись/несуществующая — явное сообщение; поля значения и комментария в окне `add` не накладываются (глобальный `Input { dock: top }` перебит для модалки) |
 | `tests/test_totp.py` | TOTP/HOTP (`src/totp.py`, 12): векторы RFC 6238 (sha1/256/512) и RFC 4226 (HOTP 0–9), counter/remaining/полоска, нормализация/декод/энкод base32, `grouped`, разбор base32 и `otpauth://` (явные ошибки на hotp/чужой алгоритм/битые digits/period), round-trip записи ↔ `TotpSpec` (битые параметры — откат к умолчаниям, битый секрет — явная ошибка) |
 | `tests/test_tty_signals.py` | Ctrl+C в чужой программе (`> cmd` / `:ed` / Ctrl+O) не роняет TUI: `_ignore_interrupt_signals` ставит **обработчик**, а не `SIG_IGN` (тот наследуется через `exec`), восстановление идемпотентно, `SIGQUIT` тоже; `_run_in_tty` глотает сигнал на время ребёнка и отдаёт shell-код (`-2` → `130`); `suspend()` оборачивает yield |
 
@@ -208,7 +208,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.185 |
+| `src/app.py` | TUI (`CommandRunner`), v1.186 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -261,6 +261,13 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.186
+
+- **fix(vault): поля значения и комментария в окне `:vault add` больше не накладываются.** Глобальный стиль `Input { dock: top }` (`src/app.tcss`) докил оба поля к верху контейнера, и комментарий закрывал поле значения. Для модалки хранилища `dock` снят селектором по id; добавлен регрессионный тест (`tests/test_vault.py`, 39).
+- **fix(copy): плоский текст блока — без Rich-разметки.** `_format_output(display=False)` (обещанный плоский текст для копирования, пайпа, `$OUT`/`$BLOCK`, F3, `:w`) подмешивал разметку в строки `Exit code`, `STDERR:` и свёрнутый `▶`. При `line_api_blocks: true` выделение мышью берётся из этого текста — в буфер уезжал `[bold yellow]` вместо строки. Разметка теперь только в display-версии (цвет в журнале сохранён). Тест: `tests/test_line_api_block.py`.
+- **fix(seed): команда `--seed` из `:welcome` — с абсолютным путём к скрипту.** Относительный `python3 src/seed_*.py` не находился, если приложение запущено не из корня чекаута (алиас из `~`, `:cd`). `seed_catalog.seed_invoke()` теперь строит путь от каталога модуля и экранирует его (`shlex.quote`).
+- **docs(vault): корректные примеры `sshpass`.** `:? vault` ×3, README, test_cmd: `sshpass -e` (берёт `$SSHPASS`), а не `-p` (выносит значение в argv — видно в `ps`); оговорка, что программу нужно установить.
 
 ## v1.185
 

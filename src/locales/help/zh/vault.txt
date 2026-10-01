@@ -29,7 +29,9 @@
 
   `exec` 会为已知程序自动选择变量（sshpass → SSHPASS、psql → PGPASSWORD、
   mysql/mysqldump → MYSQL_PWD、vault → VAULT_TOKEN、restic、borg、redis-cli）；
-  其他情况请显式写 `NAME=VAR`。
+  其他情况请显式写 `NAME=VAR`。程序本身必须已安装（如 `apt install sshpass`）——
+  保管库只提供变量。sshpass 用 `-e`（从 `$SSHPASS` 读取），不要用 `-p`：`-p` 会把
+  值放进 argv，`ps` 能看到。
 
   备注是每条记录的标注：密钥属于哪里、相关链接、提醒：
   `:vault comment SSH_PROD prod ssh;https://gitlab.example/proj;ssh://u@host`。
@@ -62,4 +64,5 @@
   会话的时长，`0` 关闭；settings.yml 中的 `vault_idle_lock: 0` —— 永久关闭。
 
   示例：`:vault init`、`:vault add SSH_PROD 生产 ssh`、`:vault cp SSH_PROD`
-  再 `> ssh …`（粘贴），或者 `:vault exec sshpass -- ssh user@host`。
+  再 `> ssh …`（粘贴），或者 `:vault exec SSH_PROD -- sshpass -e ssh user@host`
+  （需要已安装 sshpass）。

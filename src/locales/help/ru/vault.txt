@@ -30,7 +30,10 @@
 
   `exec` сам подбирает переменную для известных программ (sshpass → SSHPASS,
   psql → PGPASSWORD, mysql/mysqldump → MYSQL_PWD, vault → VAULT_TOKEN, restic,
-  borg, redis-cli); для остальных укажите `NAME=VAR` явно.
+  borg, redis-cli); для остальных укажите `NAME=VAR` явно. Сама программа должна
+  быть установлена (`apt install sshpass` и т.п.) — хранилище даёт только
+  переменную. Для sshpass нужен `-e` (берёт `$SSHPASS`), а не `-p`: `-p` выносит
+  значение в argv, где его видно в `ps`.
 
   Комментарий — пометка к записи: куда относится ключ, ссылки, напоминание:
   `:vault comment SSH_PROD прод ssh;https://gitlab.example/proj;ssh://u@host`.
@@ -68,4 +71,5 @@
   `0` — выключает; `vault_idle_lock: 0` в settings.yml — навсегда.
 
   Примеры: `:vault init`, `:vault add SSH_PROD прод ssh`, `:vault cp SSH_PROD`
-  и затем `> ssh …` (вставить), либо `:vault exec sshpass -- ssh user@host`.
+  и затем `> ssh …` (вставить), либо `:vault exec SSH_PROD -- sshpass -e ssh user@host`
+  (нужен установленный sshpass).

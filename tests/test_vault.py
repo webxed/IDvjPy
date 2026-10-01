@@ -99,7 +99,7 @@ def test_entry_name_and_value_rules():
 
 def test_preset_env_by_program():
     assert vault.preset_env("psql -h db -U user") == "PGPASSWORD"
-    assert vault.preset_env(["sshpass", "-p", "x", "ssh", "host"]) == "SSHPASS"
+    assert vault.preset_env(["sshpass", "-e", "ssh", "host"]) == "SSHPASS"
     assert vault.preset_env("mysql -h db") == "MYSQL_PWD"
     assert vault.preset_env("vim notes.txt") is None
 
@@ -431,6 +431,25 @@ async def test_add_modal_blocks_empty_value(isolated_home):
         await submit(pilot, ":vault add NO_VALUE")
         await _answer_value_modal(pilot, "")
         assert type(pilot.app.screen).__name__ == "VaultSecretScreen"
+
+
+async def test_add_modal_value_and_comment_fields_do_not_overlap(isolated_home):
+    """Поля значения и комментария видны и не накладываются друг на друга.
+
+    Глобальный стиль приложения докит `Input` к верху контейнера; в окне `add`
+    поля должно быть два и они идут в потоке — иначе комментарий закрывает
+    значение (регрессия из-за `Input { dock: top }`).
+    """
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":vault add API_KEY")
+        value_field = pilot.app.screen.query_one("#vault-input", Input)
+        comment_field = pilot.app.screen.query_one("#vault-comment", Input)
+        assert value_field.region.height > 0 and comment_field.region.height > 0
+        assert value_field.region.y < comment_field.region.y
+        assert value_field.region != comment_field.region
+        assert pilot.app.screen.focused is value_field
 
 
 async def test_comment_command_edits_without_value(isolated_home):

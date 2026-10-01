@@ -4,10 +4,18 @@
 имена скриптов и файлов справочников не переводятся.
 """
 
+from __future__ import annotations
+
+import shlex
+from pathlib import Path
+
 from i18n import t
 
-# Seed scripts live in src/; data files (settings.yml, DB) stay in cwd.
-SEED_DIR = "src"
+# Seed scripts live next to this module (in `src/`); data files (settings.yml,
+# DB) stay in cwd. Путь к скрипту — абсолютный: приложение может быть запущено
+# из любого каталога (алиас из `~`, `:cd`), и относительный `src/...` там не
+# найдётся.
+SEED_DIR = Path(__file__).resolve().parent
 
 # Colors match the startup banner / input border.
 _ACCENT = "#b794f4"
@@ -17,7 +25,7 @@ _LINK = "#8a6bb5"
 
 def seed_invoke(script: str) -> str:
     """Shell command to load a handbook into the cwd database."""
-    return f"python3 {SEED_DIR}/{script} --seed"
+    return f"python3 {shlex.quote(str(SEED_DIR / script))} --seed"
 
 
 def md_click(doc: str) -> str:
