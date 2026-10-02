@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.189**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.190**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -16,6 +16,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 |--------|--------|
 | (none) | Execute shell command; a digit-leading line that fully parses as arithmetic/units is calculated locally (see below) |
 | `> cmd` | Suspend TUI, run with a real TTY (`htop`, `vim`, `ssh`). On exit: import that shell's env and `$PWD` |
+| `:safe [on\|off]` | Opt-in safe execution confirmation; default `safe_mode: false`. Confirms recognized risky launches at ordinary/TTY/window/watch boundaries; Enter runs the frozen expansion, Esc cancels. Heuristic only, not a sandbox; `:? safe` |
 | `@ cmd` | Run without `command_timeout` (long non-TTY jobs; stdout captured) |
 | `#tag cmd` | Save (literal text; refs `!tag[tid]` not expanded on save) |
 | `# command` | Park in instance history + journal, do not run (`#` + space) |
@@ -35,6 +36,8 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `$$VAR=val` | Secret env: masked in the input line and journal (`****`); `secrets_<instance>.json` (0600), deleted on exit; never sent to `:llm`; use as `$VAR` |
 
 Aliases from `~/.bashrc`: bodies with `$1` / `$2` / `$@` substitute args; otherwise the rest of the line is appended.
+
+Safe mode is session-only when changed with `:safe`; the persisted template setting is opt-in and defaults to false. Runbook auto execution ends cleanly when a risky step is cancelled. The detector uses `shlex` heuristics and does not execute, sandbox, or prove safety; unknown shell syntax remains the user's responsibility.
 
 **Calculator (no prefix):** lines starting with a digit (or '(' / '-') are tried as math first, then shell (`7z …`, `(cd …)` unaffected). `512Mi + 20% in Gi` → 0.6Gi; `20% of 512Mi`, `512Mi*30 in Gi`, `1Gi/512Mi`, `500m in cores`, `2^10`, `524288 in Mi`. IPv4 subnets are handled the same way — `192.168.1.0/24` prints address/netmask/wildcard/network/broadcast/hosts like jodies.de/ipcalc, and `300 hosts` finds the smallest fitting prefix (/23). Memory: B, KB/MB/GB/TB (×1000), KiB/MiB/GiB/TiB and k8s Ki/Mi/Gi/Ti (×1024). % is relative to the left operand. Result block header is `calc:`.
 
@@ -153,7 +156,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.135 (app v1.189) |
+| `test_cmd.md` | Manual plan v1.136 (app v1.190) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -219,7 +222,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.189 |
+| `src/app.py` | TUI (`CommandRunner`), v1.190 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -273,6 +276,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.190
+
+- **feat(safe): опциональный safe mode `:safe on|off` (по умолчанию выключен).** Перед запуском распознанных рискованных команд (rm/chmod/chown/dd/mkfs, мутирующие kubectl/terraform/helm/git, `sqlite3` DELETE/DROP/UPDATE) показывается клавиатурное подтверждение: Enter — выполнить замороженную раскрытую команду, Esc — отмена. Проверка стоит на реальных границах запуска (обычный запуск, `> cmd`, `&`, `:watch` — подтверждение один раз на активацию, `:vault exec` через `run_command` с frozen `extra_env`/stdin); авто-шаги `:run` при отмене завершают прогон без зависания. Эвристика по shlex — это подсказка, а не sandbox: чистый результат не доказательство безопасности, документы это явно оговаривают (`:? safe`).
 
 ## v1.189
 

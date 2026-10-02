@@ -69,6 +69,7 @@
                 窗口标题带有标记（`IDvjPy_term · git · only git`）。详见 :? tags
   :welcome      - 种子目录（如同空数据库时的欢迎语；点击 --seed / .md）
   :backup       - 将命令数据库复制到 backups/（与 --seed 相同的快照）
+  :safe [on|off]- 确认已识别的风险启动（默认关闭；:? safe）
   :vault        - 密码加密的密钥保管库: init/unlock、add/cp/use/exec（:? vault）
   :screensaver  - 空闲覆盖层：矩阵数字雨（screensaver_matrix，
                 默认）或 NC 风格的星空；整宽滚动条；

@@ -30,6 +30,7 @@ HELP_TEXTS = (
     "mcp",
     "vault",
     "doctor",
+    "safe",
 )
 
 # Темы `:? <тема>` в порядке оглавления: каноническое имя → имя текста.
@@ -48,6 +49,7 @@ HELP_TOPICS: tuple[tuple[str, str], ...] = (
     ("mcp", "mcp"),
     ("vault", "vault"),
     ("doctor", "doctor"),
+    ("safe", "safe"),
 )
 
 # Алиасы тем (лишние имена и русские слова). Ключ — то, что набрал человек,
@@ -86,6 +88,8 @@ _HELP_TOPIC_ALIASES: dict[str, str] = {
     "хранилище": "vault",
     "diagnostics": "doctor",
     "диагностика": "doctor",
+    "safety": "safe",
+    "безопасность": "safe",
 }
 
 

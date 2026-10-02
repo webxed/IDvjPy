@@ -418,6 +418,10 @@ async def _wait_step(app: Any, before: Any, *, human: bool) -> StepResult:
     """
     submits_before = _submits(app)
     while _running(app):
+        # A safe-mode modal may cancel an auto launch before it creates a block.
+        # Wake the player so it can end rather than wait forever for one.
+        if getattr(app, "_safe_runbook_cancelled", False):
+            return StepResult()
         block = _last_block(app)
         if block is not None and block is not before:
             if _block_done(block):
@@ -498,6 +502,10 @@ async def play_runbook(app: Any, plan: RunPlan) -> None:
             _arm_human_step(app, step, index, total)
             result = await _wait_step(app, before, human=True)
         if result.stopped:
+            return
+        if getattr(app, "_safe_runbook_cancelled", False):
+            app._safe_runbook_cancelled = False
+            _end(app, state, t("runbook.safe_cancelled"))
             return
         if step.mode == MODE_AUTO and result.block is not None and step.stop_on_error:
             code = int(getattr(result.block, "return_code", 0) or 0)

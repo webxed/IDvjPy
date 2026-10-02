@@ -58,6 +58,17 @@ watch:
   runbook_running: "Идёт прогон цепочки — остановите его: :run stop (или Esc)."
   running: "[dim]watch: {command} · каждые {interval}s · F4 / :kill / :watch stop — остановить[/dim]"
 
+safe:
+  usage: "Использование: :safe [on|off]  (без аргумента — показать состояние)"
+  status: "Безопасный режим: {state} (settings.yml: safe_mode; :safe on|off)"
+  saved: "Безопасный режим: {state} (только эта сессия)"
+  state_on: "включён"
+  state_off: "выключен"
+  cancelled: "Безопасный режим: запуск отменён."
+  confirm_title: "Безопасный режим: подтвердите запуск"
+  confirm_risks: "Распознанный риск: {risks}"
+  confirm_hint: "Enter — выполнить именно эту команду · Esc — отмена"
+
 runbook:
   modes: "auto — выполнить и ждать завершения · manual — вставить и ждать Enter (пустой Enter — пропустить) · prompt — набрать строку"
   no_directives: "в теге нет run:-директив — все шаги пойдут auto; мутирующий шаг безопаснее пометить run:manual (см. :? run)"
@@ -80,6 +91,7 @@ runbook:
   continue_hint: "[dim]{label} · дальше — вручную или `:run {source} --step`[/dim]"
   stopped: "Runbook {title}: остановлен на шаге {index}/{total}. Можно печатать."
   done: "Runbook {title}: шагов выполнено — {total}."
+  safe_cancelled: "Безопасный режим: runbook отменён перед рискованным шагом."
 
 llm:
   offline: "[offline] Встроенная заглушка IDvjPy_term: запрос в сеть не уходил.\nТак проверяются :llm и :llm ask без ключей; настоящие ответы — у провайдеров из llm_providers.yml."
@@ -194,6 +206,7 @@ cmd:
   run: "прогон цепочки (runbook): тег или YAML, остановки ждут вас"
   update: "сверить VERSION с GitHub main"
   doctor: "локальная диагностика окружения (утилиты, пути, буфер, proxy)"
+  safe: "безопасный режим: подтверждать распознанные рискованные команды (:safe on|off)"
 
 help:
   usage: "Использование: :? [тема]. Темы: {topics}"

@@ -105,6 +105,12 @@ language: auto
 # Verify VERSION against GitHub main at startup. :update always checks.
 check_updates: true
 
+# Safe execution mode: confirm recognized risky commands before launching them
+# (rm/chmod/chown/dd/mkfs, mutating kubectl/terraform/helm/git, sqlite3 DELETE/DROP/UPDATE).
+# Opt-in, default false. Toggle for this session with :safe on / :safe off; see :? safe.
+# A heuristic over shlex, not a sandbox or a security proof.
+safe_mode: false
+
 # Screensaver. Seconds of idle; 0 = off. :screensaver — immediately.
 screensaver_idle: 120
 # Screensaver canvas: true — "matrix rain" (falling columns of glyphs, like in "The Matrix"),

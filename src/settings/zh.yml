@@ -104,6 +104,12 @@ language: auto
 # 启动时将 VERSION 与 GitHub main 比对。:update 始终检查。
 check_updates: true
 
+# 安全执行模式：启动已识别的风险命令前要求确认
+#（rm/chmod/chown/dd/mkfs、会修改状态的 kubectl/terraform/helm/git、sqlite3 DELETE/DROP/UPDATE）。
+# 默认 false，需显式启用。当前会话可用 :safe on / :safe off；详见 :? safe。
+# 基于 shlex 的启发式检查，不是沙箱或安全保证。
+safe_mode: false
+
 # 屏保。空闲秒数；0 = 关闭。:screensaver —— 立即显示。
 screensaver_idle: 120
 # 屏保画布：true —— “矩阵雨”（下落的字形列，像《黑客帝国》中那样），

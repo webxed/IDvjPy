@@ -63,6 +63,17 @@ watch:
   runbook_running: "A runbook is running — stop it first: :run stop (or Esc)."
   running: "[dim]watch: {command} · every {interval}s · F4 / :kill / :watch stop — stop[/dim]"
 
+safe:
+  usage: "Usage: :safe [on|off]  (no argument — show the current state)"
+  status: "Safe mode: {state} (settings.yml: safe_mode; :safe on|off)"
+  saved: "Safe mode: {state} (this session)"
+  state_on: "on"
+  state_off: "off"
+  cancelled: "Safe mode: execution cancelled."
+  confirm_title: "Safe mode: confirm execution"
+  confirm_risks: "Recognized risk: {risks}"
+  confirm_hint: "Enter — run this exact command · Esc — cancel"
+
 runbook:
   modes: "auto — run and wait for completion · manual — insert and wait for Enter (empty Enter — skip) · prompt — type the line"
   no_directives: "the tag has no run: directives — every step will run auto; a mutating step is safer marked run:manual (see :? run)"
@@ -85,6 +96,7 @@ runbook:
   continue_hint: "[dim]{label} · continue manually or `:run {source} --step`[/dim]"
   stopped: "Runbook {title}: stopped at step {index}/{total}. You can type now."
   done: "Runbook {title}: {total} step(s) done."
+  safe_cancelled: "Safe mode: runbook cancelled before the risky step."
 
 llm:
   offline: "[offline] The built-in IDvjPy_term stub: no network request was made.\nThis is how :llm and :llm ask are checked without keys; real answers come from the providers in llm_providers.yml."
@@ -199,6 +211,7 @@ cmd:
   run: "run a command chain (runbook): tag or YAML, wait for you where told"
   update: "compare VERSION with GitHub main"
   doctor: "local environment diagnostics (tools, paths, clipboard, proxy)"
+  safe: "safe execution mode: confirm recognized risky commands (:safe on|off)"
 
 help:
   usage: "Usage: :? [topic]. Topics: {topics}"

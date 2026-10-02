@@ -105,6 +105,12 @@ language: auto
 # Сверять VERSION с GitHub main при старте. :update проверяет всегда.
 check_updates: true
 
+# Безопасный режим: подтверждать распознанные рискованные команды перед запуском
+# (rm/chmod/chown/dd/mkfs, мутирующие kubectl/terraform/helm/git, sqlite3 DELETE/DROP/UPDATE).
+# Включается явно, по умолчанию false. На сессию: :safe on / :safe off; справка :? safe.
+# Эвристика на shlex, не песочница и не доказательство безопасности.
+safe_mode: false
+
 # Скринсейвер. Секунды простоя; 0 = выкл. :screensaver — сразу.
 screensaver_idle: 120
 # Холст заставки: true — «матричный дождь» (падающие столбцы глифов, как в «Матрице»),

@@ -1,0 +1,7 @@
+[bold]:safe — heuristic launch confirmation[/bold]
+
+Safe mode is opt-in: set `safe_mode: true` in settings.yml or use `:safe on` for this session. The default is false; `:safe off` disables it.
+
+At real launch boundaries (ordinary commands, `>`, `&`, and `:watch`) IDvjPy expands aliases, variables, and live secrets once, then inspects the frozen shell text with a small shlex-based heuristic. Recognized risky operations include rm/chmod/chown/dd/mkfs, mutating kubectl/terraform/helm/git operations, and DELETE/DROP/UPDATE passed inline to sqlite3. Enter runs exactly the displayed frozen command; Escape cancels. A watch asks once per activation, not on every tick.
+
+The detector is not a shell parser, sandbox, permission system, or security proof. It does not execute commands and cannot reliably understand scripts, shell functions, eval, command substitutions, dynamic names, or syntax it does not recognize. Quoted text such as `echo 'rm -rf /'` is treated as data. Keep reviewing commands yourself. Runbook cancellation after a rejected auto-step is final and does not hang.

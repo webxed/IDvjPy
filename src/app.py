@@ -122,6 +122,7 @@ try:
     import md_convert
     import remote_source
     import runbook
+    import safe_mode
     import totp
     import vault
     from ansi_output import to_markup, to_plain
@@ -236,6 +237,7 @@ try:
     from md_viewer import HandbookMarkdownScreen, handbook_md_path, resolve_md_path
     from output_viewer import OutputViewerScreen
     from runbook import play_runbook
+    from safe_mode_prompt import confirm as confirm_safe_mode
     from screensaver import DevopsScreensaver
     from seed_catalog import (
         KNOWN_SEED_SCRIPTS,
@@ -2590,7 +2592,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.189"
+    VERSION = "v1.190"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2742,6 +2744,8 @@ class CommandRunner(App):
     CMD_SCOPE = "scope"  # какие теги показывать в этой сессии (фильтр представления)
     CMD_VAULT = "vault"  # хранилище секретов с шифрованием по паролю (`vault.json.enc`)
     CMD_DOCTOR = "doctor"  # локальная диагностика окружения, без запусков и сети
+    CMD_SAFE = "safe"
+    KEY_SAFE_MODE = "safe_mode"
     # Colon-команды, у которых аргументы — не пути: числа и поисковые шаблоны.
     # Для них `/` — начало `:o /text` (grep по выводам) / `:h /text`, а не листинг корня.
     COLON_NO_PATH_ARGS = frozenset(
@@ -2837,6 +2841,8 @@ class CommandRunner(App):
         # Пока идёт прогон — заставка, смена сессии и `:send` откладываются.
         self._run_active = False
         self._run_state: dict[str, Any] | None = None
+        # Safe mode отменил подтверждение авто-шага прогона (:run).
+        self._safe_runbook_cancelled = False
         # Сколько строк человек отправил с начала прогона (пустой Enter на
         # шаге manual/prompt — пропуск шага, это видно по счётчику).
         self._run_submits = 0
@@ -2952,6 +2958,7 @@ class CommandRunner(App):
         self.git_prompt: bool = True
         # Где открывать терминал: `window` или `tab` (`term_open`).
         self.term_open: str = "window"
+        self.safe_mode: bool = False
         # Время последней активности (для проверки, что простой реально есть)
         # и признак «TUI спит» (`> cmd`, Ctrl+O, `:ed` — настоящий TTY).
         self._ss_bumped_at: float = 0.0
@@ -4088,6 +4095,7 @@ class CommandRunner(App):
                     )
                     self.git_prompt = bool(settings.get(self.KEY_GIT_PROMPT, True))
                     self.term_open = normalize_term_mode(settings.get(self.KEY_TERM_OPEN))
+                    self.safe_mode = bool(settings.get(self.KEY_SAFE_MODE, False))
                     self.k8s_completion = bool(
                         settings.get(self.KEY_K8S_COMPLETION, False)
                     )
@@ -5877,7 +5885,28 @@ class CommandRunner(App):
         CMD_EDITOR: "_handle_editor_command",
         CMD_ENV: "_handle_env_reload",
         CMD_VAULT: "_handle_vault_command",
+        CMD_SAFE: "_handle_safe_command",
     }
+
+    def _handle_safe_command(self, args: list[str]) -> None:
+        """`:safe [on|off]` — session-only opt-in safe execution mode."""
+        if len(args) > 1:
+            self.add_block(InfoBlock(t("safe.usage")))
+            return
+        if not args:
+            state = t("safe.state_on") if self.safe_mode else t("safe.state_off")
+            self.add_block(InfoBlock(t("safe.status", state=state)))
+            return
+        value = args[0].strip().lower()
+        if value in ("on", "true", "1", "yes"):
+            self.safe_mode = True
+        elif value in ("off", "false", "0", "no"):
+            self.safe_mode = False
+        else:
+            self.add_block(InfoBlock(t("safe.usage")))
+            return
+        state = t("safe.state_on") if self.safe_mode else t("safe.state_off")
+        self.add_block(InfoBlock(t("safe.saved", state=state)))
 
     def _handle_doctor_command(self) -> None:
         """`:doctor` — только локальная диагностика без процессов и сети."""
@@ -10449,6 +10478,14 @@ class CommandRunner(App):
         final_command = self._expand_aliases(
             self._substitute_variables(command, keep_secrets=True)
         )
+        self._safe_launch(
+            display_command, final_command,
+            lambda: self._launch_tty(user_input, display_command, final_command),
+        )
+
+    def _launch_tty(
+        self, user_input: str, display_command: str, final_command: str
+    ) -> None:
         self._tty_followup_lines: list[str] = []
         try:
             return_code = self._run_in_tty(final_command)
@@ -10502,6 +10539,12 @@ class CommandRunner(App):
         final_command = self._expand_aliases(
             self._substitute_variables(command, keep_secrets=True)
         )
+        self._safe_launch(
+            final_command, final_command,
+            lambda: self._launch_window(final_command),
+        )
+
+    def _launch_window(self, final_command: str) -> None:
         environ = {**os.environ, **self.local_env}
         try:
             argv, proc = open_terminal_command(
@@ -11826,6 +11869,18 @@ class CommandRunner(App):
         final_command = self._expand_aliases(
             self._substitute_variables(command, keep_secrets=True)
         )
+        self._safe_launch(
+            display_command,
+            final_command,
+            lambda: self._start_watch_expanded(
+                command, interval, display_command, final_command
+            ),
+        )
+
+    def _start_watch_expanded(
+        self, command: str, interval: float,
+        display_command: str, final_command: str,
+    ) -> None:
         now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         header = f"{now} ({os.getcwd()}) $ watch: {self._mask_secrets(display_command)}"
         block = self._make_command_block(
@@ -11996,31 +12051,37 @@ class CommandRunner(App):
             pass
         self._refresh_running_title()
 
-    def run_command(self, command: str, stdin_data: str | None = None, *, no_timeout: bool = False, extra_env: Mapping[str, str] | None = None) -> None:
-        """
-        Инициатор выполнения команды.
-        Подставляет переменные и запускает поток.
-        """
+    def _safe_launch(
+        self, display_command: str, final_command: str, callback: Callable[[], None]
+    ) -> None:
+        """Confirm a frozen expanded launch; the callback never re-expands it."""
+        risks = safe_mode.command_risks(final_command)
+        if not self.safe_mode or not risks:
+            callback()
+            return
+        shown = escape_display_markup(self._mask_secrets(display_command))
+
+        def cancelled() -> None:
+            self.add_block(InfoBlock(t("safe.cancelled")))
+            if self._run_active:
+                self._safe_runbook_cancelled = True
+
+        confirm_safe_mode(self, shown, risks, callback, cancelled)
+
+    def _run_expanded_command(
+        self, command: str, display_command: str, final_command: str,
+        stdin_data: str | None, no_timeout: bool, extra_env: Mapping[str, str] | None,
+    ) -> None:
+        """Launch an already expanded command after any safe-mode confirmation."""
         timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         cwd = os.getcwd()
-        
-        # Шаг 1: Подставляем переменные в строку команды
-        display_command = self._expand_aliases(self._substitute_variables(command))
-        final_command = self._substitute_variables(command, keep_secrets=True)
-        # Шаг 2: Раскрываем алиасы
-        final_command = self._expand_aliases(final_command)
-
-        # Счётчик запусков: исполняемый текст совпал с live-командой из БД
-        # (в т.ч. при запуске через !tag[tid] / !ID / повтор из истории).
         try:
             if any(e["command"] == final_command for e in self._library()):
                 database.bump_command_usage(self.db_file, final_command)
                 self._invalidate_library()
         except Exception:
-            pass  # Статистика не должна ломать запуск команды
-        
+            pass
         header = f"{timestamp} ({cwd}) $ {self._mask_secrets(display_command)}"
-
         block = self._make_command_block(
             header=header,
             raw_stdout="[Executing...]",
@@ -12031,16 +12092,29 @@ class CommandRunner(App):
         initial_text = self._pending_block_display(block)
         block.text_content = initial_text
         block.update(initial_text)
-        
         self.add_block(block)
-        
-        # Запускаем в отдельном потоке, чтобы UI не завис
         thread = threading.Thread(
             target=self._execute_in_thread,
             args=(block, final_command, stdin_data, no_timeout, extra_env),
-            daemon=True
+            daemon=True,
         )
         thread.start()
+
+    def run_command(self, command: str, stdin_data: str | None = None, *, no_timeout: bool = False, extra_env: Mapping[str, str] | None = None) -> None:
+        """Expand once, then run (or confirm) that exact command asynchronously."""
+        display_command = self._expand_aliases(self._substitute_variables(command))
+        final_command = self._expand_aliases(
+            self._substitute_variables(command, keep_secrets=True)
+        )
+        frozen_env = dict(extra_env) if extra_env else None
+        self._safe_launch(
+            display_command,
+            final_command,
+            lambda: self._run_expanded_command(
+                command, display_command, final_command, stdin_data, no_timeout,
+                frozen_env,
+            ),
+        )
 
     def action_toggle_dark(self) -> None:
         """Переключить textual-dark / textual-light и записать тему в settings.yml."""

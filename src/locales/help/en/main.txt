@@ -72,6 +72,7 @@
   :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
   :doctor       - Local environment report: paths, tools, clipboard, proxy and shell helper (:? doctor)
+  :safe [on|off]- Confirm recognized risky launches (off by default; session-only toggle; :? safe)
   :vault        - Password-encrypted secret store: init/unlock, add/cp/use/exec (:? vault)
   :screensaver  - Idle overlay: matrix digital rain (screensaver_matrix, default) or the
                 NC-style starfield; full-width ticker; bottom-left help; bottom-right

@@ -1,0 +1,7 @@
+[bold]:safe — 启发式启动确认[/bold]
+
+安全模式需显式启用：在 settings.yml 设置 `safe_mode: true`，或用 `:safe on` 仅为当前会话启用。默认关闭；`:safe off` 可关闭。
+
+在实际启动点（普通命令、`>`、`&` 和 `:watch`），IDvjPy 只展开一次别名、变量和活动密钥，再用基于 shlex 的简单启发式检查冻结的 shell 命令。可识别 rm/chmod/chown/dd/mkfs、会修改状态的 kubectl/terraform/helm/git 操作，以及直接传给 sqlite3 的 DELETE/DROP/UPDATE。Enter 执行屏幕上冻结的命令；Esc 取消。watch 每次启动只确认一次，不会每个周期都询问。
+
+这不是 shell 解析器、沙箱、权限系统或安全保证。它不会执行命令，也无法可靠理解脚本、shell 函数、eval、命令替换、动态命令名或未知语法。`echo 'rm -rf /'` 这样的引号文本是数据，不是执行。仍需自行审查命令。拒绝 runbook 自动步骤后会结束该运行，不会挂起。

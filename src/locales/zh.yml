@@ -64,6 +64,17 @@ watch:
   runbook_running: "运行手册正在运行 — 请先停止: :run stop（或 Esc）。"
   running: "[dim]watch: {command} · 每 {interval} 秒 · F4 / :kill / :watch stop — 停止[/dim]"
 
+safe:
+  usage: "用法: :safe [on|off]（无参数时显示状态）"
+  status: "安全模式: {state}（settings.yml: safe_mode；:safe on|off）"
+  saved: "安全模式: {state}（仅本会话）"
+  state_on: "开启"
+  state_off: "关闭"
+  cancelled: "安全模式: 已取消执行。"
+  confirm_title: "安全模式: 确认执行"
+  confirm_risks: "识别到的风险: {risks}"
+  confirm_hint: "Enter — 执行此命令 · Esc — 取消"
+
 runbook:
   modes: "auto — 执行并等待完成 · manual — 插入并等待 Enter（空 Enter — 跳过） · prompt — 手动输入该行"
   no_directives: "该标签没有 run: 指令 — 所有步骤都会自动执行；会修改状态的步骤更安全地标记为 run:manual（见 :? run）"
@@ -86,6 +97,7 @@ runbook:
   continue_hint: "[dim]{label} · 手动继续或 `:run {source} --step`[/dim]"
   stopped: "运行手册 {title}: 在第 {index}/{total} 步停止。现在可以输入了。"
   done: "运行手册 {title}: 已完成 {total} 个步骤。"
+  safe_cancelled: "安全模式：在高风险步骤前取消了运行手册。"
 
 llm:
   offline: "[offline] 内置的 IDvjPy_term 桩：未发出网络请求。\n:llm 和 :llm ask 就是这样在没有密钥时验证的；真正的回答来自 llm_providers.yml 中的提供方。"
@@ -200,6 +212,7 @@ cmd:
   run: "运行命令链（运行手册）: 标签或 YAML，按提示等待"
   update: "将 VERSION 与 GitHub main 比较"
   doctor: "本地环境诊断（工具、路径、剪贴板、代理）"
+  safe: "安全执行模式: 确认已识别的风险命令（:safe on|off）"
 
 help:
   usage: "用法：:? [主题]。主题：{topics}"
