@@ -63,6 +63,7 @@ COLON_COMMAND_NAMES: tuple[str, ...] = (
     "playbook",
     "run",
     "update",
+    "doctor",
 )
 
 # `:имя` — только имена из таблицы; `-`/`_`/буква сразу после имени означают, что

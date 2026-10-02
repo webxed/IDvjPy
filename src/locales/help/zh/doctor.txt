@@ -1,0 +1,16 @@
+[bold]:doctor — 本地环境诊断[/bold]
+
+`:doctor` 为当前 IDvjPy 窗口显示只读报告。它不会启动外部命令，也不会发起网络请求。
+
+[bold]报告包括[/bold]
+  • 数据目录、settings 文件、标签数据库、界面语言和会话 scope；
+  • 终端打开模式、shell helper 是否启用以及 HTTP(S) 代理是否已配置
+    （绝不显示代理地址、用户名或密码）；
+  • 可用的剪贴板后端（`wl-copy`、`xclip` 等）；
+  • `PATH` 中可用的工具：git、sqlite3、kubectl、helm、jq、OCR 和文档转换工具。
+
+缺少可选工具只是提示，不是应用错误。仅在需要相应手册或工作流时安装它。
+例如，`ocrmypdf` 和 `tesseract` 为 `:md` 中的扫描 PDF 提供本地 OCR，
+`sqlite3` 则可用于直接检查命令库的在线数据库。
+
+首次安装后、修改 PATH 后，或手册显示 `command not found` 时，可运行 `:doctor`。

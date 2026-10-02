@@ -116,6 +116,7 @@ try:
     import calc
     import database_v2 as database
     import db_transfer
+    import doctor
     import history_import
     import ipcalc
     import md_convert
@@ -2589,7 +2590,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.188"
+    VERSION = "v1.189"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2740,6 +2741,7 @@ class CommandRunner(App):
     CMD_SEND_RUN = "send!"  # то же, но сразу выполнить в целевой сессии
     CMD_SCOPE = "scope"  # какие теги показывать в этой сессии (фильтр представления)
     CMD_VAULT = "vault"  # хранилище секретов с шифрованием по паролю (`vault.json.enc`)
+    CMD_DOCTOR = "doctor"  # локальная диагностика окружения, без запусков и сети
     # Colon-команды, у которых аргументы — не пути: числа и поисковые шаблоны.
     # Для них `/` — начало `:o /text` (grep по выводам) / `:h /text`, а не листинг корня.
     COLON_NO_PATH_ARGS = frozenset(
@@ -5877,12 +5879,25 @@ class CommandRunner(App):
         CMD_VAULT: "_handle_vault_command",
     }
 
+    def _handle_doctor_command(self) -> None:
+        """`:doctor` — только локальная диагностика без процессов и сети."""
+        report = doctor.collect_report(
+            data_dir=self._data_dir,
+            settings_file=self.FILE_SETTINGS,
+            database_file=self.db_file,
+            language=getattr(self, "language", "en"),
+            scope=getattr(self, "_tag_scope", TagScope()).label,
+            terminal_mode=getattr(self, "term_open", "window"),
+        )
+        self.add_block(InfoBlock(doctor.format_report(report)))
+
     COLON_NOARG_HANDLERS: dict[str, str] = {
         CMD_QUIT: "_handle_quit_command",
         CMD_STATS: "_handle_stats_command",
         CMD_DIFF: "_handle_diff_command",
         CMD_UPDATE: "_handle_update_command",
         CMD_WELCOME: "_show_welcome_catalog",
+        CMD_DOCTOR: "_handle_doctor_command",
     }
 
     def _handle_quit_command(self) -> None:

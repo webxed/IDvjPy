@@ -71,6 +71,7 @@
                 marker (`IDvjPy_term · git · only git`). Details: :? tags
   :welcome      - Seed catalog (same as empty-DB welcome; click --seed / .md)
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
+  :doctor       - Local environment report: paths, tools, clipboard, proxy and shell helper (:? doctor)
   :vault        - Password-encrypted secret store: init/unlock, add/cp/use/exec (:? vault)
   :screensaver  - Idle overlay: matrix digital rain (screensaver_matrix, default) or the
                 NC-style starfield; full-width ticker; bottom-left help; bottom-right

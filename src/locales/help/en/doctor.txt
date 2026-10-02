@@ -1,0 +1,20 @@
+[bold]:doctor — local environment diagnostics[/bold]
+
+`:doctor` prints a read-only report for the current IDvjPy window. It never starts
+an external command and never makes a network request.
+
+[bold]The report includes[/bold]
+  • data directory, settings file, tag database, UI language and session scope;
+  • terminal opening mode, whether the shell cwd helper is active, and whether a
+    HTTP(S) proxy is configured (proxy addresses, users and passwords are never shown);
+  • available clipboard backends (`wl-copy`, `xclip`, …);
+  • useful tools found in `PATH`: git, sqlite3, kubectl, helm, jq, OCR and document
+    conversion tools.
+
+A missing optional tool is informational, not an application failure. Install a tool
+only when you want the corresponding handbook or workflow. For example, `ocrmypdf`
+and `tesseract` enable local OCR for scanned PDFs in `:md`; `sqlite3` lets you inspect
+the live command-library database yourself.
+
+Run `:doctor` after first install, after changing PATH, or when a handbook reports
+`command not found`.

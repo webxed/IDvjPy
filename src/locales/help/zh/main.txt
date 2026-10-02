@@ -217,6 +217,7 @@
   :? import  - JSON / 通过链接的共享库（`:import`、`:export`、`:backup`）
   :? mcp     - 供 AI 客户端使用的标签库：`mcp_server.py`（MCP，只读）
   :? vault   - 密钥保管库：unlock、add/cp/use/exec —— 值从不显示在屏幕上
+  :? doctor  - 本地环境诊断：路径、工具、剪贴板、代理和 shell helper
 
 [bold]导航[/bold]
   ↑/↓        - 翻看输入历史：本会话中输入的一切
