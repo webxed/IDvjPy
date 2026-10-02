@@ -32,6 +32,7 @@ $PROTO=tcp
 | 8 | `ss -tnp dport = :$PORT` | 远程 `$PORT` |
 | 9 | `ss -xlnp` | UNIX listen |
 | 10 | `ss -tuln \| grep $PORT` | 端口过滤 |
+| 11 | `ss -tlnp \| grep $PORT` | Linux：谁在监听 `$PORT` |
 
 ---
 

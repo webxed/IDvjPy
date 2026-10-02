@@ -1,6 +1,6 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.186**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.187**.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -27,7 +27,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 | `?` / `??` / `?tag` / `?tag[tid]` | Query tags / all / by tag / resolve preview. `?text` (2+ chars, no such tag) searches command text + comments across tags |
 | `!tag[tid]` / `!N` | Insert command into input (does not run) |
 | `!! …` | Assemble into input. `tag[tid]` → SQL; numeric id → `last_query_results` cache |
-| `:` | `:?` `:? <тема>` (`calc` `run` `i` `md` `llm` `tags` `vars` `kctx` `send` `session` `import`) `:q` `:w` `:h` `:c` `:json` `:md` `:rg` `:i` `:cd` `:fm` `:term` `:ed` `:env` `:r` `:cmd` `:log` `:o` `:diff` `:name` `:kill` `:watch` `:llm` `:cht` `:g` `:/` `:n` `:N` `:stats` `:mv` `:export` `:import` `:alias` `:kctx` `:session` `:new` `:scope` `:send` `:send!` `:backup` `:welcome` `:screensaver` `:theme` `:lang` `:relang` `:playbook` `:run` `:update` |
+| `:` | `:?` `:? <тема>` (`calc` `run` `i` `md` `llm` `tags` `vars` `kctx` `send` `session` `import` `mcp` `vault`) `:q` `:w` `:h` `:c` `:json` `:md` `:rg` `:i` `:cd` `:fm` `:term` `:ed` `:env` `:r` `:cmd` `:log` `:o` `:diff` `:name` `:kill` `:watch` `:llm` `:cht` `:g` `:/` `:n` `:N` `:stats` `:mv` `:export` `:import` `:alias` `:kctx` `:session` `:new` `:scope` `:send` `:send!` `:backup` `:vault` `:welcome` `:screensaver` `:theme` `:lang` `:relang` `:playbook` `:run` `:update` |
 | `\|` | Pipe focused/last block stdout (saved in history) |
 | `$OUT` | On demand: last line of focused/last block (not stored) |
 | `$VAR=val` | Set local env (also `$ VAR=val`); writes `.bashrc_term_<instance>` |
@@ -153,7 +153,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.132 (app v1.186) |
+| `test_cmd.md` | Manual plan v1.133 (app v1.187) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -193,6 +193,17 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_vault.py` | Хранилище `:vault` (39): round-trip, неверный пароль и подмена заголовка — явная ошибка, чужой/битый файл, отказ версии новее, правила имени/пароля/генерации, пресеты env; TUI: init/unlock/lock, add/gen/list/rm, значение не в журнале/истории/файле, `cp` только в буфер (и чистка), `use` в env (и маскировка после `lock`), `exec` — значение в env, не в argv, пресет и явный `VAR`, `stdin`, без `cryptography` — подсказка; автоблокировка: по простою забывает пароль, но переменные `use` остаются и маскируются, чтение снова спрашивает пароль, ранняя активность не запирает, `:vault autolock N`/`0`, настоящий таймер; `:vault unuse NAME`/`*`; комментарий: поле в окне `add` (предзаполнение, защита от пустого значения), `:vault comment` правит/показывает/снимает без значения, ссылки через `;` — построчно в `list`, комментарий в `cp`/`use`, но не в статусе; TOTP: `--totp` сохраняет base32-секрет и `meta` (ссылка `otpauth://`), битый секрет отклоняется, `list` помечает `(totp)`, `:vault totp` открывает `VaultTotpScreen` и кладёт в буфер код (не секрет), Esc не копирует, обычная запись/несуществующая — явное сообщение; поля значения и комментария в окне `add` не накладываются (глобальный `Input { dock: top }` перебит для модалки) |
 | `tests/test_totp.py` | TOTP/HOTP (`src/totp.py`, 12): векторы RFC 6238 (sha1/256/512) и RFC 4226 (HOTP 0–9), counter/remaining/полоска, нормализация/декод/энкод base32, `grouped`, разбор base32 и `otpauth://` (явные ошибки на hotp/чужой алгоритм/битые digits/period), round-trip записи ↔ `TotpSpec` (битые параметры — откат к умолчаниям, битый секрет — явная ошибка) |
 | `tests/test_tty_signals.py` | Ctrl+C в чужой программе (`> cmd` / `:ed` / Ctrl+O) не роняет TUI: `_ignore_interrupt_signals` ставит **обработчик**, а не `SIG_IGN` (тот наследуется через `exec`), восстановление идемпотентно, `SIGQUIT` тоже; `_run_in_tty` глотает сигнал на время ребёнка и отдаёт shell-код (`-2` → `130`); `suspend()` оборачивает yield |
+| `tests/test_diff.py` | `:diff`: сравнение stdout двух блоков — идентичный вывод, показ изменений (`-`/`+`), требует минимум два блока, сравнение сфокусированного блока с предыдущим |
+| `tests/test_search_content.py` | Подстрочный поиск по содержимому `?text` (7): подстрока по командам и комментариям, литеральные `%`/`_` в LIKE, мягко удалённые пропускаются, `?text` в TUI, точное имя тега по-прежнему список команд, короткий неизвестный — явная ошибка, запуск найденного по `!N` |
+| `tests/test_usage_stats.py` | Счётчики запусков и `:stats` (5): bump по команде и `usage_stats` (live/tags/never_run/top/per_tag), миграция старой схемы (колонки `use_count`/`last_used`), подсчёт реальных запусков (в т.ч. через `!N`), пустая БД, порядок `!tag` по частоте |
+| `tests/test_stop_command.py` | Остановка фоновой команды (5): F4 и `:kill` шлют SIGTERM и помечают блок «stopped by user» (код 143), `:kill all` останавливает все (registry пуст), сообщение без запущенных, обычная команда не меняется (регрессия) |
+| `tests/test_tag_move.py` | `:mv` — перенос команды и переименование тега (6): перенос в существующий тег с новым tid, отсутствующая команда → `None`, `rename_tag` переносит комментарий и отказы, `:mv kube[1] mine` в TUI, `:mv kube k8s`, явные ошибки (`Usage:`, битый тег, not found, тот же тег) |
+| `tests/test_seed_backup.py` | Снимок SQLite перед `--seed`: живая БД копируется в `backups/` до замены тегов, пустая БД не копируется, `seed_ops` пишет один снимок (не по модулю), ручной `backup_sqlite` идёт мимо once-кэша |
+| `tests/test_update_check.py` | Проверка версии `:update` (9): разбор `VERSION` из источника, сравнение версий, вид статуса (доступно/актуально/впереди), загрузка с прокси-логином `$PROXY_USER`/`$PROXY_PASS`, подсказка при «407», `:update` в TUI о новой версии и о прокси |
+| `tests/test_ipcalc.py` | Локальный `ipcalc` (`src/ipcalc.py`, 39): распознавание IPv4 с префиксом/маской и не-IP (уходит в shell), таблица подсети (`Address`/`Netmask`/`Wildcard`/`Network`/`HostMin`/`HostMax`/`Broadcast`/`Hosts/Net`, класс, private/public, бинарная колонка), граничные префиксы (`/31` RFC 3021, `/32` host route), классовая маска по умолчанию (`8.8.8.8` → /8), префикс под N хостов (`300 hosts` → /23) и соседние строки, явные ошибки `IpCalcError` |
+| `tests/test_k8s_completion.py` | Автодополнение ресурсов k8s из живого кластера (7): разбор контекста `kubectl get`, фильтр по префиксу и cap, fallback вне контекста, пустой список при сбое kubectl, таблица алиасов (`pod`/`po`/`svc`/…), гейтинг флагом `k8s_completion` (вкл/выкл по умолчанию) |
+| `tests/test_md_export.py` | Экспорт библиотеки в Markdown `:export * [file.md]`: каталог тегов и команд с комментариями, пустая библиотека, запись файла в TUI, `Usage:` без аргументов |
+| `tests/test_watch.py` | `:watch <sec> <command>`: тики обновляют один блок, `:watch stop` финализирует блок, `Usage:`/`sec must be > 0`/один активный watch, `:c` останавливает watch |
 
 Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then Enter.
 
@@ -208,7 +219,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.186 |
+| `src/app.py` | TUI (`CommandRunner`), v1.187 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
@@ -249,6 +260,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `src/i18n.py` | UI-language core: catalogue lookup (`t`/`tlist`) and long texts (`text("main")` → `locales/help/<lang>/*.txt`), language resolution (`--lang` → `$IDVJPY_LANG` → `settings.yml: language` → `en`; `auto` follows `$LANG`). Catalogues: `src/locales/<lang>.yml` plus parts in `src/locales/<lang>/*.yml` (`screensaver`, `seed`), deep-merged; `en` is the source of truth; missing keys fall back to `en`, unknown keys return themselves. Tests: `tests/test_i18n.py` (keys are strings — YAML reads bare `off`/`n`/`N` as bool; every language has all help texts and all `catalog.desc.*`) |
 | `src/example_config.py` | Локализованные шаблоны личных файлов: `available_settings_languages`/`available_llm_providers_languages`, `settings_example_path(lang)`, `llm_providers_example_path(lang)` (откат на `en`), `detect_language(explicit)` — `--lang` → `$IDVJPY_LANG` → системная локаль (auto) → `en`; шаблоны — `src/settings/<lang>.yml` и `src/llm_providers/<lang>.yml` |
 | `src/ansi_output.py` | ANSI/ESC в выводе команд: SGR → цвета (`to_markup`), плоский текст без кодов (`to_plain`), терминальный `\r` (`collapse_carriage_returns`); ключ `ansi_colors` |
+| `src/clipboard.py` | Буфер обмена для всех путей копирования/вставки: `copy_text_to_clipboards` пишет сразу в Textual (`Ctrl+V` в `Input`), OSC 52, `CLIPBOARD` и `PRIMARY` (Shift+Insert), `_linux_clipboard_cmd` — X11/Wayland через `xclip`/`xsel`/`wl-copy` с коротким таймаутом (0.4 с), `pyperclip` как запасной; `paste_text_from_clipboards` читает системный буфер, потом внутренний буфер Textual |
 | `src/runbook.py` | `:run` — полуавтоматический прогон цепочки: шаги `auto`/`manual`/`prompt`, директивы `run:` в комментариях тега, план из YAML (заметка в плане для тега без единой директивы). Тексты плана локализованы (`runbook.plan_*`) |
 | `src/seed_*.py` | Handbook seeds (linux, k8s, git, ops, …) |
 | `src/app.tcss` | Styles (JSON viewer, line-nav border, block focus); Textual CSS — расширение `.tcss`, чтобы редакторы не линтовали его браузерным CSS |
@@ -261,6 +273,13 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `test_cmd.md` | Manual test script |
 
 ---
+
+## v1.187
+
+- **feat(seed): команды «кто слушает `$PORT`».** В `netfw` добавлена `ss -tlnp | grep $PORT` (tid 11, Linux), в `sysinfo` — `lsof -nP -iTCP -sTCP:LISTEN | grep $PORT` (tid 8, портируемая grep-форма macOS/Linux; `lsof -nP -iTCP:$PORT -sTCP:LISTEN` из tid 1 фильтрует сам). Обновлены `src/seed_text/{en,zh}/{netfw,sysinfo}.yml` и `docs/{,en/,zh/}SEED_{NETFW,SYSINFO}_COMMANDS.md`; в sysinfo-справочнике добавлена оговорка о портируемости формы.
+- **docs: аудит документации под текущее число тестов и модулей.** В `.github/workflows/tests.yml` и `CLAUDE.md` счётчики приведены к факту (`--collect-only`): 1321 → **1404** теста, `slow` 430 → **441**, остальные 891 → **963**. В таблицу Tests в `COMPACT_SUMMARY.md` добавлены 11 отсутствовавших файлов (`test_diff`, `test_search_content`, `test_usage_stats`, `test_stop_command`, `test_tag_move`, `test_seed_backup`, `test_update_check`, `test_ipcalc`, `test_k8s_completion`, `test_md_export`, `test_watch`) со сверенными счётчиками; в таблицу Files — единственный не-seed модуль вне списка `src/clipboard.py`.
+- **docs: списки `:`-команд и тем `:?`.** В `COMPACT_SUMMARY.md` и `CLAUDE.md` добавлены `:vault` и `:scope`, темы `:?` `mcp` / `vault`; в `CLAUDE.md` — полный список подкоманд `:vault` (`comment` / `unuse` / `autolock` и весь остальной набор).
+- **docs: синхронизация en/zh-справочников и чистка `test_cmd.md`.** `docs/{en,zh}/SEED_{NETFW,SYSINFO}_COMMANDS.md` дотянуты до русской базы (отставали на строку: `ss -tlnp` / `lsof … grep $PORT`); в `test_cmd.md` убран дубль `test_history_import.py` в футере «Автотесты».
 
 ## v1.186
 

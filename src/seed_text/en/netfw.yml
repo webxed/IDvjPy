@@ -16,6 +16,7 @@ tags:
       7: by remote port $PORT
       8: UNIX listen
       9: filter $PORT without processes
+      10: 'Linux: who listens on $PORT'
   nst:
     comment: netstat (legacy hosts)
     commands:

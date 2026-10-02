@@ -16,6 +16,7 @@ tags:
       7: 按远程端口 $PORT
       8: UNIX 监听
       9: 按 $PORT 过滤，不带进程
+      10: 'Linux：谁在监听 $PORT'
   nst:
     comment: netstat（旧主机）
     commands:

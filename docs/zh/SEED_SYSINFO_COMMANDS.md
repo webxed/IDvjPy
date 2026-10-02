@@ -51,8 +51,9 @@ $TRACE=network
 | 5 | `lsof -nP -c $PROC` | 名为 `$PROC` 的进程 |
 | 6 | TCP LISTEN，40 行 | 前 40 个 TCP 监听 |
 | 7 | `$USER` 的文件，40 行 | 用户 `$USER` 的文件 |
+| 8 | `lsof -nP -iTCP -sTCP:LISTEN \| grep $PORT` | 谁在监听 `$PORT`（macOS/Linux） |
 
-`-nP` — 不做 DNS 解析，也不解析端口名（在 TUI 中更快）。
+`-nP` — 不做 DNS 解析，也不解析端口名（在 TUI 中更快）。`grep $PORT` 形式可移植（macOS/Linux）；`lsof -nP -iTCP:$PORT -sTCP:LISTEN`（tid 1）自行过滤，无需 `grep`。
 
 ---
 

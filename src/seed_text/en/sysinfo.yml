@@ -24,6 +24,7 @@ tags:
       4: processes named $PROC
       5: first 40 TCP listeners
       6: files of user $USER
+      7: 'who listens on $PORT (macOS/Linux, grep)'
   strace:
     comment: 'strace: system calls'
     commands:

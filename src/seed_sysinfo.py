@@ -54,6 +54,10 @@ SEED_TAGS = {
                 "lsof -nP -u $USER | head -n 40",
                 "файлы пользователя $USER",
             ),
+            (
+                "lsof -nP -iTCP -sTCP:LISTEN | grep $PORT",
+                "кто слушает $PORT (macOS/Linux, grep-форма)",
+            ),
         ],
     ),
     "strace": (

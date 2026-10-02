@@ -24,6 +24,7 @@ tags:
       4: 名为 $PROC 的进程
       5: 前 40 个 TCP 监听
       6: 用户 $USER 的文件
+      7: '谁在监听 $PORT（macOS/Linux，grep）'
   strace:
     comment: 'strace: 系统调用'
     commands:

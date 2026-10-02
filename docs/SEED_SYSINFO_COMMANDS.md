@@ -51,8 +51,9 @@ $TRACE=network
 | 5 | `lsof -nP -c $PROC` | По имени процесса |
 | 6 | TCP LISTEN, 40 строк | Обзор слушателей |
 | 7 | файлы `$USER`, 40 строк | По пользователю |
+| 8 | `lsof -nP -iTCP -sTCP:LISTEN \| grep $PORT` | Кто слушает `$PORT` (macOS/Linux) |
 
-`-nP` — без DNS и без имён портов (быстрее в TUI).
+`-nP` — без DNS и без имён портов (быстрее в TUI). Форма с `grep $PORT` портируема (macOS/Linux); `lsof -nP -iTCP:$PORT -sTCP:LISTEN` (tid 1) фильтрует сам, без `grep`.
 
 ---
 

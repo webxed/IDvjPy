@@ -36,6 +36,7 @@ SEED_TAGS = {
             ("ss -tnp dport = :$PORT", "по удалённому порту $PORT"),
             ("ss -xlnp", "UNIX listen"),
             ("ss -tuln | grep $PORT", "фильтр $PORT без процессов"),
+            ("ss -tlnp | grep $PORT", "Linux: кто слушает $PORT"),
         ],
     ),
     "nst": (

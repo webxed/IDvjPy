@@ -32,6 +32,7 @@ $PROTO=tcp
 | 8 | `ss -tnp dport = :$PORT` | Удалённый `$PORT` |
 | 9 | `ss -xlnp` | UNIX listen |
 | 10 | `ss -tuln \| grep $PORT` | Фильтр порта |
+| 11 | `ss -tlnp \| grep $PORT` | Linux: кто слушает `$PORT` |
 
 ---
 

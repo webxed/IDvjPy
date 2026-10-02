@@ -51,8 +51,9 @@ $TRACE=network
 | 5 | `lsof -nP -c $PROC` | Processes named `$PROC` |
 | 6 | TCP LISTEN, 40 rows | First 40 TCP listeners |
 | 7 | files of `$USER`, 40 rows | Files of user `$USER` |
+| 8 | `lsof -nP -iTCP -sTCP:LISTEN \| grep $PORT` | Who listens on `$PORT` (macOS/Linux) |
 
-`-nP` means no DNS and no port names (faster in the TUI).
+`-nP` means no DNS and no port names (faster in the TUI). The `grep $PORT` form is portable (macOS/Linux); `lsof -nP -iTCP:$PORT -sTCP:LISTEN` (tid 1) filters itself, without `grep`.
 
 ---
 
