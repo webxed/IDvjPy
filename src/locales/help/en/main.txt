@@ -73,6 +73,7 @@
   :backup       - Copy the command DB into backups/ (same snapshot as --seed)
   :doctor       - Local environment report: paths, tools, clipboard, proxy and shell helper (:? doctor)
   :safe [on|off]- Confirm recognized risky launches (off by default; session-only toggle; :? safe)
+  :explain cmd - Offline static command explanation; never executes it (:? explain)
   :vault        - Password-encrypted secret store: init/unlock, add/cp/use/exec (:? vault)
   :screensaver  - Idle overlay: matrix digital rain (screensaver_matrix, default) or the
                 NC-style starfield; full-width ticker; bottom-left help; bottom-right
@@ -220,6 +221,9 @@
   :? import  - JSON / a shared library by URL (`:import`, `:export`, `:backup`)
   :? mcp     - Tag library for AI clients: `mcp_server.py` (MCP, read-only)
   :? vault   - Secret store: unlock, add/cp/use/exec — values never on screen
+  :? doctor  - Local environment diagnostics: paths, tools, clipboard, proxy and shell helper
+  :? safe    - Opt-in heuristic confirmation for recognized risky command launches
+  :? explain - Offline static command explanation: no launch, expansion or file reads
 
 [bold]Navigation[/bold]
   ↑/↓        - Input history walk: everything typed in this session (`:`-commands,

@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.190
+# План тестирования IDvjPy_term v1.191
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1693,9 +1693,22 @@ printf '%s\n' \
 **Автоблокировка:** ключ `vault_idle_lock` (минуты, по умолчанию 15; `0` — выкл.). Проверить: `:vault autolock 0.05`, разблокировать, `:vault use SSH_PROD`, подождать — в журнале `Vault auto-locked`, пароль забыт (значение переменной **осталось** в окружении и маскируется), а `:vault cp SSH_PROD` снова открывает модалку пароля. `:vault autolock` показывает срок, `:vault` — строку `auto-lock: …`.
 **TOTP-коды (2FA):** `:vault add GITHUB --totp` принимает base32-ключ (`jbsw y3dp ehpk 3pxp`) или ссылку из QR `otpauth://totp/…`; проверьте, что в `:vault list` запись помечена `(totp)`, а в значении хранится канон base32 (в `vault.json.enc` секрет не читается открытым текстом). `:vault totp GITHUB` открывает окошко с живым кодом: он обновляется каждую секунду, полоска показывает остаток окна; `Enter`/`c` кладут **свежий** код в буфер, `Esc` закрывает без копии. Секрет на экран и в буфер не попадает, а **код — не секрет**: он живёт ~30 с и может попасть в журнал/`:o`. Проверьте сверку с телефоном/`oathtool` — счётчик берётся из системных часов.
 
+## Секция 56: Разбор команды (`:explain`)
+
+Локальный статический разбор: назначение программы, оценка эффекта, значения известных флагов и признаки риска. Команда **не запускается**, переменные/алиасы не раскрываются, целевые файлы не читаются, сеть/LLM не трогаются; полные аргументы не выводятся, незнакомые флаги и эффекты остаются неизвестными, пайпы и составные скрипты не разбираются как единая команда.
+
+```text
+:explain kubectl get pods -A      # kubectl, reads_state, флаг -A (all_namespaces)
+:explain git status --short       # git, reads_state, --short
+:explain rm -rf /tmp/example      # назначение/эффект неизвестны, признак риска от safe_mode
+:? explain                        # справка по теме
+```
+
+**Ожидание:** блок «Разбор команды» с явной строкой «ничего не выполняется…», без эха полной команды; известные флаги — строкой `флаг: значение`; у `rm -rf …` — признаки риска. Неизвестная программа даёт `назначение неизвестно` / `эффект неизвестен`, а не догадку. Тема `:? explain` есть в оглавлении `:?`.
+
 ---
 
-**Версия документа**: v1.136
-**Версия приложения**: v1.190
+**Версия документа**: v1.137
+**Версия приложения**: v1.191
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_seed_sqlite.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`, `tests/test_mcp_server.py`, `tests/test_vault.py`, `tests/test_totp.py`, `tests/test_tty_signals.py`  
 **Дата**: 2026-09-21

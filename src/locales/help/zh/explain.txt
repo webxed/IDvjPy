@@ -1,0 +1,13 @@
+[bold]:explain — 命令离线说明[/bold]
+
+用法：`:explain <命令>`
+
+示例：
+  :explain kubectl get pods -A
+  :explain git status --short
+  :explain rm -rf /tmp/example
+  :? explain
+
+这是本地静态启发式。它绝不执行命令，不展开变量或别名，不读取目标文件，也不访问 LLM/网络。它不是 shell 解析器，也不是安全证明。命令的完整参数不会回显。
+
+已知程序会给出简短用途和效果估计。只显示目录中记录的选项含义；无法识别的选项不做解释。命令效果可能仍然未知。管道和复合脚本的效果不会作为单一命令分析。风险信号只是启发式提示，不是保证。

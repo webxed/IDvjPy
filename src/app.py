@@ -117,6 +117,7 @@ try:
     import database_v2 as database
     import db_transfer
     import doctor
+    import explain
     import history_import
     import ipcalc
     import md_convert
@@ -2592,7 +2593,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.190"
+    VERSION = "v1.191"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2744,6 +2745,7 @@ class CommandRunner(App):
     CMD_SCOPE = "scope"  # какие теги показывать в этой сессии (фильтр представления)
     CMD_VAULT = "vault"  # хранилище секретов с шифрованием по паролю (`vault.json.enc`)
     CMD_DOCTOR = "doctor"  # локальная диагностика окружения, без запусков и сети
+    CMD_EXPLAIN = "explain"  # локальный разбор команды без запуска (справочник + эвристика)
     CMD_SAFE = "safe"
     KEY_SAFE_MODE = "safe_mode"
     # Colon-команды, у которых аргументы — не пути: числа и поисковые шаблоны.
@@ -5823,6 +5825,10 @@ class CommandRunner(App):
             return
         command = parts[0]
         args = parts[1:]
+        if command == self.CMD_EXPLAIN:
+            raw_command = raw[len(command):].strip()
+            self._handle_explain_command([raw_command] if raw_command else [])
+            return
         if command in self.COLON_ARG_HANDLERS:
             getattr(self, self.COLON_ARG_HANDLERS[command])(args)
             return
@@ -5886,7 +5892,16 @@ class CommandRunner(App):
         CMD_ENV: "_handle_env_reload",
         CMD_VAULT: "_handle_vault_command",
         CMD_SAFE: "_handle_safe_command",
+        CMD_EXPLAIN: "_handle_explain_command",
     }
+
+    def _handle_explain_command(self, args: list[str]) -> None:
+        """`:explain <command>` — offline structural explanation; never runs it."""
+        command = " ".join(args).strip()
+        if not command:
+            self.add_block(InfoBlock(t("explain.usage")))
+            return
+        self.add_block(InfoBlock(self._mask_secrets(explain.format_explanation(command))))
 
     def _handle_safe_command(self, args: list[str]) -> None:
         """`:safe [on|off]` — session-only opt-in safe execution mode."""

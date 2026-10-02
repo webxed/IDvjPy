@@ -64,6 +64,7 @@ COLON_COMMAND_NAMES: tuple[str, ...] = (
     "run",
     "update",
     "doctor",
+    "explain",
     "safe",
 )
 

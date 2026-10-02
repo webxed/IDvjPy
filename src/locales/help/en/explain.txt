@@ -1,0 +1,13 @@
+[bold]:explain — offline command explanation[/bold]
+
+Usage: `:explain <command>`
+
+Examples:
+  :explain kubectl get pods -A
+  :explain git status --short
+  :explain rm -rf /tmp/example
+  :? explain
+
+This is a local, static heuristic. It never executes the command, expands variables or aliases, reads target files, or contacts an LLM/network. It is not a shell parser or a safety proof. The command's complete arguments are not echoed.
+
+Known programs get a short purpose and estimated effect. Only catalogued flag meanings are shown; unrecognized flags remain uninterpreted. A command may still have an unknown effect. Pipe and compound-script effects are not analyzed as a unified command. Risk signals are heuristic hints, not guarantees.
