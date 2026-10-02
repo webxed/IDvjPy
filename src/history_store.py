@@ -144,7 +144,7 @@ def append_history_file_line(
                 acquire_file_lock(f, lock_timeout)
                 locked = True
             except FileLockTimeoutError:
-                locked = False
+                return False
             try:
                 last = _read_last_history_line(f, encoding)
                 if last == command:
@@ -235,7 +235,7 @@ def remove_history_file_line(
                 acquire_file_lock(f, lock_timeout)
                 locked = True
             except FileLockTimeoutError:
-                locked = False
+                return False
             try:
                 lines = [line.rstrip("\n") for line in f]
                 index = -1

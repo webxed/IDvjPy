@@ -8,9 +8,23 @@ import pytest
 
 pytestmark = pytest.mark.slow
 
+import history_store
 from app import CommandRunner
 from history_store import append_history_file_line, remove_history_file_line
 from tests.conftest import submit, wait_command_done
+
+
+def test_history_mutations_refuse_lock_timeout(tmp_path, monkeypatch):
+    path = tmp_path / "h.txt"
+    path.write_text("keep\n", encoding="utf-8")
+
+    def timeout(*args, **kwargs):
+        raise history_store.FileLockTimeoutError("busy")
+
+    monkeypatch.setattr(history_store, "acquire_file_lock", timeout)
+    assert history_store.append_history_file_line(str(path), "new") is False
+    assert history_store.remove_history_file_line(str(path), "keep") is False
+    assert path.read_text(encoding="utf-8") == "keep\n"
 
 
 def test_remove_history_line_helper(tmp_path):

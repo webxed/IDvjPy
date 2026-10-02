@@ -2589,7 +2589,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.187"
+    VERSION = "v1.188"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -5569,13 +5569,17 @@ class CommandRunner(App):
                 self.CMD_SEND, self.CMD_SEND_RUN,
                 self.CMD_LOG,
             }:
-                if not user_input.startswith(self.PREFIX_SECRET):
+                if (
+                    not user_input.startswith(self.PREFIX_SECRET)
+                    and not self._contains_live_secret(user_input)
+                ):
                     self._playbook_log.append(user_input)
 
         # Лента сессии (↑) — всё набранное; файл истории — только то, что
         # разрешает `history_queries` и фильтр `log_to_history`.
-        self._remember_session_line(user_input)
-        self.log_to_history(user_input)
+        if not self._contains_live_secret(user_input):
+            self._remember_session_line(user_input)
+            self.log_to_history(user_input)
         if self._is_history_comment(user_input):
             self._park_history_comment(user_input)
             return
@@ -5694,6 +5698,10 @@ class CommandRunner(App):
                         return
             self.handle_normal_command(user_input, no_timeout=no_timeout, record_history=not no_timeout)
 
+    def _contains_live_secret(self, text: str) -> bool:
+        """True when text contains a value that must not enter command history."""
+        return self._mask_secrets(text) != text
+
     def log_to_history(self, command: str) -> None:
         """
         Записывает команду в файл истории инстанса, исключая спецкоманды.
@@ -5766,9 +5774,10 @@ class CommandRunner(App):
 
     def _park_history_comment(self, user_input: str) -> None:
         """Оставляет строку в журнале и session history, ничего не запускает."""
-        if user_input not in self.session_history:
-            self.session_history.append(user_input)
-        self.session_history_pos = len(self.session_history)
+        if not self._contains_live_secret(user_input):
+            if user_input not in self.session_history:
+                self.session_history.append(user_input)
+            self.session_history_pos = len(self.session_history)
         self.add_block(InfoBlock(escape(user_input)))
 
     def _run_calc(self, expression: str, output: str) -> None:
@@ -10416,11 +10425,15 @@ class CommandRunner(App):
                 return
             command = resolved
 
-        if user_input not in self.session_history:
-            self.session_history.append(user_input)
-        self.session_history_pos = len(self.session_history)
+        if not self._contains_live_secret(user_input):
+            if user_input not in self.session_history:
+                self.session_history.append(user_input)
+            self.session_history_pos = len(self.session_history)
 
-        final_command = self._expand_aliases(self._substitute_variables(command))
+        display_command = self._expand_aliases(self._substitute_variables(command))
+        final_command = self._expand_aliases(
+            self._substitute_variables(command, keep_secrets=True)
+        )
         self._tty_followup_lines: list[str] = []
         try:
             return_code = self._run_in_tty(final_command)
@@ -10432,12 +10445,13 @@ class CommandRunner(App):
         except Exception as e:
             self.add_block(InfoBlock(f"TTY error: {e}"))
             return
+        finally:
+            # Секрет хранилища, скопированный для этого интерактива (`:vault cp`),
+            # убираем даже если запуск TTY завершился ошибкой.
+            self._vault_clear_clipboard()
         extra = getattr(self, "_tty_followup_lines", None) or []
         self._tty_followup_lines = []
-        # Секрет хранилища, скопированный для этого интерактива (`:vault cp`),
-        # из буфера убираем: своё дело он уже сделал.
-        self._vault_clear_clipboard()
-        text = f"TTY: {escape(self._mask_secrets(final_command))}\nExit code: {return_code}"
+        text = f"TTY: {escape(self._mask_secrets(display_command))}\nExit code: {return_code}"
         if extra:
             text += "\n" + "\n".join(extra)
         self.add_block(InfoBlock(text))
@@ -10537,7 +10551,7 @@ class CommandRunner(App):
         v1.1.9+: Раскрытие ссылок !tag[tid] и !ID происходит в on_input_submitted,
         поэтому здесь мы просто выполняем уже раскрытую команду.
         """
-        if record_history:
+        if record_history and not self._contains_live_secret(command):
             if command not in self.session_history:
                 self.session_history.append(command)
             self.session_history_pos = len(self.session_history)
@@ -11793,9 +11807,12 @@ class CommandRunner(App):
 
     def _start_watch(self, command: str, interval: float) -> None:
         """Создаёт блок :watch и поток-цикл; тики обновляют тот же блок."""
-        final_command = self._expand_aliases(self._substitute_variables(command))
+        display_command = self._expand_aliases(self._substitute_variables(command))
+        final_command = self._expand_aliases(
+            self._substitute_variables(command, keep_secrets=True)
+        )
         now = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
-        header = f"{now} ({os.getcwd()}) $ watch: {self._mask_secrets(final_command)}"
+        header = f"{now} ({os.getcwd()}) $ watch: {self._mask_secrets(display_command)}"
         block = self._make_command_block(
             header=header,
             raw_stdout="",
@@ -11973,7 +11990,8 @@ class CommandRunner(App):
         cwd = os.getcwd()
         
         # Шаг 1: Подставляем переменные в строку команды
-        final_command = self._substitute_variables(command)
+        display_command = self._expand_aliases(self._substitute_variables(command))
+        final_command = self._substitute_variables(command, keep_secrets=True)
         # Шаг 2: Раскрываем алиасы
         final_command = self._expand_aliases(final_command)
 
@@ -11986,7 +12004,7 @@ class CommandRunner(App):
         except Exception:
             pass  # Статистика не должна ломать запуск команды
         
-        header = f"{timestamp} ({cwd}) $ {self._mask_secrets(final_command)}"
+        header = f"{timestamp} ({cwd}) $ {self._mask_secrets(display_command)}"
 
         block = self._make_command_block(
             header=header,

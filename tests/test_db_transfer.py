@@ -102,6 +102,20 @@ def test_import_skip_existing_is_idempotent(tmp_path):
     assert (second.imported, second.skipped) == (0, 2)
 
 
+def test_replace_import_rejects_invalid_document_without_clearing(tmp_path):
+    db = tmp_path / "db.sqlite"
+    _seed(db)
+    for payload in ({}, {"commands": "not-a-list"}, {"commands": [], "tag_comments": []}):
+        try:
+            db_transfer.import_payload(str(db), payload, mode="replace")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid transfer payload was accepted")
+        assert len(database.get_commands_by_tag(str(db), "kube")) == 2
+        assert database.get_tag_comment(str(db), "kube") == "k8s команды"
+
+
 def test_import_replace_clears_library(tmp_path):
     db = tmp_path / "db.sqlite"
     _seed(db)

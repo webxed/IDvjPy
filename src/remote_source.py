@@ -53,7 +53,11 @@ def safe_url(url: str) -> str:
     host = parts.hostname or ""
     if ":" in host and not host.startswith("["):
         host = f"[{host}]"
-    port = f":{parts.port}" if parts.port else ""
+    try:
+        port = f":{parts.port}" if parts.port else ""
+    except ValueError:
+        # Keep malformed URLs safe for diagnostics without exposing userinfo.
+        port = ""
     return urlunsplit((parts.scheme, f"{host}{port}", parts.path, parts.query, parts.fragment))
 
 

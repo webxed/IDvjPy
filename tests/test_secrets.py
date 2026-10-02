@@ -62,6 +62,18 @@ async def test_secret_set_hides_value_and_stores_0600(isolated_home):
         assert "is not set" in last_info(app).text_content
 
 
+async def test_literal_secret_is_not_saved_but_stays_available_to_shell(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await submit(pilot, f"$$TOKEN={SECRET}")
+        await submit(pilot, f"printf '%s' {SECRET}")
+        block = await wait_command_done(app, timeout=8.0)
+        assert block.raw_stdout == SECRET
+        assert not any(SECRET in line for line in app.session_history)
+        history = Path(app.FILE_HISTORY)
+        assert not history.exists() or SECRET not in history.read_text(encoding="utf-8")
+
+
 async def test_secret_value_masked_in_journal(isolated_home):
     """В шапке и в показываемом выводе значение маскируется, raw остаётся целым."""
     app = CommandRunner()

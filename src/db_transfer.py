@@ -390,9 +390,15 @@ def import_payload(
     каждая строка вставляется с новым tid — так работает `:import` в TUI, где
     импорт — это «добавить команды», а не «восстановить базу».
     """
-    commands: Sequence[Any] = payload.get("commands") or []
+    raw_commands = payload.get("commands")
+    if not isinstance(raw_commands, list):
+        raise ValueError("JSON field `commands` must be an array")
+    commands: Sequence[Any] = raw_commands
+    raw_comments = payload.get("tag_comments", {})
+    if raw_comments is not None and not isinstance(raw_comments, dict):
+        raise ValueError("JSON field `tag_comments` must be an object")
     tag_override = (only_tag or "").strip() or None
-    comments = payload.get("tag_comments") or {}
+    comments = raw_comments or {}
     database.init_db(db_file)
     conn = database.get_db_connection(db_file)
     tags: set[str] = set()

@@ -126,6 +126,7 @@ def test_fetch_wraps_network_error_and_hides_password(monkeypatch):
 
 def test_fetch_strips_userinfo_in_result():
     assert remote_source.safe_url("https://alice:pw@host/x.json") == "https://host/x.json"
+    assert remote_source.safe_url("https://alice:pw@host:bad/x.json") == "https://host/x.json"
 
 
 # --- план импорта ------------------------------------------------------------
