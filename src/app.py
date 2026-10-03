@@ -238,6 +238,14 @@ try:
     from md_search import search as search_markdown
     from md_viewer import HandbookMarkdownScreen, handbook_md_path, resolve_md_path
     from output_viewer import OutputViewerScreen
+    from profile_store import (
+        ProfileError,
+        delete_profile,
+        list_profiles,
+        load_profile,
+        save_profile,
+        scope_from_profile,
+    )
     from runbook import play_runbook
     from safe_mode_prompt import confirm as confirm_safe_mode
     from screensaver import DevopsScreensaver
@@ -2595,7 +2603,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.194"
+    VERSION = "v1.195"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2747,6 +2755,7 @@ class CommandRunner(App):
     CMD_SCOPE = "scope"  # какие теги показывать в этой сессии (фильтр представления)
     CMD_TAGS = "tags"  # searchable tag catalog
     CMD_PIN = "pin"  # per-session favorite tags
+    CMD_PROFILE = "profile"  # named safe runtime context profiles
     CMD_TAGMETA = "tagmeta"  # tag metadata
     CMD_VAULT = "vault"  # хранилище секретов с шифрованием по паролю (`vault.json.enc`)
     CMD_DOCTOR = "doctor"  # локальная диагностика окружения, без запусков и сети
@@ -5896,6 +5905,7 @@ class CommandRunner(App):
         CMD_SCOPE: "_handle_scope_command",
         CMD_TAGS: "_handle_tags_command",
         CMD_PIN: "_handle_pin_command",
+        CMD_PROFILE: "_handle_profile_command",
         CMD_TAGMETA: "_handle_tagmeta_command",
         CMD_SCREENSAVER: "_handle_screensaver_command",
         CMD_BACKUP: "_handle_backup_command",
@@ -7412,6 +7422,107 @@ class CommandRunner(App):
         if not tags:
             lines.append(t("tag_catalog.empty"))
         self.add_block(InfoBlock("\n".join(lines)))
+
+    def _profile_payload(self, name: str) -> dict[str, object]:
+        """Build a profile without copying environment or vault values."""
+        namespace = self.local_env.get("NS") or os.environ.get("NS")
+        payload: dict[str, object] = {
+            "version": 1,
+            "name": name,
+            "cwd": os.getcwd(),
+            "scope": {
+                "mode": self._tag_scope.mode,
+                "groups": list(self._tag_scope.groups),
+                "tags": list(self._tag_scope.tags),
+            },
+        }
+        if namespace:
+            payload["namespace"] = namespace
+        if self._current_kube_cluster:
+            payload["kube_context"] = self._current_kube_cluster
+        return payload
+
+    def _profile_summary(self, profile: dict[str, object]) -> str:
+        scope = profile.get("scope") or {}
+        scope_label = ""
+        if isinstance(scope, dict):
+            mode = str(scope.get("mode") or "")
+            names = [*(scope.get("groups") or []), *(scope.get("tags") or [])]
+            scope_label = f"{mode} {', '.join(str(item) for item in names)}".strip()
+        parts = [f"cwd={profile['cwd']}"]
+        if scope_label:
+            parts.append(f"scope={scope_label}")
+        for key in ("namespace", "kube_context"):
+            if profile.get(key):
+                parts.append(f"{key}={profile[key]}")
+        return ", ".join(parts)
+
+    def _handle_profile_command(self, args: list[str]) -> None:
+        """`:profile` — save and apply non-secret runtime context references."""
+        usage = t("profile.usage")
+        if not args:
+            names, error = list_profiles(self._data_dir or ".")
+            text = t("profile.list", profiles=", ".join(names) or t("profile.none"))
+            if error:
+                text += f"\n[dim]{escape(error)}[/dim]"
+            self.add_block(InfoBlock(text))
+            return
+        action = args[0].casefold()
+        if action == "list" and len(args) == 1:
+            return self._handle_profile_command([])
+        if action == "show":
+            if len(args) > 2:
+                self.add_block(InfoBlock(usage))
+                return
+            name = args[1] if len(args) == 2 else None
+            if name is None:
+                profile = self._profile_payload("current")
+                self.add_block(InfoBlock(t("profile.current", details=escape(self._profile_summary(profile)))))
+                return
+            profile, error = load_profile(self._data_dir or ".", name)
+            if profile is None:
+                self.add_block(InfoBlock(t("profile.error", error=escape(error))))
+                return
+            self.add_block(InfoBlock(t("profile.details", name=escape(name), details=escape(self._profile_summary(profile)))))
+            return
+        if len(args) != 2 or action not in {"save", "use", "rm", "delete"}:
+            self.add_block(InfoBlock(usage))
+            return
+        name = args[1]
+        if action == "save":
+            try:
+                error = save_profile(self._data_dir or ".", self._profile_payload(name))
+            except ProfileError as exc:
+                error = str(exc)
+            if error:
+                self.add_block(InfoBlock(t("profile.error", error=escape(error))))
+            else:
+                self.add_block(InfoBlock(t("profile.saved", name=escape(name))))
+            return
+        if action in {"rm", "delete"}:
+            error = delete_profile(self._data_dir or ".", name)
+            self.add_block(InfoBlock(t("profile.error", error=escape(error))) if error else InfoBlock(t("profile.removed", name=escape(name))))
+            return
+        profile, error = load_profile(self._data_dir or ".", name)
+        if profile is None:
+            self.add_block(InfoBlock(t("profile.error", error=escape(error))))
+            return
+        cwd = str(profile["cwd"])
+        if not os.path.isdir(cwd):
+            self.add_block(InfoBlock(t("profile.cwd_missing", name=escape(name), cwd=escape(cwd))))
+            return
+        self._change_cwd(cwd)
+        self._apply_tag_scope(scope_from_profile(profile))
+        namespace = profile.get("namespace")
+        if isinstance(namespace, str) and namespace:
+            self.local_env["NS"] = namespace
+            os.environ["NS"] = namespace
+        else:
+            self.local_env.pop("NS", None)
+            os.environ.pop("NS", None)
+        kube_context = profile.get("kube_context")
+        self._current_kube_cluster = str(kube_context) if kube_context else None
+        self.add_block(InfoBlock(t("profile.applied", name=escape(name), details=escape(self._profile_summary(profile)))))
 
     def _handle_tagmeta_command(self, args: list[str]) -> None:
         """Show or replace validated metadata for a tag."""

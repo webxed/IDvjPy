@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.194 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.195 — умный терминал для создания командных строк из тегов.
 
 Переводы: [English](docs/en/README.md) · [中文](docs/zh/README.md).
 
@@ -304,6 +304,20 @@ curl -H "Bearer $TOKEN" https://api.example   # обычная подстано�
 `!` и `!!` подставляют текст во ввод. Запуск — отдельным Enter. В `??` клик по тегу вставляет `!tag ` / `!tag[tid] ` **в позицию курсора** (строку не затирает; можно кликать несколько тегов подряд). **Ctrl+клик** или **двойной клик** по `!tag[tid]` — вставить и сразу выполнить: то же, что набрать ссылку и дважды нажать Enter (ссылка раскрывается в команду и запускается). Ссылка без tid (`!tag `) выполнять нечего — она только вставляется. Нужен `terminal_mouse: true`.
 
 Алиасы с `$1` / `$2` / `$@` подставляют аргументы (`alias klogin="tsh kube login $1"` → `klogin cluster` становится `tsh kube login cluster`). Без `$n` остаток строки по-прежнему дописывается к телу алиаса. Аргументы кончаются на первом shell-операторе, и сам оператор остаётся оператором: `klogin prod || kubectl config use-context prod` → `tsh kube login prod || kubectl config use-context prod`, `kget pod | grep api` → `kubectl -n $NS get pod | grep api` (раньше `||` / `|` / `2>&1` уезжали аргументами вроде `'||'`).
+
+### Профили окружений
+
+Профиль сохраняет безопасный контекст окна, но не секреты и не значения `:vault`:
+
+```text
+:profile save git-work       # cwd, scope, NS и Kubernetes context
+:profile list
+:profile show git-work
+:profile use git-work
+:profile rm git-work
+```
+
+Профили лежат в `profile_<name>.json` в каталоге данных приложения и имеют права `0600`. `:profile use` меняет только текущее runtime-состояние; команды автоматически не запускаются и `.bashrc_term` не переписывается.
 
 ### Команды приложения (`:`)
 

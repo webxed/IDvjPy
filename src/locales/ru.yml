@@ -192,6 +192,7 @@ cmd:
   kctx: "кластерный журнал: наборы переменных по кластерам (kctx_vars)"
   session: "показать/сменить инстанс"
   scope: "область видимости тегов: оставить/скрыть наборы и теги в этом окне"
+  profile: "сохранить/применить безопасный контекст: cwd, scope, namespace и Kubernetes context"
   new: "окно приложения в отдельном терминале (сессия)"
   send: "переслать команду в другую сессию"
   "send!": "переслать и сразу выполнить"
@@ -212,6 +213,19 @@ cmd:
   tags: "поиск по каталогу живых тегов и метаданным (:tags [фильтр])"
   tagmeta: "показать или заменить структурированные метаданные тега"
   pin: "избранные теги текущей сессии (:pin add|rm|clear|list; :tags pinned)"
+  profile: "сохранить/применить безопасный контекст: cwd, scope, namespace, kube context"
+
+profile:
+  usage: "Использование: :profile [list] | :profile show [NAME] | :profile save NAME | :profile use NAME | :profile rm NAME"
+  list: "Профили: {profiles}"
+  none: "нет"
+  current: "Текущий контекст профиля: {details}"
+  details: "Профиль {name}: {details}"
+  saved: "Профиль сохранён: {name}"
+  removed: "Профиль удалён: {name}"
+  applied: "Профиль применён: {name}: {details}"
+  cwd_missing: "Профиль {name} указывает на отсутствующий каталог: {cwd}"
+  error: "Ошибка профиля: {error}"
 
 
 learn:

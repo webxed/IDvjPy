@@ -38,6 +38,18 @@ tag_metadata:
   saved: "Metadata saved for {tag}."
   invalid: "Invalid metadata: {error}"
 
+profile:
+  usage: "Usage: :profile [list] | :profile show [NAME] | :profile save NAME | :profile use NAME | :profile rm NAME"
+  list: "Profiles: {profiles}"
+  none: "none"
+  current: "Current profile context: {details}"
+  details: "Profile {name}: {details}"
+  saved: "Profile saved: {name}"
+  removed: "Profile removed: {name}"
+  applied: "Profile applied: {name}: {details}"
+  cwd_missing: "Profile {name} points to a missing directory: {cwd}"
+  error: "Profile error: {error}"
+
 scope:
   usage: "Usage: :scope add <group|tag>… (keep only these)  |  :scope rm <group|tag>… (hide these)\n       :scope clear | :scope all (show everything)  |  :scope (current state)\nGroups: linux, k8s, git, … — the canonical seed sets; a name may be a tag too."
   status_all: "[bold]Scope:[/bold] no filter — every tag is listed.\n  :scope add <group|tag>… keeps only these; :scope rm … hides these."
@@ -218,6 +230,7 @@ cmd:
   tags: "searchable catalog of live tags and metadata (:tags [filter])"
   tagmeta: "show or replace a tag's structured metadata (:tagmeta TAG [JSON])"
   pin: "session-local pinned tags (:pin add|rm|clear|list; :tags pinned)"
+  profile: "save/apply safe context references: cwd, scope, namespace, kube context"
   new: "app window in a new terminal (session)"
   send: "forward a command to another session"
   "send!": "forward and run it immediately"

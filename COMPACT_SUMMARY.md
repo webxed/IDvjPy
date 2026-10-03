@@ -1,6 +1,10 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.194**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.195**.
+
+## v1.195
+
+- Добавлены безопасные профили окружений: `:profile save|use|show|list|rm` сохраняет и применяет cwd, scope, namespace и Kubernetes context без записи секретов, vault или произвольного окружения.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -144,6 +148,11 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 - **Scope is a view filter, not data.** It only touches lists and hints: `?` (tag list), `??` (all commands), `?text` (content search), `!`/Tab completions and the screensaver ticker. Explicit refs and commands — `?tag`, `!tag[tid]`, `!N`, `:run`, `:stats`, `:export`, `:alias`, `:mv`, `:send`, `#tag+/-`, `--seed`, `:relang`, `:backup` — ignore it, so saved chains and other windows' refs never break. `??` still records every id in `last_query_results`, so `!ID` works for a hidden tag too.
 - **Per session, in a file.** `scope_<session>.json` in the data directory (not SQLite and not a DB table — the library is carried by `:export` / `backup_db.py`, the scope is a property of the window and must not travel). No file — no filter; a broken file — the filter is off and the journal says so. `:session NAME` reloads the scope of that name; the window/OSC title carries the marker (`IDvjPy_term · git · only git`). `:stats` covers the whole library and adds a reminder line while a scope is active.
 
+### Environment profiles
+- `:profile save NAME` stores only safe context references: current `cwd`, tag `scope`, `NS` namespace and current Kubernetes context.
+- `:profile list`, `:profile show [NAME]`, `:profile use NAME`, and `:profile rm NAME` manage profiles. `use` changes runtime state without running commands or rewriting `.bashrc_term`.
+- Files are `profile_<name>.json` in the data directory with mode `0600`; vault values, `$$` secrets, passwords and arbitrary environment variables are never stored. Profiles are separate from SQLite export/import.
+
 ### CLI
 - Root `app.py` is a launcher; the TUI module is `src/app.py`. `--instance-name` is parsed in the launcher / `src/app.py` `__main__` (pytest imports `src/app.py` via `pythonpath = src`).
 - Instance bashrc: `.bashrc_term_{instance}` in cwd. Template: `src/.bashrc_term.example`.
@@ -156,7 +165,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.140 (app v1.194) |
+| `test_cmd.md` | Manual plan v1.141 (app v1.195) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -222,7 +231,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.194 |
+| `src/app.py` | TUI (`CommandRunner`), v1.195 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
