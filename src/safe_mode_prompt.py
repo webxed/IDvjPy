@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
-from textual.app import ComposeResult
+from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.screen import ModalScreen
@@ -46,7 +47,7 @@ class SafeModeScreen(ModalScreen[bool]):
         self.dismiss(False)
 
 
-def confirm(app: object, command: str, risks: tuple[str, ...], callback: Callable[[], None], cancelled: Callable[[], None] | None = None) -> None:
+def confirm(app: App[Any], command: str, risks: tuple[str, ...], callback: Callable[[], None], cancelled: Callable[[], None] | None = None) -> None:
     """Ask asynchronously; callbacks receive no mutable command input."""
     def done(approved: bool | None) -> None:
         if approved:

@@ -213,6 +213,7 @@ cmd:
   doctor: "local environment diagnostics (tools, paths, clipboard, proxy)"
   safe: "safe execution mode: confirm recognized risky commands (:safe on|off)"
   explain: "offline static explanation of a command (never executes it)"
+  learn: "guided read-only practice lessons; you run the command and check the finished block"
 
 explain:
   usage: "Usage: :explain <command> — local explanation only; the command is never run. Details: :? explain"
@@ -288,6 +289,41 @@ help:
   usage: "Usage: :? [topic]. Topics: {topics}"
   unknown_topic: "No help topic '{topic}'. Topics: {topics}"
   topic_needs_space: "Help topics take a space: `{example}` (not `{glued}`)"
+
+learn:
+  header: "Read-only practice lessons"
+  lesson_row: "  {name} — {description}"
+  list_hint: "Start with :learn NAME. Run the command yourself, then use :learn hint or :learn check."
+  started: "Lesson started: {name}"
+  start_hint: "Run the task manually in the normal prompt; :learn check inspects only the latest command block created after this lesson started."
+  usage: "Usage: :learn [list|NAME|hint|check|stop]"
+  stopped: "Lesson stopped."
+  no_active: "No active lesson. Use :learn list, then :learn NAME."
+  unknown: "Unknown lesson: {name}. Use :learn list."
+  no_command: "No finished command block was found after the lesson started."
+  pending: "The latest block is still running; check again when it finishes."
+  hint_shown: "Hint: {hint}"
+  wrong_command: "The latest block is not the recognized task command for {name}."
+  failed: "The recognized command failed with exit code {code}."
+  passed: "Passed {name}: the latest new command has a recognized shape and exit code 0. This does not validate arbitrary output, shell safety, or a sandbox/security proof."
+  lesson:
+    git-status: "Inspect repository state with Git."
+    listening-ports: "Inspect TCP listening sockets."
+    sqlite-select: "Read sample commands from the live library database."
+  task:
+    git-status: "Task: run `git status` (optionally `-s`, `-b`, `-sb`, `--short`, `--branch`, or `--porcelain`)."
+    listening-ports: "Task: run `ss -tln` (optional `-p`), or `lsof -iTCP -sTCP:LISTEN -P -n`."
+    sqlite-select: "Task: run sqlite3 -readonly DB 'SELECT tag, command FROM commands LIMIT 10;' using the live library DB path (for example, `$DBFILE`)."
+  hint:
+    git-status:
+      "1": "Start with `git status`."
+      "2": "A compact accepted form is `git status -sb`."
+    listening-ports:
+      "1": "Use a TCP listening-socket view such as `ss`."
+      "2": "Run `ss -tln` (you may add `-p`), or `lsof -iTCP -sTCP:LISTEN -P -n`."
+    sqlite-select:
+      "1": "Use `sqlite3 -readonly` against the live library database, not a sandbox. `$DBFILE` is its path."
+      "2": "Run sqlite3 -readonly DB 'SELECT tag, command FROM commands LIMIT 10;' (replace DB with `$DBFILE` or the actual database path)."
 
 transfer:
   usage: "Usage: :import [--dry] [--yes] [--insecure] <file.json|https://…> (bare :import uses library_url from settings.yml)"

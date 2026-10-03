@@ -1,0 +1,39 @@
+[bold]Learn — guided read-only practice (`:learn`)[/bold]
+
+  Small offline DevOps exercises. A lesson names a task and the app only
+  watches the command block you produce; it never builds, launches, or repeats a
+  command for you.
+
+    :learn            list lessons (same as :learn list)
+    :learn NAME       select NAME as the current-window lesson and show its task
+    :learn hint       one progressive hint for the active lesson (1, then 2)
+    :learn check      assess the latest new command block
+    :learn stop       stop the active lesson
+
+  You run the ordinary command yourself in the normal prompt, as a separate
+  step. `:learn check` looks only at the latest captured command block created
+  after the lesson started — not at output, not at earlier blocks. It never
+  starts a command and never touches the network, files, or an LLM.
+
+  What a pass means: the latest new command has a recognized shape and exit
+  code 0. It is limited shape recognition, not a judgment about arbitrary
+  output, command correctness, shell safety, or a sandbox/security proof.
+
+  Lessons and the shapes they accept:
+
+    git-status
+      `git status` with an optional `-s`, `-b`, `-sb`, `--short`, `--branch`,
+      or `--porcelain` — inspect repository state.
+
+    listening-ports
+      `ss -tln` with optional `-p`, or `lsof -iTCP -sTCP:LISTEN -P -n` —
+      inspect TCP listening sockets.
+
+    sqlite-select
+      `sqlite3 -readonly DB 'SELECT tag, command FROM commands LIMIT 10;'` —
+      read sample commands from the live library database. `-readonly` is
+      required: this is the real library DB, not a sandbox copy. `$DBFILE`
+      holds its path; you may replace `DB` with `$DBFILE` or the actual path.
+
+  `:learn` and `:learn check` keep everything local and read-only; the lesson
+  only records which command shape to expect.

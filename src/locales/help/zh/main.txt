@@ -71,6 +71,7 @@
   :backup       - 将命令数据库复制到 backups/（与 --seed 相同的快照）
   :safe [on|off]- 确认已识别的风险启动（默认关闭；:? safe）
   :explain cmd - 命令的离线静态说明；绝不执行（:? explain）
+  :learn       - 只读练习课程：自行运行任务并检查块（:? learn）
   :vault        - 密码加密的密钥保管库: init/unlock、add/cp/use/exec（:? vault）
   :screensaver  - 空闲覆盖层：矩阵数字雨（screensaver_matrix，
                 默认）或 NC 风格的星空；整宽滚动条；
@@ -221,6 +222,7 @@
   :? vault   - 密钥保管库：unlock、add/cp/use/exec —— 值从不显示在屏幕上
   :? doctor  - 本地环境诊断：路径、工具、剪贴板、代理和 shell helper
   :? explain - 离线静态说明：不执行、不展开变量、不读取文件
+  :? learn   - 只读练习课程：自行运行命令，然后检查最新块
 
 [bold]导航[/bold]
   ↑/↓        - 翻看输入历史：本会话中输入的一切

@@ -1,0 +1,36 @@
+[bold]Learn — 只读练习课程（`:learn`）[/bold]
+
+  这是离线 DevOps 小练习。课程给出任务，应用只查看你自行生成的命令块；
+  它不会替你构造、启动或重复任何命令。
+
+    :learn            列出课程（等同于 :learn list）
+    :learn NAME       为当前窗口选择 NAME 课程并显示任务
+    :learn hint       显示活动课程的下一条渐进提示（先 1，再 2）
+    :learn check      检查最新的新命令块
+    :learn stop       停止活动课程
+
+  请在普通输入框中自行运行普通命令，并将运行与检查分成独立步骤。
+  `:learn check` 只检查课程开始后创建的最新捕获命令块，不检查输出或更早
+  的块。它不会启动命令，也不会访问网络、文件或 LLM。
+
+  通过的含义：最新的新命令形状已识别且退出代码为 0。这只是有限的命令
+  形状识别，不判断任意输出或命令是否正确，也不是 shell 安全检查或沙箱/
+  安全证明。
+
+  课程及接受的命令形状：
+
+    git-status
+      `git status`，可选 `-s`、`-b`、`-sb`、`--short`、`--branch` 或
+      `--porcelain` —— 查看仓库状态。
+
+    listening-ports
+      `ss -tln`，可选 `-p`；或 `lsof -iTCP -sTCP:LISTEN -P -n` ——
+      查看正在监听的 TCP 套接字。
+
+    sqlite-select
+      `sqlite3 -readonly DB 'SELECT tag, command FROM commands LIMIT 10;'` ——
+      从实时命令库数据库读取示例命令。必须带 `-readonly`：这是实际的库
+      数据库，不是沙箱副本。数据库路径在 `$DBFILE` 中；可将 `DB` 替换为
+      `$DBFILE` 或实际路径。
+
+  `:learn` 和 `:learn check` 仅在本地工作且只读；课程只记住预期的命令形状。

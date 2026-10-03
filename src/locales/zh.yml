@@ -214,6 +214,42 @@ cmd:
   doctor: "本地环境诊断（工具、路径、剪贴板、代理）"
   safe: "安全执行模式: 确认已识别的风险命令（:safe on|off）"
   explain: "命令的离线静态说明（绝不执行）"
+  learn: "只读练习课程：自行运行命令，再检查已完成的块"
+
+learn:
+  header: "只读练习课程"
+  lesson_row: "  {name} — {description}"
+  list_hint: "用 :learn NAME 开始。请自行运行命令，然后使用 :learn hint 或 :learn check。"
+  started: "课程已开始: {name}"
+  start_hint: "请在普通输入框中手动运行任务；:learn check 只检查本课程开始后创建的最新命令块。"
+  usage: "用法: :learn [list|NAME|hint|check|stop]"
+  stopped: "课程已停止。"
+  no_active: "没有活动课程。请使用 :learn list，然后使用 :learn NAME。"
+  unknown: "未知课程: {name}。请使用 :learn list。"
+  no_command: "课程开始后没有找到已完成的命令块。"
+  pending: "最新块仍在运行；完成后请再次检查。"
+  hint_shown: "提示: {hint}"
+  wrong_command: "最新块不是 {name} 的已识别任务命令。"
+  failed: "已识别命令以退出代码 {code} 失败。"
+  passed: "已通过 {name}: 最新命令的形状已识别且退出代码为 0。这不验证任意输出、任意命令正确性、shell 安全性或沙箱/安全证明。"
+  lesson:
+    git-status: "用 Git 查看仓库状态。"
+    listening-ports: "查看正在监听的 TCP 套接字。"
+    sqlite-select: "从实时命令库数据库读取示例命令。"
+  task:
+    git-status: "任务: 运行 git status（可选 -s、-b、-sb、--short、--branch 或 --porcelain）。"
+    listening-ports: "任务: 运行 ss -tln（可加 -p），或 lsof -iTCP -sTCP:LISTEN -P -n。"
+    sqlite-select: "任务: 对实时命令库数据库路径（例如 `$DBFILE`）运行 sqlite3 -readonly DB 'SELECT tag, command FROM commands LIMIT 10;'。"
+  hint:
+    git-status:
+      "1": "先使用 git status。"
+      "2": "一个可接受的紧凑形式是 git status -sb。"
+    listening-ports:
+      "1": "使用 TCP 监听套接字视图，例如 ss。"
+      "2": "运行 ss -tln（可加 -p），或 lsof -iTCP -sTCP:LISTEN -P -n。"
+    sqlite-select:
+      "1": "对实时命令库数据库使用 sqlite3 -readonly，而非沙箱。`$DBFILE` 是其路径。"
+      "2": "运行 sqlite3 -readonly DB 'SELECT tag, command FROM commands LIMIT 10;'（将 DB 替换为 `$DBFILE` 或实际数据库路径）。"
 
 explain:
   usage: "用法: :explain <命令> — 仅本地说明；命令不会执行。详情: :? explain"

@@ -120,6 +120,7 @@ try:
     import explain
     import history_import
     import ipcalc
+    import learn
     import md_convert
     import remote_source
     import runbook
@@ -2593,7 +2594,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.191"
+    VERSION = "v1.192"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2746,6 +2747,7 @@ class CommandRunner(App):
     CMD_VAULT = "vault"  # хранилище секретов с шифрованием по паролю (`vault.json.enc`)
     CMD_DOCTOR = "doctor"  # локальная диагностика окружения, без запусков и сети
     CMD_EXPLAIN = "explain"  # локальный разбор команды без запуска (справочник + эвристика)
+    CMD_LEARN = "learn"  # учебный режим: задача, подсказки, проверка выполненной команды
     CMD_SAFE = "safe"
     KEY_SAFE_MODE = "safe_mode"
     # Colon-команды, у которых аргументы — не пути: числа и поисковые шаблоны.
@@ -2961,6 +2963,10 @@ class CommandRunner(App):
         # Где открывать терминал: `window` или `tab` (`term_open`).
         self.term_open: str = "window"
         self.safe_mode: bool = False
+        # Учебный режим (`:learn`): выбранный урок и номер следующей подсказки.
+        self._learn_lesson: learn.Lesson | None = None
+        self._learn_hint_index: int = 0
+        self._learn_start_block_count: int = 0
         # Время последней активности (для проверки, что простой реально есть)
         # и признак «TUI спит» (`> cmd`, Ctrl+O, `:ed` — настоящий TTY).
         self._ss_bumped_at: float = 0.0
@@ -5893,6 +5899,7 @@ class CommandRunner(App):
         CMD_VAULT: "_handle_vault_command",
         CMD_SAFE: "_handle_safe_command",
         CMD_EXPLAIN: "_handle_explain_command",
+        CMD_LEARN: "_handle_learn_command",
     }
 
     def _handle_explain_command(self, args: list[str]) -> None:
@@ -5902,6 +5909,48 @@ class CommandRunner(App):
             self.add_block(InfoBlock(t("explain.usage")))
             return
         self.add_block(InfoBlock(self._mask_secrets(explain.format_explanation(command))))
+
+    def _handle_learn_command(self, args: list[str]) -> None:
+        """`:learn [task|hint|check|stop]` — session-local guided exercises.
+
+        Nothing is executed on the learner's behalf: they run a real read-only
+        command in the prompt, and `check` only inspects that finished block.
+        """
+        if not args:
+            self.add_block(InfoBlock(learn.format_list()))
+            return
+        action = args[0].strip().lower()
+        if action in {"stop", "reset", "clear"}:
+            self._learn_lesson = None
+            self._learn_hint_index = 0
+            self._learn_start_block_count = 0
+            self.add_block(InfoBlock(t("learn.stopped")))
+            return
+        if action in {"hint", "help"}:
+            if self._learn_lesson is None:
+                self.add_block(InfoBlock(t("learn.no_active")))
+                return
+            hint, next_index = learn.format_hint(self._learn_lesson, self._learn_hint_index)
+            self._learn_hint_index = next_index
+            self.add_block(InfoBlock(t("learn.hint_shown", hint=hint)))
+            return
+        if action == "check":
+            if self._learn_lesson is None:
+                self.add_block(InfoBlock(t("learn.no_active")))
+                return
+            blocks = list(self.query(CommandBlock))
+            new_blocks = blocks[self._learn_start_block_count:]
+            latest = new_blocks[-1] if new_blocks else None
+            self.add_block(InfoBlock(learn.check(self._learn_lesson, latest)))
+            return
+        lesson = learn.get_lesson(args[0]) if len(args) == 1 else None
+        if lesson is None:
+            self.add_block(InfoBlock(learn.usage()))
+            return
+        self._learn_lesson = lesson
+        self._learn_hint_index = 0
+        self._learn_start_block_count = len(self.query(CommandBlock))
+        self.add_block(InfoBlock(learn.format_start(lesson)))
 
     def _handle_safe_command(self, args: list[str]) -> None:
         """`:safe [on|off]` — session-only opt-in safe execution mode."""

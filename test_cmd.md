@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.191
+# План тестирования IDvjPy_term v1.192
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -13,6 +13,41 @@ python3 -m pytest tests/ -v             # весь набор, включая JS
 Команды ниже безопасны (`echo`/`printf`/`seq`). Боевые `systemctl`/`nginx` не обязательны.
 
 **Важно:** `#tag` сохраняет команду **как есть**. Ссылки `!tag[tid]` / `!ID` / `!!` раскрываются при **просмотре** `?tag[tid]` и при **выполнении**, не при сохранении.
+
+---
+
+## Учебный режим `:learn`
+
+```text
+:learn
+:learn git-status
+git status -sb
+:learn check
+:learn hint
+:learn stop
+```
+
+**Ожидание:** пустой `:learn` показывает `git-status`, `listening-ports` и
+`sqlite-select`. `:learn git-status` выбирает задачу только для этого окна.
+Обычная команда запускается отдельным Enter; `:learn check` смотрит только на
+последний блок, созданный после старта урока. Он сопоставляет разрешённую форму
+команды и exit code 0, а не произвольный вывод; до выполнения должен сказать, что
+нового блока нет, а для выполняющегося блока — что нужно дождаться завершения.
+`:learn hint` показывает две прогрессивные подсказки, `:learn stop` сбрасывает
+текущий урок. Ни одна из `:learn`-команд сама не запускает shell-команд, не читает
+файлы и не обращается к сети/LLM.
+
+Для SQLite, когда доступен `sqlite3`, выполните отдельной строкой:
+
+```bash
+sqlite3 -readonly "$DBFILE" 'SELECT tag, command FROM commands LIMIT 10;'
+:learn sqlite-select
+sqlite3 -readonly "$DBFILE" 'SELECT tag, command FROM commands LIMIT 10;'
+:learn check
+```
+
+**Ожидание:** урок принимает только вариант с `-readonly`; `$DBFILE` — путь к
+**живой** базе библиотеки, не к песочнице (вместо него допустим фактический путь).
 
 ---
 
@@ -1708,7 +1743,7 @@ printf '%s\n' \
 
 ---
 
-**Версия документа**: v1.137
-**Версия приложения**: v1.191
+**Версия документа**: v1.138
+**Версия приложения**: v1.192
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_seed_sqlite.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`, `tests/test_mcp_server.py`, `tests/test_vault.py`, `tests/test_totp.py`, `tests/test_tty_signals.py`  
 **Дата**: 2026-09-21

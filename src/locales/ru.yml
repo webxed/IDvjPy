@@ -208,6 +208,42 @@ cmd:
   doctor: "локальная диагностика окружения (утилиты, пути, буфер, proxy)"
   safe: "безопасный режим: подтверждать распознанные рискованные команды (:safe on|off)"
   explain: "локальный статический разбор команды (без запуска)"
+  learn: "учебные read-only уроки: вы запускаете команду, затем проверяете готовый блок"
+
+learn:
+  header: "Учебные read-only уроки"
+  lesson_row: "  {name} — {description}"
+  list_hint: "Начните с :learn NAME. Команду выполните сами, затем используйте :learn hint или :learn check."
+  started: "Урок начат: {name}"
+  start_hint: "Выполните задачу вручную в обычном вводе; :learn check смотрит только последний блок команды, созданный после начала урока."
+  usage: "Использование: :learn [list|NAME|hint|check|stop]"
+  stopped: "Урок остановлен."
+  no_active: "Нет активного урока. Используйте :learn list, затем :learn NAME."
+  unknown: "Неизвестный урок: {name}. Используйте :learn list."
+  no_command: "После начала урока не найден завершённый блок команды."
+  pending: "Последний блок ещё выполняется; проверьте снова после завершения."
+  hint_shown: "Подсказка: {hint}"
+  wrong_command: "Последний блок — не распознанная команда задачи {name}."
+  failed: "Распознанная команда завершилась с кодом {code}."
+  passed: "Урок {name} пройден: у последней новой команды распознана форма и код выхода 0. Вывод, произвольную корректность команды, безопасность shell и песочницу это не доказывает."
+  lesson:
+    git-status: "Посмотреть состояние репозитория через Git."
+    listening-ports: "Посмотреть TCP-сокеты в состоянии LISTEN."
+    sqlite-select: "Прочитать примеры команд из живой базы библиотеки."
+  task:
+    git-status: "Задача: выполните git status (допустимы -s, -b, -sb, --short, --branch или --porcelain)."
+    listening-ports: "Задача: выполните ss -tln (можно добавить -p) либо lsof -iTCP -sTCP:LISTEN -P -n."
+    sqlite-select: "Задача: выполните sqlite3 -readonly DB 'SELECT tag, command FROM commands LIMIT 10;' для пути к живой БД библиотеки (например, `$DBFILE`)."
+  hint:
+    git-status:
+      "1": "Начните с git status."
+      "2": "Короткий допустимый вариант: git status -sb."
+    listening-ports:
+      "1": "Нужен просмотр TCP-сокетов в LISTEN, например ss."
+      "2": "Выполните ss -tln (можно добавить -p) либо lsof -iTCP -sTCP:LISTEN -P -n."
+    sqlite-select:
+      "1": "Используйте sqlite3 -readonly с живой БД библиотеки, не с песочницей. `$DBFILE` содержит её путь."
+      "2": "Выполните sqlite3 -readonly DB 'SELECT tag, command FROM commands LIMIT 10;' (DB замените на `$DBFILE` или фактический путь)."
 
 explain:
   usage: "Использование: :explain <команда> — только локальный разбор; команда не запускается. Подробнее: :? explain"
