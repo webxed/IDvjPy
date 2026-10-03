@@ -7,7 +7,9 @@
   Command groups are covered in detail by topics — `:? <topic>` (list under "Help topics").
   :? [topic]   - Show this help; `:? llm`, `:? tags`, `:? calc` … — a topic in full
   :q          - Quit application
-  :w <file>   - Write output to file
+  :w <file> [--overwrite] - Write the journal to a file (append by default: repeated
+                `:w` adds to it; `--overwrite` replaces the file). Runs in the
+                background; the file gets masked plain text only (no raw output)
   :h [N]      - Last N lines of history_<instance>.txt (default: 20)
                 Calls of query commands (`:llm`, `:cht`, `:rg`, `:md`, `:run`,
                 `:send`) stay there for Up/`:h` but are never suggested — the

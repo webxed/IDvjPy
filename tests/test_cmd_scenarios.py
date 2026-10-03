@@ -1,4 +1,4 @@
-"""Автотесты по сценариям test_cmd.md (IDvjPy_term v1.208)."""
+"""Автотесты по сценариям test_cmd.md (IDvjPy_term v1.209)."""
 import pytest
 
 pytestmark = pytest.mark.slow
@@ -16,6 +16,7 @@ from tests.conftest import (
     last_info,
     submit,
     wait_command_done,
+    wait_write,
 )
 
 
@@ -256,6 +257,7 @@ async def test_s12_colon_commands(isolated_home):
         assert "\n" in hist.strip()
 
         await submit(pilot, ":w test_output.txt")
+        await wait_write(app)
         assert "written to" in last_info(app).text_content
         dumped = Path("test_output.txt").read_text(encoding="utf-8")
         assert "hist-line" in dumped

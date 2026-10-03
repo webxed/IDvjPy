@@ -2627,7 +2627,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.208"
+    VERSION = "v1.209"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2943,6 +2943,8 @@ class CommandRunner(App):
         self.md_converter: str = ""
         # Фоновое чтение текстового файла `:md` (большой файл/медленный носитель).
         self._md_read_thread: threading.Thread | None = None
+        # Фоновая запись журнала `:w` (сериализация/запись в потоке).
+        self._write_thread: threading.Thread | None = None
         # Локальный OCR скан-PDF (ocrmypdf): пусто — автопоиск, off — выключено.
         self.md_ocr: str = ""
         self._md_results: list[MdMatch] = []
@@ -6097,26 +6099,60 @@ class CommandRunner(App):
         self.exit()
 
     def _handle_write_command(self, args: list[str]) -> None:
-        """`:w <file>` — дописать содержимое журнала в файл."""
+        """`:w <file> [--overwrite]` — записать журнал в файл (по умолчанию дописать).
+
+        Снимок берётся в UI-потоке: только **маскированный** плоский текст блоков
+        (raw stdout/stderr и разметка в файл не уходят). Сериализация и запись
+        идут в фоне — большой журнал не морозит интерфейс. Повторный `:w` **дописывает**
+        файл (разделитель `---` между блоками); `--overwrite`/`-o` перезаписывает его.
+        """
         if not args:
-            self.add_block(InfoBlock("Error: Filename required for :w command."))
+            self.add_block(InfoBlock(t("write.usage")))
             return
         filename = args[0]
+        overwrite = any(arg.lower() in {"--overwrite", "-o"} for arg in args[1:])
+        blocks = [
+            block
+            for block in self.query("CommandBlock, InfoBlock")
+            if isinstance(block, (CommandBlock, InfoBlock))
+        ]
+        # `text_content` — плоский masked/frozen текст; теги разметки снимаются в воркере.
+        snapshot = [block.text_content for block in blocks]
+        self.sub_title = t("write.writing", name=filename)
+        self._write_thread = threading.Thread(
+            target=self._write_worker,
+            args=(filename, snapshot, overwrite),
+            daemon=True,
+            name="write-journal",
+        )
+        self._write_thread.start()
+
+    def _write_worker(
+        self, filename: str, snapshot: list[str], overwrite: bool
+    ) -> None:
+        """Фоновый поток: сериализация и запись журнала порциями (чанками)."""
+        mode = "w" if overwrite else "a"
         try:
-            all_blocks = [
-                block
-                for block in self.query("CommandBlock, InfoBlock")
-                if isinstance(block, (CommandBlock, InfoBlock))
-            ]
-            # Удаляем теги форматирования перед записью
-            content_to_write = "\n\n---\n\n".join(
-                self._strip_formatting_tags(block.text_content) for block in all_blocks
-            )
-            with open(filename, "a", encoding=self.ENCODING) as f:
-                f.write(content_to_write)
-            self.add_block(InfoBlock(f"Log content written to '{filename}'"))
-        except Exception as e:
-            self.add_block(InfoBlock(f"Error writing to file: {e}"))
+            with open(filename, mode, encoding=self.ENCODING) as handle:
+                for index, raw in enumerate(snapshot):
+                    if index:
+                        handle.write("\n\n---\n\n")
+                    handle.write(self._strip_formatting_tags(raw))
+        except OSError as error:
+            self.call_from_thread(self._write_failed, str(error))
+            return
+        self.call_from_thread(self._write_done, filename, overwrite, len(snapshot))
+
+    def _write_done(self, filename: str, overwrite: bool, blocks: int) -> None:
+        """В UI-потоке: итог записи журнала."""
+        self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+        key = "write.done_overwrite" if overwrite else "write.done"
+        self.add_block(InfoBlock(t(key, name=filename, blocks=blocks)))
+
+    def _write_failed(self, error: str) -> None:
+        """В UI-потоке: ошибка записи журнала."""
+        self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+        self.add_block(InfoBlock(t("write.failed", error=error)))
 
     def _handle_history_args(self, args: list[str]) -> None:
         """`:h [N|/текст|compact|import [оболочка]]` — лента и файл истории."""

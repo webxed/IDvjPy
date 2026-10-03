@@ -474,5 +474,12 @@ md:
   ocr_language: "{name}: tesseract has no language data for '{code}' — install the pack (apt install tesseract-ocr-{code}) or set your own language in `md_ocr` (e.g. ocrmypdf -l eng)."
   timeout: "Conversion of {name} timed out ({seconds}s)."
 
+write:
+  usage: "Usage: :w <file> [--overwrite]"
+  writing: "[dim]Writing journal to {name}…[/dim]"
+  done: "Log content written to '{name}' ({blocks} block(s), appended)."
+  done_overwrite: "Log written to '{name}' ({blocks} block(s), overwritten)."
+  failed: "Error writing to file: {error}"
+
 exit:
   cwd_note: "the app left you in {cwd}, your shell is still where it was — run in it: {hint} (a wrapper with $IDVJPY_CWD_FILE does this itself)"

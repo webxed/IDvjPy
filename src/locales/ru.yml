@@ -473,5 +473,12 @@ md:
   ocr_language: "{name}: у tesseract нет данных языка '{code}' — поставьте пакет (apt install tesseract-ocr-{code}) или задайте свой язык в `md_ocr` (напр. ocrmypdf -l eng)."
   timeout: "Конвертация {name} не уложилась в {seconds} с."
 
+write:
+  usage: "Использование: :w <файл> [--overwrite]"
+  writing: "[dim]Записываю журнал в {name}…[/dim]"
+  done: "Содержимое журнала дописано в '{name}' ({blocks} блок(ов))."
+  done_overwrite: "Журнал записан в '{name}' ({blocks} блок(ов)), файл перезаписан."
+  failed: "Ошибка записи в файл: {error}"
+
 exit:
   cwd_note: "cwd теперь {cwd}; оболочка осталась в прежнем каталоге — в ней: {hint} (или задайте $IDVJPY_CWD_FILE и переходите из обёртки)"

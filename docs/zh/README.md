@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.208 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.209 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -266,7 +266,7 @@ curl -H "Bearer $TOKEN" https://api.example   # 普通的 $TOKEN 替换
 ### 应用命令（`:`）
 
 - `:q` —— 退出
-- `:w file` —— 把输出写入文件
+- `:w file [--overwrite]` —— 将日志写入文件（默认追加：重复 `:w` 会追加；`--overwrite` 会覆盖）。写入在后台进行，文件中只有掩码后的纯文本（无 raw 输出）
 - `:h [N]` —— `history_<instance>.txt` 的最后 N 行显示为一个块（默认值来自 `settings.yml`；这些行可以用逐行模式取用）。文件中只有被保存的内容：`:` 命令（`history_queries` 名单之外的）、`#tag` 保存、`?`/`!` 行和 `$VAR=…` 都不会写入其中；而按 ↑ 则会翻遍本会话中**所有**输入过的内容（`:` 命令等来自会话记录），按输入顺序——最后输入的行最先返回
 - `:h /text` —— 在提示中搜索该文件（不区分大小写，最新的在前，相同行只出现一次）。Esc+Enter —— 用同样的搜索写入日志
 - `:h compact` —— 压缩旧历史（去重为唯一行）；不动最后 `history_keep` 行。启动时——仅在文件长度超过 `2 × history_keep` 时才执行

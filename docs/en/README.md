@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.208 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.209 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -275,7 +275,7 @@ Aliases with `$1` / `$2` / `$@` substitute arguments (`alias klogin="tsh kube lo
 ### Application commands (`:`)
 
 - `:q` — quit
-- `:w file` — write the output to a file
+- `:w file [--overwrite]` — write the journal to a file (append by default: repeated `:w` adds to it; `--overwrite` replaces the file). It runs in the background and only masked plain text (no raw output) goes into the file
 - `:h [N]` — the last N lines of `history_<instance>.txt` as one block (by default from `settings.yml`; the lines can be taken with line mode). The file holds only what was saved: `:` commands (except the `history_queries` list), `#tag` saves, `?`/`!` lines and `$VAR=…` are not written to it; with ↑ you flip through **everything** typed in this session (`:` commands and so on — from the session feed), in typing order — the last typed line comes back first
 - `:h /text` — search within that file in the hints (case-insensitive, newest first, identical lines once). Esc+Enter — the same search into the journal
 - `:h compact` — compact the old history (unique lines); the last `history_keep` lines are not touched. At startup — only if the file is longer than `2 × history_keep`
