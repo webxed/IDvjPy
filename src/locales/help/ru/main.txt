@@ -80,8 +80,8 @@
   :explain cmd - Локальный статический разбор команды; не запускает её (:? explain)
   :learn       - Учебные read-only уроки: выполните задачу сами и проверьте блок (:? learn)
   :vault        - Хранилище секретов по паролю: init/unlock, add/cp/use/exec (:? vault)
-  :screensaver  - Оверлей простоя: матричный цифровой дождь (screensaver_matrix,
-                по умолчанию) или звёздное поле в стиле NC; тикер во всю ширину;
+  :screensaver  - Оверлей простоя: звёздное поле в стиле NC; `screensaver_stars: false`
+                скрывает частицы; `:screensaver matrix` / `:screensaver stars` выбирают холст разово;
                 справка внизу слева; load/mem внизу справа. `:screensaver matrix`
                 / `:screensaver stars` выбирают холст разово; `:screensaver 0` /
                 `120` задают секунды простоя (screensaver_idle); клавиши/клики/

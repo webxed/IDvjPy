@@ -21,7 +21,7 @@ screensaver:
   - :welcome  — 种子目录
   - :backup  — 将标签数据库快照
   - :vault  — 按密码加密的密钥保管库（init/add/cp/use/exec/totp）
-  - ':screensaver  — 立即显示矩阵雨（默认）或星空; 空闲: screensaver_idle'
+  - ':screensaver  — 立即显示星空; :screensaver matrix 可临时显示矩阵雨'
   - :r [N]  — 将块命令放入输入框（N = 往前第几块）
   - :cmd [N] [show]  — 将带当前 $VAR/密钥的块命令复制到剪贴板
   - ":name label  — 给块加标签，供 |@label 使用"
@@ -48,6 +48,15 @@ screensaver:
   - :playbook [file]  — 将会话导出为 --demo YAML
   - :run tag|file.yml  — 半自动命令链; manual 步骤等待 Enter
   - :update  — 将 VERSION 与 GitHub main 比较
+  - :doctor  — 诊断本地工具、路径、剪贴板和代理
+  - :explain cmd  — 静态解释命令，不执行
+  - :learn  — 只读练习课程
+  - :safe on|off  — 确认已识别的风险命令
+  - :tags [filter]  — 搜索标签目录和元数据
+  - :tagmeta TAG  — 查看或编辑标签元数据
+  - :pin add|rm|clear|list  — 本会话固定标签
+  - :profile save|use|show|list|rm  — 安全上下文配置
+  - :snapshot save|show|diff|rm  — 有界脱敏 stdout 快照
   - :i  — Kubernetes Ingress 分析器
   - '> cmd  — 真实 TTY（htop、vim、ssh）; env/$PWD 会恢复'
   - '@ cmd  — 不受 command_timeout 限制运行（长时间非 TTY 任务）'

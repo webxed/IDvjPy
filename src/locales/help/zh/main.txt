@@ -73,8 +73,8 @@
   :explain cmd - 命令的离线静态说明；绝不执行（:? explain）
   :learn       - 只读练习课程：自行运行任务并检查块（:? learn）
   :vault        - 密码加密的密钥保管库: init/unlock、add/cp/use/exec（:? vault）
-  :screensaver  - 空闲覆盖层：矩阵数字雨（screensaver_matrix，
-                默认）或 NC 风格的星空；整宽滚动条；
+  :screensaver  - 空闲覆盖层：默认使用 NC 风格星空；`screensaver_stars: false`
+                可隐藏飞行粒子；`:screensaver matrix` / `:screensaver stars` 临时选择画布
                 左下角帮助；右下角 load/mem。`:screensaver matrix`
                 / `:screensaver stars` 单次选择画布；`:screensaver 0` /
                 `120` 设置空闲秒数（screensaver_idle）；按键/点击/

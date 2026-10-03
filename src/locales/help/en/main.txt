@@ -80,9 +80,8 @@
   :explain cmd - Offline static command explanation; never executes it (:? explain)
   :learn       - Guided read-only lessons: run the task yourself, then check the block (:? learn)
   :vault        - Password-encrypted secret store: init/unlock, add/cp/use/exec (:? vault)
-  :screensaver  - Idle overlay: matrix digital rain (screensaver_matrix, default) or the
-                NC-style starfield; full-width ticker; bottom-left help; bottom-right
-                load/mem. `:screensaver matrix` / `:screensaver stars` pick the canvas
+  :screensaver  - Idle overlay: NC-style starfield by default; `screensaver_stars: false`
+                hides particles; `:screensaver matrix` / `:screensaver stars` pick the canvas once
                 once; `:screensaver 0` / `120` set idle seconds (screensaver_idle);
                 keys/clicks/scroll/mouse move reset it, a forwarded :send wakes it,
                 and a real-TTY session (`> cmd`, Ctrl+O, `:ed`) restarts the idle

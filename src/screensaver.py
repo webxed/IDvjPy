@@ -1011,7 +1011,7 @@ class DevopsScreensaver(ModalScreen[None]):
         if self._stars is None:
             self._stars = bool(getattr(self.app, "screensaver_stars", True))
         if self._matrix is None:
-            self._matrix = bool(getattr(self.app, "screensaver_matrix", True))
+            self._matrix = False
         self._field = self._make_field(
             max(8, self.size.width or 80),
             max(4, (self.size.height or 24) - (1 if items else 0)),
@@ -1038,8 +1038,8 @@ class DevopsScreensaver(ModalScreen[None]):
     def _make_field(self, width: int, height: int) -> StarField | MatrixRain:
         """Холст заставки: матричный дождь или звёздное поле.
 
-        `matrix` — из settings.yml (`screensaver_matrix`) или явного аргумента
-        (`:screensaver matrix` / `:screensaver stars`).
+        `matrix` — только явный аргумент (`:screensaver matrix` / `:screensaver stars`);
+        обычный запуск всегда показывает звёздное поле.
         """
         if self._matrix:
             return MatrixRain(width, height, seed=self._seed)

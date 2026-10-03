@@ -21,7 +21,7 @@ screensaver:
   - :welcome  — seed catalog
   - :backup  — snapshot the tags DB
   - :vault  — password-encrypted secret store (init/add/cp/use/exec/totp)
-  - ':screensaver  — matrix rain now (default) or stars; idle: screensaver_idle'
+  - ':screensaver  — starfield now; matrix is available once via :screensaver matrix'
   - :r [N]  — block command into the input (N = how far back)
   - :cmd [N] [show]  — block command with current $VAR/secrets to clipboard
   - :name label  — label a block for |@label
@@ -47,7 +47,16 @@ screensaver:
   - :theme [name]  — TUI theme (saved in settings.yml)
   - :playbook [file]  — dump this session as --demo YAML
   - :run tag|file.yml  — half-automatic chain; manual steps wait for Enter
-  - :update  — compare VERSION with GitHub main
+  - ':update  — compare VERSION with GitHub main'
+  - ':doctor  — diagnose local tools, paths, clipboard and proxy'
+  - ':explain cmd  — static command explanation; does not execute'
+  - ':learn  — read-only practice lessons'
+  - ':safe on|off  — confirm recognized risky commands'
+  - ':tags [filter]  — search live tag catalog and metadata'
+  - ':tagmeta TAG  — inspect or edit tag metadata'
+  - ':pin add|rm|clear|list  — session-local pinned tags'
+  - ':profile save|use|show|list|rm  — safe context profiles'
+  - ':snapshot save|show|diff|rm  — bounded masked stdout snapshots'
   - :i  — Kubernetes Ingress Analyzer
   - '> cmd  — real TTY (htop, vim, ssh); env/$PWD come back'
   - '@ cmd  — run without command_timeout (long non-TTY jobs)'

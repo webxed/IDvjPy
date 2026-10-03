@@ -2609,7 +2609,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.196"
+    VERSION = "v1.197"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2789,7 +2789,6 @@ class CommandRunner(App):
     KEY_EDITOR = "editor"
     KEY_SCREENSAVER_IDLE = "screensaver_idle"
     KEY_SCREENSAVER_STARS = "screensaver_stars"
-    KEY_SCREENSAVER_MATRIX = "screensaver_matrix"
     KEY_K8S_COMPLETION = "k8s_completion"
     KEY_FILE_COMPLETION = "file_completion"
     KEY_LINE_API_BLOCKS = "line_api_blocks"
@@ -2978,8 +2977,6 @@ class CommandRunner(App):
         self._fresh_command_db: bool = False
         self.screensaver_idle: float = 0
         self.screensaver_stars: bool = True
-        # Холст заставки: «матричный дождь» (true) или звёздное поле (false).
-        self.screensaver_matrix: bool = True
         # Ветка git в приглашении строки ввода (cwd внутри репозитория).
         self.git_prompt: bool = True
         # Где открывать терминал: `window` или `tab` (`term_open`).
@@ -4123,9 +4120,7 @@ class CommandRunner(App):
                     self.screensaver_stars = bool(
                         settings.get(self.KEY_SCREENSAVER_STARS, True)
                     )
-                    self.screensaver_matrix = bool(
-                        settings.get(self.KEY_SCREENSAVER_MATRIX, True)
-                    )
+
                     self.git_prompt = bool(settings.get(self.KEY_GIT_PROMPT, True))
                     self.term_open = normalize_term_mode(settings.get(self.KEY_TERM_OPEN))
                     self.safe_mode = bool(settings.get(self.KEY_SAFE_MODE, False))

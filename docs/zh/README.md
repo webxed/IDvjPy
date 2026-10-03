@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.196 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.197 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -309,7 +309,7 @@ idvjpy() {                     # shell 的 cwd 跟随应用
 - `:scope [add|rm|clear] …` —— **本窗口**的标签范围：`:scope add git` 在列表中只保留 git 手册，`:scope rm k8s` —— 隐藏 k8s，`:scope clear`（或 `:scope all`）—— 重新显示全部；不带参数时显示当前状态。它过滤**列表与提示**（`?`、`??`、`?text`、`!`/Tab 补全、屏保滚动条）；显式引用与命令（`?tag`、`!tag[tid]`、`:run`、`:stats`、`:export`、`:alias`、`:send`）不看过滤器 —— 已保存的链条和其他窗口的引用不会被破坏。名称可以是手册组（`linux`、`k8s`、`git` …）或单个标签；未知名称会明确报错并列出可用的组。按会话保存：数据目录中的 `scope_<会话>.json`（不会写入 SQLite，也不会随 `:export`/`:backup` 一起走）。窗口标题带有标记（`IDvjPy_term · git · only git`）。详见 `:? tags`
 - `:welcome` —— 如同空数据库时的种子目录（点击 `--seed` / `.md`）。数据库非空时启动会显示**分区**块，列出各 handbook 的现成标签（`linux`、`k8s`、`git`、ops、`自有`）
 - `:backup` —— 把 SQLite 快照保存到 `backups/`（就像 `--seed` 之前那样）。空的数据库不复制。恢复：把文件复制覆盖到工作数据库上。
-- `:screensaver` —— 立即显示屏保：**「矩阵雨」**（默认，`screensaver_matrix: true`）或 DevOps 星空（`screensaver_matrix: false`）。雨——下落的一列列字符（头部明亮、尾部渐暗；节奏缓慢均匀，20 fps 下每秒 1.8–6 行，`src/screensaver.py` 中的 `TICK_SECONDS` / `MATRIX_*_SPEED`）；在星空中，星星飞向观众，越近的越大，写着 `k8s` / `git` / `!!`，还有随行的实时时钟（`15:35:42`）和日期（`2026-08-26`）。画布可临时切换：`:screensaver matrix` / `:screensaver stars`。两种画布共有：顶部是横贯全宽的亮绿色条带，显示数据库中的命令（`!tag[tid]  cmd`）；左下是命令速查（从左向右打印，距边缘有缩进）；右下是 load 1/5/15 和 RAM（每秒从 `/proc` 读取），距右角有同样的缩进；窗口较窄时 load 可能压到速查上。被隐藏的手册（`#name--`）不会显示。任何按键、点击、滚轮滚动或鼠标移动都会关闭/重置空闲状态（不会进入输入行）。从其他会话发来的命令（`:send`）也会解除屏保——否则日志会一直关着。超时：`settings.yml` 中的 `screensaver_idle`（秒，`0` = 关闭）。`:screensaver 0` / `:screensaver 120` —— 仅对本会话。TUI 休眠期间（真正的 TTY：`> cmd`、Ctrl+O、`:ed`）不会打开屏保，返回后空闲时间重新计时——这样 `> vim` 就不会再遇到屏保了。`screensaver_stars: false` —— 星空不显示飞舞的尘埃/令牌（不影响矩阵画布）。空闲如同 Norton Commander：星星飞向观众；越近的写着 `k8s` / `git` / `!!`。随行的还有实时时钟（`15:35:42`）和日期（`2026-08-26`）。顶部是横贯全宽的亮绿色条带，显示数据库中的命令（`!tag[tid]  cmd`）。左下是命令速查（从左向右打印，距边缘缩进一如从前）；右下是 load 1/5/15 和 RAM（每秒从 `/proc` 读取），距右角有同样的缩进；窗口较窄时 load 可能压到速查上。被隐藏的手册（`#name--`）不会显示。任何按键、点击、滚轮滚动或鼠标移动都会关闭/重置空闲状态（不会进入输入行）。从其他会话发来的命令（`:send`）也会解除屏保——否则日志会一直关着。超时：`settings.yml` 中的 `screensaver_idle`（秒，`0` = 关闭）。`:screensaver 0` / `:screensaver 120` —— 仅对本会话。`screensaver_stars: false` —— 没有飞舞的尘埃/令牌（时钟、条带和 load 仍保留）。
+- `:screensaver` —— 立即显示 DevOps 星空，包括星星、`k8s` / `git` / `!!` 令牌、时钟和日期。`screensaver_stars: false` 会隐藏飞星和令牌，但保留时钟、命令条带和 load。`:screensaver matrix` / `:screensaver stars` 可临时选择画布，不修改设置。顶部条带显示数据库命令；底部显示帮助与 load/RAM。`screensaver_idle` 设置空闲秒数（`0` = 关闭）；`:screensaver 0` / `:screensaver 120` 仅更改当前会话。按键、点击、滚动或鼠标移动会关闭屏保；`:send` 也会唤醒它。真正的 TTY 命令运行期间（`> cmd`、Ctrl+O、`:ed`）不会显示屏保，返回后重新开始计时。
 - `:r` —— 聚焦块的命令放入输入行；`:r N` —— 倒数 N 个块（0 = 最后一个）
 - `:cmd [N] [show]` —— 用当前 `$VAR` 值（含秘密）物化块命令 → 放入剪贴板；`show` 还会打印出来（秘密会变得可见）
 - `:log [N]`（F7）—— 在可滚动的 **Line-API** 查看器中显示块的完整输出（不再截断到 300 行）：行用 ↑/↓，翻页用 PgUp/PgDn，Esc/q；文本搜索 —— `/`（Enter —— 向前，`n`/`N` —— 下一个/上一个匹配，Esc —— 关闭搜索框），匹配行整行高亮（强调色背景 + bold）；`f` —— 只保留有匹配的行（再次 `f` 或 Esc 恢复全部输出，副标题中的行号会恢复为原始行号），此时用 ↑/↓ 在匹配之间移动；Enter 和 Ctrl+C 把选中的（高亮的）行复制到剪贴板 —— 如同 F2 逐行模式中的 Enter（没有搜索时无选中项：查看器会明确说明，而不是复制第一行；在搜索框中 Ctrl+C 复制框内文本）。`N` —— 倒数第几个块（0 = 聚焦/最后一个）。行是真实的（如同 F3），如有 `STDERR` 也会包含。`y` 会复制来源文件的路径（raw 视图 `:md`）；对块输出则明确显示 `No file path to copy`
@@ -434,8 +434,7 @@ language: en                 # 界面语言（en、ru、zh）：:lang / --lang /
 check_updates: true          # 启动时：把 VERSION 与 GitHub main 比较；:update 则总是比较
 library_url: ""              # 不带参数的 `:import` 的静态来源 —— 通过 https 的共享库 JSON；留空即关闭
 screensaver_idle: 120        # 空闲（按键/点击/滚动/鼠标）→ 屏保；0 = 关闭。:screensaver —— 立即显示
-screensaver_matrix: true     # 屏保画布：true —— 「矩阵雨」，false —— 星空（:screensaver matrix|stars —— 临时切换）
-screensaver_stars: true      # 星空：飞舞的星星；false —— 黑色画布（时钟/条带/load 仍保留）
+screensaver_stars: true      # 屏保中的飞星/令牌；false —— 隐藏它们但保留时钟/条带/load；:screensaver matrix 仅临时显示
 git_prompt: true            # cwd 位于仓库内时，输入行提示中的 git 分支（`~/proj (main) ❯`）；false —— 仅路径
 k8s_completion: false        # 提示中来自集群的 k8s 资源名称（`kubectl get pod <Tab>`）
 file_completion: auto        # 文件提示：auto | paths | off（见下文）

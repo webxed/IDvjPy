@@ -549,38 +549,29 @@ async def test_screensaver_stars_off_from_settings(isolated_home):
         await submit(pilot, ":screensaver")
         await pilot.pause()
         assert isinstance(app.screen, DevopsScreensaver)
-        assert app.screensaver_matrix is False
         assert app.screensaver_stars is False
         assert isinstance(app.screen._field, StarField)
         assert app.screen._field.stars_enabled is False
         assert all(star.kind == "clock" for star in app.screen._field.stars)
 
 
-async def test_screensaver_matrix_on_by_default(isolated_home):
-    """Матричный дождь — холст по умолчанию (`screensaver_matrix: true`)."""
+async def test_screensaver_stars_on_by_default(isolated_home):
+    """Обычная заставка — звёздное поле с частицами; настройка одна."""
     app = CommandRunner()
     async with app.run_test(size=(80, 24)) as pilot:
         await submit(pilot, ":screensaver")
         await pilot.pause()
         assert isinstance(app.screen, DevopsScreensaver)
-        assert app.screensaver_matrix is True
-        assert app.screen._matrix is True
-        assert isinstance(app.screen._field, MatrixRain)
-        # Клик/пауза могли не дать ни одного тика — прокручиваем дождь и смотрим холст.
-        for _ in range(30):
-            app.screen._field.tick(0.08)
-        glyphs = {
-            ch for ch in app.screen._field.render_text().plain if ch not in " \n"
-        }
-        assert glyphs
-        assert glyphs <= set(MATRIX_GLYPHS)
+        assert app.screensaver_stars is True
+        assert isinstance(app.screen._field, StarField)
+        assert app.screen._field.stars_enabled is True
 
 
-async def test_screensaver_matrix_off_from_settings(isolated_home):
-    """`screensaver_matrix: false` — снова звёздное поле (с пылью, как раньше)."""
+async def test_legacy_screensaver_matrix_setting_is_ignored(isolated_home):
+    """Устаревший ключ не переключает постоянный холст на матричный."""
     settings = isolated_home / "settings.yml"
     settings.write_text(
-        settings.read_text(encoding="utf-8") + "screensaver_matrix: false\n",
+        settings.read_text(encoding="utf-8") + "screensaver_matrix: true\n",
         encoding="utf-8",
     )
     app = CommandRunner()
@@ -588,9 +579,7 @@ async def test_screensaver_matrix_off_from_settings(isolated_home):
         await submit(pilot, ":screensaver")
         await pilot.pause()
         assert isinstance(app.screen, DevopsScreensaver)
-        assert app.screensaver_matrix is False
         assert isinstance(app.screen._field, StarField)
-        assert app.screen._field.stars_enabled is True
 
 
 async def test_colon_screensaver_switches_canvas(isolated_home):
@@ -613,8 +602,7 @@ async def test_colon_screensaver_switches_canvas(isolated_home):
         await pilot.pause()
         assert isinstance(app.screen, DevopsScreensaver)
         assert isinstance(app.screen._field, MatrixRain)
-        # Настройка не менялась — это только показ.
-        assert app.screensaver_matrix is False
+        # :screensaver matrix выбирает холст только для этого показа.
 
 
 async def test_colon_screensaver_usage_on_unknown_arg(isolated_home):

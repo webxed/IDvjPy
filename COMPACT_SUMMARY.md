@@ -1,6 +1,10 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.196**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.197**.
+
+## v1.197
+
+- Упрощена настройка заставки: в шаблонах оставлен только `screensaver_stars`; звёздное поле стало стандартным, матричный дождь вызывается разово.
 
 ## v1.195
 
@@ -9,6 +13,7 @@ TUI на Textual для запуска shell-команд с тегирован�
 ## v1.196
 
 - Добавлены ограниченные снимки маскированного stdout: `:snapshot save|list|show|diff|rm`; можно сравнить текущий вывод с сохранённым, не сохраняя stderr, команду и окружение.
+- Упрощена настройка заставки: в шаблонах оставлен только `screensaver_stars`; звёздное поле — по умолчанию, матричный дождь вызывается разово.
 
 Запуск: `python3 app.py` (лаунчер; код в `src/`). Тесты: `python3 -m pytest tests/ -v`. Демо-запись: `python3 app.py --demo`.
 
@@ -169,7 +174,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.142 (app v1.196) |
+| `test_cmd.md` | Manual plan v1.143 (app v1.197) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -200,7 +205,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_git_prompt.py` | Ветка git для приглашения: `.git` вверх по дереву, `.git`-файл worktree с относительным `gitdir:`, отделённый HEAD → `@sha`, пустой/битый `HEAD`, не репозиторий, инвалидация кэша по `(mtime, размер)`, обрезка длинного имени |
 | `tests/test_setup_shell.py` | `./setup.sh --shell-helper`: блок в rc (маркеры, идемпотентность, `$IDVJPY_RC`, zsh, `command idvjpy` / путь клона), уборка `command rm` переживает `alias rm='rm -i'`, venv не трогается, `--help`/неизвестный флаг |
 | `tests/test_ci_shards.py` | CI-шарды: больше одного, `--timeout=600`, пустой шард — ошибка, раскладка = партиция всех `tests/test_*.py` (без потерь и дублей), баланс ≤ 1.2× |
-| `tests/test_screensaver.py` | starfield и матричный дождь (`MatrixRain`: падение/сброс, глифы, палитра), `:screensaver` и холст по `screensaver_matrix` / `:screensaver matrix|stars`, idle timer, key swallowed, `:send` снимает заставку |
+| `tests/test_screensaver.py` | starfield и матричный дождь (`MatrixRain`: падение/сброс, глифы, палитра), `:screensaver` по умолчанию и `screensaver_stars`, разовые `:screensaver matrix|stars`, idle timer, key swallowed, `:send` снимает заставку |
 | `tests/test_docker_stand.py` | Файлы docker-стенда: seed-скрипты в entrypoint, compose-том/TTY, Dockerfile, `.dockerignore`, job CI, конвертер документов в образе и собранный образец `report.docx` |
 | `tests/test_tag_scope.py` | Область видимости тегов (модуль): `split_names` (пробелы/запятые), `classify` (группа побеждает одноимённый тег, известные/чужие имена), `only`/`hide`, `rm` на пустом → `hide`, `rm` из `only`, снятие последнего имени → пустой scope, смешение режимов → `ScopeModeError`, `split`/`describe`, round-trip `scope_<сессия>.json` и изоляция сессий, битый файл/нет файла |
 | `tests/test_scope_command.py` | `:scope` в TUI (инвариант «фильтр — только списки»): `?`/`??`/`!`-подсказки скрывают чужие теги, `?tag`/`!tag[tid]`/`:stats` работают при скрытом теге, `??` с секцией Scope, `rm` → hide, `clear`/`all` возвращают всё (файл удалён), статус без аргументов, ошибки неизвестного имени и смешения режимов, маркер в заголовке, переживает restart, две сессии независимы, битый файл → фильтр выключен и сообщение, лента заставки уважает scope |
@@ -235,10 +240,10 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.196 |
+| `src/app.py` | TUI (`CommandRunner`), v1.197 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
-| `src/screensaver.py` | Idle overlay: «матричный дождь» (`MatrixRain`) или звёздное поле + flying clock/date + full-width green ticker + bottom help (left) and load/mem (right) (`:screensaver`; `screensaver_matrix` / `screensaver_stars`) |
+| `src/screensaver.py` | Idle overlay: звёздное поле по умолчанию (`screensaver_stars` управляет частицами), разовый матричный дождь (`:screensaver matrix`), flying clock/date + ticker + bottom help/load/mem |
 | `src/git_prompt.py` | Ветка git для приглашения строки ввода (`~/proj (main) ❯`; ключ `git_prompt`): `find_git_dir` поднимается вверх от cwd (`.git`-каталог или `.git`-файл worktree/submodule с относительным `gitdir:`), `read_head` разбирает `HEAD` (`refs/heads/x` → `x`, вложенная `feature/x` целиком; отделённый HEAD → короткий SHA `@1a2b3c4`) с кэшем по `(mtime_ns, size)`; `format_prompt_branch` режет длинное имя по хвосту. Подпроцессов нет |
 | `src/database_v2.py` | SQLite tagged history — только примитивы БД (чтение/запись строк, теги, комментарии, `usage_stats`); перенос — в `src/db_transfer.py` |
 | `src/db_transfer.py` | Единственная реализация переноса библиотеки: JSON (`export_json`/`import_json` — каноническая схема, терпимое чтение обоих исторических видов, глобальные `id` из файла не берутся, `skip_existing`/`preserve_tid`/`mode=replace`), CSV команд (адресно по тег+tid) и комментариев тегов, Markdown-каталог, `library_overview` для `list`. Для внешнего импорта: `loads_payload`, `payload_only_tag`, `run_mode` (разбор `run:`-директив для плана) и `plan_import`/`ImportPlan` — что изменит импорт, без записи (`--dry`, подтверждение `:import <url>`). Один код для TUI (`:export`/`:import`) и CLI |

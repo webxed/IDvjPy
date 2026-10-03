@@ -115,13 +115,8 @@ safe_mode: false
 
 # 屏保。空闲秒数；0 = 关闭。:screensaver —— 立即显示。
 screensaver_idle: 120
-# 屏保画布：true —— “矩阵雨”（下落的字形列，像《黑客帝国》中那样），
-# false —— 星空（此时 screensaver_stars 生效）。顶部的滚动条、帮助和
-# 底部的 load/RAM 在两种情况下都保留。要在 TUI 中一次性切换：
-# `:screensaver matrix` / `:screensaver stars`。
-screensaver_matrix: true
-# 星空的飞星（尘埃 + k8s/git/…）。false —— 黑色画布；时钟、滚动条和
-# load 保留。不影响矩阵画布。也有 `:screensaver stars`。
+# 星空动画：false 会隐藏飞星/令牌，但保留时钟、滚动条和 load。
+# `:screensaver matrix` 仍可作为单次画布选择使用。
 screensaver_stars: true
 
 # cwd 位于仓库内时，输入行提示中的 git 分支（`~/proj (main) ❯`）；
@@ -195,6 +190,7 @@ llm_render_markdown: true
 # false —— 所有输出都是纯文本。F6 会一次性关闭颜色。
 # 纯文本（`:w`、F3、`|`、`$OUT`/`$BLOCK`、`:log`、`@key`）不取决于该键。
 ansi_colors: true
+
 
 # 如果将秘密值提取到 `$$NAME=…` 行后，清空剪贴板。
 # true —— 这样的插入之后 CLIPBOARD/PRIMARY 会被清空（秘密不会留在缓冲区中）；

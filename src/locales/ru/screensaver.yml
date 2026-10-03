@@ -21,7 +21,7 @@ screensaver:
   - :welcome  — каталог seed
   - :backup  — снимок БД тегов
   - :vault  — хранилище секретов с шифрованием по паролю (init/add/cp/use/exec/totp)
-  - ":screensaver  — «матричный дождь» сразу (по умолчанию) или звёзды; простой: screensaver_idle"
+  - ":screensaver  — звёздное поле сразу; матрица разово: :screensaver matrix"
   - :r [N]  — перенести команду блока во ввод (N = насколько назад)
   - :cmd [N] [show]  — команда блока с текущими $VAR/секретами в буфер
   - ":name label  — метка блока для |@label"
@@ -48,6 +48,15 @@ screensaver:
   - :playbook [file]  — выгрузить сессию как YAML для --demo
   - :run tag|file.yml  — полуавтоматическая цепочка; ручные шаги ждут Enter
   - :update  — сравнить VERSION с GitHub main
+  - :doctor  — диагностика инструментов, путей, буфера и proxy
+  - :explain cmd  — статический разбор команды без запуска
+  - :learn  — учебные read-only уроки
+  - :safe on|off  — подтверждать распознанные рискованные команды
+  - :tags [фильтр]  — поиск по каталогу тегов и метаданным
+  - :tagmeta TAG  — просмотр/изменение метаданных тега
+  - :pin add|rm|clear|list  — избранные теги сессии
+  - :profile save|use|show|list|rm  — безопасные профили контекста
+  - :snapshot save|show|diff|rm  — ограниченные маскированные снимки stdout
   - :i  — анализатор Kubernetes Ingress
   - "> cmd  — настоящий TTY (htop, vim, ssh); env/$PWD возвращаются"
   - "@ cmd  — запуск без command_timeout (долгие не-TTY задачи)"
