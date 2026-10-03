@@ -22,6 +22,10 @@ tags:
       13: unit postgresql
       14: unit journal
       15: 'interactive psql (better: > psql)'
+      16: active queries with duration
+      17: who blocks whom
+      18: dead tuples and autovacuum (top 10)
+      19: largest tables by total size
   kfvars:
     comment: kafka variables
     commands:
@@ -30,7 +34,7 @@ tags:
     comment: 'kafka: topics, groups, kcat'
     commands:
       0: cluster metadata (kcat/kafkacat)
-      1: last 10 messages of $TOPIC, then exit
+      1: last 10 messages of $TOPIC (-c 10), then exit
       2: list topics
       3: describe $TOPIC
       4: all topics in detail
@@ -39,6 +43,8 @@ tags:
       7: config of topic $TOPIC
       8: broker API (availability)
       9: topics (Confluent .sh script)
+      10: group lag in detail (--verbose)
+      11: cluster ACLs (read-only)
   pgstat:
     comment: postgres overview
     commands:
@@ -47,3 +53,7 @@ tags:
     comment: kafka overview
     commands:
       0: kcat metadata → list topics
+  khealth:
+    comment: Kafka health overview (no payload)
+    commands:
+      0: metadata → topic description → group lag

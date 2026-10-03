@@ -5,25 +5,11 @@ Seed git handbook tags for IDvjPy_term (see SEED_GIT_COMMANDS.md).
 Does not touch proc / file / net / kube / k8s investigation tags.
 
 Run: python3 src/seed_git.py --seed
-
-Uses database_tags_file from settings.yml (same as app.py).
 """
-import argparse
-import os
 import sys
 
-try:
-    import yaml
-
-    import database_v2 as database
-except ImportError as e:
-    print(f"Error: {e}", file=sys.stderr)
-    print("Install dependencies: pip install -r requirements.txt", file=sys.stderr)
-    sys.exit(1)
-
-FILE_SETTINGS = "settings.yml"
-ENCODING = "utf-8"
-DEFAULT_DB = "mytags.db"
+from seed_lib import run_seed as _run_seed
+from seed_lib import seed_cli
 
 # tag -> (tag comment, [(command, command comment), ...])
 # Inspect commands use --no-pager so less does not block the TUI.
@@ -126,66 +112,39 @@ SEED_TAGS = {
 }
 
 
-def get_db_file() -> str:
-    if not os.path.exists(FILE_SETTINGS):
-        return DEFAULT_DB
-    try:
-        with open(FILE_SETTINGS, encoding=ENCODING) as f:
-            settings = yaml.safe_load(f)
-        if settings:
-            return settings.get("database_tags_file", DEFAULT_DB)
-    except Exception:
-        pass
-    return DEFAULT_DB
-
-
-def hard_delete_commands_by_tag(db_file: str, tag: str) -> None:
-    conn = database.get_db_connection(db_file)
-    conn.execute("DELETE FROM commands WHERE tag = ?", (tag,))
-    conn.execute("DELETE FROM tags WHERE tag = ?", (tag,))
-    conn.commit()
-    conn.close()
+# Разметка канонических тегов (машинные токены, не переводятся; см. :tagmeta).
+SEED_METADATA = {
+    "git": {
+        "risk": "medium",
+        "utilities": ["git"],
+        "os": ["linux", "macos", "windows"],
+        "interactive": False,
+        "topic": "vcs",
+        "example": "git status -sb",
+    },
+    "gstat": {
+        "risk": "low",
+        "utilities": ["git"],
+        "os": ["linux", "macos", "windows"],
+        "interactive": False,
+        "topic": "inspect",
+        "example": "!git[2] ; echo '--- branch ---' ; !git[11]",
+    },
+}
 
 
 def run_seed(db_file: str) -> int:
-    from seed_lib import backup_sqlite_before_seed, localized_tags
-
-    backup_sqlite_before_seed(db_file, "git")
-    database.init_db(db_file)
-    n = 0
-    for tag, (tag_comment, commands) in localized_tags(SEED_TAGS).items():
-        hard_delete_commands_by_tag(db_file, tag)
-        for cmd, cmd_comment in commands:
-            tid = database.add_command(db_file, cmd, tag)
-            if cmd_comment:
-                database.set_command_comment(db_file, tag, tid, cmd_comment)
-            n += 1
-        if tag_comment:
-            database.set_tag_comment(db_file, tag, tag_comment)
-    return n
+    return _run_seed(db_file, SEED_TAGS, label="git", metadata=SEED_METADATA)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Seed IDvjPy_term DB with git handbook (SEED_GIT_COMMANDS.md)"
+    seed_cli(
+        description="Seed IDvjPy_term DB with git handbook (SEED_GIT_COMMANDS.md)",
+        seed_help="Replace git/gstat/gsync/… tags (does not touch proc/file/net/kube/k*)",
+        seed_tags=SEED_TAGS,
+        argv=sys.argv,
+        label="git",
     )
-    parser.add_argument(
-        "--seed",
-        action="store_true",
-        help="Replace git/gstat/gsync/… tags (does not touch proc/file/net/kube/k*)",
-    )
-    parser.add_argument(
-        "--db",
-        default="",
-        help="SQLite file (default: settings.yml database_tags_file)",
-    )
-    args = parser.parse_args()
-    if not args.seed:
-        print("Run with --seed to populate the database.", file=sys.stderr)
-        sys.exit(0)
-    db_file = args.db or get_db_file()
-    n = run_seed(db_file)
-    print(f"Seeded {len(SEED_TAGS)} tags ({n} commands) into {db_file}")
 
 
 if __name__ == "__main__":

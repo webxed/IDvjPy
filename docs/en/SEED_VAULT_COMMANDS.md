@@ -85,7 +85,7 @@ made-up role name (it used to be `$ROLE=custom-role`, and Enter would run it).
 | 6 | `$$SECRET_ID=@secret_id` | `run:auto` | secret from step 5 |
 | 7 | `vault write auth/approle/login role_id="$ROLE_ID" secret_id="$SECRET_ID"` | `run:auto` | login, `token` |
 | 8 | `$$VAULT_TOKEN=@token` | `run:auto` | update the token |
-| 9 | `vault read $SECRET` | `run:auto` | check access with the new token |
+| 9 | `vault token capabilities $SECRET` | `run:auto` | token capabilities on the path (value is not printed) |
 
 ```text
 # the whole chain (semi-automatic): stops where a human is needed

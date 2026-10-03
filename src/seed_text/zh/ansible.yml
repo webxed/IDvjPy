@@ -19,6 +19,7 @@ tags:
       10: 模块 $MODULE（会改动主机）
       11: $MODULE 文档
       12: 'REPL（更好: > ansible-console -i $INV）'
+      13: 主机 $HOST 的变量和分组
   aplay:
     comment: 'ansible-playbook: 语法、检查、运行'
     commands:
@@ -32,6 +33,8 @@ tags:
       7: 运行，限制 $LIMIT（会改动主机）
       8: 运行，标签 $TAGS（会改动主机）
       9: 运行 $PLAY（会改动主机）
+      10: $LIMIT 的 playbook 任务
+      11: lint playbook（外部工具）
   avault:
     comment: ansible-vault
     commands:
@@ -52,6 +55,7 @@ tags:
       4: 安装集合
       5: 安装角色
       6: 角色骨架 $ROLE
+      7: 已安装集合的版本
   aping:
     comment: ping inventory 主机
     commands:

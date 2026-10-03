@@ -82,6 +82,18 @@ def test_seed_k8s_chains_tids_and_playbook_refs(tmp_path):
     assert database.get_tag_comment(db, "kcrash")
     assert "CrashLoop" in database.get_command_comment(db, "kcrash", 1)
 
+    # v1.2xx: $SA в kvars и новые read-only теги kdns / krbac.
+    kvars = database.get_command_by_tid(db, "kvars", 1)
+    assert "sa=$SA" in kvars["command"]
+    kdns = database.get_commands_by_tag(db, "kdns")
+    assert "dnsPolicy" in kdns[0]["command"]
+    assert kdns[1]["command"] == "kubectl exec $POD -n $NS -- cat /etc/resolv.conf"
+    assert "endpointslice" in kdns[3]["command"]
+    krbac = database.get_commands_by_tag(db, "krbac")
+    assert krbac[0]["command"] == "kubectl auth can-i get pods -n $NS"
+    assert "--as=system:serviceaccount:$NS:$SA" in krbac[4]["command"]
+    assert "--as=system:serviceaccount:$NS:$SA" in krbac[5]["command"]
+
 
 def test_seed_k8s_chains_refs_point_to_existing_tids():
     """Все !tag[tid] в цепочках указывают на существующий тег и существующий tid."""
@@ -111,7 +123,6 @@ def test_seed_k8s_chains_cli(tmp_path, monkeypatch):
     import seed_k8s_chains as seed
 
     db = str(tmp_path / "cli.db")
-    monkeypatch.setattr(seed, "get_db_file", lambda: db)
     monkeypatch.setattr(
         seed.sys,
         "argv",

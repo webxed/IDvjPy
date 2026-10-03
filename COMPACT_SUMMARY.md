@@ -1,6 +1,13 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.205**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.206**.
+
+## v1.206
+
+- Improved the seed handbooks with safer, more instructive commands: the `vapprole` chain now ends with `vault token capabilities $SECRET` instead of reading the secret value, package managers show dry-run previews (`apt-get -s`, `dnf --assumeno`) and dependency queries, PostgreSQL/Kafka gained read-only diagnostics (`pg_blocking_pids`, `pg_stat_user_tables`, `--verbose` lag, `kafka-acls --list`, `kcat -c 10`, new `khealth` overview), Kubernetes gained `$SA` plus the `kdns` and `krbac` tags, and Docker/HTTP/TLS/systemd/Ansible/SQLite gained bounded inspect commands (including an explicit DB snapshot and a teaching `ROLLBACK` example).
+- Unified `seed_git.py` and `seed_k8s_chains.py` onto `seed_lib.run_seed()` / `seed_cli()` (new optional `label`, backup labels `git` / `k8s` preserved).
+- Annotated canonical tags with `:tagmeta` metadata (`git`, `gstat`, `kns`, `kpod`, `klog`, `kdns`, `krbac`, `dck`, `dcmp`, `sqlite`, `vault`, `vapprole`, `proc`, `file`, `net`, `kube`) through the single writer `database.set_tag_metadata()`; machine tokens are not translated and a repeated `--seed` keeps the annotation.
+- Localized the new seed comments (English and Chinese), updated the Russian/English/Chinese command handbooks and the `:? tags` help, and extended the focused seed, i18n, and metadata tests.
 
 ## v1.205
 
@@ -212,7 +219,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.151 (app v1.205) |
+| `test_cmd.md` | Manual plan v1.152 (app v1.206) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -278,7 +285,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.205 |
+| `src/app.py` | TUI (`CommandRunner`), v1.206 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: звёздное поле по умолчанию (`screensaver_stars` управляет частицами), разовый матричный дождь (`:screensaver matrix`), flying clock/date + ticker + bottom help/load/mem |

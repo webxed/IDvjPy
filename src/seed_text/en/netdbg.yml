@@ -34,7 +34,8 @@ tags:
       1: 'certificate: dates/subject'
       2: x509 text, 40 lines
       3: openssl version
-      4: interactive s_client
+      4: handshake with strict chain verification
+      5: interactive s_client
   npath:
     comment: path to $HOST
     commands:

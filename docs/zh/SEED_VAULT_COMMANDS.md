@@ -85,7 +85,7 @@ $FIELD=
 | 6 | `$$SECRET_ID=@secret_id` | `run:auto` | 来自步骤 5 的密钥 |
 | 7 | `vault write auth/approle/login role_id="$ROLE_ID" secret_id="$SECRET_ID"` | `run:auto` | 登录，`token` |
 | 8 | `$$VAULT_TOKEN=@token` | `run:auto` | 更新令牌 |
-| 9 | `vault read $SECRET` | `run:auto` | 用新令牌检查访问 |
+| 9 | `vault token capabilities $SECRET` | `run:auto` | token 对该路径的权限（不打印值） |
 
 ```text
 # 整条命令链（半自动）：在需要人的地方停下

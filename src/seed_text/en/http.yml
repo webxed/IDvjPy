@@ -18,6 +18,9 @@ tags:
       9: timing breakdown
       10: POST, code only
       11: headers, no TLS check
+      12: response headers (no body, capped at 10s)
+      13: 'retries and timeouts: code and time'
+      14: remote IP, HTTP version, code
   ngx:
     comment: 'nginx: config, status, logs'
     commands:

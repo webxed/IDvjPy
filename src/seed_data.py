@@ -55,6 +55,29 @@ SEED_TAGS = {
             ("systemctl status postgresql --no-pager", "unit postgresql"),
             ("journalctl -u postgresql -n 80 --no-pager", "журнал unit"),
             ("psql", "интерактивный psql (лучше: > psql)"),
+            (
+                "psql -c \"SELECT pid, now() - query_start AS duration, state, "
+                "left(query,80) AS query FROM pg_stat_activity WHERE state <> 'idle' "
+                "ORDER BY duration DESC;\"",
+                "активные запросы с длительностью",
+            ),
+            (
+                "psql -c \"SELECT pid, pg_blocking_pids(pid) AS blocked_by, "
+                "left(query,80) AS query FROM pg_stat_activity "
+                "WHERE cardinality(pg_blocking_pids(pid)) > 0;\"",
+                "кто кого блокирует",
+            ),
+            (
+                "psql -c \"SELECT relname, n_dead_tup, last_autovacuum, last_autoanalyze "
+                "FROM pg_stat_user_tables ORDER BY n_dead_tup DESC LIMIT 10;\"",
+                "мёртвые строки и autovacuum (top 10)",
+            ),
+            (
+                "psql -c \"SELECT relname, pg_size_pretty(pg_total_relation_size(relid)) "
+                "AS total FROM pg_stat_user_tables "
+                "ORDER BY pg_total_relation_size(relid) DESC LIMIT 10;\"",
+                "крупнейшие таблицы по полному размеру",
+            ),
         ],
     ),
     "kfvars": (
@@ -71,8 +94,8 @@ SEED_TAGS = {
         [
             ("kcat -b $BROKER -L", "метаданные кластера (kcat/kafkacat)"),
             (
-                "kcat -b $BROKER -t $TOPIC -C -o -10 -e",
-                "последние 10 сообщений $TOPIC и выход",
+                "kcat -b $BROKER -t $TOPIC -C -o -10 -c 10",
+                "последние 10 сообщений $TOPIC (-c 10) и выход",
             ),
             ("kafka-topics --bootstrap-server $BROKER --list", "список топиков"),
             (
@@ -98,6 +121,15 @@ SEED_TAGS = {
                 "kafka-topics.sh --bootstrap-server $BROKER --list",
                 "топики (скрипт Confluent .sh)",
             ),
+            (
+                "kafka-consumer-groups --bootstrap-server $BROKER --describe "
+                "--group $GROUP --verbose",
+                "лаг группы подробно (--verbose)",
+            ),
+            (
+                "kafka-acls --bootstrap-server $BROKER --list",
+                "ACL кластера (read-only)",
+            ),
         ],
     ),
     "pgstat": (
@@ -116,6 +148,15 @@ SEED_TAGS = {
             (
                 "!kf[1] ; echo '--- topics ---' ; !kf[3]",
                 "kcat metadata → list topics",
+            ),
+        ],
+    ),
+    "khealth": (
+        "обзор здоровья Kafka (без payload)",
+        [
+            (
+                "!kf[1] ; echo '--- topic ---' ; !kf[4] ; echo '--- lag ---' ; !kf[7]",
+                "metadata → описание топика → lag группы",
             ),
         ],
     ),

@@ -34,7 +34,8 @@ tags:
       1: '证书: 日期/主体'
       2: x509 文本，40 行
       3: openssl 版本
-      4: 交互式 s_client
+      4: 严格校验证书链的握手
+      5: 交互式 s_client
   npath:
     comment: 到 $HOST 的路径
     commands:

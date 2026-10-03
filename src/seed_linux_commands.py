@@ -111,6 +111,51 @@ EXTRA_COMMENTS = {
     ("net", 11): "Заглушка test3",
 }
 
+# Разметка канонических тегов (машинные токены, не переводятся; см. :tagmeta).
+# `risk` — описательная пометка, а не защита.
+SEED_METADATA = {
+    "proc": {
+        "risk": "medium",
+        "utilities": ["ps", "kill"],
+        "os": ["linux", "macos"],
+        "interactive": False,
+        "topic": "processes",
+        "example": "ps aux",
+    },
+    "file": {
+        "risk": "medium",
+        "utilities": ["ls", "cp", "mv", "rm"],
+        "os": ["linux", "macos"],
+        "interactive": False,
+        "topic": "files",
+        "example": "ls -la",
+    },
+    "net": {
+        "risk": "medium",
+        "utilities": ["ss", "curl", "ssh", "rsync"],
+        "os": ["linux", "macos"],
+        "interactive": False,
+        "topic": "network",
+        "example": "ss -tulnp",
+    },
+    "kube": {
+        "risk": "high",
+        "utilities": ["kubectl", "tsh"],
+        "os": ["linux", "macos", "windows"],
+        "interactive": False,
+        "topic": "kubernetes",
+        "example": "kubectl get pods -n $NS",
+    },
+    "logs": {
+        "risk": "low",
+        "utilities": ["tail", "grep"],
+        "os": ["linux", "macos"],
+        "interactive": False,
+        "topic": "logs",
+        "example": "tail -n 50 /var/log/syslog",
+    },
+}
+
 
 def get_db_file():
     """Read database path from settings.yml, same logic as app.py."""
@@ -159,6 +204,9 @@ def run_seed(db_file: str) -> int:
             n += 1
         if tag_comment:
             database.set_tag_comment(db_file, tag, tag_comment)
+    for tag, value in SEED_METADATA.items():
+        if tag in SEED_COMMANDS:
+            database.set_tag_metadata(db_file, tag, value)
     return n
 
 

@@ -1,6 +1,7 @@
 """--seed copies a live SQLite DB into backups/ before replacing tags."""
 import database_v2 as database
 import seed_git
+import seed_k8s_chains
 import seed_lib
 import seed_ops
 
@@ -45,6 +46,21 @@ def test_seed_ops_writes_one_backup(tmp_path):
     assert database.get_command_by_tid(db, "mine", 1)["command"] == "echo custom"
     assert not list((tmp_path / "backups").glob("ops-pre-docker-*.db"))
     assert not list((tmp_path / "backups").glob("ops-pre-seed-*.db"))
+
+
+def test_seed_git_and_k8s_keep_their_backup_labels(tmp_path):
+    """seed_git / seed_k8s_chains используют общий run_seed, но метки — свои."""
+    git_db = str(tmp_path / "git.db")
+    database.init_db(git_db)
+    database.add_command(git_db, "git status --porcelain", "git")
+    seed_git.run_seed(git_db)
+    assert list((tmp_path / "backups").glob("git-pre-git-*.db"))
+
+    k8s_db = str(tmp_path / "k8s.db")
+    database.init_db(k8s_db)
+    database.add_command(k8s_db, "kubectl get pods -n $NS", "kpod")
+    seed_k8s_chains.run_seed(k8s_db)
+    assert list((tmp_path / "backups").glob("k8s-pre-k8s-*.db"))
 
 
 def test_manual_backup_ignores_seed_once_cache(tmp_path):

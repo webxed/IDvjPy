@@ -6,7 +6,8 @@ SEED_SQLITE_COMMANDS.md).
 SQL is practised on the live library database: SELECT/WHERE/GROUP BY/ORDER BY,
 LIKE, sqlite_master, EXPLAIN QUERY PLAN — and the hard delete that `#tag-` cannot
 do (row shown by the app: soft delete). Inspect commands come first; the ones that
-change the database are tid 10-12 and say so in the comment. Nothing else is
+change the database are tid 11-13 and say so in the comment. Tid 17 copies the file
+before manual SQL, tid 18 is a teaching transaction that rolls back. Nothing else is
 touched; the app injects `$DBFILE` (the library file it opened).
 
 Run: python3 src/seed_sqlite.py --seed
@@ -101,6 +102,15 @@ SEED_TAGS = {
                 "sqlite3 $DBFILE",
                 "интерактивный sqlite3 (лучше: > sqlite3 $DBFILE)",
             ),
+            (
+                'cp "$DBFILE" "mytags-before-manual-sqlite-$(date +%Y%m%d-%H%M%S).db"',
+                "снимок файла базы перед ручным SQL (создаёт файл)",
+            ),
+            (
+                "sqlite3 \"$DBFILE\" \"BEGIN; DELETE FROM commands WHERE tag = '$TAG'; "
+                "SELECT changes(); ROLLBACK;\"",
+                "учебный пример: транзакция с откатом (изменения не сохраняются)",
+            ),
         ],
     ),
     "sqlstat": (
@@ -116,8 +126,22 @@ SEED_TAGS = {
 }
 
 
+# Разметка канонических тегов (машинные токены, не переводятся; см. :tagmeta).
+# `risk` — описательная пометка, а не защита: мутирующие шаги держит `run:manual`.
+SEED_METADATA = {
+    "sqlite": {
+        "risk": "high",
+        "utilities": ["sqlite3"],
+        "os": ["linux", "macos", "windows"],
+        "interactive": False,
+        "topic": "database",
+        "example": 'sqlite3 -header -column $DBFILE "SELECT tag, COUNT(*) FROM commands GROUP BY tag;"',
+    },
+}
+
+
 def run_seed(db_file: str) -> int:
-    return _run_seed(db_file, SEED_TAGS)
+    return _run_seed(db_file, SEED_TAGS, metadata=SEED_METADATA)
 
 
 def main() -> None:

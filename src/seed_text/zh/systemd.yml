@@ -15,12 +15,15 @@ tags:
       6: $UNIT 已启用/已禁用
       7: 运行中的 service
       8: 定时器
-      9: 重新加载 unit 文件
+      9: 重新加载 unit 文件（会改动管理器状态）
       10: 重新加载 $UNIT（会改动服务）
       11: 重启 $UNIT（会改动服务）
       12: 启动 $UNIT（会改动服务）
       13: 停止 $UNIT（会改动服务）
       14: 重置 $UNIT 的失败状态
+      15: 一条命令查看 $UNIT 的关键属性
+      16: 带完整行的状态
+      17: 校验 $UNIT 的 unit 文件
   jctl:
     comment: 'journalctl: systemd 日志'
     commands:
@@ -35,6 +38,7 @@ tags:
       8: 日志磁盘占用
       9: JSON $UNIT → F5
       10: '跟随 $UNIT（更好: > journalctl -f -u $UNIT）'
+      11: $UNIT 自 $SINCE 起 ISO 时间的日志
   dmesg:
     comment: 'dmesg: 内核环形缓冲区'
     commands:

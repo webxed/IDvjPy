@@ -41,12 +41,19 @@ SEED_TAGS = {
                 "запущенные services",
             ),
             ("systemctl list-timers --all --no-pager", "таймеры"),
-            ("systemctl daemon-reload", "перечитать unit-файлы"),
+            ("systemctl daemon-reload", "перечитать unit-файлы (меняет состояние менеджера)"),
             ("systemctl reload $UNIT", "reload $UNIT (меняет сервис)"),
             ("systemctl restart $UNIT", "restart $UNIT (меняет сервис)"),
             ("systemctl start $UNIT", "start $UNIT (меняет сервис)"),
             ("systemctl stop $UNIT", "stop $UNIT (меняет сервис)"),
             ("systemctl reset-failed $UNIT", "сбросить failed $UNIT"),
+            (
+                "systemctl show $UNIT -p ActiveState -p SubState -p Result "
+                "-p ExecMainStatus -p NRestarts",
+                "ключевые свойства $UNIT одной командой",
+            ),
+            ("systemctl status $UNIT --no-pager -l", "статус с полными строками"),
+            ("systemd-analyze verify $UNIT", "проверить unit-файл $UNIT"),
         ],
     ),
     "jctl": (
@@ -71,6 +78,10 @@ SEED_TAGS = {
             (
                 "journalctl -f -u $UNIT",
                 "follow $UNIT (лучше: > journalctl -f -u $UNIT)",
+            ),
+            (
+                'journalctl -u $UNIT --since "$SINCE" --no-pager -o short-iso',
+                "журнал $UNIT с $SINCE в ISO-времени",
             ),
         ],
     ),

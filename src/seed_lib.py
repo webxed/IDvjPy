@@ -338,8 +338,20 @@ def localized_tags(seed_tags: dict, lang: str | None = None) -> dict:
         out[tag] = (_translated(block.get("comment"), tag_comment), new_commands)
     return out
 
-def run_seed(db_file: str, seed_tags: dict, *, label: str = "seed") -> int:
-    """Replace tags in seed_tags; return number of commands inserted."""
+def run_seed(
+    db_file: str,
+    seed_tags: dict,
+    *,
+    label: str = "seed",
+    metadata: dict[str, dict] | None = None,
+) -> int:
+    """Replace tags in seed_tags; return number of commands inserted.
+
+    ``metadata`` (tag → validated dict) is written through the single writer
+    ``database.set_tag_metadata`` after the tag is (re)seeded, so a repeated
+    ``--seed`` keeps the annotation instead of resetting it to ``'{}'``.
+    Machine tokens (utilities/os/topic/example) are not translated.
+    """
     backup_sqlite_before_seed(db_file, label)
     database.init_db(db_file)
     n = 0
@@ -352,6 +364,10 @@ def run_seed(db_file: str, seed_tags: dict, *, label: str = "seed") -> int:
             n += 1
         if tag_comment:
             database.set_tag_comment(db_file, tag, tag_comment)
+    if metadata:
+        for tag, value in metadata.items():
+            if tag in seed_tags:
+                database.set_tag_metadata(db_file, tag, value)
     return n
 
 
@@ -361,6 +377,7 @@ def seed_cli(
     seed_help: str,
     seed_tags: dict,
     argv: list[str],
+    label: str = "",
 ) -> None:
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--seed", action="store_true", help=seed_help)
@@ -375,6 +392,6 @@ def seed_cli(
         sys.exit(0)
     db_file = args.db or get_db_file()
     script = Path(argv[0]).stem
-    label = script[5:] if script.startswith("seed_") else script
-    n = run_seed(db_file, seed_tags, label=label or "seed")
+    derived = script[5:] if script.startswith("seed_") else script
+    n = run_seed(db_file, seed_tags, label=label or derived or "seed")
     print(f"Seeded {len(seed_tags)} tags ({n} commands) into {db_file}")

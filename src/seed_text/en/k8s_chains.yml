@@ -2,7 +2,7 @@ tags:
   kvars:
     comment: incident variables
     commands:
-      0: check $NS/$POD/…/$QUOTA
+      0: check $NS/$POD/…/$QUOTA/$SA
   kns:
     comment: cluster / namespace
     commands:
@@ -132,3 +132,22 @@ tags:
     comment: PVC / PV / events — volume not bound
     commands:
       0: Pending / no volume
+  kdns:
+    comment: 'DNS: dnsPolicy, resolv.conf, endpoints'
+    commands:
+      0: dnsPolicy / dnsConfig of the pod
+      1: resolv.conf inside the pod (read-only)
+      2: 'Endpoints: IP and ports of $SVC'
+      3: EndpointSlice $SVC
+      4: CoreDNS pods
+      5: CoreDNS service
+  krbac:
+    comment: 'RBAC: what the token / ServiceAccount can do'
+    commands:
+      0: can read pods?
+      1: can create deployments?
+      2: can read secrets?
+      3: ServiceAccount in $NS
+      4: rights of SA $SA (impersonation)
+      5: full rights list of SA $SA
+      6: describe SA $SA

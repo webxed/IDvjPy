@@ -47,4 +47,4 @@ tags:
       5: 'run:auto 密钥: 取上一个块中的 secret_id'
       6: run:auto login → token
       7: 'run:auto 密钥: 将 `$VAULT_TOKEN` 更新为 approle token'
-      8: run:auto 用新 token 检查访问
+      8: run:auto 检查 token 对该路径的权限（不打印值）

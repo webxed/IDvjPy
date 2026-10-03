@@ -19,6 +19,7 @@ tags:
       10: module $MODULE (changes the host)
       11: docs for $MODULE
       12: 'REPL (better: > ansible-console -i $INV)'
+      13: variables and groups of host $HOST
   aplay:
     comment: 'ansible-playbook: syntax, check, run'
     commands:
@@ -32,6 +33,8 @@ tags:
       7: run, limit $LIMIT (changes hosts)
       8: run, tags $TAGS (changes hosts)
       9: run $PLAY (changes hosts)
+      10: playbook tasks for $LIMIT
+      11: lint the playbook (external tool)
   avault:
     comment: ansible-vault
     commands:
@@ -52,6 +55,7 @@ tags:
       4: install a collection
       5: install a role
       6: role skeleton $ROLE
+      7: version of the installed collection
   aping:
     comment: ping inventory hosts
     commands:

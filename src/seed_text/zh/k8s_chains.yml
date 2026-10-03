@@ -2,7 +2,7 @@ tags:
   kvars:
     comment: 事故排查变量
     commands:
-      0: 检查 $NS/$POD/…/$QUOTA
+      0: 检查 $NS/$POD/…/$QUOTA/$SA
   kns:
     comment: 集群 / 命名空间
     commands:
@@ -132,3 +132,22 @@ tags:
     comment: PVC / PV / 事件 — 卷未绑定
     commands:
       0: Pending / 无卷
+  kdns:
+    comment: 'DNS: dnsPolicy、resolv.conf、endpoints'
+    commands:
+      0: pod 的 dnsPolicy / dnsConfig
+      1: pod 内的 resolv.conf（只读）
+      2: '$SVC 的 Endpoints: IP 和端口'
+      3: EndpointSlice $SVC
+      4: CoreDNS pod
+      5: CoreDNS service
+  krbac:
+    comment: 'RBAC: token / ServiceAccount 能做什么'
+    commands:
+      0: 能读 pod 吗?
+      1: 能创建 deployments 吗?
+      2: 能读 secrets 吗?
+      3: $NS 中的 ServiceAccount
+      4: SA $SA 的权限（impersonation）
+      5: SA $SA 的完整权限列表
+      6: describe SA $SA

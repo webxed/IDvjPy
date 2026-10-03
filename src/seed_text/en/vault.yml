@@ -47,4 +47,4 @@ tags:
       5: 'run:auto secret: secret_id from the previous block'
       6: run:auto login → token
       7: 'run:auto secret: update `$VAULT_TOKEN` to the approle token'
-      8: run:auto check access with the new token
+      8: run:auto check the token capabilities on the path (value is not printed)

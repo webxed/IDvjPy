@@ -3,7 +3,8 @@
 Теги **`dck`** (docker) и **`dcmp`** (compose). Плейбуки: `dps`, `dlog`, `dcstat`.
 
 Интерактивный exec — с префиксом `>` (настоящий TTY).
-Не класть в автоцепочку: `docker system prune`, `rm -f`, `compose down -v`.
+Не класть в автоцепочку: `docker system prune`, `rm -f`, `compose down -v`.  
+`docker events --since 10m --until now` — конечный срез событий (без `--follow`).
 
 ```bash
 python3 src/seed_docker.py --seed
@@ -48,6 +49,10 @@ $COMPOSE_FILE=compose.yaml
 | 19 | `docker rm $CTR` | Удалить контейнер |
 | 20 | `docker rmi $IMAGE` | Удалить образ |
 | 21 | `docker exec -it $CTR sh` | Shell (`> docker exec -it $CTR sh`) |
+| 22 | `docker inspect --format '{{json .State.Health}}' $CTR` | Health-статус (JSON) |
+| 23 | `docker events --since 10m --until now` | События за 10 минут |
+| 24 | `docker container ls --format 'table …'` | Таблица names/status/ports |
+| 25 | `docker image inspect $IMAGE` | Inspect образа (config) |
 
 ---
 
@@ -66,6 +71,8 @@ $COMPOSE_FILE=compose.yaml
 | 9 | `docker compose down` | Down (без `-v`) |
 | 10 | `docker compose exec $SVC sh` | Exec (`> …`) |
 | 11 | `docker-compose ps` | Старый бинарь |
+| 12 | `docker compose config --quiet` | Проверка конфига (код возврата) |
+| 13 | `docker compose ps --all` | Все сервисы (включая остановленные) |
 
 ---
 

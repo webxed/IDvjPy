@@ -35,6 +35,11 @@ $CTR=traefik
 | 10 | `curl … -w dns/connect/tls/ttfb/total` | Тайминги |
 | 11 | `curl … -X POST` | POST, только код |
 | 12 | `curl -sS -kI $URL` | Без проверки TLS |
+| 13 | `curl -sS -D - -o /dev/null --max-time 10 $URL` | Заголовки ответа (без тела) |
+| 14 | `curl … --retry 2 --retry-all-errors …` | Повторы и таймауты |
+| 15 | `curl … -w '%{remote_ip} %{http_version} %{http_code}'` | IP и версия HTTP |
+
+`curl -k` приемлем только для диагностики и не исправляет TLS.
 
 ---
 

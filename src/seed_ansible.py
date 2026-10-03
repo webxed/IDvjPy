@@ -5,6 +5,8 @@ Seed ansible handbook tags (see SEED_ANSIBLE_COMMANDS.md).
 Playbooks are inspect-only: inventory, syntax-check, check --diff.
 Real playbook runs and vault encrypt/decrypt of files are in the tags,
 but not in achk / aping.
+`ansible-vault view` and decrypt-to-stdout print plaintext into the journal.
+`ansible-lint` is an optional external tool, not an app dependency.
 
 Run: python3 src/seed_ansible.py --seed
 """
@@ -53,6 +55,10 @@ SEED_TAGS = {
                 "ansible-console -i $INV",
                 "REPL (лучше: > ansible-console -i $INV)",
             ),
+            (
+                "ansible-inventory -i $INV --host $HOST",
+                "переменные и группы хоста $HOST",
+            ),
         ],
     ),
     "aplay": (
@@ -86,6 +92,11 @@ SEED_TAGS = {
                 "ansible-playbook -i $INV $PLAY",
                 "прогон $PLAY (меняет хосты)",
             ),
+            (
+                "ansible-playbook -i $INV $PLAY --list-tasks --limit $LIMIT",
+                "задачи плейбука для $LIMIT",
+            ),
+            ("ansible-lint $PLAY", "lint плейбука (внешняя утилита)"),
         ],
     ),
     "avault": (
@@ -131,6 +142,10 @@ SEED_TAGS = {
             ),
             ("ansible-galaxy role install $ROLE", "поставить роль"),
             ("ansible-galaxy init $ROLE", "скелет роли $ROLE"),
+            (
+                "ansible-galaxy collection list $COLLECTION",
+                "версия установленной коллекции",
+            ),
         ],
     ),
     "aping": (

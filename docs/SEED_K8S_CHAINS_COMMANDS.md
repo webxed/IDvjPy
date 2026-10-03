@@ -3,7 +3,7 @@
 Обзор и цикл расследования: [`K8S_CHAINS.md`](../K8S_CHAINS.md). Ниже — фиксированные tid рабочих тегов.
 
 Сидовый тег `kube` (`seed_linux_commands.py`) — общий справочник.  
-Этот сид — **рабочие** теги с `$NS`, `$POD`, `$DEPLOY`, `$SVC`, `$ING`, `$APP`, `$CTR`, `$QUOTA`.
+Этот сид — **рабочие** теги с `$NS`, `$POD`, `$DEPLOY`, `$SVC`, `$ING`, `$APP`, `$CTR`, `$QUOTA`, `$SA`.
 
 ```bash
 python3 src/seed_k8s_chains.py --seed
@@ -12,7 +12,7 @@ python3 src/seed_k8s_chains.py --seed
 Не трогает `proc` / `file` / `net` / `kube`. Повторный `--seed` перезаписывает только
 `kvars` `kns` `kpod` `klog` `kev` `ksvc` `king` `kdep` `kres` `kjq`
 `kavail` `kstore`
-`kcrash` `knet` `kroll` `kwatch` `kquota` `kscale` `kvolume`.
+`kcrash` `knet` `kroll` `kwatch` `kquota` `kscale` `kvolume` `kdns` `krbac`.
 
 `kubectl logs -f` / `exec -it` / `port-forward` — с префиксом `>` (настоящий TTY).  
 `delete` / `rollout restart` / `undo` — не в плейбуках.
@@ -29,6 +29,7 @@ $ING=api
 $POD=
 $CTR=
 $QUOTA=compute-resources
+$SA=
 !! kvars[1]
 ```
 
@@ -40,7 +41,7 @@ $QUOTA=compute-resources
 
 | tid | Команда | Назначение |
 |-----|---------|------------|
-| 1 | `echo ns=$NS pod=$POD … quota=$QUOTA` | Проверка переменных |
+| 1 | `echo ns=$NS pod=$POD … quota=$QUOTA sa=$SA` | Проверка переменных |
 
 ---
 
@@ -212,6 +213,37 @@ $QUOTA=compute-resources
 
 ---
 
+## kdns — DNS (tid)
+
+Резолв Service: `dnsPolicy` пода → `resolv.conf` → Endpoints/EndpointSlice → CoreDNS.
+
+| tid | Команда | Назначение |
+|-----|---------|------------|
+| 1 | `kubectl get pod $POD -n $NS -o jsonpath='{.spec.dnsPolicy}{…}{.spec.dnsConfig}{…}'` | `dnsPolicy` / `dnsConfig` |
+| 2 | `kubectl exec $POD -n $NS -- cat /etc/resolv.conf` | `resolv.conf` внутри пода (read-only) |
+| 3 | `kubectl get endpoints $SVC -n $NS -o yaml` | Endpoints: IP и порты |
+| 4 | `kubectl get endpointslice -n $NS -l kubernetes.io/service-name=$SVC -o wide` | EndpointSlice |
+| 5 | `kubectl get pods -n kube-system -l k8s-app=kube-dns -o wide` | Поды CoreDNS |
+| 6 | `kubectl get svc kube-dns -n kube-system -o wide` | Сервис CoreDNS |
+
+---
+
+## krbac — RBAC (tid)
+
+`auth can-i` отвечает `yes`/`no`, ничего не меняя. Права чужого ServiceAccount — через `--as`.
+
+| tid | Команда | Назначение |
+|-----|---------|------------|
+| 1 | `kubectl auth can-i get pods -n $NS` | Читать поды? |
+| 2 | `kubectl auth can-i create deployments -n $NS` | Создавать deployments? |
+| 3 | `kubectl auth can-i get secrets -n $NS` | Читать secrets? |
+| 4 | `kubectl get sa -n $NS` | ServiceAccount в `$NS` |
+| 5 | `kubectl auth can-i get pods -n $NS --as=system:serviceaccount:$NS:$SA` | Права SA `$SA` |
+| 6 | `kubectl auth can-i --list -n $NS --as=system:serviceaccount:$NS:$SA` | Полный список прав SA |
+| 7 | `kubectl describe sa $SA -n $NS` | Describe SA `$SA` |
+
+---
+
 ## Плейбуки
 
 | Тег | Цепочка | Зачем |
@@ -251,5 +283,5 @@ $QUOTA=compute-resources
 | Шум в ns | `$NS` | `!! kwatch[1]` + `:/error` |
 | HPA не масштабирует | `$NS`, `$APP` | `!! kscale[1]` (`!kavail[1]`, `!kpod[7]`) |
 | Pod Pending: нет тома | `$NS`, `$POD` | `!! kvolume[1]` (`!kstore[1,3]`) |
-| Forbidden / нет прав | `$NS` | `!kns[7]` (`auth can-i --list`) ; `!kns[1]` |
+| Forbidden / нет прав | `$NS` | `!kns[7]` (`auth can-i --list`) ; `!krbac[1]` ; `!krbac[5]` (права SA) |
 | Drain/evict не идёт | `$NS` | `!kavail[3]` ; `!kavail[4]` |

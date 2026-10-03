@@ -27,6 +27,10 @@ tags:
       18: 删除已停止的 $CTR
       19: 删除镜像 $IMAGE
       20: '在 $CTR 中开 shell（更好: > docker exec -it $CTR sh）'
+      21: 容器健康状态（JSON）
+      22: 最近 10 分钟的事件
+      23: 容器表格（names/status/ports）
+      24: 检查镜像（image config）
   dcmp:
     comment: docker compose
     commands:
@@ -41,6 +45,8 @@ tags:
       8: 停止并删除容器
       9: '在 $SVC 中 exec（更好: > docker compose exec $SVC sh）'
       10: 旧版 docker-compose 二进制
+      11: 校验配置（静默，通过退出码报错）
+      12: 所有服务（含已停止）
   dps:
     comment: docker 概览
     commands:

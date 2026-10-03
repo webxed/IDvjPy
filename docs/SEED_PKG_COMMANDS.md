@@ -1,7 +1,8 @@
 # Справочник пакетов: apt, dnf, rpm
 
 Теги **`apt`**, **`dnf`**, **`rpm`**. Плейбуки осмотра: `aptq`, `rpmq`.  
-`install` / `remove` / `apt update` — не в плейбуке.
+`install` / `remove` / `apt update` — не в плейбуке.  
+`apt-get -s` и `dnf --assumeno` показывают предполагаемую транзакцию, но не применяют её.
 
 ```bash
 python3 src/seed_pkg.py --seed
@@ -33,6 +34,10 @@ $PKG=curl
 | 9 | `apt update` | Обновить индексы |
 | 10 | `apt install $PKG` | Поставить |
 | 11 | `apt remove $PKG` | Убрать |
+| 12 | `apt-get -s install $PKG` | Dry-run установки (план) |
+| 13 | `apt-get -s remove $PKG` | Dry-run удаления (план) |
+| 14 | `apt-cache depends $PKG` | Зависимости `$PKG` |
+| 15 | `apt-cache rdepends $PKG` | Кто зависит от `$PKG` |
 
 ---
 
@@ -48,6 +53,10 @@ $PKG=curl
 | 6 | `yum info $PKG` | yum |
 | 7 | `dnf install $PKG` | Поставить |
 | 8 | `dnf remove $PKG` | Убрать |
+| 9 | `dnf install --assumeno $PKG` | Dry-run установки (план) |
+| 10 | `dnf remove --assumeno $PKG` | Dry-run удаления (план) |
+| 11 | `dnf repoquery --requires $PKG` | Зависимости `$PKG` |
+| 12 | `dnf repoquery --whatrequires $PKG` | Кто требует `$PKG` |
 
 ---
 

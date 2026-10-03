@@ -22,6 +22,8 @@ tags:
       13: database integrity
       14: SQL dump of the DB to mytags.sql (into the current directory)
       15: 'interactive sqlite3 (better: > sqlite3 $DBFILE)'
+      16: file snapshot before manual SQL (creates a file)
+      17: 'teaching example: transaction that rolls back (changes are not saved)'
   sqlstat:
     comment: library database overview
     commands:

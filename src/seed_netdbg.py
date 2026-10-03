@@ -88,6 +88,11 @@ SEED_TAGS = {
             ),
             ("openssl version", "версия openssl"),
             (
+                "echo | timeout 8 openssl s_client -connect $HOST:$PORT "
+                "-servername $SNI -verify_return_error -brief",
+                "handshake со строгой проверкой цепочки",
+            ),
+            (
                 "> openssl s_client -connect $HOST:$PORT -servername $SNI",
                 "интерактивный s_client",
             ),

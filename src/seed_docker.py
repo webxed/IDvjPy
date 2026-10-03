@@ -45,6 +45,16 @@ SEED_TAGS = {
             ("docker rm $CTR", "удалить остановленный $CTR"),
             ("docker rmi $IMAGE", "удалить образ $IMAGE"),
             ("docker exec -it $CTR sh", "shell в $CTR (лучше: > docker exec -it $CTR sh)"),
+            (
+                "docker inspect --format '{{json .State.Health}}' $CTR",
+                "health-статус контейнера (JSON)",
+            ),
+            ("docker events --since 10m --until now", "события за последние 10 минут"),
+            (
+                "docker container ls --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}'",
+                "таблица контейнеров (names/status/ports)",
+            ),
+            ("docker image inspect $IMAGE", "inspect образа (image config)"),
         ],
     ),
     "dcmp": (
@@ -61,6 +71,11 @@ SEED_TAGS = {
             ("docker compose down", "остановить и убрать контейнеры"),
             ("docker compose exec $SVC sh", "exec в $SVC (лучше: > docker compose exec $SVC sh)"),
             ("docker-compose ps", "старый бинарь docker-compose"),
+            (
+                "docker compose config --quiet",
+                "проверить конфиг (бесшумно, ошибки в код возврата)",
+            ),
+            ("docker compose ps --all", "все сервисы (включая остановленные)"),
         ],
     ),
     "dps": (
@@ -93,8 +108,29 @@ SEED_TAGS = {
 }
 
 
+# Разметка канонических тегов (машинные токены, не переводятся; см. :tagmeta).
+SEED_METADATA = {
+    "dck": {
+        "risk": "medium",
+        "utilities": ["docker"],
+        "os": ["linux", "macos"],
+        "interactive": False,
+        "topic": "containers",
+        "example": "docker ps -a",
+    },
+    "dcmp": {
+        "risk": "medium",
+        "utilities": ["docker", "docker compose"],
+        "os": ["linux", "macos"],
+        "interactive": False,
+        "topic": "compose",
+        "example": "docker compose ps --all",
+    },
+}
+
+
 def run_seed(db_file: str) -> int:
-    return _run_seed(db_file, SEED_TAGS)
+    return _run_seed(db_file, SEED_TAGS, metadata=SEED_METADATA)
 
 
 def main() -> None:

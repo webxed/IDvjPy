@@ -1,6 +1,7 @@
 # Справочник данных: PostgreSQL и Kafka
 
-Теги **`pg`**, **`kf`**. Плейбуки: `pgstat`, `kfstat` (осмотр, без DROP/delete topic).
+Теги **`pg`**, **`kf`**. Плейбуки: `pgstat`, `kfstat`, `khealth` (осмотр, без DROP/delete topic).  
+Только read-only: `pg_terminate_backend`, `VACUUM FULL`, `REINDEX`, `DROP` и `kafka-acls --add` в справочник не входят.
 
 `psql` берёт `$PGHOST` `$PGPORT` `$PGUSER` `$PGDATABASE` (стандарт libpq).
 Kafka: `kcat` (он же kafkacat) и скрипты `kafka-topics` / `kafka-topics.sh`.
@@ -43,6 +44,10 @@ $GROUP=
 | 14 | `systemctl status postgresql --no-pager` | Unit |
 | 15 | `journalctl -u postgresql -n 80 --no-pager` | Журнал |
 | 16 | `psql` | Интерактив (`> psql`) |
+| 17 | `psql … now() - query_start` | Активные запросы с длительностью |
+| 18 | `psql … pg_blocking_pids` | Кто кого блокирует |
+| 19 | `psql … pg_stat_user_tables` | Мёртвые строки и autovacuum |
+| 20 | `psql … pg_total_relation_size` | Крупнейшие таблицы по размеру |
 
 ---
 
@@ -53,7 +58,7 @@ $GROUP=
 | tid | Команда | Назначение |
 |-----|---------|------------|
 | 1 | `kcat -b $BROKER -L` | Метаданные |
-| 2 | `kcat -b $BROKER -t $TOPIC -C -o -10 -e` | Последние 10 сообщений |
+| 2 | `kcat -b $BROKER -t $TOPIC -C -o -10 -c 10` | Последние 10 сообщений (явный `-c 10`) |
 | 3 | `kafka-topics --bootstrap-server $BROKER --list` | Топики |
 | 4 | `kafka-topics … --describe --topic $TOPIC` | Описать `$TOPIC` |
 | 5 | `kafka-topics … --describe` | Все топики |
@@ -62,6 +67,8 @@ $GROUP=
 | 8 | `kafka-configs … --describe` | Конфиг топика |
 | 9 | `kafka-broker-api-versions …` | Доступность брокера |
 | 10 | `kafka-topics.sh … --list` | Топики (Confluent) |
+| 11 | `kafka-consumer-groups … --describe --group $GROUP --verbose` | Лаг подробно |
+| 12 | `kafka-acls --bootstrap-server $BROKER --list` | ACL кластера (read-only) |
 
 ---
 
@@ -71,6 +78,7 @@ $GROUP=
 |-----|---------|
 | `pgstat[1]` | ready → version → recovery → activity |
 | `kfstat[1]` | kcat `-L` → list topics |
+| `khealth[1]` | kcat `-L` → describe `$TOPIC` → lag `$GROUP` (без payload) |
 
 ```text
 !! pgstat[1]

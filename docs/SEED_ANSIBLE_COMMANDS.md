@@ -26,6 +26,7 @@ $COLLECTION=
 ```
 
 Интерактив: `> ansible-console -i $INV`, `> ansible-vault edit $VAULTFILE`.
+`ansible-vault view` и decrypt в stdout печатают plaintext в журнал. `ansible-lint` — необязательная внешняя утилита, не зависимость приложения.
 
 ---
 
@@ -46,6 +47,7 @@ $COLLECTION=
 | 11 | `ansible … -m $MODULE -a '$ARGS'` | Модуль (меняет хост) |
 | 12 | `ansible-doc $MODULE` | Документация модуля |
 | 13 | `ansible-console -i $INV` | REPL (`> ansible-console …`) |
+| 14 | `ansible-inventory -i $INV --host $HOST` | Переменные и группы хоста |
 
 Не в плейбуке: tid 11 (меняет хост), tid 13 (интерактив).
 
@@ -65,6 +67,8 @@ $COLLECTION=
 | 8 | `--limit $LIMIT` | Прогон (меняет хосты) |
 | 9 | `--tags $TAGS` | Прогон (меняет хосты) |
 | 10 | `ansible-playbook -i $INV $PLAY` | Полный прогон (меняет хосты) |
+| 11 | `--list-tasks --limit $LIMIT` | Задачи для `$LIMIT` |
+| 12 | `ansible-lint $PLAY` | Lint (внешняя утилита) |
 
 В `achk` только tid 1 и 5.
 
@@ -74,7 +78,7 @@ $COLLECTION=
 
 `avault`: view и encrypt/decrypt в stdout — осмотр; encrypt/decrypt файла, create, edit — меняют диск / интерактив.
 
-`agalaxy`: list/search — осмотр; install/init — пишут в `~/.ansible`.
+`agalaxy`: list/search — осмотр; install/init — пишут в `~/.ansible`. `ansible-galaxy collection list $COLLECTION` — версия конкретной коллекции.
 
 ---
 

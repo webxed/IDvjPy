@@ -22,7 +22,9 @@
                Scope still hides tags outside this session's visibility.
   Metadata  - `:tagmeta TAG` shows metadata; passing JSON replaces it, `{}` clears.
                Fields: risk, utilities, os, interactive, topic, example. Descriptive
-               only; metadata is included in JSON transfer.
+               only; metadata is included in JSON transfer. Canonical seeds annotate
+               their own tags (git, kpod, sqlite, vault, …), so `:tags vcs` works
+               right after `--seed` without manual `:tagmeta`.
 
 
   Catalog    - `:tags [filter]` searches live tags, descriptions, and metadata;

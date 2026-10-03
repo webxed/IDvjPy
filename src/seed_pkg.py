@@ -3,6 +3,7 @@
 Seed package-manager handbook: apt, dnf, rpm (see SEED_PKG_COMMANDS.md).
 
 Playbooks are query-only. install/remove are in tags, not in aptq/rpmq.
+`-s` (apt-get) and `--assumeno` (dnf) preview the transaction without applying it.
 
 Run: python3 src/seed_pkg.py --seed
 """
@@ -32,6 +33,13 @@ SEED_TAGS = {
             ("apt update", "обновить индексы (меняет кэш)"),
             ("apt install $PKG", "поставить $PKG (меняет систему)"),
             ("apt remove $PKG", "убрать $PKG"),
+            (
+                "apt-get -s install $PKG",
+                "dry-run установки: план транзакции без изменений",
+            ),
+            ("apt-get -s remove $PKG", "dry-run удаления: план транзакции"),
+            ("apt-cache depends $PKG", "от чего зависит $PKG"),
+            ("apt-cache rdepends $PKG", "кто зависит от $PKG (обратные)"),
         ],
     ),
     "dnf": (
@@ -45,6 +53,13 @@ SEED_TAGS = {
             ("yum info $PKG", "yum info (старые хосты)"),
             ("dnf install $PKG", "поставить $PKG (меняет систему)"),
             ("dnf remove $PKG", "убрать $PKG"),
+            (
+                "dnf install --assumeno $PKG",
+                "dry-run установки (--assumeno = ответ «нет»)",
+            ),
+            ("dnf remove --assumeno $PKG", "dry-run удаления"),
+            ("dnf repoquery --requires $PKG", "зависимости $PKG"),
+            ("dnf repoquery --whatrequires $PKG", "кто требует $PKG"),
         ],
     ),
     "rpm": (

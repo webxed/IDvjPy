@@ -2,6 +2,7 @@
 
 Тег **`vault`**. Плейбуки: `vstat`, `vkv`, `vapprole` (осмотр и вход).  
 `kv get` печатает секреты **в журнал** — в автоцепочку не входит; для осмотра пути — `kv metadata get`.
+Завершающий шаг `vapprole` проверяет права токена (`vault token capabilities $SECRET`), а не читает значение.
 
 `vvars` не печатает `VAULT_TOKEN`, только `token=set` / `token=unset`.
 
@@ -85,7 +86,7 @@ $FIELD=
 | 6 | `$$SECRET_ID=@secret_id` | `run:auto` | секрет из шага 5 |
 | 7 | `vault write auth/approle/login role_id="$ROLE_ID" secret_id="$SECRET_ID"` | `run:auto` | вход, `token` |
 | 8 | `$$VAULT_TOKEN=@token` | `run:auto` | обновить токен |
-| 9 | `vault read $SECRET` | `run:auto` | проверка доступа новым токеном |
+| 9 | `vault token capabilities $SECRET` | `run:auto` | права токена на путь (значение не печатается) |
 
 ```text
 # вся цепочка (полуавтомат): останавливается там, где нужен человек

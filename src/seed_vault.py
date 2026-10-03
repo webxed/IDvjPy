@@ -8,7 +8,9 @@ credentials, not data changes) and is meant to be run as a chain: `:run vapprole
 `run:manual` stops where the human decides: steps 1 and 2 are **prefix lines to
 complete** (`$$VAULT_TOKEN=`, `$ROLE=` — the value is typed after `=`), and step 5
 confirms issuing a new secret-id. The other steps carry no `run:` directive and
-run themselves (`vault read`, `$$VAR=@key`).
+run themselves (`vault read`, `$$VAR=@key`). The final step checks the new token's
+capabilities on `$SECRET` instead of reading the value, so no secret reaches the
+journal.
 vvars does not echo VAULT_TOKEN (only set/unset).
 
 Run: python3 src/seed_vault.py --seed
@@ -108,14 +110,39 @@ SEED_TAGS = {
                 "$$VAULT_TOKEN=@token",
                 "run:auto секрет: обновить `$VAULT_TOKEN` на approle-токен",
             ),
-            ("vault read $SECRET", "run:auto проверить доступ новым токеном"),
+            (
+                "vault token capabilities $SECRET",
+                "run:auto проверить права токена на путь (значение не печатается)",
+            ),
         ],
     ),
 }
 
 
+# Разметка канонических тегов (машинные токены, не переводятся; см. :tagmeta).
+# `risk` — описательная пометка, а не защита: мутирующие шаги держит `run:manual`.
+SEED_METADATA = {
+    "vault": {
+        "risk": "medium",
+        "utilities": ["vault"],
+        "os": ["linux", "macos"],
+        "interactive": False,
+        "topic": "secrets",
+        "example": "vault kv metadata get $SECRET",
+    },
+    "vapprole": {
+        "risk": "medium",
+        "utilities": ["vault"],
+        "os": ["linux", "macos"],
+        "interactive": False,
+        "topic": "secrets",
+        "example": "vault token capabilities $SECRET",
+    },
+}
+
+
 def run_seed(db_file: str) -> int:
-    return _run_seed(db_file, SEED_TAGS)
+    return _run_seed(db_file, SEED_TAGS, metadata=SEED_METADATA)
 
 
 def main() -> None:

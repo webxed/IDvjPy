@@ -17,6 +17,10 @@ tags:
       8: update indexes (changes the cache)
       9: install $PKG (changes the system)
       10: remove $PKG
+      11: 'dry-run install: transaction plan without changes'
+      12: 'dry-run remove: transaction plan'
+      13: what $PKG depends on
+      14: what depends on $PKG (reverse)
   dnf:
     comment: dnf / yum (RHEL/Fedora)
     commands:
@@ -28,6 +32,10 @@ tags:
       5: yum info (old hosts)
       6: install $PKG (changes the system)
       7: remove $PKG
+      8: 'dry-run install (--assumeno answers "no")'
+      9: dry-run remove
+      10: dependencies of $PKG
+      11: what requires $PKG
   rpm:
     comment: 'rpm: queries (RHEL and more)'
     commands:

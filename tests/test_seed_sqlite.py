@@ -16,6 +16,10 @@ import seed_sqlite
 
 # Команды, которые пишут в базу или файл: ровно они помечены «меняет» в сиде.
 MUTATING_TIDS = (11, 12, 13)
+# Учебный пример содержит DELETE, но откатывает транзакцию — база не меняется.
+ROLLBACK_TIDS = (18,)
+# Снимок файла: не SQL, но тоже пишет на диск (создаёт копию базы).
+SNAPSHOT_TIDS = (17,)
 
 
 def _sqlite_commands() -> list[tuple[str, str]]:
@@ -27,7 +31,7 @@ def _sqlite_commands() -> list[tuple[str, str]]:
 def test_seed_tags_shape():
     assert list(seed_sqlite.SEED_TAGS) == ["sqlvars", "sqlite", "sqlstat"]
     tag_comment, commands = seed_sqlite.SEED_TAGS["sqlite"]
-    assert len(commands) == 16
+    assert len(commands) == 18
     assert "11–13" in tag_comment  # в подписи видно, какие tid меняют базу
 
 
@@ -53,9 +57,21 @@ def test_only_marked_tids_change_the_database():
     """Читающие команды не содержат DELETE/VACUUM, а меняющие — помечены."""
     for index, (command, comment) in enumerate(_sqlite_commands(), start=1):
         changes = ("DELETE" in command) or ("VACUUM" in command)
+        if index in ROLLBACK_TIDS:
+            assert changes and "ROLLBACK" in command, command
+            continue
         assert changes == (index in MUTATING_TIDS), command
         if changes:
             assert "меняет" in comment, command
+
+
+def test_snapshot_command_copies_the_live_file():
+    """Tid 17 — снимок базы перед ручным SQL (создаёт файл, не меняет базу)."""
+    command, comment = _sqlite_commands()[16]
+    assert command.startswith("cp ")
+    assert "$DBFILE" in command
+    assert "mytags-before-manual-sqlite-" in command
+    assert "создаёт файл" in comment
 
 
 def test_every_command_uses_the_injected_path():
@@ -65,7 +81,10 @@ def test_every_command_uses_the_injected_path():
             continue  # проверка наличия CLI — без пути
         assert "$DBFILE" in command, command
         assert "mytags.db" not in command, command
-        assert command.startswith("sqlite3"), command
+        if index in SNAPSHOT_TIDS:
+            assert command.startswith("cp "), command
+        else:
+            assert command.startswith("sqlite3"), command
 
 
 def test_playbook_is_inspect_only_and_refers_to_existing_tids():

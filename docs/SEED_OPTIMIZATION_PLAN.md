@@ -287,3 +287,14 @@ python3 -m pytest tests/test_seed_ops.py tests/test_seed_i18n.py -q
 ```
 
 Полный `pytest tests/` не запускать без явного запроса: набор выполняется долго.
+
+## Статус выполнения
+
+- [x] 1. Vault: финальный шаг `vapprole` → `vault token capabilities $SECRET` (значение не печатается).
+- [x] 2. Пакеты: dry-run `apt-get -s` / `dnf --assumeno`, `apt-cache depends/rdepends`, `dnf repoquery --requires/--whatrequires`.
+- [x] 3. PostgreSQL: активные запросы с длительностью, `pg_blocking_pids`, `pg_stat_user_tables`, крупнейшие таблицы. Kafka: `--verbose`, `kafka-acls --list`, явный `kcat -c 10`, новый обзор `khealth`.
+- [x] 4. Kubernetes: `$SA`, теги `kdns` (dnsPolicy/resolv.conf/Endpoints/CoreDNS) и `krbac` (`auth can-i`, impersonation SA).
+- [x] 5. Docker (`State.Health`, `events`, `container ls`, `image inspect`, `compose config --quiet`, `compose ps --all`), HTTP (`-D -`, retry/timeouts, `remote_ip/http_version`), TLS (`-verify_return_error`), systemd (`show -p`, `status -l`, `short-iso`, `systemd-analyze verify`), Ansible (`--host`, `--list-tasks --limit`, `collection list $COLLECTION`, `ansible-lint`), SQLite (снимок перед ручным SQL + учебный `ROLLBACK`).
+- [x] 6. `observe` — **решили не создавать**: предлагаемые команды уже живут в `hinfo` (uptime/free), `disk` (df), `sysstat` (vmstat), `netfw` (ss), `systemd` (failed/journal), поэтому отдельный handbook дублировал бы существующие теги (см. пункт 13).
+- [x] 7. Git/Kubernetes переведены на `seed_lib.run_seed()` / `seed_cli()` (добавлен параметр `label`, метки backup `git` / `k8s` сохранены).
+- [x] 8. `:tagmeta`: канонические сиды размечают теги через единственный писатель `database.set_tag_metadata()` (git, gstat, kns, kpod, klog, kdns, krbac, dck, dcmp, sqlite, vault, vapprole, proc, file, net, kube). Машинные токены не переводятся, повторный `--seed` не сбрасывает разметку.

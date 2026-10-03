@@ -38,6 +38,12 @@ def test_seed_docker_tids_and_playbooks(tmp_path):
     assert dck[0]["command"] == "docker ps"
     assert "docker logs --tail=100" in dck[3]["command"]
     assert "grep -iE" in dck[13]["command"]  # tid 14
+    assert "State.Health" in dck[21]["command"]  # tid 22
+    assert dck[22]["command"] == "docker events --since 10m --until now"  # tid 23
+    assert dck[24]["command"] == "docker image inspect $IMAGE"  # tid 25
+    dcmp = database.get_commands_by_tag(db, "dcmp")
+    assert dcmp[11]["command"] == "docker compose config --quiet"  # tid 12
+    assert dcmp[12]["command"] == "docker compose ps --all"  # tid 13
     dps = database.get_command_by_tid(db, "dps", 1)
     assert "!dck[1]" in dps["command"]
     assert "!dck[6]" in dps["command"]
@@ -75,6 +81,12 @@ def test_seed_ansible_inspect_playbooks(tmp_path):
     aplay = database.get_commands_by_tag(db, "aplay")
     assert "--syntax-check" in aplay[0]["command"]
     assert "--check --diff" in aplay[4]["command"]  # tid 5
+    # v1.2xx: задачи для limit, lint и переменные одного хоста.
+    assert "--list-tasks --limit $LIMIT" in aplay[10]["command"]  # tid 11
+    assert aplay[11]["command"] == "ansible-lint $PLAY"  # tid 12
+    assert rows[13]["command"] == "ansible-inventory -i $INV --host $HOST"  # tid 14
+    agalaxy = database.get_commands_by_tag(db, "agalaxy")
+    assert agalaxy[7]["command"] == "ansible-galaxy collection list $COLLECTION"  # tid 8
     achk = database.get_command_by_tid(db, "achk", 1)
     assert "!ansible[3]" in achk["command"]
     assert "!aplay[1]" in achk["command"]
@@ -96,6 +108,8 @@ def test_seed_http_curl_nginx_traefik(tmp_path):
     curl = database.get_commands_by_tag(db, "curl")
     assert curl[0]["command"] == "curl -sI $URL"
     assert "time_namelookup" in curl[9]["command"]  # tid 10
+    assert "--max-time 10" in curl[12]["command"]  # tid 13
+    assert "%{remote_ip}" in curl[14]["command"]  # tid 15
     hchk = database.get_command_by_tid(db, "hchk", 1)
     assert "!curl[1]" in hchk["command"]
     assert "!curl[10]" in hchk["command"]
@@ -160,12 +174,28 @@ def test_seed_data_postgres_kafka(tmp_path):
     assert "!pg[1]" in pgstat["command"]
     assert "!pg[9]" in pgstat["command"]
     assert "DROP" not in pgstat["command"]
+    # Read-only диагностика: длительность, блокировки, dead tuples, размер.
+    assert "pg_blocking_pids" in database.get_command_by_tid(db, "pg", 18)["command"]
+    assert "n_dead_tup" in database.get_command_by_tid(db, "pg", 19)["command"]
+    assert "pg_total_relation_size" in database.get_command_by_tid(db, "pg", 20)["command"]
     kf = database.get_commands_by_tag(db, "kf")
     assert kf[0]["command"].startswith("kcat")
+    assert "-c 10" in kf[1]["command"]
+    assert database.get_command_by_tid(db, "kf", 11)["command"] == (
+        "kafka-consumer-groups --bootstrap-server $BROKER --describe "
+        "--group $GROUP --verbose"
+    )
+    assert database.get_command_by_tid(db, "kf", 12)["command"] == (
+        "kafka-acls --bootstrap-server $BROKER --list"
+    )
     kfstat = database.get_command_by_tid(db, "kfstat", 1)
     assert "!kf[1]" in kfstat["command"]
     assert "!kf[3]" in kfstat["command"]
     assert "--delete" not in kfstat["command"]
+    khealth = database.get_command_by_tid(db, "khealth", 1)
+    assert "!kf[1]" in khealth["command"]
+    assert "!kf[4]" in khealth["command"]
+    assert "!kf[7]" in khealth["command"]
 
 
 def test_seed_host_tar_only(tmp_path):
@@ -222,6 +252,17 @@ def test_seed_systemd_inspect_playbooks(tmp_path):
     dmesg = database.get_commands_by_tag(db, "dmesg")
     assert dmesg[0]["command"].startswith("dmesg --color=never")
     assert "--level=err,warn" in dmesg[2]["command"]  # tid 3
+    # v1.2xx: точечный show, полный status и verify unit-файла.
+    assert database.get_command_by_tid(db, "sctl", 16)["command"] == (
+        "systemctl show $UNIT -p ActiveState -p SubState -p Result "
+        "-p ExecMainStatus -p NRestarts"
+    )
+    assert database.get_command_by_tid(db, "sctl", 18)["command"] == (
+        "systemd-analyze verify $UNIT"
+    )
+    assert database.get_command_by_tid(db, "jctl", 12)["command"] == (
+        'journalctl -u $UNIT --since "$SINCE" --no-pager -o short-iso'
+    )
     sfail = database.get_command_by_tid(db, "sfail", 1)
     assert "!sctl[1]" in sfail["command"]
     assert "!sctl[2]" in sfail["command"]
@@ -310,8 +351,10 @@ def test_seed_vault_inspect_playbooks(tmp_path):
     assert database.get_command_by_tid(db, "vapprole", 8)["command"] == (
         "$$VAULT_TOKEN=@token"
     )
+    # Финальный шаг проверяет права нового токена, а не читает значение секрета:
+    # иначе секрет ушёл бы в журнал.
     assert database.get_command_by_tid(db, "vapprole", 9)["command"] == (
-        "vault read $SECRET"
+        "vault token capabilities $SECRET"
     )
     # Директивы прогона: человек ждёт токен/роль и выпуск secret_id, остальное само.
     app_role = {row["tid"]: row["comment"] for row in database.get_commands_by_tag(db, "vapprole")}
@@ -394,6 +437,8 @@ def test_seed_netdbg_bounded_capture(tmp_path):
     assert database.get_command_by_tid(db, "ncat", 1)["command"] == "nc -vz $HOST $PORT"
     hops = database.get_commands_by_tag(db, "hops")
     assert "mtr -c $COUNT -r" in hops[3]["command"]
+    tls = database.get_commands_by_tag(db, "tls")
+    assert "-verify_return_error" in tls[4]["command"]  # tid 5: строгая проверка
     assert database.get_command_by_tid(db, "ss", 1) is None
     assert database.get_command_by_tid(db, "net", 1) is None
     assert database.get_command_by_tid(db, "nmap", 1) is None
@@ -413,6 +458,19 @@ def test_seed_pkg_query_playbooks(tmp_path):
     assert "!rpm[2]" in rpmq["command"]
     assert database.get_command_by_tid(db, "rpm", 1)["command"] == "rpm -q $PKG"
     assert database.get_command_by_tid(db, "dnf", 1)["command"] == "dnf info $PKG"
+    # Dry-run и запросы зависимостей — только предпросмотр, без изменения системы.
+    assert database.get_command_by_tid(db, "apt", 12)["command"] == (
+        "apt-get -s install $PKG"
+    )
+    assert database.get_command_by_tid(db, "apt", 14)["command"] == (
+        "apt-cache depends $PKG"
+    )
+    assert database.get_command_by_tid(db, "dnf", 9)["command"] == (
+        "dnf install --assumeno $PKG"
+    )
+    assert database.get_command_by_tid(db, "dnf", 11)["command"] == (
+        "dnf repoquery --requires $PKG"
+    )
 
 
 def test_seed_user_inspect_playbook(tmp_path):

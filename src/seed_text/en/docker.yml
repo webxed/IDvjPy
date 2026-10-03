@@ -27,6 +27,10 @@ tags:
       18: remove a stopped $CTR
       19: remove image $IMAGE
       20: 'shell in $CTR (better: > docker exec -it $CTR sh)'
+      21: container health status (JSON)
+      22: events of the last 10 minutes
+      23: container table (names/status/ports)
+      24: inspect an image (image config)
   dcmp:
     comment: docker compose
     commands:
@@ -41,6 +45,8 @@ tags:
       8: stop and remove containers
       9: 'exec in $SVC (better: > docker compose exec $SVC sh)'
       10: old docker-compose binary
+      11: check config (quiet, errors via exit code)
+      12: all services (including stopped)
   dps:
     comment: docker overview
     commands:

@@ -17,6 +17,10 @@ tags:
       8: 更新索引（会改动缓存）
       9: 安装 $PKG（会改动系统）
       10: 删除 $PKG
+      11: '安装 dry-run：事务计划，不做改动'
+      12: '删除 dry-run：事务计划'
+      13: $PKG 依赖什么
+      14: 谁依赖 $PKG（反向）
   dnf:
     comment: dnf / yum（RHEL/Fedora）
     commands:
@@ -28,6 +32,10 @@ tags:
       5: yum info（旧主机）
       6: 安装 $PKG（会改动系统）
       7: 删除 $PKG
+      8: '安装 dry-run（--assumeno 表示回答"否"）'
+      9: 删除 dry-run
+      10: $PKG 的依赖
+      11: 谁需要 $PKG
   rpm:
     comment: 'rpm: 查询（RHEL 等）'
     commands:

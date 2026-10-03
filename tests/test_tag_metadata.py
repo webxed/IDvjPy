@@ -57,3 +57,40 @@ def test_metadata_import_rejects_invalid_object(tmp_path):
         db_transfer.import_payload(str(tmp_path / "db.sqlite"), {
             "commands": [], "tag_metadata": {"git": {"risk": "unknown"}}
         })
+
+
+def test_seed_annotates_canonical_tags_and_survives_reseed(tmp_path):
+    """Канонические сиды пишут метаданные, повторный `--seed` их не сбрасывает."""
+    import seed_git
+
+    db = str(tmp_path / "seeded.db")
+    seed_git.run_seed(db)
+    git = database.get_tag_metadata(db, "git")
+    assert git["risk"] == "medium"
+    assert git["utilities"] == ["git"]
+    assert database.get_tag_metadata(db, "gstat")["topic"] == "inspect"
+
+    seed_git.run_seed(db)
+    assert database.get_tag_metadata(db, "git")["risk"] == "medium"
+
+
+def test_every_annotated_seed_writes_valid_metadata(tmp_path):
+    """Каждый размеченный тег проходит схему и не пуст после своего сида."""
+    import seed_docker
+    import seed_k8s_chains
+    import seed_linux_commands
+    import seed_sqlite
+    import seed_vault
+
+    for module, tag in (
+        (seed_docker, "dck"),
+        (seed_k8s_chains, "kpod"),
+        (seed_sqlite, "sqlite"),
+        (seed_vault, "vault"),
+        (seed_linux_commands, "proc"),
+    ):
+        db = str(tmp_path / f"{tag}.db")
+        module.run_seed(db)
+        value = database.get_tag_metadata(db, tag)
+        assert value, (module.__name__, tag)
+        assert value["risk"] in database.TAG_RISK_LEVELS, (module.__name__, tag)

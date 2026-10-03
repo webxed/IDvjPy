@@ -15,12 +15,15 @@ tags:
       6: enabled/disabled $UNIT
       7: running services
       8: timers
-      9: reload unit files
+      9: reload unit files (changes manager state)
       10: reload $UNIT (changes service)
       11: restart $UNIT (changes service)
       12: start $UNIT (changes service)
       13: stop $UNIT (changes service)
       14: reset failed $UNIT
+      15: key properties of $UNIT in one command
+      16: status with full lines
+      17: verify the unit file of $UNIT
   jctl:
     comment: 'journalctl: systemd journal'
     commands:
@@ -35,6 +38,7 @@ tags:
       8: journal disk usage
       9: JSON $UNIT → F5
       10: 'follow $UNIT (better: > journalctl -f -u $UNIT)'
+      11: journal of $UNIT since $SINCE in ISO time
   dmesg:
     comment: 'dmesg: kernel ring buffer'
     commands:

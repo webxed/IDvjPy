@@ -22,6 +22,8 @@ tags:
       13: 数据库完整性
       14: 数据库导出为 SQL（mytags.sql，写入当前目录）
       15: '交互式 sqlite3（更好: > sqlite3 $DBFILE）'
+      16: 手动 SQL 前的文件快照（会创建文件）
+      17: '教学示例: 带回滚的事务（改动不会保存）'
   sqlstat:
     comment: 库数据库概览
     commands:

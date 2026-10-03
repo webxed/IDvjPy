@@ -72,7 +72,8 @@ Tid 5 не в плейбуке.
 | 2 | `… \| openssl x509 -dates` | Даты/subject |
 | 3 | `… \| openssl x509 -text \| head` | x509 text |
 | 4 | `openssl version` | Версия |
-| 5 | `> openssl s_client …` | Интерактив |
+| 5 | `echo \| timeout 8 openssl s_client … -verify_return_error -brief` | Строгая проверка цепочки |
+| 6 | `> openssl s_client …` | Интерактив |
 
 ---
 

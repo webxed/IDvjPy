@@ -45,6 +45,19 @@ SEED_TAGS = {
             ),
             ("curl -sS -o /dev/null -w '%{http_code}\\n' -X POST $URL", "POST, только код"),
             ("curl -sS -kI $URL", "заголовки, без проверки TLS"),
+            (
+                "curl -sS -D - -o /dev/null --max-time 10 $URL",
+                "заголовки ответа (без тела, ограничено 10с)",
+            ),
+            (
+                "curl -sS --retry 2 --retry-all-errors --connect-timeout 3 "
+                "--max-time 15 -o /dev/null -w '%{http_code} %{time_total}\\n' $URL",
+                "повторы и таймауты: код и время",
+            ),
+            (
+                "curl -sS -o /dev/null -w '%{remote_ip} %{http_version} %{http_code}\\n' $URL",
+                "IP, версия HTTP и код",
+            ),
         ],
     ),
     "ngx": (

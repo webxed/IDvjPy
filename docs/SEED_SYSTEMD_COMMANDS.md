@@ -37,14 +37,17 @@ $BOOT=0
 | 7 | `systemctl is-enabled $UNIT` | enabled / disabled |
 | 8 | `list-units --type=service --state=running` | Запущенные services |
 | 9 | `systemctl list-timers --all --no-pager` | Таймеры |
-| 10 | `systemctl daemon-reload` | Перечитать unit-файлы |
+| 10 | `systemctl daemon-reload` | Перечитать unit-файлы (меняет состояние менеджера) |
 | 11 | `systemctl reload $UNIT` | Reload (меняет сервис) |
 | 12 | `systemctl restart $UNIT` | Restart (меняет сервис) |
 | 13 | `systemctl start $UNIT` | Start (меняет сервис) |
 | 14 | `systemctl stop $UNIT` | Stop (меняет сервис) |
 | 15 | `systemctl reset-failed $UNIT` | Сбросить failed |
+| 16 | `systemctl show $UNIT -p ActiveState -p SubState …` | Ключевые свойства одной командой |
+| 17 | `systemctl status $UNIT --no-pager -l` | Статус с полными строками |
+| 18 | `systemd-analyze verify $UNIT` | Проверить unit-файл |
 
-В плейбуках нет tid 10–15.
+В плейбуках нет tid 10–18.
 
 ---
 
@@ -63,6 +66,7 @@ $BOOT=0
 | 9 | `--disk-usage` | Место журнала |
 | 10 | `-u $UNIT -o json-pretty -n 20` | JSON → F5 |
 | 11 | `journalctl -f -u $UNIT` | Follow (`> journalctl -f …`) |
+| 12 | `journalctl -u $UNIT --since "$SINCE" -o short-iso` | Журнал с `$SINCE` в ISO-времени |
 
 ---
 

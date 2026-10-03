@@ -8,22 +8,10 @@ Run: python3 src/seed_k8s_chains.py --seed
 
 Uses database_tags_file from settings.yml (same as app.py).
 """
-import argparse
-import os
 import sys
 
-try:
-    import yaml
-
-    import database_v2 as database
-except ImportError as e:
-    print(f"Error: {e}", file=sys.stderr)
-    print("Install dependencies: pip install -r requirements.txt", file=sys.stderr)
-    sys.exit(1)
-
-FILE_SETTINGS = "settings.yml"
-ENCODING = "utf-8"
-DEFAULT_DB = "mytags.db"
+from seed_lib import run_seed as _run_seed
+from seed_lib import seed_cli
 
 # tag -> (tag comment, [(command, command comment), ...])
 # tid = 1-based index in each list. Playbooks reference these tids.
@@ -32,8 +20,9 @@ SEED_TAGS = {
         "переменные инцидента",
         [
             (
-                "echo ns=$NS pod=$POD deploy=$DEPLOY svc=$SVC ing=$ING app=$APP ctr=$CTR quota=$QUOTA",
-                "проверка $NS/$POD/…/$QUOTA",
+                "echo ns=$NS pod=$POD deploy=$DEPLOY svc=$SVC ing=$ING app=$APP "
+                "ctr=$CTR quota=$QUOTA sa=$SA",
+                "проверка $NS/$POD/…/$QUOTA/$SA",
             ),
         ],
     ),
@@ -303,72 +292,109 @@ SEED_TAGS = {
             ),
         ],
     ),
+    "kdns": (
+        "DNS: dnsPolicy, resolv.conf, endpoints",
+        [
+            (
+                "kubectl get pod $POD -n $NS -o jsonpath="
+                "'{.spec.dnsPolicy}{\"\\n\"}{.spec.dnsConfig}{\"\\n\"}'",
+                "dnsPolicy / dnsConfig пода",
+            ),
+            (
+                "kubectl exec $POD -n $NS -- cat /etc/resolv.conf",
+                "resolv.conf внутри пода (read-only)",
+            ),
+            ("kubectl get endpoints $SVC -n $NS -o yaml", "Endpoints: IP и порты $SVC"),
+            (
+                "kubectl get endpointslice -n $NS -l kubernetes.io/service-name=$SVC -o wide",
+                "EndpointSlice $SVC",
+            ),
+            (
+                "kubectl get pods -n kube-system -l k8s-app=kube-dns -o wide",
+                "поды CoreDNS",
+            ),
+            ("kubectl get svc kube-dns -n kube-system -o wide", "сервис CoreDNS"),
+        ],
+    ),
+    "krbac": (
+        "RBAC: что можно токену / ServiceAccount",
+        [
+            ("kubectl auth can-i get pods -n $NS", "читать поды?"),
+            ("kubectl auth can-i create deployments -n $NS", "создавать deployments?"),
+            ("kubectl auth can-i get secrets -n $NS", "читать secrets?"),
+            ("kubectl get sa -n $NS", "ServiceAccount в $NS"),
+            (
+                "kubectl auth can-i get pods -n $NS --as=system:serviceaccount:$NS:$SA",
+                "права SA $SA (impersonation)",
+            ),
+            (
+                "kubectl auth can-i --list -n $NS --as=system:serviceaccount:$NS:$SA",
+                "полный список прав SA $SA",
+            ),
+            ("kubectl describe sa $SA -n $NS", "describe SA $SA"),
+        ],
+    ),
 }
 
 
-def get_db_file() -> str:
-    """Read database path from settings.yml, same logic as app.py."""
-    if not os.path.exists(FILE_SETTINGS):
-        return DEFAULT_DB
-    try:
-        with open(FILE_SETTINGS, encoding=ENCODING) as f:
-            settings = yaml.safe_load(f)
-        if settings:
-            return settings.get("database_tags_file", DEFAULT_DB)
-    except Exception:
-        pass
-    return DEFAULT_DB
-
-
-def hard_delete_commands_by_tag(db_file: str, tag: str) -> None:
-    """Remove all rows for tag so new inserts get tid 1, 2, 3..."""
-    conn = database.get_db_connection(db_file)
-    conn.execute("DELETE FROM commands WHERE tag = ?", (tag,))
-    conn.execute("DELETE FROM tags WHERE tag = ?", (tag,))
-    conn.commit()
-    conn.close()
+# Разметка канонических тегов (машинные токены, не переводятся; см. :tagmeta).
+SEED_METADATA = {
+    "kns": {
+        "risk": "low",
+        "utilities": ["kubectl"],
+        "os": ["linux", "macos", "windows"],
+        "interactive": False,
+        "topic": "inspect",
+        "example": "kubectl config current-context",
+    },
+    "kpod": {
+        "risk": "low",
+        "utilities": ["kubectl"],
+        "os": ["linux", "macos", "windows"],
+        "interactive": False,
+        "topic": "inspect",
+        "example": "kubectl get pods -n $NS -o wide",
+    },
+    "klog": {
+        "risk": "low",
+        "utilities": ["kubectl"],
+        "os": ["linux", "macos", "windows"],
+        "interactive": False,
+        "topic": "logs",
+        "example": "kubectl logs $POD -n $NS --tail=200",
+    },
+    "kdns": {
+        "risk": "low",
+        "utilities": ["kubectl"],
+        "os": ["linux", "macos", "windows"],
+        "interactive": False,
+        "topic": "network",
+        "example": "kubectl get pod $POD -n $NS -o jsonpath='{.spec.dnsPolicy}'",
+    },
+    "krbac": {
+        "risk": "low",
+        "utilities": ["kubectl"],
+        "os": ["linux", "macos", "windows"],
+        "interactive": False,
+        "topic": "rbac",
+        "example": "kubectl auth can-i get pods -n $NS",
+    },
+}
 
 
 def run_seed(db_file: str) -> int:
     """Replace investigation tags; return number of commands inserted."""
-    from seed_lib import backup_sqlite_before_seed, localized_tags
-
-    backup_sqlite_before_seed(db_file, "k8s")
-    database.init_db(db_file)
-    n = 0
-    for tag, (tag_comment, commands) in localized_tags(SEED_TAGS).items():
-        hard_delete_commands_by_tag(db_file, tag)
-        for cmd, cmd_comment in commands:
-            tid = database.add_command(db_file, cmd, tag)
-            if cmd_comment:
-                database.set_command_comment(db_file, tag, tid, cmd_comment)
-            n += 1
-        if tag_comment:
-            database.set_tag_comment(db_file, tag, tag_comment)
-    return n
+    return _run_seed(db_file, SEED_TAGS, label="k8s", metadata=SEED_METADATA)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Seed IDvjPy_term DB with k8s investigation chains (K8S_CHAINS.md)"
+    seed_cli(
+        description="Seed IDvjPy_term DB with k8s investigation chains (K8S_CHAINS.md)",
+        seed_help="Replace kns/kpod/kres/kquota/… tags (does not touch proc/file/net/kube)",
+        seed_tags=SEED_TAGS,
+        argv=sys.argv,
+        label="k8s",
     )
-    parser.add_argument(
-        "--seed",
-        action="store_true",
-        help="Replace kns/kpod/kres/kquota/… tags (does not touch proc/file/net/kube)",
-    )
-    parser.add_argument(
-        "--db",
-        default="",
-        help="SQLite file (default: settings.yml database_tags_file)",
-    )
-    args = parser.parse_args()
-    if not args.seed:
-        print("Run with --seed to populate the database.", file=sys.stderr)
-        sys.exit(0)
-    db_file = args.db or get_db_file()
-    n = run_seed(db_file)
-    print(f"Seeded {len(SEED_TAGS)} tags ({n} commands) into {db_file}")
 
 
 if __name__ == "__main__":
