@@ -89,6 +89,14 @@ def fetch_text(
     request = urllib.request.Request(raw, headers={"User-Agent": USER_AGENT})
     try:
         with net.open_url(request, timeout, env) as response:
+            final_url = response.geturl()
+            final_scheme = urlsplit(final_url).scheme.lower()
+            if final_scheme not in SECURE_SCHEMES and not (
+                final_scheme in INSECURE_SCHEMES and allow_insecure
+            ):
+                raise RemoteError(
+                    f"Refusing redirect to {safe_url(final_url)}: expected https://"
+                )
             chunks: list[bytes] = []
             total = 0
             while True:
@@ -109,4 +117,4 @@ def fetch_text(
             net.format_fetch_error(exc, env, subject=f"Could not fetch {safe_url(raw)}")
         ) from None
     text = b"".join(chunks).decode("utf-8-sig", errors="replace")
-    return FetchResult(url=safe_url(raw), text=text, size=total)
+    return FetchResult(url=safe_url(final_url), text=text, size=total)

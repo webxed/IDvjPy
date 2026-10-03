@@ -32,8 +32,12 @@ LIBRARY_TEXT = json.dumps(LIBRARY, ensure_ascii=False)
 
 
 class _FakeResponse:
-    def __init__(self, chunks: list[bytes]):
+    def __init__(self, chunks: list[bytes], url: str = "https://host/tags.json"):
         self._chunks = list(chunks)
+        self._url = url
+
+    def geturl(self) -> str:
+        return self._url
 
     def read(self, size: int = -1) -> bytes:
         return self._chunks.pop(0) if self._chunks else b""
@@ -45,8 +49,10 @@ class _FakeResponse:
         return False
 
 
-def _patch_open_url(monkeypatch, chunks: list[bytes]) -> None:
-    monkeypatch.setattr(net, "open_url", lambda *a, **k: _FakeResponse(chunks))
+def _patch_open_url(
+    monkeypatch, chunks: list[bytes], *, final_url: str = "https://host/tags.json"
+) -> None:
+    monkeypatch.setattr(net, "open_url", lambda *a, **k: _FakeResponse(chunks, final_url))
 
 
 def _patch_fetch(monkeypatch, text: str, *, error: str = "") -> dict:
@@ -98,9 +104,21 @@ def test_fetch_requires_https(monkeypatch):
 
 
 def test_fetch_allows_insecure_when_asked(monkeypatch):
-    _patch_open_url(monkeypatch, [b"{}"])
+    _patch_open_url(monkeypatch, [b"{}"], final_url="http://host/tags.json")
     result = remote_source.fetch_text("http://host/tags.json", allow_insecure=True)
     assert result.text == "{}" and result.size == 2
+
+
+def test_fetch_rejects_redirect_from_https_to_http(monkeypatch):
+    _patch_open_url(monkeypatch, [b"{}"], final_url="http://host/redirected.json")
+    with pytest.raises(remote_source.RemoteError, match="redirect.*expected https://"):
+        remote_source.fetch_text("https://host/tags.json")
+
+
+def test_fetch_reports_final_redirect_url(monkeypatch):
+    _patch_open_url(monkeypatch, [b"{}"], final_url="https://cdn.example/lib.json")
+    result = remote_source.fetch_text("https://host/tags.json")
+    assert result.url == "https://cdn.example/lib.json"
 
 
 def test_fetch_reads_chunks_and_enforces_size(monkeypatch):
