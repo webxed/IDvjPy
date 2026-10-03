@@ -193,7 +193,12 @@
                cursor/OSC escapes and control chars are stripped, progress
                redraws collapse to the final line — like a real terminal. Plain
                text (F3, |, $OUT/$BLOCK, :log, @key) never contains escapes
-  #<tag>     - Save command to database with tag (`#tag cmd`, no space after #)
+  #<tag>     - Save command to database with tag (`#tag cmd`, no space after #).
+               The text is stored literally (references are not expanded). Before
+               writing, a non-blocking heuristic template check looks for missing
+               !tag[tid]/!ID references, undefined $VAR names and recognized
+               command risks. With warnings, the first Enter shows them and keeps
+               the line in the input; the second Enter saves it as-is (:? tags)
   # command  - Park a line in history without running (bash-style; space after #)
   #tag! / #tag!tid - Restore soft-deleted tag / command
   #name-- / #name!! - Hide / restore a handbook's tags (ansible, linux, k8s, …)
