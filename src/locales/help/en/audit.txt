@@ -1,0 +1,12 @@
+[bold]:? audit — content-free library change log[/bold]
+
+  :audit [N] - Show the most recent N records (default 20, maximum 200).
+                The log contains only UTC timestamp, operation, affected count,
+                and tag names. It never stores command text, comments, import
+                payloads, source URLs, or secret values.
+
+  Stored in `library_audit.jsonl` in the application data directory. Records are
+  append-only. Seeds and internal maintenance are intentionally not included.
+  File mode is 0600 where supported. This is an operational change log, not a
+  tamper-proof security audit: a local user who can edit the data directory can
+  alter it.

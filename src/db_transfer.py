@@ -472,7 +472,20 @@ def import_payload(
         raise
     finally:
         conn.close()
-    return ImportResult(imported, updated, skipped, tuple(sorted(tags)))
+    result = ImportResult(imported, updated, skipped, tuple(sorted(tags)))
+    if result.total:
+        try:
+            from library_audit import record_event
+
+            record_event(
+                os.path.dirname(os.path.abspath(db_file)) or ".",
+                "import",
+                tags=list(result.tags),
+                count=result.total,
+            )
+        except (ImportError, OSError):
+            pass
+    return result
 
 
 # --- CSV ---------------------------------------------------------------------

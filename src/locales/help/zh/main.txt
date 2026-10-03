@@ -69,6 +69,7 @@
                 （linux、k8s、git …）或单个标签。按会话保存：scope_<会话>.json；
                 窗口标题带有标记（`IDvjPy_term · git · only git`）。详见 :? tags
   :welcome      - 种子目录（如同空数据库时的欢迎语；点击 --seed / .md）
+  :audit [N]    - 查看不含命令内容的最近库变更（详见 :? audit）
   :backup       - 将命令数据库复制到 backups/（与 --seed 相同的快照）
   :safe [on|off]- 确认已识别的风险启动（默认关闭；:? safe）
   :explain cmd - 命令的离线静态说明；绝不执行（:? explain）

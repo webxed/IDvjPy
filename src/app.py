@@ -121,6 +121,7 @@ try:
     import history_import
     import ipcalc
     import learn
+    import library_audit
     import md_convert
     import remote_source
     import runbook
@@ -2613,7 +2614,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.200"
+    VERSION = "v1.201"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2757,6 +2758,7 @@ class CommandRunner(App):
     CMD_SCREENSAVER = "screensaver"
     CMD_WELCOME = "welcome"
     CMD_BACKUP = "backup"
+    CMD_AUDIT = "audit"
     CMD_FM = "fm"
     CMD_TERM = "term"
     CMD_EDITOR = "ed"
@@ -5921,6 +5923,7 @@ class CommandRunner(App):
         CMD_TAGMETA: "_handle_tagmeta_command",
         CMD_SCREENSAVER: "_handle_screensaver_command",
         CMD_BACKUP: "_handle_backup_command",
+        CMD_AUDIT: "_handle_audit_command",
         CMD_FM: "_handle_fm_args",
         CMD_TERM: "_handle_term_args",
         CMD_EDITOR: "_handle_editor_command",
@@ -6558,6 +6561,34 @@ class CommandRunner(App):
             new_cwd = None
         names = sorted(set(updates) | set(removed))
         return format_env_followup(names, new_cwd)
+
+    def _handle_audit_command(self, args: list[str]) -> None:
+        """:audit [N] — show recent content-free library mutation records."""
+        if len(args) > 1:
+            self.add_block(InfoBlock("Usage: :audit [N]"))
+            return
+        try:
+            limit = int(args[0]) if args else 20
+            events, error = library_audit.read_events(self._data_dir or ".", limit)
+        except ValueError:
+            events, error = [], "N must be a positive integer"
+        if error:
+            self.add_block(InfoBlock(f"Audit error: {error}"))
+        elif not events:
+            self.add_block(InfoBlock("No library audit events"))
+        else:
+            lines = ["Recent library audit events (commands/comments are not stored):"]
+            lines.extend(
+                f"{item['timestamp']}  {item['action']}  count={item['count']}  tags={escape(','.join(item['tags']) or '-')}"
+                for item in events
+            )
+            self.add_block(InfoBlock("\n".join(lines)))
+
+    def _audit_library_change(
+        self, action: str, tags: list[str] | tuple[str, ...], count: int
+    ) -> None:
+        """Best-effort metadata-only audit; audit failure never blocks a DB mutation."""
+        library_audit.record_event(self._data_dir or ".", action, tags=tags, count=count)
 
     def _handle_backup_command(self, args: list[str]) -> None:
         if not args:
@@ -9950,6 +9981,7 @@ class CommandRunner(App):
                     self.db_file, tag, cmd_id, comment.strip()
                 )
                 if updated:
+                    self._audit_library_change("comment", [tag], 1)
                     self.add_block(InfoBlock(
                         f"Command {updated['tag']}[{updated['tid']}] "
                         f"comment set to: '{comment.strip()}'"
@@ -9969,6 +10001,7 @@ class CommandRunner(App):
             tag, comment = m.groups()
             try:
                 database.set_tag_comment(self.db_file, tag, comment.strip())
+                self._audit_library_change("comment", [tag], 1)
                 self.add_block(InfoBlock(f"Tag '{tag}' comment set to: '{comment.strip()}'"))
             except Exception as e:
                 self.add_block(InfoBlock(f"Database error: {e}"))
@@ -10040,6 +10073,7 @@ class CommandRunner(App):
                             touched.append(tag)
                             n += c
                     if n:
+                        self._audit_library_change("soft-delete", touched, n)
                         self.add_block(InfoBlock(
                             f"Hid {n} command(s) in '{name}' "
                             f"(tags: {', '.join(touched)}). Restore: #{name}!!"
@@ -10055,6 +10089,7 @@ class CommandRunner(App):
                             touched.append(tag)
                             n += c
                     if n:
+                        self._audit_library_change("restore", touched, n)
                         self.add_block(InfoBlock(
                             f"Restored {n} command(s) in '{name}' "
                             f"(tags: {', '.join(touched)})."
@@ -10076,12 +10111,14 @@ class CommandRunner(App):
                 if tid_str:
                     tid = int(tid_str)
                     if database.restore_command_by_tid(self.db_file, tag, tid):
+                        self._audit_library_change("restore", [tag], 1)
                         self.add_block(InfoBlock(f"Restored {tag}[{tid}]."))
                     else:
                         self.add_block(InfoBlock(f"Error: deleted command {tag}[{tid}] not found."))
                 else:
                     n = database.restore_commands_by_tag(self.db_file, tag)
                     if n:
+                        self._audit_library_change("restore", [tag], n)
                         self.add_block(InfoBlock(f"Restored {n} command(s) with tag '{tag}'."))
                     else:
                         self.add_block(InfoBlock(f"No deleted commands for tag '{tag}'."))
@@ -10095,11 +10132,14 @@ class CommandRunner(App):
             tag, identifier = m.groups()
             try:
                 if not identifier:
-                    database.delete_commands_by_tag(self.db_file, tag)
+                    count = database.delete_commands_by_tag(self.db_file, tag)
+                    if count:
+                        self._audit_library_change("soft-delete", [tag], count)
                     self.add_block(InfoBlock(f"All commands with tag '{tag}' marked as deleted."))
                 else:
                     cmd_id = int(identifier)
                     database.delete_command_by_tid(self.db_file, tag, cmd_id)
+                    self._audit_library_change("soft-delete", [tag], 1)
                     self.add_block(InfoBlock(f"Command {tag}[{cmd_id}] marked as deleted."))
             except Exception as e:
                 self.add_block(InfoBlock(f"Database error: {e}"))
@@ -10114,6 +10154,7 @@ class CommandRunner(App):
             # Ссылки !tag[tid] и !ID будут раскрываться только при выполнении через !
             try:
                 tid = database.add_command(self.db_file, command_to_save, tag)
+                self._audit_library_change("save", [tag], 1)
                 self.add_block(InfoBlock(f"Saved: '{command_to_save}' as {tag}[{tid}]"))
             except Exception as e:
                 self.add_block(InfoBlock(f"Database error: {e}"))
