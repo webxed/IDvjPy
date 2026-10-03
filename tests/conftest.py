@@ -117,6 +117,19 @@ async def submit(pilot, text: str) -> None:
     await pilot.pause()
 
 
+async def save_tag(pilot, text: str) -> None:
+    """Сохранить `#tag cmd`, подтвердив эвристические замечания шаблона.
+
+    Первый Enter только печатает предупреждения (незнакомые `$VAR`, недостающие
+    ссылки, распознанные риски) и возвращает строку во ввод
+    (`app._pending_tag_save`); второй Enter сохраняет её как есть (см.
+    `tag_validation`). Шаблон без замечаний сохраняется с первого Enter.
+    """
+    await submit(pilot, text)
+    if getattr(pilot.app, "_pending_tag_save", None) is not None:
+        await submit(pilot, text)
+
+
 async def wait_command_done(app: CommandRunner, timeout: float = 8.0) -> CommandBlock:
     """Ждёт завершения фонового subprocess у последнего CommandBlock."""
     deadline = time.monotonic() + timeout

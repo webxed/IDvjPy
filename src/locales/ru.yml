@@ -15,6 +15,25 @@ startup:
 session:
   usage: "Usage: :session NAME   |   :new [NAME|-] [DIR] — окно в отдельном терминале"
 
+tag_catalog:
+  header: "Каталог тегов ({count}) — фильтр: {filter}"
+  empty: "Подходящих живых тегов нет."
+
+pins:
+  usage: "Использование: :pin [list] | :pin add TAG… | :pin rm TAG… | :pin clear"
+  list: "Закреплено в этой сессии: {tags}"
+  none: "нет"
+  updated: "Закреплённые теги обновлены: {tags}"
+  unknown: "Неизвестные живые теги: {tags}. Закрепление действует в сессии и требует существующего тега."
+  broken: "Файл закреплённых тегов пропущен: {error}"
+  save_failed: "Не удалось сохранить закреплённые теги в {file}."
+
+tag_metadata:
+  usage: "Использование: :tagmeta TAG [JSON-объект] — показать или заменить метаданные. Поля: risk (low|medium|high|critical), utilities (массив строк), os (массив строк), interactive (логическое), topic (строка), example (строка)."
+  empty: "У тега {tag} нет метаданных."
+  saved: "Метаданные сохранены для {tag}."
+  invalid: "Некорректные метаданные: {error}"
+
 tag_validation:
   confirm: "Проверка шаблона нашла возможные проблемы (это только эвристика; команда не запускалась):\n{warnings}\nНажмите Enter ещё раз, чтобы сохранить как есть, или измените строку для отмены."
 

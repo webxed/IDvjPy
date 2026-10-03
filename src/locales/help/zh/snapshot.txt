@@ -1,0 +1,17 @@
+[bold]:? snapshot — 有界输出快照[/bold]
+
+  :snapshot list          列出已保存的快照
+  :snapshot save NAME     保存聚焦命令块（或最新块）的 stdout
+  :snapshot show NAME     显示已保存的 stdout
+  :snapshot diff NAME     将已保存的 stdout 与聚焦/最新命令块比较
+  :snapshot rm NAME       删除快照
+
+  快照存放在应用数据目录的 output_snapshots.json 中，与 SQLite 标签库和命令
+  历史分开。该文件为私有（0600），以原子方式替换，上限 5 MiB；最多保留 20 个
+  快照，每个最多 256 KiB。保存已存在的名称会替换该快照。
+
+  只保存 stdout。保存时会遮蔽机密；stderr、命令文本、环境变量和保管库内容
+  绝不会包含在内。过大的 stdout 会在 UTF-8 边界处截断。这是本地比较辅助工具，
+  不是审计日志，也不是命令输出的备份。
+
+  `:diff` 仍可用于比较当前日志中的两个块。

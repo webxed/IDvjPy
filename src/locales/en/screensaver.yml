@@ -20,6 +20,7 @@ screensaver:
   - :send <session|*> cmd  — forward a command to another session (:send! runs it)
   - :welcome  — seed catalog
   - :backup  — snapshot the tags DB
+  - :audit  — content-free library change records (:? audit)
   - :vault  — password-encrypted secret store (init/add/cp/use/exec/totp)
   - ':screensaver  — starfield now; matrix is available once via :screensaver matrix'
   - :r [N]  — block command into the input (N = how far back)

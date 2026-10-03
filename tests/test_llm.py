@@ -821,12 +821,12 @@ async def test_colon_llm_ask_sends_task_with_library_context(isolated_home, monk
     monkeypatch.setattr(app_module, "perform_request", fake)
 
     from app import CommandRunner
-    from tests.conftest import submit, wait_command_done
+    from tests.conftest import save_tag, submit, wait_command_done
 
     app = CommandRunner()
     async with app.run_test(size=(110, 30)) as pilot:
-        await submit(pilot, "#kpod kubectl get pods -n $NS")
-        await submit(pilot, "#klog kubectl logs $POD -n $NS --tail=200")
+        await save_tag(pilot, "#kpod kubectl get pods -n $NS")
+        await save_tag(pilot, "#klog kubectl logs $POD -n $NS --tail=200")
         await submit(pilot, ":llm ask найди поды и покажи логи")
         block = await wait_command_done(app, timeout=8.0)
 
@@ -855,11 +855,11 @@ async def test_colon_llm_ask_offers_only_existing_refs(isolated_home, monkeypatc
     )
 
     from app import CommandRunner
-    from tests.conftest import info_texts, submit, wait_command_done
+    from tests.conftest import info_texts, save_tag, submit, wait_command_done
 
     app = CommandRunner()
     async with app.run_test(size=(110, 30)) as pilot:
-        await submit(pilot, "#kpod kubectl get pods -n $NS")
+        await save_tag(pilot, "#kpod kubectl get pods -n $NS")
         await submit(pilot, ":llm ask что с подами")
         await wait_command_done(app, timeout=8.0)
         assert await _wait_info_contains(app, "!kpod[1]")
@@ -916,11 +916,11 @@ async def test_colon_llm_ask_named_provider(isolated_home, monkeypatch):
     monkeypatch.setattr(app_module, "perform_request", fake)
 
     from app import CommandRunner
-    from tests.conftest import submit, wait_command_done
+    from tests.conftest import save_tag, submit, wait_command_done
 
     app = CommandRunner()
     async with app.run_test(size=(110, 30)) as pilot:
-        await submit(pilot, "#kpod kubectl get pods -n $NS")
+        await save_tag(pilot, "#kpod kubectl get pods -n $NS")
         # Явный провайдер: первое слово после `ask` — имя из providers.
         await submit(pilot, ":llm ask grok найди поды")
         block = await wait_command_done(app, timeout=8.0)
@@ -955,11 +955,11 @@ async def test_colon_llm_provider_app_context_key(isolated_home, monkeypatch):
     monkeypatch.setattr(app_module, "perform_request", fake)
 
     from app import CommandRunner
-    from tests.conftest import submit, wait_command_done
+    from tests.conftest import save_tag, submit, wait_command_done
 
     app = CommandRunner()
     async with app.run_test(size=(110, 30)) as pilot:
-        await submit(pilot, "#kpod kubectl get pods -n $NS")
+        await save_tag(pilot, "#kpod kubectl get pods -n $NS")
         await submit(pilot, ":llm ds hi")
         await wait_command_done(app, timeout=8.0)
         await submit(pilot, ":llm plain hi")
@@ -987,11 +987,11 @@ async def test_colon_llm_ask_ref_action_is_dispatchable(isolated_home, monkeypat
     monkeypatch.setattr(app_module, "perform_request", lambda *a, **k: "План: !kpod[1].")
 
     from app import CommandRunner, InfoBlock
-    from tests.conftest import input_widget, submit, wait_command_done
+    from tests.conftest import input_widget, save_tag, submit, wait_command_done
 
     app = CommandRunner()
     async with app.run_test(size=(110, 30)) as pilot:
-        await submit(pilot, "#kpod kubectl get pods -n $NS")
+        await save_tag(pilot, "#kpod kubectl get pods -n $NS")
         await submit(pilot, ":llm ask что с подами")
         await wait_command_done(app, timeout=8.0)
         assert await _wait_info_contains(app, "!kpod[1]")

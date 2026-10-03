@@ -21,6 +21,52 @@ startup:
 session:
   usage: "用法: :session NAME   |   :new [NAME|-] [DIR] — 在独立终端中打开窗口"
 
+tag_catalog:
+  header: "标签目录（{count}）— 过滤: {filter}"
+  empty: "没有匹配的活跃标签。"
+
+tag_validation:
+  confirm: "模板检查发现可能的问题（仅为启发式；命令未运行）：\n{warnings}\n再按 Enter 按原样保存，或编辑输入以取消。"
+
+pins:
+  usage: "用法: :pin [list] | :pin add TAG… | :pin rm TAG… | :pin clear"
+  list: "本会话已固定: {tags}"
+  none: "无"
+  updated: "已更新的固定标签: {tags}"
+  unknown: "未知的活跃标签: {tags}。固定仅在本会话有效，且需要标签已存在。"
+  broken: "已忽略固定标签文件: {error}"
+  save_failed: "无法将固定标签保存到 {file}。"
+
+tag_metadata:
+  usage: "用法: :tagmeta TAG [JSON对象] — 显示或替换元数据。字段: risk (low|medium|high|critical)、utilities (字符串数组)、os (字符串数组)、interactive (布尔)、topic (字符串)、example (字符串)。"
+  empty: "标签 {tag} 没有元数据。"
+  saved: "已保存 {tag} 的元数据。"
+  invalid: "元数据无效: {error}"
+
+snapshot:
+  usage: "用法: :snapshot [list] | :snapshot save NAME | :snapshot show NAME | :snapshot diff NAME | :snapshot rm NAME"
+  disabled: "输出快照已禁用（settings.yml: output_snapshots）。"
+  none: "无"
+  list: "已保存的输出快照: {snapshots}"
+  no_output: "没有已完成的命令输出可供快照。"
+  saved: "已保存输出快照: {name}{note}"
+  truncated: "（已截断至 256 KiB）"
+  removed: "已删除输出快照: {name}"
+  error: "快照错误: {error}"
+  identical: "快照 {name} 与当前 stdout 相同。"
+
+profile:
+  usage: "用法: :profile [list] | :profile show [NAME] | :profile save NAME | :profile use NAME | :profile rm NAME"
+  list: "配置: {profiles}"
+  none: "无"
+  current: "当前配置上下文: {details}"
+  details: "配置 {name}: {details}"
+  saved: "已保存配置: {name}"
+  removed: "已删除配置: {name}"
+  applied: "已应用配置: {name}: {details}"
+  cwd_missing: "配置 {name} 指向不存在的目录: {cwd}"
+  error: "配置错误: {error}"
+
 scope:
   usage: "用法: :scope add <组|标签>… （只保留这些）  |  :scope rm <组|标签>… （隐藏这些）\n       :scope clear | :scope all （显示全部）  |  :scope （当前状态）\n组: linux、k8s、git … —— 规范的种子集合；名称也可以是标签。"
   status_all: "[bold]Scope:[/bold] 无过滤 —— 所有标签都会列出。\n  :scope add <组|标签>… 只保留这些；:scope rm … 隐藏这些。"
@@ -198,6 +244,12 @@ cmd:
   kctx: "集群日志: 按集群保存的变量（kctx_vars）"
   session: "显示或切换实例"
   scope: "会话标签范围: 在本窗口中保留或隐藏组/标签"
+  tags: "可搜索的活跃标签与元数据目录（:tags [过滤]）"
+  tagmeta: "显示或替换标签的结构化元数据（:tagmeta TAG [JSON]）"
+  pin: "会话内的固定标签（:pin add|rm|clear|list; :tags pinned）"
+  snapshot: "保存有界且已掩码的命令输出，供日后比较（:? snapshot）"
+  audit: "显示不含内容的库变更记录（:? audit）"
+  profile: "保存/应用安全上下文引用: cwd、scope、namespace、kube context"
   new: "在新终端中打开应用窗口（会话）"
   send: "将命令转发到另一个会话"
   "send!": "转发并立即执行"

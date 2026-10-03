@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from app import CommandRunner, InfoBlock
-from tests.conftest import completion_click_spans, input_widget, submit
+from tests.conftest import completion_click_spans, input_widget, save_tag, submit
 
 
 async def _type(app: CommandRunner, pilot, value: str):
@@ -22,9 +22,9 @@ async def _type(app: CommandRunner, pilot, value: str):
 
 async def _seed(pilot) -> None:
     """Библиотека с двумя тегами и комментарием у `vault`."""
-    await submit(pilot, "#vault vault write auth/approle/login role_id=$ROLE_ID")
-    await submit(pilot, "#vault vault read secret/data/app")
-    await submit(pilot, "#kube kubectl get pods -n $NS")
+    await save_tag(pilot, "#vault vault write auth/approle/login role_id=$ROLE_ID")
+    await save_tag(pilot, "#vault vault read secret/data/app")
+    await save_tag(pilot, "#kube kubectl get pods -n $NS")
     await submit(pilot, "#vault=HashiCorp Vault")
 
 
