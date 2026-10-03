@@ -23,6 +23,8 @@ session:
 tag_catalog:
   header: "Tag catalog ({count}) — filter: {filter}"
   empty: "No matching live tags."
+tag_validation:
+  confirm: "Template checks found possible issues (heuristics only; command was not run):\n{warnings}\nPress Enter again to save as-is, or edit the input to cancel."
 pins:
   usage: "Usage: :pin [list] | :pin add TAG… | :pin rm TAG… | :pin clear"
   list: "Pinned in this session: {tags}"
@@ -249,7 +251,6 @@ cmd:
   send: "forward a command to another session"
   "send!": "forward and run it immediately"
   backup: "snapshot and manage SQLite backups"
-  audit: "show content-free library change records"
   vault: "password-encrypted secret store (init / add / cp / use / exec)"
   welcome: "seed catalog (same as an empty DB)"
   screensaver: "overlay now — matrix rain (default) / stars; idle: screensaver_idle"

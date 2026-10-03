@@ -126,6 +126,7 @@ try:
     import remote_source
     import runbook
     import safe_mode
+    import tag_validation
     import totp
     import vault
     from ansi_output import to_markup, to_plain
@@ -2614,7 +2615,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.201"
+    VERSION = "v1.202"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -10149,6 +10150,40 @@ class CommandRunner(App):
         parts = content.split(maxsplit=1)
         if len(parts) == 2:
             tag, command_to_save = parts
+
+            # Первый Enter показывает эвристические замечания, второй подтверждает
+            # сохранение; содержимое не раскрывается и не исполняется.
+            warning_key = (tag, command_to_save)
+            if getattr(self, "_pending_tag_save", None) != warning_key:
+                try:
+                    existing = database.get_all_commands_with_ids(self.db_file)
+                    environment_names = (
+                        set(os.environ)
+                        | set(self.local_env)
+                        | set(self._secret_names)
+                        | set(self._vault_env)
+                        | set(LAZY_PLACEHOLDERS)
+                    )
+                    warnings = tag_validation.diagnose_template(
+                        command_to_save,
+                        current_tag=tag,
+                        commands=existing,
+                        variables=environment_names,
+                    )
+                except Exception:
+                    warnings = []
+                if warnings:
+                    self._pending_tag_save = warning_key
+                    input_widget = self.query_one(f"#{self.ID_INPUT}", Input)
+                    input_widget.value = user_input
+                    input_widget.cursor_position = len(user_input)
+                    input_widget.focus()
+                    self.add_block(InfoBlock(t(
+                        "tag_validation.confirm",
+                        warnings="\n".join(f"• {warning}" for warning in warnings),
+                    )))
+                    return
+            self._pending_tag_save = None
 
             # v1.1.9+: Сохраняем команду как есть, БЕЗ раскрытия ссылок
             # Ссылки !tag[tid] и !ID будут раскрываться только при выполнении через !
