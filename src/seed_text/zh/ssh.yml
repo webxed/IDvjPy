@@ -57,3 +57,10 @@ tags:
     comment: OpenSSH 证书到期
     commands:
       0: summary -L → days_left
+  skey:
+    comment: 新 SSH 密钥与 ssh-copy-id
+    commands:
+      0: 'run:auto 检查 $KEY：指纹或新路径'
+      1: 'run:manual 在 TTY 中创建带 passphrase 的 Ed25519；不会覆盖 $KEY'
+      2: 'run:manual 将 $KEY.pub 安装到 $REMOTE；在 TTY 中输入远程用户密码'
+      3: 'run:auto 验证新的密钥登录'

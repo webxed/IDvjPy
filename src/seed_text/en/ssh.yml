@@ -57,3 +57,10 @@ tags:
     comment: OpenSSH certificate expiry
     commands:
       0: summary -L → days_left
+  skey:
+    comment: new SSH key and ssh-copy-id
+    commands:
+      0: 'run:auto check $KEY: fingerprint or new path'
+      1: 'run:manual create Ed25519 with a passphrase in TTY; does not overwrite $KEY'
+      2: 'run:manual install $KEY.pub on $REMOTE; type the remote user password in TTY'
+      3: 'run:auto verify the new key login'

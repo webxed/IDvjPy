@@ -1,6 +1,6 @@
 # ssh / scp handbook for IDvjPy
 
-Tags **`ssh`**, **`scp`**. Playbooks: `schk` (access), `ossh` (OpenSSH version), `ocert` (certificate expiry).
+Tags **`ssh`**, **`scp`**. Playbooks: `schk` (access), `ossh` (OpenSSH version), `ocert` (certificate expiry), `skey` (a new key and `ssh-copy-id`).
 
 Basic `ssh` / `scp` are already in the linux tag `net[5]` / `net[7]` — this seed does not overwrite them.
 
@@ -66,7 +66,7 @@ $CMD=uname -a
 | 29 | `ssh-keygen -L … \| grep Type/Valid/…` | CA, Valid, principals |
 | 30 | `valid_to=…; days_left=…` | Days until expiry (GNU `date`) |
 
-`ssh-copy-id` and key generation are not in the playbook. Tids 15/17 do not overwrite an existing `$KEY`.
+Tids 15/17 do not overwrite an existing `$KEY`. Use `:run skey` for the connected workflow that creates a protected Ed25519 key and publishes it to a server.
 
 `ssh-keygen -L` reads an OpenSSH cert (`-cert.pub`). If it is a regular key, the command will fail. `days_left` is computed from the `Valid: from … to …` line.
 
@@ -94,6 +94,20 @@ Password in a TTY: `> scp …`. For large trees `!! rchk[1]` / rsync is more con
 | `schk[1]` | `-G` → BatchMode `true` → keyscan |
 | `ossh[1]` | `ssh -V` → `ssh -Q key` → files `*cert*` |
 | `ocert[1]` | certificate summary → `days_left` |
+| `skey[1]` | check `$KEY` → manually create the key → manually `ssh-copy-id` → BatchMode check |
+
+### A new key and access with it: `:run skey`
+
+```text
+$KEY=~/.ssh/id_ed25519_example
+$COMMENT="$(whoami)@$(hostname)-example"
+$REMOTE=alice@app.example.com
+:run skey
+```
+
+The first and last steps run automatically. Key creation and `ssh-copy-id` use `run:manual`: the application places the command in the input, but the person confirms its launch with a separate Enter. Both commands start with `>`, so they run in a real TTY: `ssh-keygen` asks for a passphrase and `ssh-copy-id`, if needed, asks for the **remote** user's password.
+
+The playbook refuses to overwrite an existing `$KEY`; choose a new path or inspect the old key with `!! ssh[6]` first. Verify a host key through a trusted channel before `ssh-copy-id`: `ssh-keyscan` is useful for diagnosis but does not by itself prove a server's identity.
 
 ```text
 $HOST=app.example.com

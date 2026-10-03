@@ -1,6 +1,6 @@
 # IDvjPy 的 ssh / scp 手册
 
-标签 **`ssh`**、**`scp`**。运行手册：`schk`（访问）、`ossh`（OpenSSH 版本）、`ocert`（证书有效期）。
+标签 **`ssh`**、**`scp`**。运行手册：`schk`（访问）、`ossh`（OpenSSH 版本）、`ocert`（证书有效期）、`skey`（新密钥和 `ssh-copy-id`）。
 
 基础的 `ssh` / `scp` 已在 linux 标签 `net[5]` / `net[7]` 中 —— 本种子不会覆盖它们。
 
@@ -66,7 +66,7 @@ $CMD=uname -a
 | 29 | `ssh-keygen -L … \| grep Type/Valid/…` | CA、Valid、principals |
 | 30 | `valid_to=…; days_left=…` | 距到期天数（GNU `date`） |
 
-`ssh-copy-id` 和生成密钥不在运行手册中。tid 15/17 不会覆盖已存在的 `$KEY`。
+tid 15/17 不会覆盖已存在的 `$KEY`。使用 `:run skey` 执行创建受保护 Ed25519 密钥并发布到服务器的完整流程。
 
 `ssh-keygen -L` 读取的是 OpenSSH 证书（`-cert.pub`）。如果是普通密钥，命令会报错。`days_left` 根据 `Valid: from … to …` 这一行计算。
 
@@ -94,6 +94,20 @@ $CMD=uname -a
 | `schk[1]` | `-G` → BatchMode `true` → keyscan |
 | `ossh[1]` | `ssh -V` → `ssh -Q key` → 文件 `*cert*` |
 | `ocert[1]` | 证书摘要 → `days_left` |
+| `skey[1]` | 检查 `$KEY` → 手动创建密钥 → 手动 `ssh-copy-id` → BatchMode 检查 |
+
+### 新密钥及其登录验证：`:run skey`
+
+```text
+$KEY=~/.ssh/id_ed25519_example
+$COMMENT="$(whoami)@$(hostname)-example"
+$REMOTE=alice@app.example.com
+:run skey
+```
+
+第一个和最后一个步骤自动执行。创建密钥和 `ssh-copy-id` 使用 `run:manual`：应用把命令放入输入框，但由用户通过单独的 Enter 确认运行。两条命令都以 `>` 开头，因此在真实 TTY 中运行：`ssh-keygen` 会询问 passphrase，`ssh-copy-id` 必要时会询问**远程**用户密码。
+
+运行手册拒绝覆盖已有的 `$KEY`；请另选路径，或先用 `!! ssh[6]` 检查旧密钥。在使用 `ssh-copy-id` 前，请通过可信渠道核验 host key：`ssh-keyscan` 适合诊断，但单独使用不能证明服务器身份。
 
 ```text
 $HOST=app.example.com

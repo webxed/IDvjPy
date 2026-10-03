@@ -151,6 +151,27 @@ SEED_TAGS = {
             ),
         ],
     ),
+    "skey": (
+        "новый SSH-ключ и ssh-copy-id",
+        [
+            (
+                'test -e "$KEY" && ssh-keygen -lf "$KEY" || echo "new key will be created: $KEY"',
+                "run:auto проверить $KEY: fingerprint или новый путь",
+            ),
+            (
+                '> test ! -e "$KEY" || { echo "refusing to overwrite existing $KEY"; exit 1; }; ssh-keygen -t ed25519 -f "$KEY" -C "$COMMENT"',
+                "run:manual создать Ed25519 с passphrase в TTY; не перезаписывает $KEY",
+            ),
+            (
+                '> ssh-copy-id -i "$KEY.pub" "$REMOTE"',
+                "run:manual установить $KEY.pub на $REMOTE; пароль удалённого пользователя вводится в TTY",
+            ),
+            (
+                "ssh -o BatchMode=yes -o ConnectTimeout=5 $REMOTE true",
+                "run:auto проверить новый вход по ключу",
+            ),
+        ],
+    ),
 }
 
 

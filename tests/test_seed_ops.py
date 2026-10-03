@@ -511,6 +511,21 @@ def test_seed_ssh_scp_noninteractive_playbook(tmp_path):
     ocert = database.get_command_by_tid(db, "ocert", 1)
     assert "!ssh[29]" in ocert["command"]
     assert "!ssh[30]" in ocert["command"]
+    skey = database.get_commands_by_tag(db, "skey")
+    assert len(skey) == 4
+    assert "test -e" in skey[0]["command"]
+    assert skey[1]["command"].startswith("> test ! -e")
+    assert "ssh-keygen -t ed25519" in skey[1]["command"]
+    assert skey[2]["command"].startswith("> ssh-copy-id -i")
+    assert "BatchMode=yes" in skey[3]["command"]
+    assert "run:auto" in skey[0]["comment"]
+    assert "run:manual" in skey[1]["comment"]
+    assert "run:manual" in skey[2]["comment"]
+    assert "run:auto" in skey[3]["comment"]
+    from runbook import build_plan
+
+    plan = build_plan(db, "skey")
+    assert [step.mode for step in plan.steps] == ["auto", "manual", "manual", "auto"]
 
 
 def test_seed_ops_does_not_touch_linux_k8s_git(tmp_path):
