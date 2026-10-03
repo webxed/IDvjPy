@@ -35,6 +35,7 @@
 """
 from __future__ import annotations
 
+import codecs
 import hashlib
 import io
 import os
@@ -98,7 +99,8 @@ _OFFICE_ZIP_PARTS = frozenset(
 )
 #: mimetype ODF/EPUB-пакетов (у них нет `[Content_Types].xml`).
 _ODF_MIMETYPES = (b"application/vnd.oasis.opendocument", b"application/epub+zip")
-_SNIFF_BYTES = 65536
+#: Сколько байтов достаточно, чтобы распознать формат по содержимому.
+SNIFF_BYTES = 65536
 #: Ниже этой доли «печатных» байтов файл не в UTF-8 считаем бинарём.
 _PRINTABLE_MIN_RATIO = 0.90
 
@@ -126,7 +128,7 @@ class ConvertResult:
 
 def _printable_ratio(data: bytes) -> float:
     """Доля «печатных» байтов: управляющие (< 0x20, кроме `\\t \\n \\r`) выдают бинарь."""
-    sample = data[:_SNIFF_BYTES]
+    sample = data[:SNIFF_BYTES]
     if not sample:
         return 1.0
     printable = sum(1 for byte in sample if byte >= 0x20 or byte in (0x09, 0x0A, 0x0D))
@@ -149,22 +151,55 @@ def zip_holds_document(data: bytes) -> bool:
     return False
 
 
-def is_plain_text(data: bytes, encoding: str = TEXT_ENCODING) -> bool:
-    """Можно ли показать файл как текст, не конвертируя (по содержимому, не по имени)."""
+def _decodes_as_text(data: bytes, encoding: str, *, complete: bool) -> bool:
+    """Декодируется ли как текст (для неполного префикса — без падения на хвосте)."""
+    try:
+        if complete:
+            data.decode(encoding)
+        else:
+            # Префикс может обрываться посреди многобайтной последовательности:
+            # инкрементальный декодер буферизует хвост и не падает на нём.
+            codecs.getincrementaldecoder(encoding)(errors="strict").decode(data, final=False)
+    except (UnicodeDecodeError, LookupError):
+        return False
+    return True
+
+
+def is_plain_text(
+    data: bytes, encoding: str = TEXT_ENCODING, *, complete: bool = True
+) -> bool:
+    """Можно ли показать файл как текст, не конвертируя (по содержимому, не по имени).
+
+    ``complete=False`` — это только префикс файла (см. ``SNIFF_BYTES``): ZIP-
+    контейнер по началу не разобрать (каталог ZIP в конце файла), поэтому любой
+    ``PK``-префикс считаем документом — офисный пакет и просто архив одинаково
+    уходят конвертеру. Полное чтение проверяет точнее.
+    """
     if not data:
         return True
-    if b"\x00" in data[:_SNIFF_BYTES]:
+    if b"\x00" in data[:SNIFF_BYTES]:
         return False
     if data.startswith(_DOC_SIGNATURES):
         return False
-    if data.startswith(b"PK\x03\x04") and zip_holds_document(data):
-        return False
-    try:
-        data.decode(encoding)
-    except UnicodeDecodeError:
+    if data.startswith(b"PK\x03\x04"):
+        if not complete:
+            return False
+        if zip_holds_document(data):
+            return False
+    if not _decodes_as_text(data, encoding, complete=complete):
         # Не UTF-8 (например, cp1251): бинарь выдаёт обилие управляющих байтов.
         return _printable_ratio(data) >= _PRINTABLE_MIN_RATIO
     return True
+
+
+def human_size(num: int) -> str:
+    """Байты в удобные единицы (KiB/MiB/GiB) — для сообщений о лимитах."""
+    value = float(max(0, int(num)))
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if value < 1024 or unit == "GiB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} GiB"
 
 
 def decode_text(data: bytes, encoding: str = TEXT_ENCODING) -> str:

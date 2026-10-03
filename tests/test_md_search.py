@@ -17,7 +17,7 @@ from app import CommandRunner
 from md_search import MdMatch, MdSearchResult, rg_available, search
 from md_viewer import HandbookMarkdownScreen
 from output_viewer import OutputView, OutputViewerScreen
-from tests.conftest import last_info, submit
+from tests.conftest import last_info, submit, wait_md
 
 # --- Встроенный сканер ------------------------------------------------------
 
@@ -110,7 +110,7 @@ async def test_rg_shows_clickable_results(isolated_home, monkeypatch):
 
         # `:rg <N>` открывает N-й результат в md-просмотрщике.
         await submit(pilot, ":rg 1")
-        await pilot.pause()
+        await wait_md(app)
         assert isinstance(app.screen, HandbookMarkdownScreen)
 
 
@@ -171,7 +171,7 @@ async def test_md_opens_file_by_path(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 30)) as pilot:
         await submit(pilot, f":md {note}")
-        await pilot.pause()
+        await wait_md(app)
         assert isinstance(app.screen, HandbookMarkdownScreen)
 
 
@@ -187,7 +187,7 @@ async def test_rg_and_md_recorded_in_history(isolated_home, monkeypatch):
         await submit(pilot, ":rg needle")
         assert await _wait_for(app, "needle #0")
         await submit(pilot, f":md {note}")
-        await pilot.pause()
+        await wait_md(app)
         history = app._read_file_history()
         assert ":rg needle" in history
         assert any(line.startswith(":md ") for line in history)
@@ -212,6 +212,7 @@ async def test_md_opens_at_line(isolated_home):
     async with app.run_test(size=(80, 20)) as pilot:
         # Секция 20 — строка 83 (1-based).
         await submit(pilot, f":md {note}#L83")
+        await wait_md(app)
         screen = app.screen
         assert isinstance(screen, HandbookMarkdownScreen)
         assert screen._line == 83
@@ -241,6 +242,7 @@ async def test_rg_result_opens_at_its_line(isolated_home, monkeypatch):
         await submit(pilot, ":rg needle")
         assert await _wait_for(app, "needle")
         await submit(pilot, ":rg 1")
+        await wait_md(app)
         screen = app.screen
         assert isinstance(screen, HandbookMarkdownScreen)
         assert screen._line == 83
@@ -269,7 +271,7 @@ async def test_large_md_opens_raw_line_viewer(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 20)) as pilot:
         await submit(pilot, f":md {note}")
-        await pilot.pause()
+        await wait_md(app)
         screen = app.screen
         assert isinstance(screen, OutputViewerScreen)
         view = screen.query_one(OutputView)
@@ -287,7 +289,7 @@ async def test_large_md_raw_viewer_jumps_to_line(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 20)) as pilot:
         await submit(pilot, f":md {note}#L20")
-        await pilot.pause()
+        await wait_md(app)
         screen = app.screen
         assert isinstance(screen, OutputViewerScreen)
         view = screen.query_one(OutputView)
@@ -303,7 +305,7 @@ async def test_small_md_still_rendered(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 20)) as pilot:
         await submit(pilot, f":md {note}")
-        await pilot.pause()
+        await wait_md(app)
         assert isinstance(app.screen, HandbookMarkdownScreen)
 
 
@@ -317,7 +319,7 @@ async def test_md_formatted_view_copies_full_path(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 20)) as pilot:
         await submit(pilot, f":md {note}")
-        await pilot.pause()
+        await wait_md(app)
         assert isinstance(app.screen, HandbookMarkdownScreen)
         pyperclip.copy("")
         await pilot.press("y")
@@ -336,7 +338,7 @@ async def test_md_raw_view_copies_full_path(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 20)) as pilot:
         await submit(pilot, f":md {note}")
-        await pilot.pause()
+        await wait_md(app)
         assert isinstance(app.screen, OutputViewerScreen)
         pyperclip.copy("")
         await pilot.press("y")

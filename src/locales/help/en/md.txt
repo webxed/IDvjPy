@@ -72,7 +72,13 @@
   `md_converter`; "could not convert" — the text carries the tool's stderr line; "no
   text" — neither the converter nor OCR produced anything; "timed out".
 
+  `:md` opens regular files only: a directory, FIFO or device is refused with a message.
+  Reading and decoding run in the background, so a large file or a slow mount does not
+  freeze the UI; a file over `md_max_bytes` (default 64 MiB) is refused rather than
+  pulled in whole.
+
   Settings: `md_dir` (`:rg` base), `md_render_lines` (formatting threshold),
-  `md_converter` (what converts) and `md_ocr` (what recognizes).
+  `md_max_bytes` (read cap, bytes), `md_converter` (what converts) and `md_ocr`
+  (what recognizes).
 
   Other topics and the full command list — :?

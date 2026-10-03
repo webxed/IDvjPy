@@ -457,6 +457,10 @@ vault:
   stdin_note: "Передаю {name} в stdin (значение скрыто): {command}"
 
 md:
+  reading: "[dim]Читаю {name}…[/dim]"
+  error_read: "Ошибка чтения {path}: {error}"
+  not_regular: "{name}: это не обычный файл (каталог, FIFO или устройство) — `:md` открывает только файлы."
+  too_large: "{name}: {size} превышает md_max_bytes ({limit}) — поднимите лимит в settings.yml или используйте shell-утилиты для больших файлов."
   converting: "[dim]Конвертирую {name} → markdown…[/dim]"
   converted: "Документ {name} → markdown: {lines} стр., конвертер {converter}."
   from_cache: "из кэша"

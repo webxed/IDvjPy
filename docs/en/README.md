@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.207 — a smart terminal for building command lines from tags.
+**IDvjPy_term** v1.208 — a smart terminal for building command lines from tags.
 
 Translations: [Russian](../../README.md) · [中文](../zh/README.md).
 
@@ -431,6 +431,7 @@ history_forget_not_found: true  # a typo (`command not found`, 127) leaves histo
 history_queries: [llm, cht, rg, md, run, send, send!]  # invocations of these `:` commands — to history (↑/:h), but not to hints; [] — do not write
 md_dir: ""                   # directory of documents for `:rg` (e.g. an Obsidian vault); empty — cwd
 md_render_lines: 1000        # threshold for a formatted `:md`; longer — raw view in the Line-API viewer
+md_max_bytes: 67108864       # cap for reading text in `:md` (bytes); larger — refused with a hint
 md_converter: ""             # converter for documents with `:md` (docx/pdf/…); empty — auto anydoc → markitdown → pandoc
 md_ocr: ""                   # local OCR for scanned PDFs (ocrmypdf, needs tesseract); empty — auto, off — disable
 database_tags_file: mytags.db

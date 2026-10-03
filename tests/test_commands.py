@@ -6,7 +6,7 @@ pytestmark = pytest.mark.slow
 from app import CommandBlock, CommandRunner, InfoBlock, escape_help_markup
 from i18n import t
 from seed_catalog import seed_invoke
-from tests.conftest import input_widget, last_info, submit, type_keys, wait_command_done
+from tests.conftest import input_widget, last_info, submit, type_keys, wait_command_done, wait_md
 
 
 async def test_app_starts_with_input_focused(isolated_home):
@@ -132,7 +132,7 @@ async def test_colon_md_opens_formatted_handbook(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(120, 40)) as pilot:
         await submit(pilot, ":md SEED_LINUX_COMMANDS.md")
-        await pilot.pause()
+        await wait_md(app)
         assert isinstance(app.screen, HandbookMarkdownScreen)
         md = app.screen.query_one("#md-body", Markdown)
         assert "proc" in (md.source or "").lower()
@@ -171,7 +171,7 @@ async def test_md_viewer_wheel_does_not_scroll_journal(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(120, 40)) as pilot:
         await submit(pilot, ":md SEED_LINUX_COMMANDS.md")
-        await pilot.pause()
+        await wait_md(app)
         assert isinstance(app.screen, HandbookMarkdownScreen)
         journal = app.query("#results-container")
         y0 = journal[0].scroll_y if journal else 0

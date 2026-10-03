@@ -25,7 +25,7 @@ import pytest
 import md_convert
 from app import CommandRunner, InfoBlock
 from md_viewer import HandbookMarkdownScreen
-from tests.conftest import submit
+from tests.conftest import submit, wait_md
 
 # --- Детект «текст / документ» (по содержимому, не по имени) ----------------
 
@@ -55,6 +55,26 @@ def test_plain_text_rejects_containers_and_binary():
     assert not md_convert.is_plain_text(b"# Title\n\x00\x01\x02binary")
     assert not md_convert.is_plain_text(_zip_with({"[Content_Types].xml": b"<Types/>"}))
     assert not md_convert.is_plain_text(_zip_with({"mimetype": ODF_MIMETYPE}))
+
+
+def test_prefix_detection_matches_content_not_name():
+    """`complete=False` — только префикс: текст остаётся текстом, контейнер — нет."""
+    text = ("# Title\n\n" + "пример текста\n" * 50).encode("utf-8")
+    assert md_convert.is_plain_text(text[: md_convert.SNIFF_BYTES], complete=False)
+    # Обрыв префикса посреди многобайтного символа не превращает текст в бинарь.
+    assert md_convert.is_plain_text(text[:1], complete=False)
+    # PDF/RTF-сигнатура видна уже в начале файла.
+    assert not md_convert.is_plain_text(PDF_BYTES[:16], complete=False)
+    assert not md_convert.is_plain_text(b"{\\rtf1\\ansi", complete=False)
+    # ZIP по префиксу не разобрать: центральный каталог в конце файла —
+    # любой `PK`-префикс считаем документом (офисный пакет или архив).
+    assert not md_convert.is_plain_text(b"PK\x03\x04rest", complete=False)
+
+
+def test_human_size():
+    assert md_convert.human_size(0) == "0 B"
+    assert md_convert.human_size(2048) == "2.0 KiB"
+    assert md_convert.human_size(64 * 1024 * 1024) == "64.0 MiB"
 
 
 def test_zip_holds_document_ignores_plain_archives():
@@ -330,7 +350,7 @@ async def test_plain_text_does_not_call_converter(isolated_home, monkeypatch):
     app = CommandRunner()
     async with app.run_test(size=(100, 20)) as pilot:
         await submit(pilot, f":md {note}")
-        await pilot.pause()
+        await wait_md(app)
         assert isinstance(app.screen, HandbookMarkdownScreen)
 
 

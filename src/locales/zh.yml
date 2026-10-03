@@ -460,6 +460,10 @@ vault:
   stdin_note: "将 {name} 送入 stdin（值已隐藏）: {command}"
 
 md:
+  reading: "[dim]正在读取 {name}…[/dim]"
+  error_read: "读取 {path} 出错：{error}"
+  not_regular: "{name}：不是普通文件（目录、FIFO 或设备）—— `:md` 只能打开文件。"
+  too_large: "{name}：{size} 超过 md_max_bytes（{limit}）—— 请在 settings.yml 中调高，或对大文件使用 shell 工具。"
   converting: "[dim]正在将 {name} 转换为 markdown…[/dim]"
   converted: "{name} → markdown：{lines} 行，转换器 {converter}。"
   from_cache: "缓存"

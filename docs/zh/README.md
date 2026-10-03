@@ -8,7 +8,7 @@
 
 键盘驱动的 TUI，将**标签视为命令模板**，并把它们组装成 shell 命令行（`!tag[tid]`、`!!`）。需要 Python **3.12+**、[Textual](https://textual.textualize.io/)。
 
-**IDvjPy_term** v1.207 — 从标签生成命令行的智能终端。
+**IDvjPy_term** v1.208 — 从标签生成命令行的智能终端。
 
 其他语言：[Russian](../../README.md) · [English](../en/README.md)。
 
@@ -422,6 +422,7 @@ history_forget_not_found: true  # 拼写错误（`command not found`，127）会
 history_queries: [llm, cht, rg, md, run, send, send!]  # 这些 `:` 命令的调用——写入历史（↑/:h），但不作为提示；[] —— 不写入
 md_dir: ""                   # `:rg` 的文档目录（例如 Obsidian vault）；留空 —— cwd
 md_render_lines: 1000        # 格式化 `:md` 的阈值；更长则以 raw 视图在 Line-API 查看器中显示
+md_max_bytes: 67108864       # `:md` 读取文本的上限（字节）；更大则拒绝并给出提示
 md_converter: ""             # `:md` 的文档转换器（docx/pdf/…）；留空 —— 自动 anydoc → markitdown → pandoc
 md_ocr: ""                   # 扫描版 PDF 的本地 OCR（ocrmypdf，需要 tesseract）；留空 —— 自动，off —— 关闭
 database_tags_file: mytags.db

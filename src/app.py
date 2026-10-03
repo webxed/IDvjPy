@@ -85,6 +85,7 @@ try:
     import json
     import os
     import re
+    import stat
     import textwrap
     import threading
     import time
@@ -529,6 +530,11 @@ MATRIX_THEME = Theme(
 # создаёт виджет на каждый блок: 550 строк ≈ 1.3 с, 2200 ≈ 6 с, 13k ≈ 40 с.
 # Выше порога файл открывается как исходник в Line-API просмотрщике.
 DEFAULT_MD_RENDER_LINES = 1000
+
+# Предел полного чтения текстового файла в `:md` (байты). Просмотрщик держит
+# текст в памяти, поэтому слишком большой файл отклоняем с понятным сообщением,
+# а не тянем целиком. Прав `md_max_bytes` в settings.yml.
+DEFAULT_MD_MAX_BYTES = 64 * 1024 * 1024
 
 
 class LineNavigable(Static):
@@ -2621,7 +2627,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.207"
+    VERSION = "v1.208"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2688,6 +2694,7 @@ class CommandRunner(App):
     KEY_KCTX_VARS = "kctx_vars"
     KEY_MD_DIR = "md_dir"
     KEY_MD_RENDER_LINES = "md_render_lines"
+    KEY_MD_MAX_BYTES = "md_max_bytes"
     KEY_MD_CONVERTER = "md_converter"
     KEY_MD_OCR = "md_ocr"
     HISTORY_SEARCH_LIMIT = 50
@@ -2930,8 +2937,12 @@ class CommandRunner(App):
         self.md_dir: str = ""
         # Порог форматированного `:md` (строк); больше — raw-вид в Line API.
         self.md_render_lines: int = DEFAULT_MD_RENDER_LINES
+        # Предел полного чтения текста в `:md` (байты); больше — отказ с подсказкой.
+        self.md_max_bytes: int = DEFAULT_MD_MAX_BYTES
         # Конвертер документов для `:md` (docx/pdf/…): пусто — автопоиск.
         self.md_converter: str = ""
+        # Фоновое чтение текстового файла `:md` (большой файл/медленный носитель).
+        self._md_read_thread: threading.Thread | None = None
         # Локальный OCR скан-PDF (ocrmypdf): пусто — автопоиск, off — выключено.
         self.md_ocr: str = ""
         self._md_results: list[MdMatch] = []
@@ -4156,6 +4167,12 @@ class CommandRunner(App):
                         )
                     except (TypeError, ValueError):
                         self.md_render_lines = DEFAULT_MD_RENDER_LINES
+                    try:
+                        self.md_max_bytes = int(
+                            settings.get(self.KEY_MD_MAX_BYTES, DEFAULT_MD_MAX_BYTES)
+                        )
+                    except (TypeError, ValueError):
+                        self.md_max_bytes = DEFAULT_MD_MAX_BYTES
                     try:
                         self.history_keep = int(
                             settings.get(self.KEY_HISTORY_KEEP, DEFAULT_HISTORY_KEEP)
@@ -6818,18 +6835,66 @@ class CommandRunner(App):
     def _open_md_file(self, path: Path, line: int | None = None) -> None:
         """Открыть файл просмотрщиком: markdown как есть, документ — через конвертер.
 
-        Решаем по содержимому (`md_convert.is_plain_text`), а не по имени файла:
-        `.pdf` часто декодируется без ошибки, а markdown бывает с другим именем.
+        Формат решаем по содержимому (префикс, `is_plain_text(..., complete=False)`),
+        а не по имени: `.pdf` часто декодируется без ошибки, а markdown бывает с
+        другим именем. Каталоги, FIFO и устройства отклоняем до чтения (FIFO
+        заблокировал бы обработчик), а полное чтение и декодирование уходит в
+        фоновый поток — большой файл на медленном носителе не морозит UI.
         """
+        try:
+            info = path.stat()
+        except OSError as e:
+            self.add_block(InfoBlock(t("md.error_read", path=path, error=e)))
+            return
+        if not stat.S_ISREG(info.st_mode):
+            self.add_block(InfoBlock(t("md.not_regular", name=path.name)))
+            return
+        try:
+            with open(path, "rb") as handle:
+                prefix = handle.read(md_convert.SNIFF_BYTES)
+        except OSError as e:
+            self.add_block(InfoBlock(t("md.error_read", path=path, error=e)))
+            return
+        if not md_convert.is_plain_text(prefix, self.ENCODING, complete=False):
+            self._convert_document_to_md(path, line=line)
+            return
+        if info.st_size > self.md_max_bytes:
+            self.add_block(InfoBlock(t(
+                "md.too_large",
+                name=path.name,
+                size=md_convert.human_size(info.st_size),
+                limit=md_convert.human_size(self.md_max_bytes),
+            )))
+            return
+        self.sub_title = t("md.reading", name=path.name)
+        self._md_read_thread = threading.Thread(
+            target=self._md_read_worker, args=(path, line), daemon=True, name="md-read"
+        )
+        self._md_read_thread.start()
+
+    def _md_read_worker(self, path: Path, line: int | None) -> None:
+        """Фоновое чтение/декодирование текстового файла (не морозим event loop)."""
         try:
             data = path.read_bytes()
         except OSError as e:
-            self.add_block(InfoBlock(f"Error reading {path}: {e}"))
+            self.call_from_thread(self._md_read_failed, path, str(e))
             return
-        if md_convert.is_plain_text(data, self.ENCODING):
-            self._show_md_text(path, md_convert.decode_text(data, self.ENCODING), line=line)
+        if not md_convert.is_plain_text(data, self.ENCODING):
+            # Файл мог измениться между префиксом и чтением — уводим конвертеру.
+            self.call_from_thread(self._convert_document_to_md, path, line)
             return
-        self._convert_document_to_md(path, line=line)
+        text = md_convert.decode_text(data, self.ENCODING)
+        self.call_from_thread(self._md_read_done, path, text, line)
+
+    def _md_read_failed(self, path: Path, error: str) -> None:
+        """В UI-потоке: ошибка фонового чтения `:md`."""
+        self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+        self.add_block(InfoBlock(t("md.error_read", path=path, error=error)))
+
+    def _md_read_done(self, path: Path, text: str, line: int | None) -> None:
+        """В UI-потоке: текст прочитан — открываем просмотрщик."""
+        self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
+        self._show_md_text(path, text, line=line)
 
     def _show_md_text(self, path: Path, text: str, line: int | None = None) -> None:
         """Показать markdown-текст (опц. на строке `line`): форматированно или исходником.

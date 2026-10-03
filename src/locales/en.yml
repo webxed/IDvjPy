@@ -458,6 +458,10 @@ vault:
   stdin_note: "Feeding {name} to stdin (value hidden): {command}"
 
 md:
+  reading: "[dim]Reading {name}…[/dim]"
+  error_read: "Error reading {path}: {error}"
+  not_regular: "{name}: not a regular file (directory, FIFO, or device) — `:md` opens files only."
+  too_large: "{name}: {size} exceeds md_max_bytes ({limit}) — raise it in settings.yml or use shell tools for huge files."
   converting: "[dim]Converting {name} → markdown…[/dim]"
   converted: "Converted {name} → markdown: {lines} line(s) via {converter}."
   from_cache: "cache"

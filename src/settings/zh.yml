@@ -57,6 +57,11 @@ md_dir: ""
 # 如果需要格式化且文件很大（并愿意等待），请调高。
 md_render_lines: 1000
 
+# `:md` 读取文本文件的上限（字节，默认 64 MiB）。查看器将文本保存在
+# 内存中，因此超过上限的文件会被拒绝并给出明确提示，而不是整个读入。
+# 如果确实需要打开此类文件，请调高该值。
+md_max_bytes: 67108864
+
 # 文档转换器（`:md notes.docx`、`:md report.pdf` → markdown）。
 # 留空 —— 自动：anydoc → markitdown → pandoc。`pip install firecrawl-anydoc`
 # 支持 docx/xlsx/pptx/doc/ppt/xls/pdf/rtf/epub/odt，无需额外依赖，

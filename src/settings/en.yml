@@ -57,6 +57,11 @@ md_dir: ""
 # Raise it if you need formatting and a large file (and are ready to wait).
 md_render_lines: 1000
 
+# Cap for reading a text file in `:md` (bytes, default 64 MiB). The viewer holds
+# the text in memory, so a larger file is refused with a clear message instead
+# of being pulled in whole. Raise it if you really need to open such a file.
+md_max_bytes: 67108864
+
 # Converter for documents (`:md notes.docx`, `:md report.pdf` → markdown).
 # Empty — auto: anydoc → markitdown → pandoc. `pip install firecrawl-anydoc`
 # covers docx/xlsx/pptx/doc/ppt/xls/pdf/rtf/epub/odt with no extra dependencies
