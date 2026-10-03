@@ -88,7 +88,7 @@ $TEXT=kubectl
 两张表：`commands`（`id`、`tag`、`tid`、`command`、`timestamp`、`deleted`、`comment`、
 `use_count`、`last_used`）和 `tags`（`tag`、`comment`）。唯一性由 `(tag, tid)` 保证，
 在 `deleted = 0` 时按 `(tag, tid)` 建的部分索引 `idx_tag_tid`。
-详见 [`DATABASE.md`](../DATABASE.md)。
+详见 [`DATABASE.md`](../../DATABASE.md)。
 
 在 `LIKE`（tid 9）中自己写的 `%` / `_` 是通配符，而应用中的 `?text` 会按字面搜索它们
 （`_escape_like` + `ESCAPE '\'`），所以结果可能不同。
@@ -99,7 +99,7 @@ $TEXT=kubectl
 
 1. `:backup` —— 把 SQLite 快照存到 `backups/`，以防出错。
 2. 确认是这个标签：`?tegg`（命令列表）和 `??`。
-3. `$TAG=tegg` → `!sqlite[11]`（或手动执行 [`DATABASE.md`](../DATABASE.md) 中的 SQL）。
+3. `$TAG=tegg` → `!sqlite[11]`（或手动执行 [`DATABASE.md`](../../DATABASE.md) 中的 SQL）。
 4. `!sqlite[12]` —— 顺便清理软删除的，`!sqlite[13]` —— `VACUUM`。
 5. 已经打开的窗口中的列表取自内存缓存：请重启应用（或者
    在应用关闭时操作）—— 否则在下次从 UI 发生变更前，标签仍然可见。

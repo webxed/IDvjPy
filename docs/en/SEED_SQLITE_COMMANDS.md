@@ -88,7 +88,7 @@ deliberately manual: tid 11–13 change the database, the rest only read.
 Two tables: `commands` (`id`, `tag`, `tid`, `command`, `timestamp`, `deleted`, `comment`,
 `use_count`, `last_used`) and `tags` (`tag`, `comment`). Uniqueness of `(tag, tid)`,
 a partial index `idx_tag_tid` on `(tag, tid)` where `deleted = 0`.
-In detail — [`DATABASE.md`](../DATABASE.md).
+In detail — [`DATABASE.md`](../../DATABASE.md).
 
 Your own `%` / `_` in `LIKE` (tid 9) are a pattern, while `?text` in the application searches for them literally
 (`_escape_like` + `ESCAPE '\'`), so the results may differ.
@@ -99,7 +99,7 @@ Your own `%` / `_` in `LIKE` (tid 9) are a pattern, while `?text` in the applica
 
 1. `:backup` — a SQLite snapshot in `backups/` in case of a mistake.
 2. Make sure it is the right tag: `?tegg` (command list) and `??`.
-3. `$TAG=tegg` → `!sqlite[11]` (or the SQL from [`DATABASE.md`](../DATABASE.md) by hand).
+3. `$TAG=tegg` → `!sqlite[11]` (or the SQL from [`DATABASE.md`](../../DATABASE.md) by hand).
 4. `!sqlite[12]` — purge the soft-deleted along the way, `!sqlite[13]` — `VACUUM`.
 5. Lists in an already open window come from the in-memory cache: restart the application (or do
    this while it is closed) — otherwise the tag stays visible until the next mutation from the UI.

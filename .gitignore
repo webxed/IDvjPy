@@ -44,6 +44,7 @@ scope_*.json
 !/requirements-dev.txt
 /test*.*
 !/test_cmd.md
+!/test_changed.py
 # Временное сообщение коммита: шёлк без backticks, пишем в файл и commit -F
 .commit_msg.tmp
 
