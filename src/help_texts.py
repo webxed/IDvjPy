@@ -52,7 +52,7 @@ HELP_TOPICS: tuple[tuple[str, str], ...] = (
     ("session", "session"),
     ("import", "import"),
     ("mcp", "mcp"),
-    ("vault", "vault"),
+    ("key", "vault"),
     ("doctor", "doctor"),
     ("safe", "safe"),
     ("explain", "explain"),

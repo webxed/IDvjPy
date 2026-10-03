@@ -5,6 +5,6 @@
 pytest>=8.0
 pytest-asyncio>=0.24
 pytest-timeout>=2.3
-# `:vault` использует AES-GCM из `cryptography` (опция приложения, не в
+# `:key` использует AES-GCM из `cryptography` (опция приложения, не в
 # requirements.txt): тестам нужен реальный store.
 cryptography>=41

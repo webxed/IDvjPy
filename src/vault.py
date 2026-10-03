@@ -1,4 +1,4 @@
-"""Хранилище секретов с шифрованием по паролю (`:vault`).
+"""Хранилище секретов с шифрованием по паролю (`:key`).
 
 Файл (`vault.json.enc` в data-каталоге, 0600) — JSON-конверт: открытый заголовок
 с параметрами плюс base64-зашифрованные данные. В заголовке нет ни имён, ни
@@ -54,11 +54,11 @@ NONCE_BYTES = 12
 MIN_PASSWORD_LEN = 8
 DEFAULT_GENERATED_LEN = 24
 
-# Имя записи — как имя переменной: им же пользуются `:vault use`/`exec`.
+# Имя записи — как имя переменной: им же пользуются `:key use`/`exec`.
 RE_ENTRY_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 
 # Программы, которые ждут пароль/токен в своей переменной окружения: с ними
-# `:vault exec NAME -- <программа> …` работает без явного `NAME=VAR`.
+# `:key exec NAME -- <программа> …` работает без явного `NAME=VAR`.
 ENV_PRESETS: dict[str, str] = {
     "sshpass": "SSHPASS",
     "psql": "PGPASSWORD",
@@ -114,13 +114,13 @@ def validate_name(name: str) -> str | None:
 
 
 def generate_value(length: int = DEFAULT_GENERATED_LEN) -> str:
-    """Случайное значение (`secrets.token_urlsafe`) — для `:vault gen`."""
+    """Случайное значение (`secrets.token_urlsafe`) — для `:key gen`."""
     size = max(8, min(int(length or DEFAULT_GENERATED_LEN), 256))
     return secrets.token_urlsafe(size)
 
 
 def preset_env(command: str | Sequence[str]) -> str | None:
-    """Какая переменная окружения нужна программе (`:vault exec NAME -- cmd`)."""
+    """Какая переменная окружения нужна программе (`:key exec NAME -- cmd`)."""
     if isinstance(command, str):
         parts = command.split()
     else:
@@ -234,7 +234,7 @@ def _load_file(path: str) -> dict[str, object]:
         with open(path, encoding="utf-8") as handle:
             raw = json.load(handle)
     except FileNotFoundError:
-        raise VaultError(f"No vault file: {path} (create one with :vault init)") from None
+        raise VaultError(f"No vault file: {path} (create one with :key init)") from None
     except (OSError, json.JSONDecodeError):
         raise VaultError(f"Vault file is damaged: {path}") from None
     if not isinstance(raw, dict):
@@ -249,7 +249,7 @@ def _load_file(path: str) -> dict[str, object]:
 
 
 def dump_entries(entries: Mapping[str, Mapping[str, object]]) -> list[str]:
-    """Имена записей в стабильном порядке (для `:vault list`)."""
+    """Имена записей в стабильном порядке (для `:key list`)."""
     return sorted(entries)
 
 
@@ -268,7 +268,7 @@ def sanitize_entry(raw: Mapping[str, object]) -> dict[str, object]:
         uses = 0
     if uses > 0:
         entry["uses"] = uses
-    # Тип записи и её параметры: `:vault` сам их не толкует (это делает модуль
+    # Тип записи и её параметры: `:key` сам их не толкует (это делает модуль
     # владельца, напр. `totp.py`), но должен сохранить — иначе тип потеряется
     # при первой же перезаписи файла.
     kind = str(raw.get("kind") or "").strip().lower()

@@ -206,10 +206,10 @@ ansi_colors: true
 # false（默认）—— 不动缓冲区。
 clear_clipboard_after_secret: false
 
-# 保管库（`:vault`）自动锁定：多久没有任何保管库操作后自动上锁 —— 忘记密码，
-# 下次读取会重新要求输入密码。`:vault use` 给出的变量会留在环境中
-# （如需清除：`:vault unuse [NAME|*]`）。
-# 0 —— 不自动锁定。`:vault autolock N` 可修改本次会话的设置。
+# 保管库（`:key`）自动锁定：多久没有任何保管库操作后自动上锁 —— 忘记密码，
+# 下次读取会重新要求输入密码。`:key use` 给出的变量会留在环境中
+# （如需清除：`:key unuse [NAME|*]`）。
+# 0 —— 不自动锁定。`:key autolock N` 可修改本次会话的设置。
 vault_idle_lock: 15
 
 # `:ed <文件>|$OUT|$BLOCK` 的外部编辑器（在 TTY 中启动，TUI 暂停）。

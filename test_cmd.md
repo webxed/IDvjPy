@@ -1,4 +1,4 @@
-# План тестирования IDvjPy_term v1.217
+# План тестирования IDvjPy_term v1.218
 
 Ручной прогон TUI и зеркальные автотесты (Textual Pilot).
 
@@ -1712,37 +1712,37 @@ printf '%s\n' \
 
 ---
 
-### Хранилище секретов `:vault` (v1.178)
+### Хранилище секретов `:key` (v1.178)
 
 Проверяем руками то, что сторожат тесты: значение записи никогда не показывается, а живёт только в буфере, env или stdin.
 
 ```text
-:vault                        # нет файла → «No vault file yet»
-:vault init                   # пароль дважды (минимум 8 символов)
-:vault                        # открыто, записей нет
-:vault add SSH_PROD прод      # значение вводится точками; в окне есть и поле комментария
-:vault comment SSH_PROD прод ssh;https://gitlab.example/proj   # комментарий/ссылки, значения не трогает
-:vault list                   # имя и комментарий; каждая ссылка — своей строкой
-:vault cp SSH_PROD            # → в буфер; в блоке виден комментарий (что именно скопировали)
+:key                        # нет файла → «No vault file yet»
+:key init                   # пароль дважды (минимум 8 символов)
+:key                        # открыто, записей нет
+:key add SSH_PROD прод      # значение вводится точками; в окне есть и поле комментария
+:key comment SSH_PROD прод ssh;https://gitlab.example/proj   # комментарий/ссылки, значения не трогает
+:key list                   # имя и комментарий; каждая ссылка — своей строкой
+:key cp SSH_PROD            # → в буфер; в блоке виден комментарий (что именно скопировали)
 > ssh user@host               # вставить значение из буфера, потом Ctrl+D
-:vault use SSH_PROD           # $SSH_PROD в этой сессии
-:vault unuse SSH_PROD          # снять эту переменную; `:vault unuse *` — все
-:vault exec SSH_PROD=SSHPASS -- sshpass -e ssh user@host   # значение в env, не в argv (sshpass берёт $SSHPASS)
-:vault stdin MY_PASS -- sudo -S true                    # значение на stdin
-:vault add GITHUB --totp      # TOTP: вставить base32-ключ (jbsw y3dp ehpk 3pxp) или ссылку otpauth://
-:vault list                   # GITHUB (totp)
-:vault totp GITHUB            # живой код 2FA: Enter/`c` — копировать свежий, Esc — закрыть без копии
-:vault lock                   # пароль забыт; переменные `use` остаются
-:vault unlock                 # снова пароль
-:vault autolock               # показать срок автоблокировки (по умолчанию 15 мин)
-:vault autolock 5             # на сессию: запирать после 5 мин без обращений
-:vault rm SSH_PROD            # запись удалена (переменная осталась — подсказка в блоке)
+:key use SSH_PROD           # $SSH_PROD в этой сессии
+:key unuse SSH_PROD          # снять эту переменную; `:key unuse *` — все
+:key exec SSH_PROD=SSHPASS -- sshpass -e ssh user@host   # значение в env, не в argv (sshpass берёт $SSHPASS)
+:key stdin MY_PASS -- sudo -S true                    # значение на stdin
+:key add GITHUB --totp      # TOTP: вставить base32-ключ (jbsw y3dp ehpk 3pxp) или ссылку otpauth://
+:key list                   # GITHUB (totp)
+:key totp GITHUB            # живой код 2FA: Enter/`c` — копировать свежий, Esc — закрыть без копии
+:key lock                   # пароль забыт; переменные `use` остаются
+:key unlock                 # снова пароль
+:key autolock               # показать срок автоблокировки (по умолчанию 15 мин)
+:key autolock 5             # на сессию: запирать после 5 мин без обращений
+:key rm SSH_PROD            # запись удалена (переменная осталась — подсказка в блоке)
 ```
 
-**Ожидание:** значение нигде не печатается — ни в `:vault list`, ни в шапке блока, ни в `:o`, ни в `↑`, ни в `history_*.txt`; пока хранилище открыто, оно маскируется (`****`) даже в выводе чужих команд. `cp` чистит буфер по выходу из TTY и через минуту. `:vault lock` забывает пароль, но **не снимает** переменные `use` — их убирает `:vault unuse NAME` / `:vault unuse *` (и тогда значение перестаёт маскироваться); смена сессии (`:session`) очищает и переменные сессии; закрытие приложения забывает пароль (файл `vault.json.enc`, 0600, в data-каталоге переживает перезапуск). Без пакета `cryptography` любая `:vault`-команда даёт подсказку `pip install cryptography`.
-**Комментарий:** поле `hint` — пометка к записи (ссылки через `;`, каждая в `list` — своей строкой); в окне `:vault add` есть отдельное **немаскированное** поле комментария, `:vault comment NAME [текст]` правит его без переспроса значения (без текста — показать, `-` — снять). Он виден в блоках `cp`/`use`, но не в `:vault`. Это **не секрет**: набирается в строке ввода и попадает в журнал/`↑`/`history_*.txt` как есть — пароль и URL с токеном туда не пишем.
-**Автоблокировка:** ключ `vault_idle_lock` (минуты, по умолчанию 15; `0` — выкл.). Проверить: `:vault autolock 0.05`, разблокировать, `:vault use SSH_PROD`, подождать — в журнале `Vault auto-locked`, пароль забыт (значение переменной **осталось** в окружении и маскируется), а `:vault cp SSH_PROD` снова открывает модалку пароля. `:vault autolock` показывает срок, `:vault` — строку `auto-lock: …`.
-**TOTP-коды (2FA):** `:vault add GITHUB --totp` принимает base32-ключ (`jbsw y3dp ehpk 3pxp`) или ссылку из QR `otpauth://totp/…`; проверьте, что в `:vault list` запись помечена `(totp)`, а в значении хранится канон base32 (в `vault.json.enc` секрет не читается открытым текстом). `:vault totp GITHUB` открывает окошко с живым кодом: он обновляется каждую секунду, полоска показывает остаток окна; `Enter`/`c` кладут **свежий** код в буфер, `Esc` закрывает без копии. Секрет на экран и в буфер не попадает, а **код — не секрет**: он живёт ~30 с и может попасть в журнал/`:o`. Проверьте сверку с телефоном/`oathtool` — счётчик берётся из системных часов.
+**Ожидание:** значение нигде не печатается — ни в `:key list`, ни в шапке блока, ни в `:o`, ни в `↑`, ни в `history_*.txt`; пока хранилище открыто, оно маскируется (`****`) даже в выводе чужих команд. `cp` чистит буфер по выходу из TTY и через минуту. `:key lock` забывает пароль, но **не снимает** переменные `use` — их убирает `:key unuse NAME` / `:key unuse *` (и тогда значение перестаёт маскироваться); смена сессии (`:session`) очищает и переменные сессии; закрытие приложения забывает пароль (файл `vault.json.enc`, 0600, в data-каталоге переживает перезапуск). Без пакета `cryptography` любая `:key`-команда даёт подсказку `pip install cryptography`.
+**Комментарий:** поле `hint` — пометка к записи (ссылки через `;`, каждая в `list` — своей строкой); в окне `:key add` есть отдельное **немаскированное** поле комментария, `:key comment NAME [текст]` правит его без переспроса значения (без текста — показать, `-` — снять). Он виден в блоках `cp`/`use`, но не в `:key`. Это **не секрет**: набирается в строке ввода и попадает в журнал/`↑`/`history_*.txt` как есть — пароль и URL с токеном туда не пишем.
+**Автоблокировка:** ключ `vault_idle_lock` (минуты, по умолчанию 15; `0` — выкл.). Проверить: `:key autolock 0.05`, разблокировать, `:key use SSH_PROD`, подождать — в журнале `Vault auto-locked`, пароль забыт (значение переменной **осталось** в окружении и маскируется), а `:key cp SSH_PROD` снова открывает модалку пароля. `:key autolock` показывает срок, `:key` — строку `auto-lock: …`.
+**TOTP-коды (2FA):** `:key add GITHUB --totp` принимает base32-ключ (`jbsw y3dp ehpk 3pxp`) или ссылку из QR `otpauth://totp/…`; проверьте, что в `:key list` запись помечена `(totp)`, а в значении хранится канон base32 (в `vault.json.enc` секрет не читается открытым текстом). `:key totp GITHUB` открывает окошко с живым кодом: он обновляется каждую секунду, полоска показывает остаток окна; `Enter`/`c` кладут **свежий** код в буфер, `Esc` закрывает без копии. Секрет на экран и в буфер не попадает, а **код — не секрет**: он живёт ~30 с и может попасть в журнал/`:o`. Проверьте сверку с телефоном/`oathtool` — счётчик берётся из системных часов.
 
 ## Секция 56: Разбор команды (`:explain`)
 
@@ -1759,7 +1759,7 @@ printf '%s\n' \
 
 ---
 
-**Версия документа**: v1.163
-**Версия приложения**: v1.217
+**Версия документа**: v1.164
+**Версия приложения**: v1.218
 **Автотесты**: `tests/test_cmd_scenarios.py`, `tests/test_commands.py`, `tests/test_completion.py`, `tests/test_tags.py`, `tests/test_seed_catalog.py`, `tests/test_seed_sqlite.py`, `tests/test_json_viewer.py`, `tests/test_demo.py`, `tests/test_screensaver.py`, `tests/test_calc.py`, `tests/test_ipcalc.py`, `tests/test_md_search.py`, `tests/test_output_viewer.py`, `tests/test_journal_follow.py`, `tests/test_session_mailbox.py`, `tests/test_session_registry.py`, `tests/test_colon_commands.py`, `tests/test_help_topics.py`, `tests/test_secrets.py`, `tests/test_history_import.py`, `tests/test_db_transfer.py`, `tests/test_backup_cli.py`, `tests/test_net.py`, `tests/test_remote_import.py`, `tests/test_paste_right_click.py`, `tests/test_relang.py`, `tests/test_demo_i18n.py`, `tests/test_tag_ref_click.py`, `tests/test_line_api_block.py`, `tests/test_ux_extras.py`, `tests/test_llm.py`, `tests/test_tag_query_hints.py`, `tests/test_mouse_selection.py`, `tests/test_ansi_output.py`, `tests/test_mcp_server.py`, `tests/test_vault.py`, `tests/test_totp.py`, `tests/test_tty_signals.py`, `tests/test_settings_sync.py`
 **Дата**: 2026-09-21

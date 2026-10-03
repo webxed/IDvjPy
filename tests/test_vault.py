@@ -1,7 +1,7 @@
-"""Хранилище секретов `:vault`: шифр (`src/vault.py`) и команды TUI.
+"""Хранилище секретов `:key`: шифр (`src/vault.py`) и команды TUI.
 
 Модульные тесты — про конверт (round-trip), явные ошибки и инвариант «нет
-открытого текста на диске». Тесты TUI гоняют `:vault` через маскированную
+открытого текста на диске». Тесты TUI гоняют `:key` через маскированную
 модалку (`VaultSecretScreen`) и проверяют главное правило: значение записи не
 появляется ни на экране, ни в истории, — наружу оно уходит только в буфер, env
 и stdin.
@@ -27,7 +27,7 @@ PW = "vault-pass-123"
 
 @pytest.fixture(autouse=True)
 def _clean_vault_env():
-    """Не оставлять переменные, отданные `:vault use`, соседним тестам."""
+    """Не оставлять переменные, отданные `:key use`, соседним тестам."""
     yield
     for name in ("SSH_PROD", "VAULT_TOKEN", "PGPASSWORD", "MYSQL_PWD", "MY_SECRET"):
         os.environ.pop(name, None)
@@ -128,7 +128,7 @@ async def _answer_modal(pilot, *values: str) -> None:
 
 
 async def _answer_value_modal(pilot, value: str, comment: str | None = None) -> None:
-    """Окно значения (`:vault add`): значение и (опционально) поле комментария."""
+    """Окно значения (`:key add`): значение и (опционально) поле комментария."""
     field = pilot.app.screen.query_one("#vault-input", Input)
     field.value = value
     field.focus()
@@ -146,7 +146,7 @@ def _journal_text(app: CommandRunner) -> str:
 
 
 async def _init_vault(pilot) -> None:
-    await submit(pilot, ":vault init")
+    await submit(pilot, ":key init")
     await _answer_modal(pilot, PW, PW)
 
 
@@ -154,14 +154,14 @@ async def test_without_cryptography_reports_hint(isolated_home, monkeypatch):
     monkeypatch.setattr(vault, "crypto_available", lambda: False)
     app = CommandRunner()
     async with app.run_test(size=(100, 30)) as pilot:
-        await submit(pilot, ":vault")
+        await submit(pilot, ":key")
         assert "cryptography" in last_info(app).text_content
 
 
 async def test_status_init_and_unlock_cycle(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
-        await submit(pilot, ":vault")
+        await submit(pilot, ":key")
         assert "No vault file yet" in last_info(app).text_content
 
         await _init_vault(pilot)
@@ -170,15 +170,15 @@ async def test_status_init_and_unlock_cycle(isolated_home):
         assert (isolated_home / "vault.json.enc").exists()
 
         # Пустое хранилище подсказывает, что делать дальше.
-        await submit(pilot, ":vault")
+        await submit(pilot, ":key")
         assert "no secrets yet" in last_info(app).text_content
 
         # Забыли пароль — статус снова «locked», а запрос пароля открывает.
-        await submit(pilot, ":vault lock")
+        await submit(pilot, ":key lock")
         assert app._vault_password is None
-        await submit(pilot, ":vault")
+        await submit(pilot, ":key")
         assert "locked" in last_info(app).text_content
-        await submit(pilot, ":vault unlock")
+        await submit(pilot, ":key unlock")
         await _answer_modal(pilot, PW)
         assert app._vault_password == PW
 
@@ -187,8 +187,8 @@ async def test_unlock_with_wrong_password_stays_locked(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault lock")
-        await submit(pilot, ":vault unlock")
+        await submit(pilot, ":key lock")
+        await submit(pilot, ":key unlock")
         await _answer_modal(pilot, "wrong-password-here")
         assert app._vault_password is None
         assert "Wrong password" in last_info(app).text_content
@@ -199,9 +199,9 @@ async def test_lock_then_add_asks_password_then_value(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault lock")
+        await submit(pilot, ":key lock")
         assert app._vault_password is None
-        await submit(pilot, ":vault add LATE_SEC hint here")
+        await submit(pilot, ":key add LATE_SEC hint here")
         await _answer_modal(pilot, PW)  # пароль
         await _answer_modal(pilot, "late-value")  # значение
         assert "Saved LATE_SEC" in last_info(app).text_content
@@ -212,11 +212,11 @@ async def test_add_list_and_value_never_shown(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add SSH_PROD prod ssh")
+        await submit(pilot, ":key add SSH_PROD prod ssh")
         await _answer_modal(pilot, "s3cret-value")
         assert "Saved SSH_PROD" in last_info(app).text_content
 
-        await submit(pilot, ":vault list")
+        await submit(pilot, ":key list")
         text = last_info(app).text_content
         assert "SSH_PROD" in text and "prod ssh" in text
         assert "s3cret-value" not in text
@@ -233,7 +233,7 @@ async def test_generated_value_is_hidden(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault gen TOKEN_LONG 40")
+        await submit(pilot, ":key gen TOKEN_LONG 40")
         assert "Generated TOKEN_LONG" in last_info(app).text_content
         stored = (app._vault_entries or {}).get("TOKEN_LONG", {}).get("value")
         assert isinstance(stored, str) and len(stored) >= 40
@@ -244,9 +244,9 @@ async def test_cp_puts_value_in_clipboard_only(isolated_home, clip_store):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add MY_SECRET")
+        await submit(pilot, ":key add MY_SECRET")
         await _answer_modal(pilot, "clip-value")
-        await submit(pilot, ":vault cp MY_SECRET")
+        await submit(pilot, ":key cp MY_SECRET")
         assert "clipboard" in last_info(app).text_content
         assert clip_store.paste() == "clip-value"
         assert app._vault_clip_pending is True
@@ -264,15 +264,15 @@ async def test_use_exports_env_and_lock_keeps_it(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add MY_SECRET")
+        await submit(pilot, ":key add MY_SECRET")
         await _answer_modal(pilot, "env-value")
-        await submit(pilot, ":vault use MY_SECRET")
+        await submit(pilot, ":key use MY_SECRET")
         assert os.environ.get("MY_SECRET") == "env-value"
         assert "env-value" not in _journal_text(app)
         # Значение маскируется и в чужих выводах, пока хранилище открыто.
         assert app._mask_secrets("here: env-value") == "here: ****"
 
-        await submit(pilot, ":vault lock")
+        await submit(pilot, ":key lock")
         assert app._vault_password is None, "пароль забыт"
         assert os.environ.get("MY_SECRET") == "env-value", "переменная осталась"
         assert app._vault_env == {"MY_SECRET": "env-value"}
@@ -282,33 +282,33 @@ async def test_use_exports_env_and_lock_keeps_it(isolated_home):
 
 
 async def test_unuse_clears_exported_vars(isolated_home):
-    """Ручная очистка переменных: `:vault unuse NAME` и `:vault unuse *`."""
+    """Ручная очистка переменных: `:key unuse NAME` и `:key unuse *`."""
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add MY_SECRET")
+        await submit(pilot, ":key add MY_SECRET")
         await _answer_modal(pilot, "v1")
-        await submit(pilot, ":vault add SSH_PROD")
+        await submit(pilot, ":key add SSH_PROD")
         await _answer_modal(pilot, "v2")
-        await submit(pilot, ":vault use MY_SECRET")
-        await submit(pilot, ":vault use SSH_PROD")
+        await submit(pilot, ":key use MY_SECRET")
+        await submit(pilot, ":key use SSH_PROD")
         assert os.environ.get("MY_SECRET") == "v1"
         assert os.environ.get("SSH_PROD") == "v2"
 
-        await submit(pilot, ":vault unuse MY_SECRET")
+        await submit(pilot, ":key unuse MY_SECRET")
         assert "MY_SECRET" not in os.environ
         assert os.environ.get("SSH_PROD") == "v2", "чужая переменная не тронута"
         assert "Removed 1" in last_info(app).text_content
 
         # Хранилище при этом не заперто — пароль не спрашивают.
         assert app._vault_password == PW
-        await submit(pilot, ":vault unuse nope")
+        await submit(pilot, ":key unuse nope")
         assert "No exported variable named nope" in last_info(app).text_content
 
-        await submit(pilot, ":vault unuse *")
+        await submit(pilot, ":key unuse *")
         assert "SSH_PROD" not in os.environ
         assert app._vault_env == {}
-        await submit(pilot, ":vault unuse *")
+        await submit(pilot, ":key unuse *")
         assert "No exported variables to remove" in last_info(app).text_content
 
 
@@ -318,9 +318,9 @@ async def test_autolock_locks_after_idle_and_asks_password_again(isolated_home, 
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add MY_SECRET")
+        await submit(pilot, ":key add MY_SECRET")
         await _answer_modal(pilot, "idle-value")
-        await submit(pilot, ":vault use MY_SECRET")
+        await submit(pilot, ":key use MY_SECRET")
         assert os.environ.get("MY_SECRET") == "idle-value"
 
         # Прошло больше срока без обращений — таймер срабатывает.
@@ -335,7 +335,7 @@ async def test_autolock_locks_after_idle_and_asks_password_again(isolated_home, 
         assert app._vault_timer is None
 
         # Чтение секрета снова требует пароль (а не отдаёт значение молча).
-        await submit(pilot, ":vault cp MY_SECRET")
+        await submit(pilot, ":key cp MY_SECRET")
         assert type(pilot.app.screen).__name__ == "VaultSecretScreen"
         await _answer_modal(pilot, PW)
         await wait_clipboard(app)
@@ -354,27 +354,27 @@ async def test_autolock_not_early_then_fires(isolated_home):
 
 
 async def test_autolock_setting_and_session_override(isolated_home):
-    """`:vault autolock N` меняет срок на сессию; 0 — выключает; статус это видит."""
+    """`:key autolock N` меняет срок на сессию; 0 — выключает; статус это видит."""
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
         assert app._vault_timer is not None, "после разблокировки таймер взведён"
         assert app.vault_idle_lock == 15  # из settings.yml по умолчанию
 
-        await submit(pilot, ":vault autolock 0")
+        await submit(pilot, ":key autolock 0")
         assert app.vault_idle_lock == 0
         assert app._vault_timer is None
         assert "auto-lock off" in last_info(app).text_content
-        await submit(pilot, ":vault")
+        await submit(pilot, ":key")
         assert "auto-lock: off" in last_info(app).text_content
 
-        await submit(pilot, ":vault autolock 5")
+        await submit(pilot, ":key autolock 5")
         assert app.vault_idle_lock == 5
         assert app._vault_timer is not None
         assert "5 min" in last_info(app).text_content
-        await submit(pilot, ":vault autolock")
+        await submit(pilot, ":key autolock")
         assert "5 min" in last_info(app).text_content  # без аргумента — показать
-        await submit(pilot, ":vault")
+        await submit(pilot, ":key")
         assert "auto-lock: 5 min" in last_info(app).text_content
 
 
@@ -383,7 +383,7 @@ async def test_autolock_timer_fires_by_itself(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault autolock 0.003")  # ≈ 0.18 с
+        await submit(pilot, ":key autolock 0.003")  # ≈ 0.18 с
         assert app.vault_idle_lock > 0
         for _ in range(60):
             if app._vault_password is None:
@@ -397,11 +397,11 @@ async def test_remove_entry(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add TMP_SEC")
+        await submit(pilot, ":key add TMP_SEC")
         await _answer_modal(pilot, "value")
-        await submit(pilot, ":vault rm TMP_SEC")
+        await submit(pilot, ":key rm TMP_SEC")
         assert "Removed TMP_SEC" in last_info(app).text_content
-        await submit(pilot, ":vault rm TMP_SEC")
+        await submit(pilot, ":key rm TMP_SEC")
         assert "No secret named TMP_SEC" in last_info(app).text_content
 
 
@@ -410,7 +410,7 @@ async def test_add_modal_has_comment_field_prefilled(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add API_KEY прод api")
+        await submit(pilot, ":key add API_KEY прод api")
         comment_field = pilot.app.screen.query_one("#vault-comment", Input)
         assert comment_field.value == "прод api"
         await _answer_value_modal(pilot, "k-123", "прод api;https://api.example/key")
@@ -419,7 +419,7 @@ async def test_add_modal_has_comment_field_prefilled(isolated_home):
         assert entry["hint"] == "прод api;https://api.example/key"
         # Значение — по-прежнему только в маске, в журнал не попадает.
         assert "k-123" not in _journal_text(app)
-        await submit(pilot, ":vault list")
+        await submit(pilot, ":key list")
         text = last_info(app).text_content
         assert "API_KEY" in text
         assert "      прод api" in text and "      https://api.example/key" in text
@@ -430,7 +430,7 @@ async def test_add_modal_blocks_empty_value(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add NO_VALUE")
+        await submit(pilot, ":key add NO_VALUE")
         await _answer_value_modal(pilot, "")
         assert type(pilot.app.screen).__name__ == "VaultSecretScreen"
 
@@ -445,7 +445,7 @@ async def test_add_modal_value_and_comment_fields_do_not_overlap(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add API_KEY")
+        await submit(pilot, ":key add API_KEY")
         value_field = pilot.app.screen.query_one("#vault-input", Input)
         comment_field = pilot.app.screen.query_one("#vault-comment", Input)
         assert value_field.region.height > 0 and comment_field.region.height > 0
@@ -455,52 +455,52 @@ async def test_add_modal_value_and_comment_fields_do_not_overlap(isolated_home):
 
 
 async def test_comment_command_edits_without_value(isolated_home):
-    """`:vault comment` — правит/показывает/снимает комментарий, значения не трогает."""
+    """`:key comment` — правит/показывает/снимает комментарий, значения не трогает."""
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add SSH_PROD")
+        await submit(pilot, ":key add SSH_PROD")
         await _answer_value_modal(pilot, "s3cret")
 
-        await submit(pilot, ":vault comment SSH_PROD прод ssh;ssh://deploy@host")
+        await submit(pilot, ":key comment SSH_PROD прод ssh;ssh://deploy@host")
         entry = (app._vault_entries or {})["SSH_PROD"]
         assert entry["value"] == "s3cret", "значение не тронуто"
         assert entry["hint"] == "прод ssh;ssh://deploy@host"
         assert "s3cret" not in _journal_text(app)
 
-        await submit(pilot, ":vault comment SSH_PROD")
+        await submit(pilot, ":key comment SSH_PROD")
         assert "прод ssh;ssh://deploy@host" in last_info(app).text_content
 
         # В списке несколько ссылок — каждая с новой строки.
-        await submit(pilot, ":vault list")
+        await submit(pilot, ":key list")
         text = last_info(app).text_content
         assert "      прод ssh" in text and "      ssh://deploy@host" in text
 
-        await submit(pilot, ":vault comment SSH_PROD -")
+        await submit(pilot, ":key comment SSH_PROD -")
         assert "hint" not in (app._vault_entries or {})["SSH_PROD"]
-        await submit(pilot, ":vault comment SSH_PROD")
+        await submit(pilot, ":key comment SSH_PROD")
         assert "(none)" in last_info(app).text_content
 
-        await submit(pilot, ":vault comment NOPE x")
+        await submit(pilot, ":key comment NOPE x")
         assert "No secret named NOPE" in last_info(app).text_content
 
 
 async def test_comment_shown_in_cp_and_use_not_in_status(isolated_home, clip_store):
-    """Комментарий виден в `cp`/`use` (чтобы не копировать наугад), но не в `:vault`."""
+    """Комментарий виден в `cp`/`use` (чтобы не копировать наугад), но не в `:key`."""
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add SSH_PROD")
+        await submit(pilot, ":key add SSH_PROD")
         await _answer_value_modal(pilot, "s3cret", "прод ssh")
 
-        await submit(pilot, ":vault cp SSH_PROD")
+        await submit(pilot, ":key cp SSH_PROD")
         assert clip_store.paste() == "s3cret"
         assert "прод ssh" in last_info(app).text_content
 
-        await submit(pilot, ":vault use SSH_PROD")
+        await submit(pilot, ":key use SSH_PROD")
         assert "прод ssh" in last_info(app).text_content
 
-        await submit(pilot, ":vault")
+        await submit(pilot, ":key")
         assert "прод ssh" not in last_info(app).text_content, "статус короткий"
 
 
@@ -509,10 +509,10 @@ async def test_remove_warns_about_exported_var(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add MY_SECRET")
+        await submit(pilot, ":key add MY_SECRET")
         await _answer_modal(pilot, "keep-value")
-        await submit(pilot, ":vault use MY_SECRET")
-        await submit(pilot, ":vault rm MY_SECRET")
+        await submit(pilot, ":key use MY_SECRET")
+        await submit(pilot, ":key rm MY_SECRET")
         text = last_info(app).text_content
         assert "Removed MY_SECRET" in text
         assert "unuse" in text and "MY_SECRET" in text
@@ -524,7 +524,7 @@ async def test_exec_uses_env_not_argv(isolated_home, monkeypatch):
     calls: list[tuple[str, dict[str, str] | None]] = []
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add PGPASS")
+        await submit(pilot, ":key add PGPASS")
         await _answer_modal(pilot, "db-pass")
         monkeypatch.setattr(
             app,
@@ -533,7 +533,7 @@ async def test_exec_uses_env_not_argv(isolated_home, monkeypatch):
                 (cmd, extra_env)
             ),
         )
-        await submit(pilot, ":vault exec PGPASS -- psql -h db")
+        await submit(pilot, ":key exec PGPASS -- psql -h db")
     assert calls == [("psql -h db", {"PGPASSWORD": "db-pass"})]
 
 
@@ -542,7 +542,7 @@ async def test_exec_explicit_var_and_unknown_program(isolated_home, monkeypatch)
     calls: list[tuple[str, dict[str, str] | None]] = []
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add MY_SECRET")
+        await submit(pilot, ":key add MY_SECRET")
         await _answer_modal(pilot, "token-1")
         monkeypatch.setattr(
             app,
@@ -551,10 +551,10 @@ async def test_exec_explicit_var_and_unknown_program(isolated_home, monkeypatch)
                 (cmd, extra_env)
             ),
         )
-        await submit(pilot, ":vault exec MY_SECRET=VAULT_TOKEN -- vault read secret/x")
+        await submit(pilot, ":key exec MY_SECRET=VAULT_TOKEN -- vault read secret/x")
         assert calls == [("vault read secret/x", {"VAULT_TOKEN": "token-1"})]
         # Программа без пресета и без `NAME=VAR` — явная ошибка со списком.
-        await submit(pilot, ":vault exec MY_SECRET -- vim notes.txt")
+        await submit(pilot, ":key exec MY_SECRET -- vim notes.txt")
         assert "no $VAR was given" in last_info(app).text_content
 
 
@@ -563,7 +563,7 @@ async def test_stdin_feeds_value(isolated_home, monkeypatch):
     calls: list[tuple[str, str | None]] = []
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add MY_SECRET")
+        await submit(pilot, ":key add MY_SECRET")
         await _answer_modal(pilot, "sudo-pass")
         monkeypatch.setattr(
             app,
@@ -572,22 +572,22 @@ async def test_stdin_feeds_value(isolated_home, monkeypatch):
                 (cmd, stdin_data)
             ),
         )
-        await submit(pilot, ":vault stdin MY_SECRET -- sudo -S true")
+        await submit(pilot, ":key stdin MY_SECRET -- sudo -S true")
     assert calls == [("sudo -S true", "sudo-pass\n")]
 
 
 async def test_usage_and_unknown_subcommand(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
-        await submit(pilot, ":vault nope")
-        assert "Unknown :vault subcommand" in last_info(app).text_content
-        await submit(pilot, ":vault add")
-        assert "Usage: :vault" in last_info(app).text_content
-        await submit(pilot, ":vault add 1bad")
+        await submit(pilot, ":key nope")
+        assert "Unknown :key subcommand" in last_info(app).text_content
+        await submit(pilot, ":key add")
+        assert "Usage: :key" in last_info(app).text_content
+        await submit(pilot, ":key add 1bad")
         assert "letters, digits" in last_info(app).text_content
 
 
-# --- TOTP-записи (`:vault add NAME --totp`, `:vault totp NAME`) ------------
+# --- TOTP-записи (`:key add NAME --totp`, `:key totp NAME`) ------------
 
 SECRET = "JBSWY3DPEHPK3PXP"
 OPAUTH = (
@@ -597,7 +597,7 @@ OPAUTH = (
 
 
 def _stored_code(entry: dict) -> str:
-    """Код, который обязан положить в буфер `:vault totp` (для сверки)."""
+    """Код, который обязан положить в буфер `:key totp` (для сверки)."""
     spec = totp.spec_from_entry(entry)
     assert spec is not None
     return totp.code_at(
@@ -610,7 +610,7 @@ async def test_totp_add_stores_secret_and_defaults(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add OTP_PROD --totp")
+        await submit(pilot, ":key add OTP_PROD --totp")
         await _answer_value_modal(pilot, "jbsw y3dp ehpk 3pxp", "prod 2fa")
         assert "Saved OTP_PROD" in last_info(app).text_content
         entry = (app._vault_entries or {})["OTP_PROD"]
@@ -630,7 +630,7 @@ async def test_totp_add_accepts_otpauth_link(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add OTP_ACME --totp")
+        await submit(pilot, ":key add OTP_ACME --totp")
         await _answer_value_modal(pilot, OPAUTH, "prod 2fa;https://acme.example")
         entry = (app._vault_entries or {})["OTP_ACME"]
         assert entry["kind"] == "totp"
@@ -648,7 +648,7 @@ async def test_totp_add_rejects_bad_secret(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add OTP_BAD --totp")
+        await submit(pilot, ":key add OTP_BAD --totp")
         await _answer_value_modal(pilot, "not-base32")
         assert "Not a TOTP secret" in last_info(app).text_content
         assert "OTP_BAD" not in (app._vault_entries or {}), "битая запись не сохраняется"
@@ -658,11 +658,11 @@ async def test_totp_list_marks_entry(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add OTP --totp")
+        await submit(pilot, ":key add OTP --totp")
         await _answer_value_modal(pilot, SECRET, "prod 2fa")
-        await submit(pilot, ":vault add PLAIN")
+        await submit(pilot, ":key add PLAIN")
         await _answer_value_modal(pilot, "just-a-value")
-        await submit(pilot, ":vault list")
+        await submit(pilot, ":key list")
         text = last_info(app).text_content
         assert "OTP (totp)" in text
         assert "PLAIN" in text and "PLAIN (totp)" not in text
@@ -674,9 +674,9 @@ async def test_totp_screen_copies_code_not_secret(isolated_home, clip_store):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add OTP --totp")
+        await submit(pilot, ":key add OTP --totp")
         await _answer_value_modal(pilot, SECRET, "prod 2fa")
-        await submit(pilot, ":vault totp OTP")
+        await submit(pilot, ":key totp OTP")
         assert type(pilot.app.screen).__name__ == "VaultTotpScreen"
         # На экране — код, не секрет.
         shown = pilot.app.screen.query_one("#totp-code", Static).content
@@ -694,12 +694,12 @@ async def test_totp_screen_copies_code_not_secret(isolated_home, clip_store):
         # Esc — закрыть, ничего не копируя; `c` — тоже копирует.
         app._vault_clear_clipboard()
         await wait_clipboard(app)
-        await submit(pilot, ":vault totp OTP")
+        await submit(pilot, ":key totp OTP")
         await pilot.press("escape")
         await pilot.pause()
         assert clip_store.paste() == "", "Esc не копирует"
 
-        await submit(pilot, ":vault totp OTP")
+        await submit(pilot, ":key totp OTP")
         await pilot.press("c")
         await pilot.pause()
         await wait_clipboard(app)
@@ -710,9 +710,9 @@ async def test_totp_on_plain_entry_is_explicit(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault add PLAIN")
+        await submit(pilot, ":key add PLAIN")
         await _answer_value_modal(pilot, "just-a-value")
-        await submit(pilot, ":vault totp PLAIN")
+        await submit(pilot, ":key totp PLAIN")
         assert "is not a TOTP entry" in last_info(app).text_content
         assert type(pilot.app.screen).__name__ != "VaultTotpScreen"
 
@@ -721,5 +721,70 @@ async def test_totp_missing_entry_is_explicit(isolated_home):
     app = CommandRunner()
     async with app.run_test(size=(100, 40)) as pilot:
         await _init_vault(pilot)
-        await submit(pilot, ":vault totp NOPE")
+        await submit(pilot, ":key totp NOPE")
         assert "No secret named NOPE" in last_info(app).text_content
+
+
+# --- Поиск по именам и комментариям (`:key find`) -------------------------
+
+
+async def test_find_matches_name_and_comment_case_insensitive(isolated_home):
+    """`:key find` ищет по имени и комментарию без регистра; значения не показывает."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":key add SSH_PROD prod ssh")
+        await _answer_value_modal(pilot, "s3cret-ssh")
+        await submit(pilot, ":key add GITHUB_TOKEN github api")
+        await _answer_value_modal(pilot, "s3cret-gh")
+        await submit(pilot, ":key add DB_PASSWORD db")
+        await _answer_value_modal(pilot, "s3cret-db")
+
+        # По имени, в другом регистре.
+        await submit(pilot, ":key find ssh_prod")
+        text = last_info(app).text_content
+        assert "SSH_PROD" in text and "prod ssh" in text
+        assert "GITHUB_TOKEN" not in text and "DB_PASSWORD" not in text
+        assert "s3cret-ssh" not in text
+
+        # По комментарию (`search` — алиас), значения не ищем.
+        await submit(pilot, ":key search api")
+        text = last_info(app).text_content
+        assert "GITHUB_TOKEN" in text and "SSH_PROD" not in text
+        assert "s3cret-gh" not in text
+        await submit(pilot, ":key find s3cret")
+        assert "No key matches" in last_info(app).text_content
+
+
+async def test_find_without_query_shows_usage(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":key find")
+        assert "Usage: :key find" in last_info(app).text_content
+
+
+async def test_find_no_match_is_explicit(isolated_home):
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":key add ONLY_ONE")
+        await _answer_value_modal(pilot, "just-a-value")
+        await submit(pilot, ":key find zzz")
+        text = last_info(app).text_content
+        assert "No key matches" in text and "zzz" in text
+
+
+async def test_find_needs_unlock(isolated_home):
+    """Запертое хранилище: `find` сначала спрашивает пароль (имена зашифрованы)."""
+    app = CommandRunner()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await _init_vault(pilot)
+        await submit(pilot, ":key add SSH_PROD prod")
+        await _answer_value_modal(pilot, "s3cret")
+        await submit(pilot, ":key lock")
+        assert app._vault_password is None
+        await submit(pilot, ":key find ssh")
+        assert type(pilot.app.screen).__name__ == "VaultSecretScreen"
+        await _answer_modal(pilot, PW)
+        assert "SSH_PROD" in last_info(app).text_content

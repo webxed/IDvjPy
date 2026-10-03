@@ -21,7 +21,7 @@ screensaver:
   - :welcome  — каталог seed
   - :backup  — снимок БД тегов
   - :audit  — журнал изменений библиотеки без содержимого команд (:? audit)
-  - :vault  — хранилище секретов с шифрованием по паролю (init/add/cp/use/exec/totp)
+  - :key  — хранилище секретов с шифрованием по паролю (init/add/find/cp/use/exec/totp)
   - ":screensaver  — звёздное поле сразу; матрица разово: :screensaver matrix"
   - :r [N]  — перенести команду блока во ввод (N = насколько назад)
   - :cmd [N] [show]  — команда блока с текущими $VAR/секретами в буфер
@@ -46,6 +46,7 @@ screensaver:
   - ":kctx [cluster] [N]  — журнал кластера: сохранённые переменные по кластеру (kctx_vars)"
   - :/text · :g  — поиск по строкам журнала; :n / :N вперёд/назад
   - :theme [name]  — тема TUI (сохраняется в settings.yml)
+  - ':settings [sync]  — добавить в settings.yml / llm_providers.yml новые ключи шаблона'
   - :playbook [file]  — выгрузить сессию как YAML для --demo
   - :run tag|file.yml  — полуавтоматическая цепочка; ручные шаги ждут Enter
   - :update  — сравнить VERSION с GitHub main

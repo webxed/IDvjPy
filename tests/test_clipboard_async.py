@@ -129,7 +129,7 @@ async def test_vault_clear_erases_its_own_value(isolated_home):
 
 
 async def test_old_vault_copy_cannot_overwrite_newer_value(isolated_home, monkeypatch):
-    """Поздняя системная запись A не возвращает A после `:vault cp B`."""
+    """Поздняя системная запись A не возвращает A после `:key cp B`."""
     import app as app_module
 
     a_started = threading.Event()
@@ -158,7 +158,7 @@ async def test_old_vault_copy_cannot_overwrite_newer_value(isolated_home, monkey
 
 
 async def test_old_vault_timer_cannot_clear_newer_value(isolated_home):
-    """TTL A не имеет права очистить B после второй команды `:vault cp`."""
+    """TTL A не имеет права очистить B после второй команды `:key cp`."""
     app = CommandRunner()
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause()

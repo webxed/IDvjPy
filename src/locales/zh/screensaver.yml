@@ -21,7 +21,7 @@ screensaver:
   - :welcome  — 种子目录
   - :backup  — 将标签数据库快照
   - :audit  — 不含内容的库变更记录（:? audit）
-  - :vault  — 按密码加密的密钥保管库（init/add/cp/use/exec/totp）
+  - :key  — 按密码加密的密钥保管库（init/add/find/cp/use/exec/totp）
   - ':screensaver  — 立即显示星空; :screensaver matrix 可临时显示矩阵雨'
   - :r [N]  — 将块命令放入输入框（N = 往前第几块）
   - :cmd [N] [show]  — 将带当前 $VAR/密钥的块命令复制到剪贴板
@@ -46,6 +46,7 @@ screensaver:
   - ':kctx [cluster] [N]  — 集群日志: 按集群保存的变量（kctx_vars）'
   - :/text · :g  — 搜索日志行; :n / :N 下一个/上一个
   - :theme [name]  — TUI 主题（保存在 settings.yml）
+  - ':settings [sync]  — 将模板新增键合并进 settings.yml / llm_providers.yml'
   - :playbook [file]  — 将会话导出为 --demo YAML
   - :run tag|file.yml  — 半自动命令链; manual 步骤等待 Enter
   - :update  — 将 VERSION 与 GitHub main 比较

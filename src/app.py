@@ -495,8 +495,8 @@ DEFAULT_SCREENSAVER_IDLE = 120
 # сработать на волосок раньше срока, из-за чего заставка без нужды переносилась бы.
 SCREENSAVER_TIMER_SLACK = 0.05
 
-# Автоблокировка хранилища `:vault`: сколько минут без обращений к нему держать его
-# открытым (`settings.yml: vault_idle_lock`, `:vault autolock N` — на сессию).
+# Автоблокировка хранилища `:key`: сколько минут без обращений к нему держать его
+# открытым (`settings.yml: vault_idle_lock`, `:key autolock N` — на сессию).
 # 0 — не запирать. Таймер взводится при разблокировке и перезапускается на каждой
 # операции; по тишине хранилище запирается, а чтение секрета снова спросит пароль.
 DEFAULT_VAULT_IDLE_LOCK = 15
@@ -2715,7 +2715,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.217"
+    VERSION = "v1.218"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2798,7 +2798,7 @@ class CommandRunner(App):
     FILE_COMPLETION_PROBE_DEPTH = 20
     TIMER_DELAY = 2
     # Сколько секунд секрет хранилища может лежать в буфере обмена после
-    # `:vault cp` (по выходу из TTY-сессии буфер чистится сразу).
+    # `:key cp` (по выходу из TTY-сессии буфер чистится сразу).
     VAULT_CLIPBOARD_TTL = 60
     COMMAND_TIMEOUT = 10
     FILE_LOCK_TIMEOUT = 5  # Таймаут для получения блокировки файла (секунды)
@@ -2880,7 +2880,7 @@ class CommandRunner(App):
     CMD_PIN = "pin"  # избранные теги в рамках сессии
     CMD_PROFILE = "profile"  # именованные безопасные профили контекста
     CMD_TAGMETA = "tagmeta"  # метаданные тега
-    CMD_VAULT = "vault"  # хранилище секретов с шифрованием по паролю (`vault.json.enc`)
+    CMD_KEY = "key"  # хранилище секретов с шифрованием по паролю (`vault.json.enc`)
     CMD_DOCTOR = "doctor"  # локальная диагностика окружения, без запусков и сети
     CMD_EXPLAIN = "explain"  # локальный разбор команды без запуска (справочник + эвристика)
     CMD_LEARN = "learn"  # учебный режим: задача, подсказки, проверка выполненной команды
@@ -2913,7 +2913,7 @@ class CommandRunner(App):
     KEY_CHEAT_SH_URL = "cheat_sh_url"
     KEY_CHEAT_SH_OPTIONS = "cheat_sh_options"
     KEY_CLEAR_CLIP_AFTER_SECRET = "clear_clipboard_after_secret"
-    # Автоблокировка хранилища `:vault` через N минут без обращений (0 — выкл.).
+    # Автоблокировка хранилища `:key` через N минут без обращений (0 — выкл.).
     KEY_VAULT_IDLE_LOCK = "vault_idle_lock"
     # Статичная ссылка для `:import` без аргументов (командная библиотека тегов).
     KEY_LIBRARY_URL = "library_url"
@@ -3077,9 +3077,9 @@ class CommandRunner(App):
         self.local_env: dict[str, str] = {}
         # Имена секретных переменных ($$NAME=…): значения маскируются в UI
         self._secret_names: set[str] = set()
-        # Хранилище `:vault`: пароль и записи живут только в памяти, пока сессия
+        # Хранилище `:key`: пароль и записи живут только в памяти, пока сессия
         # разблокирована (файл — `vault.json.enc`, 0600). `_vault_env` — имена
-        # переменных, которым значение отдал `:vault use` (их снимает `lock`/выход).
+        # переменных, которым значение отдал `:key use` (их снимает `lock`/выход).
         self._vault_password: str | None = None
         self._vault_entries: dict[str, dict[str, object]] | None = None
         self._vault_env: dict[str, str] = {}
@@ -4163,7 +4163,7 @@ class CommandRunner(App):
         """Внутренний буфер — сразу, системный — последовательно в worker-е.
 
         У vault есть поколение: отложенная запись старого секрета не имеет права
-        попасть в системный clipboard после следующего `:vault cp`/обычной копии.
+        попасть в системный clipboard после следующего `:key cp`/обычной копии.
         """
         payload = text or ""
         copy_internal(payload, self)
@@ -5002,8 +5002,8 @@ class CommandRunner(App):
             pass
         # Выход: секреты не остаются на диске после закрытия приложения.
         self._purge_secrets_file()
-        # Хранилище `:vault`: пароль и записи живут только в памяти сессии,
-        # переменные, отданные `:vault use`, — тоже (в env их не оставляем).
+        # Хранилище `:key`: пароль и записи живут только в памяти сессии,
+        # переменные, отданные `:key use`, — тоже (в env их не оставляем).
         self._vault_forget()
         self._vault_clear_env()
         # Терминал уходит в тот же каталог, в котором осталось окно (OSC 7), а по
@@ -6285,7 +6285,7 @@ class CommandRunner(App):
         CMD_TERM: "_handle_term_args",
         CMD_EDITOR: "_handle_editor_command",
         CMD_ENV: "_handle_env_reload",
-        CMD_VAULT: "_handle_vault_command",
+        CMD_KEY: "_handle_key_command",
         CMD_SAFE: "_handle_safe_command",
         CMD_EXPLAIN: "_handle_explain_command",
         CMD_LEARN: "_handle_learn_command",
@@ -8269,7 +8269,7 @@ class CommandRunner(App):
                 os.environ.pop(key, None)
         self.local_env.clear()
         self._secret_names = set()
-        # Переменные, взятые из хранилища (`:vault use`), — тоже уносим: смена
+        # Переменные, взятые из хранилища (`:key use`), — тоже уносим: смена
         # сессии меняет и env, а значение живёт только в памяти.
         self._vault_env.clear()
 
@@ -9417,8 +9417,8 @@ class CommandRunner(App):
     def _mask_secrets(self, text: str) -> str:
         """Заменить значения секретов на `****` для показа в журнале.
 
-        Кроме `$$NAME=…` маскируются значения хранилища `:vault`: и записи (пока оно
-        разблокировано), и значения, отданные в env через `:vault use` — их нельзя
+        Кроме `$$NAME=…` маскируются значения хранилища `:key`: и записи (пока оно
+        разблокировано), и значения, отданные в env через `:key use` — их нельзя
         показать в заголовке блока, `:o` или выводе, даже если программа сама их
         напечатает. Иначе после автоблокировки переменная осталась бы в окружении,
         а её значение — рассекречено в выводе.
@@ -9493,15 +9493,15 @@ class CommandRunner(App):
             self.local_env.pop(name, None)
         self._secret_names.clear()
 
-    # --- Хранилище секретов (`:vault`) ----------------------------------------
+    # --- Хранилище секретов (`:key`) ----------------------------------------
     # Шифрование и файл — `src/vault.py`; ввод пароля/значения — модалка
     # `VaultSecretScreen` (`src/vault_prompt.py`). Значение записи не появляется на
     # экране, в журнале и в истории: наружу оно уходит только в буфер (`cp`),
     # в env процесса (`use`/`exec`) или в stdin (`stdin`). Пока хранилище
     # разблокировано, его значения маскируются (`_mask_secrets`), как `$$`-секреты.
 
-    def _handle_vault_command(self, args: list[str]) -> None:
-        """`:vault …` — хранилище секретов с шифрованием по паролю."""
+    def _handle_key_command(self, args: list[str]) -> None:
+        """`:key …` — хранилище секретов с шифрованием по паролю."""
         if not vault.crypto_available():
             self.add_block(InfoBlock(vault.unavailable_hint()))
             return
@@ -9515,6 +9515,8 @@ class CommandRunner(App):
             "gen": self._vault_do_gen,
             "list": self._vault_do_list,
             "ls": self._vault_do_list,
+            "find": self._vault_do_find,
+            "search": self._vault_do_find,
             "rm": self._vault_do_rm,
             "remove": self._vault_do_rm,
             "cp": self._vault_do_cp,
@@ -9538,7 +9540,7 @@ class CommandRunner(App):
         action(rest)
 
     def _vault_show_status(self) -> None:
-        """`:vault` — файл, замок, записи и автоблокировка (без значений)."""
+        """`:key` — файл, замок, записи и автоблокировка (без значений)."""
         if not os.path.exists(self.FILE_VAULT):
             self.add_block(InfoBlock(t("vault.missing", file=self.FILE_VAULT)))
             return
@@ -9560,7 +9562,7 @@ class CommandRunner(App):
         self.add_block(InfoBlock("\n".join(lines)))
 
     def _vault_autolock_line(self) -> str:
-        """Строка про автоблокировку для `:vault`/`:vault autolock`."""
+        """Строка про автоблокировку для `:key`/`:key autolock`."""
         try:
             minutes = float(self.vault_idle_lock or 0)
         except (TypeError, ValueError):
@@ -9585,15 +9587,15 @@ class CommandRunner(App):
         """Забыть пароль и записи, снять таймер. Переменные `use` — НЕ трогает.
 
         Смысл замка — снова спросить пароль при обращении к хранилищу, а не
-        вытряхнуть окружение: `:vault use` отдаёт значения командам, и вынимать их
-        заново каждый раз неудобно. Снять переменные — `:vault unuse` (или `*`).
+        вытряхнуть окружение: `:key use` отдаёт значения командам, и вынимать их
+        заново каждый раз неудобно. Снять переменные — `:key unuse` (или `*`).
         """
         self._vault_stop_timer()
         self._vault_password = None
         self._vault_entries = None
 
     def _vault_clear_env(self, target: str | None = None) -> int:
-        """Снять переменные, отданные `:vault use`. `target`: имя или None/`*` (все).
+        """Снять переменные, отданные `:key use`. `target`: имя или None/`*` (все).
 
         Возвращает число снятых (не найденное имя — 0, это не ошибка).
         """
@@ -9640,7 +9642,7 @@ class CommandRunner(App):
     def _vault_auto_lock(self) -> None:
         """Таймер: тишина в хранилище дольше `vault_idle_lock` — запереть его.
 
-        Запирание снимает и переменные, отданные `:vault use`: значение не должно
+        Запирание снимает и переменные, отданные `:key use`: значение не должно
         остаться в env, если человек отошёл. Следующее чтение ( `cp` / `use` / `exec` /
         `stdin` / `list` / `rm` / `add` / `gen` ) снова спросит пароль.
         """
@@ -9662,7 +9664,7 @@ class CommandRunner(App):
         self.set_timer(3, self.clear_subtitle)
 
     def _vault_do_autolock(self, args: list[str]) -> None:
-        """`:vault autolock [N]` — срок автоблокировки на сессию (минуты; 0 — выкл.)."""
+        """`:key autolock [N]` — срок автоблокировки на сессию (минуты; 0 — выкл.)."""
         if not args:
             self.add_block(InfoBlock(self._vault_autolock_line().strip()))
             return
@@ -9756,7 +9758,7 @@ class CommandRunner(App):
         self.push_screen(screen, done)
 
     def _vault_do_init(self, args: list[str]) -> None:
-        """`:vault init` — создать хранилище (пароль спрашиваем дважды)."""
+        """`:key init` — создать хранилище (пароль спрашиваем дважды)."""
         if args:
             self.add_block(InfoBlock(t("vault.usage")))
             return
@@ -9768,7 +9770,7 @@ class CommandRunner(App):
         )
 
     def _vault_do_unlock(self, args: list[str]) -> None:
-        """`:vault unlock` — разблокировать на сессию."""
+        """`:key unlock` — разблокировать на сессию."""
         if args:
             self.add_block(InfoBlock(t("vault.usage")))
             return
@@ -9779,7 +9781,7 @@ class CommandRunner(App):
         self._vault_ensure_unlocked(lambda: None)
 
     def _vault_do_lock(self, args: list[str]) -> None:
-        """`:vault lock` — забыть пароль (переменные `use` остаются в окружении)."""
+        """`:key lock` — забыть пароль (переменные `use` остаются в окружении)."""
         if args:
             self.add_block(InfoBlock(t("vault.usage")))
             return
@@ -9792,7 +9794,7 @@ class CommandRunner(App):
         )))
 
     def _vault_do_unuse(self, args: list[str]) -> None:
-        """`:vault unuse [NAME|*]` — снять переменные, отданные `:vault use`."""
+        """`:key unuse [NAME|*]` — снять переменные, отданные `:key use`."""
         if len(args) > 1:
             self.add_block(InfoBlock(t("vault.usage")))
             return
@@ -9807,7 +9809,7 @@ class CommandRunner(App):
             self.add_block(InfoBlock(t("vault.unuse_none")))
 
     def _vault_do_comment(self, args: list[str]) -> None:
-        """`:vault comment NAME [текст…]` — комментарий к записи (значение не тронуто).
+        """`:key comment NAME [текст…]` — комментарий к записи (значение не тронуто).
 
         Ссылки разделяются `;`; без текста — показать текущий, `-` — снять.
         """
@@ -9849,7 +9851,7 @@ class CommandRunner(App):
         self.add_block(InfoBlock(t("vault.comment_set", name=name)))
 
     def _vault_do_totp(self, args: list[str]) -> None:
-        """`:vault totp NAME` — живой код двухфакторной аутентификации."""
+        """`:key totp NAME` — живой код двухфакторной аутентификации."""
         if len(args) != 1:
             self.add_block(InfoBlock(t("vault.usage")))
             return
@@ -9904,7 +9906,7 @@ class CommandRunner(App):
         self.add_block(InfoBlock(t("vault.totp_copied", name=name)))
 
     def _vault_do_add(self, args: list[str]) -> None:
-        """`:vault add NAME [hint words…] [--totp]` — добавить/заменить значение.
+        """`:key add NAME [hint words…] [--totp]` — добавить/заменить значение.
 
         `--totp` — запись со секретом двухфакторной аутентификации: значение
         вводится в маске, но может быть и ссылкой `otpauth://`.
@@ -9925,7 +9927,7 @@ class CommandRunner(App):
     def _vault_prompt_value(self, name: str, hint: str, kind: str = "") -> None:
         """Спросить значение и комментарий записи (значение — в маске).
 
-        Комментарий предзаполнен: тем, что набрали в `:vault add NAME …`, иначе
+        Комментарий предзаполнен: тем, что набрали в `:key add NAME …`, иначе
         уже сохранённым (при замене значения его не надо вводить заново). Второе
         поле — обычное, не маскированное: это пометка/ссылки, а не секрет.
 
@@ -9981,7 +9983,7 @@ class CommandRunner(App):
         self.push_screen(screen, done)
 
     def _vault_do_gen(self, args: list[str]) -> None:
-        """`:vault gen NAME [len]` — сгенерировать значение и сохранить."""
+        """`:key gen NAME [len]` — сгенерировать значение и сохранить."""
         if not args or len(args) > 2:
             self.add_block(InfoBlock(t("vault.usage")))
             return
@@ -10010,7 +10012,7 @@ class CommandRunner(App):
         self.add_block(InfoBlock(t("vault.generated", name=name, length=len(value))))
 
     def _vault_do_list(self, args: list[str]) -> None:
-        """`:vault list` — имена и подсказки (значения не показываем)."""
+        """`:key list` — имена и подсказки (значения не показываем)."""
         if args:
             self.add_block(InfoBlock(t("vault.usage")))
             return
@@ -10023,19 +10025,51 @@ class CommandRunner(App):
             return
         lines = [t("vault.list_title", count=len(entries))]
         for name in vault.dump_entries(entries):
-            links = self._vault_comment_segments(name)
-            marker = (
-                t("vault.list_totp_marker")
-                if str(entries[name].get("kind") or "") == "totp"
-                else ""
-            )
-            if len(links) <= 1:
-                suffix = f" — {links[0]}" if links else ""
-                lines.append(t("vault.list_row", name=name, hint=marker + suffix))
-                continue
-            # Несколько ссылок — каждая с новой строки: в одну строку они сливаются.
-            lines.append(t("vault.list_row", name=name, hint=marker))
-            lines.extend(t("vault.list_link", link=link) for link in links)
+            lines.extend(self._vault_entry_lines(entries, name))
+        self.add_block(InfoBlock("\n".join(lines)))
+
+    def _vault_entry_lines(self, entries: dict[str, dict], name: str) -> list[str]:
+        """Строки записи для `list`/`find` — имя, пометка `(totp)`, комментарий.
+
+        Значение сюда не попадает: его нет ни в `list_row`, ни в `list_link`.
+        """
+        links = self._vault_comment_segments(name)
+        marker = (
+            t("vault.list_totp_marker")
+            if str((entries.get(name) or {}).get("kind") or "") == "totp"
+            else ""
+        )
+        if len(links) <= 1:
+            suffix = f" — {links[0]}" if links else ""
+            return [t("vault.list_row", name=name, hint=marker + suffix)]
+        # Несколько ссылок — каждая с новой строки: в одну строку они сливаются.
+        lines = [t("vault.list_row", name=name, hint=marker)]
+        lines.extend(t("vault.list_link", link=link) for link in links)
+        return lines
+
+    def _vault_do_find(self, args: list[str]) -> None:
+        """`:key find <text>` — поиск по именам и комментариям (не по значениям)."""
+        query = " ".join(args).strip()
+        if not query:
+            self.add_block(InfoBlock(t("vault.find_usage")))
+            return
+        self._vault_ensure_unlocked(lambda: self._vault_render_find(query))
+
+    def _vault_render_find(self, query: str) -> None:
+        entries = self._vault_entries or {}
+        needle = query.lower()
+        hits = [
+            name
+            for name in vault.dump_entries(entries)
+            if needle in name.lower()
+            or needle in str((entries.get(name) or {}).get("hint") or "").lower()
+        ]
+        if not hits:
+            self.add_block(InfoBlock(t("vault.find_none", query=query)))
+            return
+        lines = [t("vault.find_title", query=query, count=len(hits))]
+        for name in hits:
+            lines.extend(self._vault_entry_lines(entries, name))
         self.add_block(InfoBlock("\n".join(lines)))
 
     def _vault_comment_segments(self, name: str) -> list[str]:
@@ -10054,7 +10088,7 @@ class CommandRunner(App):
         return " · " + text
 
     def _vault_do_rm(self, args: list[str]) -> None:
-        """`:vault rm NAME` — удалить запись."""
+        """`:key rm NAME` — удалить запись."""
         if len(args) != 1:
             self.add_block(InfoBlock(t("vault.usage")))
             return
@@ -10080,7 +10114,7 @@ class CommandRunner(App):
         self.add_block(InfoBlock(text))
 
     def _vault_do_cp(self, args: list[str]) -> None:
-        """`:vault cp NAME` — значение в буфер обмена (на экран не печатаем)."""
+        """`:key cp NAME` — значение в буфер обмена (на экран не печатаем)."""
         if len(args) != 1:
             self.add_block(InfoBlock(t("vault.usage")))
             return
@@ -10154,7 +10188,7 @@ class CommandRunner(App):
         self.set_timer(3, self.clear_subtitle)
 
     def _vault_do_use(self, args: list[str]) -> None:
-        """`:vault use NAME [VAR]` — отдать значение в env на эту сессию."""
+        """`:key use NAME [VAR]` — отдать значение в env на эту сессию."""
         if not args or len(args) > 2:
             self.add_block(InfoBlock(t("vault.usage")))
             return
@@ -10177,7 +10211,7 @@ class CommandRunner(App):
         )))
 
     def _vault_do_exec(self, args: list[str]) -> None:
-        """`:vault exec NAME[=VAR] -- cmd` — значение программе через env, не в argv."""
+        """`:key exec NAME[=VAR] -- cmd` — значение программе через env, не в argv."""
         parsed = self._vault_split_command(args, t("vault.usage"))
         if parsed is None:
             return
@@ -10206,7 +10240,7 @@ class CommandRunner(App):
         self.run_command(command, extra_env={var: value})
 
     def _vault_do_stdin(self, args: list[str]) -> None:
-        """`:vault stdin NAME -- cmd` — значение программе на stdin (sudo -S и т.п.)."""
+        """`:key stdin NAME -- cmd` — значение программе на stdin (sudo -S и т.п.)."""
         parsed = self._vault_split_command(args, t("vault.usage"))
         if parsed is None:
             return
@@ -11485,7 +11519,7 @@ class CommandRunner(App):
             self.add_block(InfoBlock(f"TTY error: {e}"))
             return
         finally:
-            # Секрет хранилища, скопированный для этого интерактива (`:vault cp`),
+            # Секрет хранилища, скопированный для этого интерактива (`:key cp`),
             # убираем даже если запуск TTY завершился ошибкой.
             self._vault_clear_clipboard()
         extra = getattr(self, "_tty_followup_lines", None) or []
@@ -11857,7 +11891,7 @@ class CommandRunner(App):
         (start_new_session) и не ждать command_timeout.
 
         `extra_env` — добавить переменные только этому процессу (значение
-        `:vault exec` уходит в env, а не в текст команды: иначе было бы видно
+        `:key exec` уходит в env, а не в текст команды: иначе было бы видно
         в `ps` и заголовке блока).
         """
         raw_stdout, raw_stderr, return_code = "", "", 0

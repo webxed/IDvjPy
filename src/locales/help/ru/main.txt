@@ -83,7 +83,7 @@
   :safe [on|off]- Подтверждать распознанные рискованные запуски (по умолчанию выключен; :? safe)
   :explain cmd - Локальный статический разбор команды; не запускает её (:? explain)
   :learn       - Учебные read-only уроки: выполните задачу сами и проверьте блок (:? learn)
-  :vault        - Хранилище секретов по паролю: init/unlock, add/cp/use/exec (:? vault)
+  :key        - Хранилище секретов по паролю: init/unlock, add/list/find/cp/use/exec (:? key)
   :screensaver  - Оверлей простоя: звёздное поле в стиле NC; `screensaver_stars: false`
                 скрывает частицы; `:screensaver matrix` / `:screensaver stars` выбирают холст разово;
                 справка внизу слева; load/mem внизу справа. `:screensaver matrix`
@@ -241,7 +241,7 @@
   :? session - Экземпляры приложения и окна (`:session`, `:new`)
   :? import  - JSON / общая библиотека по URL (`:import`, `:export`, `:backup`)
   :? mcp     - Библиотека тегов для AI-клиентов: `mcp_server.py` (MCP, только чтение)
-  :? vault   - Хранилище секретов: unlock, add/cp/use/exec — значения не на экране
+  :? key   - Хранилище секретов: unlock, add/list/find/cp/use/exec — значения не на экране
   :? doctor  - Локальная диагностика окружения: пути, утилиты, clipboard, proxy, shell helper
   :? explain - Офлайн-эвристика: без запуска, раскрытия переменных и чтения файлов
   :? learn   - Учебные read-only уроки: выполните команду сами, затем проверьте последний блок

@@ -54,7 +54,7 @@ COLON_COMMAND_NAMES: tuple[str, ...] = (
     "send!",
     "backup",
     "audit",
-    "vault",
+    "key",
     "welcome",
     "screensaver",
     "theme",

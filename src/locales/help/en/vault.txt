@@ -1,4 +1,4 @@
-[bold]Vault — password-encrypted secret store (`:vault`)[/bold]
+[bold]Vault — password-encrypted secret store (`:key`)[/bold]
 
   A long-lived store of secrets, unlike `$$NAME=…` (that one lives only for the
   session). The file is `vault.json.enc` in the data dir (0600): its header is
@@ -7,26 +7,28 @@
 
   Unlock once per session; the password then stays in memory only:
 
-    :vault init               create the vault (password asked twice)
-    :vault unlock | lock      unlock for this session / forget it
-    :vault                    file, lock state, the names (never the values)
+    :key init               create the vault (password asked twice)
+    :key unlock | lock      unlock for this session / forget it
+    :key                    file, lock state, the names (never the values)
 
   Managing entries:
 
-    :vault add NAME [hint]    add or replace a value; the window also has a comment
-    :vault comment NAME [text]  change the comment alone (the value is kept);
+    :key add NAME [hint]    add or replace a value; the window also has a comment
+    :key comment NAME [text]  change the comment alone (the value is kept);
                               `;` separates links, no text shows it, `-` clears it
-    :vault gen NAME [len]     generate a random value
-    :vault list               names and comments (each link on its own line)
-    :vault rm NAME            remove an entry
+    :key gen NAME [len]     generate a random value
+    :key list               names and comments (each link on its own line)
+    :key find TEXT          search by name and comment, case-insensitive (alias
+                              `search`); values are never searched or shown
+    :key rm NAME            remove an entry
 
   Getting a value out — a value is never printed:
 
-    :vault cp NAME               → clipboard (cleared on TTY exit, and in 60 s)
-    :vault use NAME [VAR]        → $VAR in this session's environment
-    :vault exec NAME[=VAR] -- cmd    $VAR in the child env, not in argv
-    :vault stdin NAME -- cmd         feed the value to the command's stdin
-    :vault unuse [NAME|*]            remove exported variables (NAME, or `*` for all)
+    :key cp NAME               → clipboard (cleared on TTY exit, and in 60 s)
+    :key use NAME [VAR]        → $VAR in this session's environment
+    :key exec NAME[=VAR] -- cmd    $VAR in the child env, not in argv
+    :key stdin NAME -- cmd         feed the value to the command's stdin
+    :key unuse [NAME|*]            remove exported variables (NAME, or `*` for all)
 
   `exec` guesses the variable for known programs (sshpass → SSHPASS,
   psql → PGPASSWORD, mysql/mysqldump → MYSQL_PWD, vault → VAULT_TOKEN, restic,
@@ -36,7 +38,7 @@
   `-p` puts the value into argv, where `ps` can see it.
 
   Comments are a note per entry — where the key belongs, links, a reminder:
-  `:vault comment SSH_PROD prod ssh;https://gitlab.example/proj;ssh://u@host`.
+  `:key comment SSH_PROD prod ssh;https://gitlab.example/proj;ssh://u@host`.
   They are **not** secrets and are not masked: they go into the journal, `↑` and
   `history_*.txt` as typed — never paste the value itself (or a URL with a token)
   into a comment. The comment is shown next to the value in `cp`/`use` messages.
@@ -52,8 +54,8 @@
   encrypted like any other entry; only the current one-time code reaches the
   screen, so the secret itself is never printed:
 
-    :vault add GITHUB --totp      paste a base32 secret or an otpauth:// link
-    :vault totp GITHUB            live code: updates every second, Enter/`c` copies
+    :key add GITHUB --totp      paste a base32 secret or an otpauth:// link
+    :key totp GITHUB            live code: updates every second, Enter/`c` copies
                                   the fresh code, Esc closes without copying
 
   The `--totp` value takes a bare base32 key (`jbsw y3dp ehpk 3pxp`) or a link from
@@ -66,11 +68,11 @@
 
   [bold]Auto-lock:[/bold] the store locks itself after `vault_idle_lock` minutes
   with no vault operation (15 by default) — the password is forgotten, so the next
-  read asks for it again. Variables given to `:vault use` stay in the environment
-  (clear them explicitly with `:vault unuse`). `:vault autolock N` changes the
+  read asks for it again. Variables given to `:key use` stay in the environment
+  (clear them explicitly with `:key unuse`). `:key autolock N` changes the
   delay for this session, `0` turns it off; `vault_idle_lock: 0` in settings.yml —
   for good.
 
-  Examples: `:vault init`, `:vault add SSH_PROD prod ssh`, `:vault cp SSH_PROD`
-  then `> ssh …` (paste), or `:vault exec SSH_PROD -- sshpass -e ssh user@host`
+  Examples: `:key init`, `:key add SSH_PROD prod ssh`, `:key cp SSH_PROD`
+  then `> ssh …` (paste), or `:key exec SSH_PROD -- sshpass -e ssh user@host`
   (with sshpass installed).
