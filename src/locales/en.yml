@@ -20,6 +20,15 @@ startup:
 session:
   usage: "Usage: :session NAME   |   :new [NAME|-] [DIR] — a window in a separate terminal"
 
+tag_catalog:
+  header: "Tag catalog ({count}) — filter: {filter}"
+  empty: "No matching live tags."
+tag_metadata:
+  usage: "Usage: :tagmeta TAG [JSON-object] — show or replace metadata. Fields: risk (low|medium|high|critical), utilities (string array), os (string array), interactive (boolean), topic (string), example (string)."
+  empty: "No metadata for {tag}."
+  saved: "Metadata saved for {tag}."
+  invalid: "Invalid metadata: {error}"
+
 scope:
   usage: "Usage: :scope add <group|tag>… (keep only these)  |  :scope rm <group|tag>… (hide these)\n       :scope clear | :scope all (show everything)  |  :scope (current state)\nGroups: linux, k8s, git, … — the canonical seed sets; a name may be a tag too."
   status_all: "[bold]Scope:[/bold] no filter — every tag is listed.\n  :scope add <group|tag>… keeps only these; :scope rm … hides these."
@@ -197,6 +206,8 @@ cmd:
   kctx: "cluster journal: saved vars per cluster (kctx_vars)"
   session: "show or switch instance"
   scope: "session tag scope: keep or hide groups/tags in this window"
+  tags: "searchable catalog of live tags and metadata (:tags [filter])"
+  tagmeta: "show or replace a tag's structured metadata (:tagmeta TAG [JSON])"
   new: "app window in a new terminal (session)"
   send: "forward a command to another session"
   "send!": "forward and run it immediately"
@@ -214,6 +225,7 @@ cmd:
   safe: "safe execution mode: confirm recognized risky commands (:safe on|off)"
   explain: "offline static explanation of a command (never executes it)"
   learn: "guided read-only practice lessons; you run the command and check the finished block"
+
 
 explain:
   usage: "Usage: :explain <command> — local explanation only; the command is never run. Details: :? explain"

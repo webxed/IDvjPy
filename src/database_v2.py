@@ -14,6 +14,7 @@ Schema:
 - deleted: soft-delete flag
 """
 import datetime
+import json
 import os
 import sqlite3
 
@@ -78,6 +79,10 @@ def init_db(db_file: str):
             comment TEXT
         );
     """)
+
+    tag_cols = {row[1] for row in conn.execute("PRAGMA table_info(tags)").fetchall()}
+    if "metadata" not in tag_cols:
+        conn.execute("ALTER TABLE tags ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'")
 
     # Create index for faster tag queries
     conn.execute("""
@@ -363,11 +368,86 @@ def set_tag_comment(db_file: str, tag: str, comment: str):
     """
     conn = get_db_connection(db_file)
     conn.execute(
-        "INSERT OR REPLACE INTO tags (tag, comment) VALUES (?, ?)",
-        (tag, comment)
+        "INSERT INTO tags (tag, comment) VALUES (?, ?) "
+        "ON CONFLICT(tag) DO UPDATE SET comment = excluded.comment",
+        (tag, comment),
     )
     conn.commit()
     conn.close()
+
+TAG_METADATA_FIELDS = frozenset({"risk", "utilities", "os", "interactive", "topic", "example"})
+TAG_RISK_LEVELS = frozenset({"low", "medium", "high", "critical"})
+
+
+def validate_tag_metadata(metadata: object) -> dict[str, object]:
+    """Validate the portable, intentionally small tag metadata schema."""
+    if not isinstance(metadata, dict):
+        raise ValueError("tag metadata must be an object")
+    unknown = set(metadata) - TAG_METADATA_FIELDS
+    if unknown:
+        raise ValueError(f"unknown tag metadata field(s): {', '.join(sorted(unknown))}")
+    result: dict[str, object] = {}
+    for key, value in metadata.items():
+        if key == "risk":
+            if not isinstance(value, str) or value not in TAG_RISK_LEVELS:
+                raise ValueError("risk must be low, medium, high, or critical")
+        elif key == "interactive":
+            if not isinstance(value, bool):
+                raise ValueError("interactive must be a boolean")
+        elif key in {"utilities", "os"}:
+            if not isinstance(value, list) or not all(isinstance(x, str) for x in value):
+                raise ValueError(f"{key} must be an array of strings")
+        elif not isinstance(value, str):
+            raise ValueError(f"{key} must be a string")
+        result[key] = value
+    if len(json.dumps(result, ensure_ascii=False)) > 8192:
+        raise ValueError("tag metadata exceeds 8192 bytes")
+    return result
+
+
+def set_tag_metadata(db_file: str, tag: str, metadata: object) -> None:
+    """Replace one tag's validated metadata; an empty object clears it."""
+    value = validate_tag_metadata(metadata)
+    conn = get_db_connection(db_file)
+    try:
+        conn.execute(
+            "INSERT INTO tags (tag, metadata) VALUES (?, ?) "
+            "ON CONFLICT(tag) DO UPDATE SET metadata = excluded.metadata",
+            (tag, json.dumps(value, ensure_ascii=False, sort_keys=True)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_tag_metadata(db_file: str, tag: str) -> dict[str, object]:
+    conn = get_db_connection(db_file)
+    try:
+        row = conn.execute("SELECT metadata FROM tags WHERE tag = ?", (tag,)).fetchone()
+        if not row or not row["metadata"]:
+            return {}
+        try:
+            return validate_tag_metadata(json.loads(row["metadata"]))
+        except (ValueError, json.JSONDecodeError):
+            return {}
+    finally:
+        conn.close()
+
+
+def get_all_tag_metadata(db_file: str) -> dict[str, dict[str, object]]:
+    conn = get_db_connection(db_file)
+    try:
+        rows = conn.execute("SELECT tag, metadata FROM tags ORDER BY tag").fetchall()
+        result = {}
+        for row in rows:
+            try:
+                result[row["tag"]] = validate_tag_metadata(json.loads(row["metadata"] or "{}"))
+            except (ValueError, json.JSONDecodeError):
+                result[row["tag"]] = {}
+        return result
+    finally:
+        conn.close()
+
 
 def get_tag_comment(db_file: str, tag: str) -> str:
     """

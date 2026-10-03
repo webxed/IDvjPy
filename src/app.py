@@ -2594,7 +2594,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.192"
+    VERSION = "v1.193"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2744,6 +2744,8 @@ class CommandRunner(App):
     CMD_SEND = "send"  # переслать команду в другую сессию (вставить во ввод)
     CMD_SEND_RUN = "send!"  # то же, но сразу выполнить в целевой сессии
     CMD_SCOPE = "scope"  # какие теги показывать в этой сессии (фильтр представления)
+    CMD_TAGS = "tags"  # searchable tag catalog
+    CMD_TAGMETA = "tagmeta"  # tag metadata
     CMD_VAULT = "vault"  # хранилище секретов с шифрованием по паролю (`vault.json.enc`)
     CMD_DOCTOR = "doctor"  # локальная диагностика окружения, без запусков и сети
     CMD_EXPLAIN = "explain"  # локальный разбор команды без запуска (справочник + эвристика)
@@ -5890,6 +5892,8 @@ class CommandRunner(App):
         CMD_SEND: "_handle_send_args",
         CMD_SEND_RUN: "_handle_send_run_args",
         CMD_SCOPE: "_handle_scope_command",
+        CMD_TAGS: "_handle_tags_command",
+        CMD_TAGMETA: "_handle_tagmeta_command",
         CMD_SCREENSAVER: "_handle_screensaver_command",
         CMD_BACKUP: "_handle_backup_command",
         CMD_FM: "_handle_fm_args",
@@ -7327,6 +7331,51 @@ class CommandRunner(App):
             visible=visible,
             hidden=hidden,
         )
+
+    def _handle_tags_command(self, args: list[str]) -> None:
+        """Filterable catalog of live tags and their metadata."""
+        needle = " ".join(args).strip().casefold()
+        comments = dict(database.get_all_tags_with_comments(self.db_file))
+        metadata = database.get_all_tag_metadata(self.db_file)
+        tags = sorted(
+            tag for tag in database.get_all_tags(self.db_file)
+            if self._scope_allows(tag)
+            and (not needle or needle in tag.casefold()
+                 or needle in comments.get(tag, "").casefold()
+                 or needle in json.dumps(metadata.get(tag, {}), ensure_ascii=False).casefold())
+        )
+        lines = [t("tag_catalog.header", count=len(tags), filter=needle or "—")]
+        for tag in tags:
+            detail = comments.get(tag, "")
+            meta = metadata.get(tag, {})
+            if meta:
+                detail = " · ".join(part for part in (detail, json.dumps(meta, ensure_ascii=False, sort_keys=True)) if part)
+            lines.append(f"{tag}: {detail}" if detail else tag)
+        if not tags:
+            lines.append(t("tag_catalog.empty"))
+        self.add_block(InfoBlock("\\n".join(lines)))
+
+    def _handle_tagmeta_command(self, args: list[str]) -> None:
+        """Show or replace validated metadata for a tag."""
+        if not args:
+            self.add_block(InfoBlock(t("tag_metadata.usage")))
+            return
+        tag = args[0]
+        if len(args) == 1:
+            value = database.get_tag_metadata(self.db_file, tag)
+            self.add_block(InfoBlock(json.dumps(value, ensure_ascii=False, indent=2) if value else t("tag_metadata.empty", tag=tag)))
+            return
+        if len(args) != 2:
+            self.add_block(InfoBlock(t("tag_metadata.usage")))
+            return
+        try:
+            value = json.loads(args[1])
+            database.set_tag_metadata(self.db_file, tag, value)
+        except (json.JSONDecodeError, ValueError) as exc:
+            self.add_block(InfoBlock(t("tag_metadata.invalid", error=str(exc))))
+            return
+        self._invalidate_library()
+        self.add_block(InfoBlock(t("tag_metadata.saved", tag=tag)))
 
     def _handle_scope_command(self, args: list[str]) -> None:
         """`:scope` — какие теги показывать в этой сессии.

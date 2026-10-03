@@ -135,6 +135,13 @@ def _tag_comments(db_file: str, *, tag: str | None = None) -> dict[str, str]:
     return dict(database.get_all_tags_with_comments(db_file))
 
 
+def _tag_metadata(db_file: str, *, tag: str | None = None) -> dict[str, dict[str, Any]]:
+    metadata = database.get_all_tag_metadata(db_file)
+    if tag is not None:
+        return {tag: metadata.get(tag, {})}
+    return {name: value for name, value in metadata.items() if value}
+
+
 def library_overview(db_file: str) -> list[tuple[str, int, str]]:
     """Теги для отчёта `backup_db.py list`: (тег, число живых команд, комментарий)."""
     conn = database.get_db_connection(db_file)
@@ -171,6 +178,7 @@ def export_json(
         "total_commands": len(commands),
         "total_tags": len(comments),
         "tag_comments": comments,
+        "tag_metadata": _tag_metadata(db_file, tag=tag),
         "commands": commands,
     }
     with open(path, "w", encoding="utf-8") as handle:
@@ -397,6 +405,14 @@ def import_payload(
     raw_comments = payload.get("tag_comments", {})
     if raw_comments is not None and not isinstance(raw_comments, dict):
         raise ValueError("JSON field `tag_comments` must be an object")
+    raw_metadata = payload.get("tag_metadata", {})
+    if raw_metadata is not None and not isinstance(raw_metadata, dict):
+        raise ValueError("JSON field `tag_metadata` must be an object")
+    metadata = raw_metadata or {}
+    for metadata_tag, value in metadata.items():
+        if not isinstance(metadata_tag, str) or not metadata_tag.strip():
+            raise ValueError("tag_metadata keys must be non-empty tag names")
+        database.validate_tag_metadata(value)
     tag_override = (only_tag or "").strip() or None
     comments = raw_comments or {}
     database.init_db(db_file)
@@ -438,8 +454,17 @@ def import_payload(
             if not isinstance(comment, str):
                 continue
             conn.execute(
-                "INSERT OR REPLACE INTO tags (tag, comment) VALUES (?, ?)",
+                "INSERT INTO tags (tag, comment) VALUES (?, ?) "
+                "ON CONFLICT(tag) DO UPDATE SET comment = excluded.comment",
                 (tag, comment),
+            )
+        for tag, value in metadata.items():
+            if tag_override and tag != tag_override:
+                continue
+            conn.execute(
+                "INSERT INTO tags (tag, metadata) VALUES (?, ?) "
+                "ON CONFLICT(tag) DO UPDATE SET metadata = excluded.metadata",
+                (tag, json.dumps(database.validate_tag_metadata(value), ensure_ascii=False, sort_keys=True)),
             )
         conn.commit()
     except Exception:

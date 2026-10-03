@@ -16,6 +16,11 @@
                组合管道/保存：`#file !file[1] | !file[2]`（预览会展开引用）
   !N         - 按上次查询中的 ID 执行命令
 
+  Catalog    - `:tags [filter]` 搜索活动标签、描述和元数据，并遵循当前会话 scope。
+               `:tagmeta TAG` 查看元数据；传入 JSON 对象可替换，`{}` 清空。
+               字段：risk、utilities（字符串数组）、os（字符串数组）、interactive（布尔值）、topic、example。
+               JSON 导出包含 tag_metadata；元数据仅用于描述，不影响命令执行。
+
   Scope      - 窗口级标签过滤：:scope add git（只保留该手册）、:scope rm k8s
                （隐藏它）、:scope clear / :scope all（显示全部）。只影响列表与
                提示：?、??、?text、`!`/Tab 补全以及屏保滚动条。显式引用（?tag、
