@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Seed unix-pipeline handbook: sort, uniq, cut, tr, wc, xargs, tee, jq
-(see SEED_PIPE_COMMANDS.md).
+Справочник unix-конвейера: sort, uniq, cut, tr, wc, xargs, tee, jq
+(см. SEED_PIPE_COMMANDS.md).
 
-Meant for `| cmd` on a journal block and `!!` assembly. tee writes a file
-and is not in playbooks. Does not touch grep/awk/sed (seed_text.py).
+Рассчитан на `| cmd` по блоку журнала и сборку через `!!`. tee пишет файл
+и в плейбуки не входит. Не трогает grep/awk/sed (seed_text.py).
 
-Run: python3 src/seed_pipe.py --seed
+Запуск: python3 src/seed_pipe.py --seed
 """
 import sys
 

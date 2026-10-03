@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-Seed HashiCorp Vault handbook tags (see SEED_VAULT_COMMANDS.md).
+Теги справочника HashiCorp Vault (см. SEED_VAULT_COMMANDS.md).
 
-Playbooks are inspect-only: no seal, revoke, kv put/delete.
-`vapprole` logs in via AppRole (generates a short-lived secret-id and a token —
-credentials, not data changes) and is meant to be run as a chain: `:run vapprole`.
-`run:manual` stops where the human decides: steps 1 and 2 are **prefix lines to
-complete** (`$$VAULT_TOKEN=`, `$ROLE=` — the value is typed after `=`), and step 5
-confirms issuing a new secret-id. The other steps carry no `run:` directive and
-run themselves (`vault read`, `$$VAR=@key`). The final step checks the new token's
-capabilities on `$SECRET` instead of reading the value, so no secret reaches the
-journal.
-vvars does not echo VAULT_TOKEN (only set/unset).
+Плейбуки только осматривают: никаких seal, revoke, kv put/delete.
+`vapprole` входит через AppRole (выпускает короткоживущий secret-id и токен —
+это учётные данные, а не изменение данных) и рассчитан на запуск цепочкой: `:run vapprole`.
+`run:manual` останавливается там, где решает человек: шаги 1 и 2 — это **строки-префиксы,
+которые надо дополнить** (`$$VAULT_TOKEN=`, `$ROLE=` — значение набирается после `=`), а шаг 5
+подтверждает выпуск нового secret-id. Остальные шаги не несут директивы `run:` и
+выполняются сами (`vault read`, `$$VAR=@key`). Последний шаг проверяет права
+нового токена на `$SECRET` вместо чтения значения, поэтому ни один секрет не
+попадает в журнал.
+vvars не печатает VAULT_TOKEN (только set/unset).
 
 Run: python3 src/seed_vault.py --seed
 """

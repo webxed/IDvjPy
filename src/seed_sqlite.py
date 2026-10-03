@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Seed the sqlite3 handbook for the app's own tag library (see
+Сид справочника sqlite3 для собственной библиотеки тегов приложения (см.
 SEED_SQLITE_COMMANDS.md).
 
-SQL is practised on the live library database: SELECT/WHERE/GROUP BY/ORDER BY,
-LIKE, sqlite_master, EXPLAIN QUERY PLAN — and the hard delete that `#tag-` cannot
-do (row shown by the app: soft delete). Inspect commands come first; the ones that
-change the database are tid 11-13 and say so in the comment. Tid 17 copies the file
-before manual SQL, tid 18 is a teaching transaction that rolls back. Nothing else is
-touched; the app injects `$DBFILE` (the library file it opened).
+SQL отрабатывается на живой базе библиотеки: SELECT/WHERE/GROUP BY/ORDER BY,
+LIKE, sqlite_master, EXPLAIN QUERY PLAN — и жёсткое удаление, которое не умеет `#tag-`
+(строка показана приложением: мягкое удаление). Команды осмотра идут первыми; те, что
+меняют базу, — это tid 11–13, и об этом сказано в комментарии. Tid 17 копирует файл
+перед ручным SQL, tid 18 — учебная транзакция с откатом. Больше ничего не
+затрагивается; приложение подставляет `$DBFILE` (открытый им файл библиотеки).
 
 Run: python3 src/seed_sqlite.py --seed
 """

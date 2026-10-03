@@ -293,7 +293,7 @@ async def test_large_md_raw_viewer_jumps_to_line(isolated_home):
         screen = app.screen
         assert isinstance(screen, OutputViewerScreen)
         view = screen.query_one(OutputView)
-        assert view.match_row == 19  # 0-based
+        assert view.match_row == 19  # отсчёт с нуля
         assert "line 20" in (screen.sub_title or "")
 
 

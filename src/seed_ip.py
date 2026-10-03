@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Seed iproute2 + ethtool handbook (see SEED_IP_COMMANDS.md).
+Справочник iproute2 + ethtool (см. SEED_IP_COMMANDS.md).
 
-Playbooks are inspect-only: link/addr/route/neigh/stats.
-ip link set up/down and addr/route add are in tags, not in ilink/iiface.
-Does not touch linux `net` (ip addr / ip route stay there).
+Плейбуки только для чтения: link/addr/route/neigh/stats.
+ip link set up/down и addr/route add — в тегах, но не в ilink/iiface.
+Не трогает linux `net` (ip addr / ip route остаются там).
 
-Run: python3 src/seed_ip.py --seed
+Запуск: python3 src/seed_ip.py --seed
 """
 import sys
 

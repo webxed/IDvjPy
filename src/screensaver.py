@@ -1,12 +1,12 @@
-"""Norton Commander-style starfield, DevOps-themed — or Matrix digital rain.
+"""Звёздное поле в стиле Norton Commander на DevOps-тему — или «матричный дождь».
 
-Stars fly toward the viewer (classic NC screensaver). Closer particles
-become kubectl/git/helm tokens and IDvjPy fragments. Live clock and date
-drift with them. Live tags/commands from the library scroll full-width at
-the top. Command help types along the bottom left; load 1/5/15 and RAM sit
-on the bottom right with the same corner inset (they may overlap in a
-narrow terminal). Any key or click dismisses the overlay; that key is not
-typed into the prompt.
+Звёзды летят на зрителя (классическая заставка NC). Ближние частицы
+становятся токенами kubectl/git/helm и фрагментами IDvjPy. Живые часы и дата
+дрейфуют вместе с ними. Живые теги/команды из библиотеки прокручиваются во всю
+ширину сверху. Справка по командам печатается внизу слева; load 1/5/15 и RAM
+расположены внизу справа с тем же отступом от угла (в узком терминале они
+могут перекрываться). Любая клавиша или клик скрывает оверлей; эта клавиша не
+печатается в prompt.
 
 `screensaver_matrix: true` (settings.yml) заменяет холст на «матричный дождь»
 (`MatrixRain`) — падающие столбцы глифов; лента, справка и load/RAM остаются.
@@ -64,7 +64,7 @@ STYLE_HELP_CMD = "bold #67e8f9"
 STYLE_HOST_LOAD = "bold #fde047"
 STYLE_HOST_MEM = "bold #67e8f9"
 TICKER_SEP = "    ·    "
-TICKER_CPS = 2.5  # characters per second; slow crawl so it stays readable
+TICKER_CPS = 2.5  # символов в секунду; медленное движение, чтобы читалось
 HELP_TYPE_CPS = 22.0
 
 # --- Матричный дождь (`screensaver_matrix`) ---------------------------------
@@ -91,11 +91,11 @@ TICK_SECONDS = 0.05
 # симуляции при 10 fps отрисовки не меняют картинку — только вдвое меньше CPU.
 PAINT_INTERVAL = 0.1
 HELP_PAUSE_SEC = 2.2
-HELP_INDENT_RATIO = 0.2  # off the left edge, left of center
-HOST_POLL_SEC = 1.0  # /proc reads; not every starfield frame
+HELP_INDENT_RATIO = 0.2  # отступ от левого края, левее центра
+HOST_POLL_SEC = 1.0  # чтение /proc; не каждый кадр звёздного поля
 CLOCK_LABELS = ("time", "date")
 
-# One-line Command help for the bottom typewriter (:? prefixes and :commands).
+# Однострочная справка по командам для «печатной машинки» внизу (:? префиксы и :команды).
 COMMAND_HELP_LINES = (
     ":?  — full command help",
     ":q  — quit",
@@ -228,14 +228,14 @@ def cells_to_text(cells: Sequence[Sequence[tuple[str, str]]]) -> Text:
 
 
 def clock_glyph(moment: datetime, label: str) -> str:
-    """``time`` → 24h clock with seconds; ``date`` → ISO calendar day."""
+    """``time`` → 24-часовые часы с секундами; ``date`` → календарный день в ISO."""
     if label == "time":
         return moment.strftime("%H:%M:%S")
     return moment.strftime("%Y-%m-%d")
 
 
 def flatten_command(text: str) -> str:
-    """Collapse a command to a single ticker-friendly line."""
+    """Сворачивает команду в одну строку, пригодную для ленты."""
     return " ".join((text or "").split())
 
 
@@ -263,7 +263,7 @@ def format_bytes_short(n: int) -> str:
 
 
 def parse_meminfo(text: str) -> tuple[int | None, int | None]:
-    """Parse `/proc/meminfo` body → ``(used_bytes, total_bytes)``."""
+    """Разбирает содержимое `/proc/meminfo` → ``(used_bytes, total_bytes)``."""
     kb: dict[str, int] = {}
     for line in text.splitlines():
         parts = line.split()
@@ -299,7 +299,7 @@ def read_loadavg() -> tuple[float, float, float] | None:
 
 
 def read_host_snapshot(*, meminfo_path: str = "/proc/meminfo") -> HostSnapshot:
-    """Cheap kernel counters: loadavg + MemAvailable. No subprocess."""
+    """Дешёвые счётчики ядра: loadavg + MemAvailable. Без subprocess."""
     load = read_loadavg()
     used, total = read_meminfo(meminfo_path)
     return HostSnapshot(
@@ -312,7 +312,7 @@ def read_host_snapshot(*, meminfo_path: str = "/proc/meminfo") -> HostSnapshot:
 
 
 def format_host_text(snap: HostSnapshot) -> Text:
-    """Compact ``load avg …  mem …`` for the bottom-right status."""
+    """Компактное ``load avg …  mem …`` для статуса внизу справа."""
     if snap.load1 is None or snap.load5 is None or snap.load15 is None:
         load_s = "—"
     else:
@@ -331,7 +331,7 @@ def format_host_text(snap: HostSnapshot) -> Text:
 
 
 def _edge_pad(width: int) -> int:
-    """Same corner inset as the command-help typewriter."""
+    """Тот же отступ от угла, что у «печатной машинки» со справкой."""
     return min(max(2, int(width * HELP_INDENT_RATIO)), max(0, width - 4))
 
 
@@ -370,7 +370,7 @@ def _cells_to_text(cells: list[tuple[str, str]]) -> Text:
 
 
 def render_host_line(snap: HostSnapshot, width: int) -> Text:
-    """Right-aligned load/mem with the same corner inset as command help."""
+    """load/mem по правому краю с тем же отступом от угла, что у справки."""
     width = max(1, width)
     pad = _edge_pad(width)
     body = format_host_text(snap)
@@ -386,7 +386,7 @@ def render_host_line(snap: HostSnapshot, width: int) -> Text:
 
 
 def overlay_host_on_help(help_line: Text, snap: HostSnapshot, width: int) -> Text:
-    """Help on the left, host on the right; a narrow row may let host cover help."""
+    """Справка слева, хост справа; в узкой строке хост может перекрыть справку."""
     width = max(1, width)
     pad = _edge_pad(width)
     cells = _text_cells(help_line, width)
@@ -403,7 +403,7 @@ def overlay_host_on_help(help_line: Text, snap: HostSnapshot, width: int) -> Tex
 
 
 class HostStats:
-    """Sample host load/RAM at ``poll`` seconds, not on every starfield frame."""
+    """Сэмплит load/RAM хоста раз в ``poll`` секунд, а не каждый кадр звёздного поля."""
 
     def __init__(
         self,
@@ -437,7 +437,7 @@ class HostStats:
 def ticker_items_from_commands(
     rows: Iterable[tuple[str, int, str]],
 ) -> tuple[str, ...]:
-    """Live (tag, tid, command) rows → `!tag[tid]  cmd` ticker entries."""
+    """Live-строки (tag, tid, command) → записи ленты `!tag[tid]  cmd`."""
     items: list[str] = []
     for tag, tid, command in rows:
         name = (tag or "").strip()
@@ -454,7 +454,7 @@ def ticker_items_from_commands(
 def load_library_reminders(
     db_file: str | None, allowed_tags: Collection[str] | None = None
 ) -> tuple[str, ...]:
-    """Snapshot live commands from SQLite. Hidden handbook tags stay out.
+    """Снимок live-команд из SQLite. Скрытые handbook-теги не попадают.
 
     ``allowed_tags`` — scope сессии (`:scope`): лента заставки — тоже список
     команд, поэтому показывает только видимое. ``None`` — фильтра нет.
@@ -479,7 +479,7 @@ def load_library_reminders(
 
 
 class LibraryTicker:
-    """Infinite marquee of shuffled library commands. Unit-testable."""
+    """Бесконечная бегущая строка из перемешанных команд библиотеки. Тестируема юнит-тестами."""
 
     def __init__(
         self,
@@ -524,7 +524,7 @@ class LibraryTicker:
 
 
 class HelpTypewriter:
-    """Bottom help: type LTR over the previous line, pause, next in shuffle order."""
+    """Справка внизу: печатает слева направо поверх предыдущей строки, пауза, следующая по перемешанному порядку."""
 
     def __init__(
         self,
@@ -632,7 +632,7 @@ class Star:
 
 
 class StarField:
-    """Pure simulation: tick + render. Safe to unit-test without Textual."""
+    """Чистая симуляция: tick + render. Безопасна для юнит-тестов без Textual."""
 
     def __init__(
         self,
@@ -709,7 +709,7 @@ class StarField:
         drawn: list[tuple[float, Star]] = []
         for star in self.stars:
             drawn.append((star.z, star))
-        drawn.sort(key=lambda item: -item[0])  # far first, near overwrites
+        drawn.sort(key=lambda item: -item[0])  # дальние первыми, ближние перекрывают
         for z, star in drawn:
             sx, sy = self._project(star)
             glyph = star.glyph if z < 0.55 or star.kind != "dust" else self._dust_for(z)
@@ -933,7 +933,7 @@ class MatrixRain:
 
 
 class DevopsScreensaver(ModalScreen[None]):
-    """Full-screen starfield. Any key / click returns to the TUI."""
+    """Звёздное поле во весь экран. Любая клавиша / клик возвращают в TUI."""
 
     _modal = True
     CSS = """

@@ -1,8 +1,8 @@
-"""Offline explanation of a shell command for ``:explain``.
+"""Офлайн-пояснение shell-команды для ``:explain``.
 
-This is deliberately a small, deterministic catalogue rather than a shell parser or
-an LLM.  It never starts a process, resolves a command from PATH, reads a file, or
-makes a network request.  Unknown syntax and programs are reported plainly.
+Это намеренно небольшой детерминированный каталог, а не shell-парсер и не
+LLM. Он никогда не запускает процесс, не ищет команду в PATH, не читает файл и
+не делает сетевых запросов. Неизвестный синтаксис и программы сообщаются прямо.
 """
 from __future__ import annotations
 
@@ -18,20 +18,20 @@ from safe_mode import command_risks
 
 _ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 _WRAPPERS = frozenset({"sudo", "env", "command", "exec", "nohup"})
-# Wrapper options that take a separate value; skipping only the flag would treat
-# the value (a user or variable name) as the program.
+# Опции-обёртки, которые принимают отдельное значение; пропуск только флага
+# заставил бы принять значение (имя пользователя или переменной) за программу.
 _WRAPPER_VALUE_FLAGS = frozenset({
     "-u", "-g", "-h", "-p", "-C", "-T",
     "--user", "--group", "--host", "--prompt", "--unset", "--chdir",
 })
 _REDIRECTIONS = frozenset({">", ">>", "<", "<<"})
-# find actions that write or execute; a plain find only reads.
+# действия find, которые пишут или выполняют; обычный find только читает.
 _FIND_MUTATORS = frozenset({
     "-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprintf", "-fls",
 })
 
-# Program → a deliberately short purpose key.  The catalogue teaches commonly
-# encountered DevOps tools without pretending that all shell commands are known.
+# Программа → намеренно короткий ключ назначения. Каталог учит часто
+# встречающимся DevOps-инструментам, не делая вид, что известны все shell-команды.
 _PURPOSES = {
     "git": "git",
     "kubectl": "kubectl",
@@ -62,7 +62,7 @@ _PURPOSES = {
     "cd": "cd",
 }
 
-# Subcommands that only read; anything else is treated as potentially mutating.
+# Подкоманды, которые только читают; всё остальное считается потенциально изменяющим.
 _READ_SUBCOMMANDS = {
     "git": frozenset({"status", "log", "diff", "show", "rev-parse", "ls-files", "ls-tree", "grep"}),
     "kubectl": frozenset({"get", "describe", "logs", "explain", "version", "cluster-info", "api-resources", "api-versions", "auth"}),
@@ -83,7 +83,7 @@ _FLAG_KEYS = {
 
 @dataclass(frozen=True)
 class CommandExplanation:
-    """Safe-to-display structural summary; it deliberately keeps no arguments."""
+    """Безопасная для показа структурная сводка; намеренно не хранит аргументы."""
 
     program: str | None
     purpose: str | None
@@ -105,10 +105,10 @@ def _words(command: str) -> list[str] | None:
 
 
 def _program_and_args(words: list[str]) -> tuple[str | None, list[str]]:
-    """Find the first executable after simple assignments and wrappers.
+    """Находит первую исполняемую команду после простых присваиваний и обёрток.
 
-    A pipeline or a compound expression is rejected by the caller before this is
-    reached, so a single segment is described at a time.
+    Пайплайн или составное выражение отсекаются вызывающим кодом до вызова
+    этой функции, поэтому за раз описывается один сегмент.
     """
     index = 0
     while index < len(words) and _ASSIGNMENT.match(words[index]):
@@ -136,8 +136,8 @@ def _effect(program: str, args: list[str]) -> str:
         sql = " ".join(args)
         if re.search(r"\b(DELETE|DROP|UPDATE|INSERT|CREATE|ALTER|VACUUM)\b", sql, re.I):
             return "changes_data"
-        # Without a narrowly recognizable inline SELECT, the CLI may create a
-        # database, run dot commands, or read SQL interactively.
+        # Без узко распознаваемого inline SELECT CLI может создать базу,
+        # выполнить dot-команды или читать SQL в интерактивном режиме.
         if args and re.match(r"^\s*SELECT\b", args[-1], re.I):
             return "reads_data"
         return "unknown_effect"
@@ -162,12 +162,12 @@ def _effect(program: str, args: list[str]) -> str:
 
 
 def analyse(command: str) -> CommandExplanation:
-    """Return a local structural explanation, without executing ``command``."""
+    """Возвращает локальное структурное пояснение, не выполняя ``command``."""
     words = _words(command)
     if words is None:
         return CommandExplanation(None, None, "unknown_effect", (), command_risks(command), True)
-    # A compound shell expression has several execution paths; do not present its
-    # first segment as the whole command.
+    # У составного shell-выражения несколько путей выполнения; не выдавать его
+    # первый сегмент за всю команду.
     if any(token and all(char in ";&|()\n" for char in token) for token in words):
         return CommandExplanation(None, None, "unknown_effect", (), command_risks(command))
     program, args = _program_and_args(words)
@@ -185,7 +185,7 @@ def analyse(command: str) -> CommandExplanation:
 
 
 def format_explanation(command: str) -> str:
-    """Format a localized Rich block without reproducing command arguments."""
+    """Форматирует локализованный блок Rich, не воспроизводя аргументы команды."""
     result = analyse(command)
     lines = [t("explain.header"), t("explain.no_execution"), ""]
     if result.parse_error:

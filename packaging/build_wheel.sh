@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Build an installable idvjpy-term wheel from the current source tree.
+# Собрать устанавливаемый wheel idvjpy-term из текущего дерева исходников.
 #
-# The wheel embeds a private copy of ../src inside the boot package
-# (idvjpy_boot/src). At runtime the bootstrapper puts that directory on
-# sys.path, so top-level imports (app, database_v2, ...) and resources
-# (app.tcss, demos/, *.example.yml, .bashrc_term.example) resolve from the
-# installed package, not from a source checkout.
+# Wheel встраивает приватную копию ../src внутрь boot-пакета
+# (idvjpy_boot/src). При запуске бутстрап кладёт этот каталог в sys.path,
+# поэтому импорты верхнего уровня (app, database_v2, …) и ресурсы
+# (app.tcss, demos/, *.example.yml, .bashrc_term.example) берутся из
+# установленного пакета, а не из исходного дерева.
 #
-# Usage:
-#   packaging/build_wheel.sh          # build into packaging/dist/
+# Использование:
+#   packaging/build_wheel.sh          # сборка в packaging/dist/
 #
-# Requirements: python3 with pip + setuptools>=68 (no network needed:
-# the build is isolated from PyPI via --no-build-isolation --no-deps).
+# Требования: python3 с pip + setuptools>=68 (сеть не нужна: сборка
+# изолирована от PyPI через --no-build-isolation --no-deps).
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -24,7 +24,7 @@ echo "==> Embedding current $(pwd)/../src into $EMBED"
 rm -rf "$EMBED"
 mkdir -p "$EMBED"
 cp -R ../src/. "$EMBED/"
-# The embedded copy is shipped code-only: drop interpreter caches.
+# Встраиваемая копия поставляется только кодом: убираем кэши интерпретатора.
 find "$EMBED" -type d -name '__pycache__' -prune -exec rm -rf {} +
 find "$EMBED" -type f -name '*.py[co]' -delete
 

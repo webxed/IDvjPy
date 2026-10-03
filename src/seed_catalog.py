@@ -1,4 +1,4 @@
-"""Handbook seed catalog for the empty-database welcome hint and `:welcome`.
+"""Каталог seed-справочников для подсказки на пустой базе и `:welcome`.
 
 Тексты — в локалях (`catalog.*`, части `src/locales/<lang>/seed.yml`); команды,
 имена скриптов и файлов справочников не переводятся.
@@ -11,25 +11,25 @@ from pathlib import Path
 
 from i18n import t
 
-# Seed scripts live next to this module (in `src/`); data files (settings.yml,
-# DB) stay in cwd. Путь к скрипту — абсолютный: приложение может быть запущено
+# Seed-скрипты лежат рядом с этим модулем (в `src/`); файлы данных (settings.yml,
+# БД) остаются в cwd. Путь к скрипту — абсолютный: приложение может быть запущено
 # из любого каталога (алиас из `~`, `:cd`), и относительный `src/...` там не
 # найдётся.
 SEED_DIR = Path(__file__).resolve().parent
 
-# Colors match the startup banner / input border.
+# Цвета совпадают со стартовым баннером / рамкой ввода.
 _ACCENT = "#b794f4"
 _CMD = "#4a8c58"
 _LINK = "#8a6bb5"
 
 
 def seed_invoke(script: str) -> str:
-    """Shell command to load a handbook into the cwd database."""
+    """Shell-команда для загрузки справочника в базу текущего каталога."""
     return f"python3 {shlex.quote(str(SEED_DIR / script))} --seed"
 
 
 def md_click(doc: str) -> str:
-    """Rich markup: clickable handbook filename → action_open_handbook_md."""
+    """Rich-разметка: кликабельное имя файла справочника → action_open_handbook_md."""
     return (
         f"[@click=app.open_handbook_md('{doc}')]"
         f"[underline {_LINK}]{doc}[/][/]"
@@ -37,7 +37,7 @@ def md_click(doc: str) -> str:
 
 
 def cmd_click(script: str) -> str:
-    """Rich markup: clickable --seed line → action_insert_seed_command."""
+    """Rich-разметка: кликабельная строка --seed → action_insert_seed_command."""
     cmd = seed_invoke(script)
     return (
         f"[@click=app.insert_seed_command('{script}')]"
@@ -45,8 +45,8 @@ def cmd_click(script: str) -> str:
     )
 
 
-# script, handbook markdown (empty if none); the one-line description is the
-# locale key `catalog.desc.<script without seed_/.py>`.
+# script, markdown справочника (пусто, если нет); однострочное описание — это
+# ключ локали `catalog.desc.<script без seed_/.py>`.
 SEED_HANDBOOKS_CORE = (
     ("seed_linux_commands.py", "SEED_LINUX_COMMANDS.md"),
     ("seed_k8s_chains.py", "K8S_CHAINS.md"),
@@ -111,7 +111,7 @@ def _entry(script: str, doc: str) -> list[str]:
 
 
 def format_empty_db_hint(db_file: str) -> str:
-    """Welcome text when the command database has no live rows."""
+    """Приветственный текст, когда в базе команд нет живых строк."""
     lines = [
         f"[bold {_ACCENT}]{t('catalog.title')}[/]  [dim]({db_file})[/]",
         "",
@@ -147,7 +147,7 @@ def _handbook_section_order() -> list[str]:
 
 
 def format_library_overview(live_tags: list[str]) -> str:
-    """Compact map of loaded handbook sections (non-empty DB startup)."""
+    """Компактная карта загруженных разделов справочника (старт с непустой БД)."""
     from seed_groups import group_for_tag, handbook_groups
 
     live = [tag for tag in live_tags if tag]

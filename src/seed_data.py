@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Seed postgres + kafka handbook tags (see SEED_DATA_COMMANDS.md).
+Справочник postgres + kafka (см. SEED_DATA_COMMANDS.md).
 
-Run: python3 src/seed_data.py --seed
+Запуск: python3 src/seed_data.py --seed
 """
 import sys
 

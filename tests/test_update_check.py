@@ -1,4 +1,4 @@
-"""GitHub version check for :update."""
+"""Проверка версии на GitHub для :update."""
 import urllib.request
 
 from net import PROXY_AUTH_HINT

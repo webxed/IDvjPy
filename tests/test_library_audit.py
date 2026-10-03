@@ -1,4 +1,4 @@
-"""The library audit stores operation metadata, never library content."""
+"""Аудит библиотеки хранит метаданные операций, но не содержимое библиотеки."""
 from __future__ import annotations
 
 import json

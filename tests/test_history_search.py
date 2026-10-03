@@ -1,4 +1,4 @@
-"""History command search across the session history and the live tag library."""
+"""Поиск по истории: по ленте сессии и по живой библиотеке тегов."""
 from __future__ import annotations
 
 import database_v2 as database

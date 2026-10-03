@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Seed the IDvjPy_term database with a canonical set of Linux commands.
+Наполняет базу IDvjPy_term каноническим набором Linux-команд.
 
-Command order and tid mapping are defined in SEED_LINUX_COMMANDS.md.
-Run:
-  python3 src/seed_linux_commands.py --seed       # replace proc/file/net/kube
-  python3 src/seed_linux_commands.py --comments   # fill empty command comments in place
+Порядок команд и привязка tid заданы в SEED_LINUX_COMMANDS.md.
+Запуск:
+  python3 src/seed_linux_commands.py --seed       # заменить proc/file/net/kube
+  python3 src/seed_linux_commands.py --comments   # заполнить пустые комментарии команд на месте
 
-Uses database_tags_file from settings.yml (same as app.py).
+Использует database_tags_file из settings.yml (как app.py).
 """
 import argparse
 import os
@@ -158,7 +158,7 @@ SEED_METADATA = {
 
 
 def get_db_file():
-    """Read database path from settings.yml, same logic as app.py."""
+    """Читает путь к базе из settings.yml, та же логика, что и в app.py."""
     if not os.path.exists(FILE_SETTINGS):
         return DEFAULT_DB
     try:
@@ -172,7 +172,7 @@ def get_db_file():
 
 
 def hard_delete_commands_by_tag(db_file: str, tag: str) -> None:
-    """Remove all rows for tag so new inserts get tid 1, 2, 3..."""
+    """Удаляет все строки тега, чтобы новые вставки получили tid 1, 2, 3..."""
     conn = database.get_db_connection(db_file)
     conn.execute("DELETE FROM commands WHERE tag = ?", (tag,))
     conn.commit()
@@ -188,7 +188,7 @@ def _seed_items(tag: str):
 
 
 def run_seed(db_file: str) -> int:
-    """(Re)seed seed tags: hard-delete then add commands in order."""
+    """(Пере)сеивает seed-теги: жёстко удаляет, затем добавляет команды по порядку."""
     from seed_lib import backup_sqlite_before_seed, localized_tags
 
     backup_sqlite_before_seed(db_file, "linux")
@@ -211,7 +211,7 @@ def run_seed(db_file: str) -> int:
 
 
 def apply_comments(db_file: str, only_empty: bool = True) -> int:
-    """Set comments on existing rows; do not delete or insert commands."""
+    """Проставляет комментарии существующим строкам; не удаляет и не вставляет команды."""
     from seed_lib import localized_comment, localized_tag_comment
 
     database.init_db(db_file)

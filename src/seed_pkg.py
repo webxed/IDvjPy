@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Seed package-manager handbook: apt, dnf, rpm (see SEED_PKG_COMMANDS.md).
+Справочник пакетных менеджеров: apt, dnf, rpm (см. SEED_PKG_COMMANDS.md).
 
-Playbooks are query-only. install/remove are in tags, not in aptq/rpmq.
-`-s` (apt-get) and `--assumeno` (dnf) preview the transaction without applying it.
+Плейбуки только для запросов. install/remove — в тегах, но не в aptq/rpmq.
+`-s` (apt-get) и `--assumeno` (dnf) показывают план транзакции, не применяя его.
 
-Run: python3 src/seed_pkg.py --seed
+Запуск: python3 src/seed_pkg.py --seed
 """
 import sys
 

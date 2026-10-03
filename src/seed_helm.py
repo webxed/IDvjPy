@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Seed helm handbook tags (see SEED_HELM_COMMANDS.md).
+Справочник helm (см. SEED_HELM_COMMANDS.md).
 
-Does not touch kube / kpod / … from seed_k8s_chains.py.
+Не трогает kube / kpod / … из seed_k8s_chains.py.
 
-Run: python3 src/seed_helm.py --seed
+Запуск: python3 src/seed_helm.py --seed
 """
 import sys
 

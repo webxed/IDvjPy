@@ -1,7 +1,7 @@
-"""Safe execution mode at the real launch boundaries (Pilot scenarios).
+"""Безопасный режим на реальных границах запуска (Pilot-сценарии).
 
-Confirmation is keyboard-driven, non-blocking, and must run the exact frozen
-expansion; cancelling must never start a process or hang a runbook.
+Подтверждение — с клавиатуры, без блокировки; запускается ровно замороженное
+выражение, а отмена никогда не должна стартовать процесс или подвешивать runbook.
 """
 from __future__ import annotations
 
@@ -97,7 +97,7 @@ async def test_confirm_runs_exact_frozen_command(isolated_home, monkeypatch):
         app.local_env["SAFE_T"] = "AAA"
         await submit(pilot, "chmod 000 /tmp/$SAFE_T")
         await _wait_for_modal(app)
-        # Change the source after confirmation is requested: the frozen text must win.
+        # Меняем источник после запроса подтверждения: должен победить замороженный текст.
         app.local_env["SAFE_T"] = "BBB"
         await pilot.press("enter")
         await pilot.pause()

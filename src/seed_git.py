@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Seed git handbook tags for IDvjPy_term (see SEED_GIT_COMMANDS.md).
+Теги справочника git для IDvjPy_term (см. SEED_GIT_COMMANDS.md).
 
-Does not touch proc / file / net / kube / k8s investigation tags.
+Не затрагивает теги обследования proc / file / net / kube / k8s.
 
 Run: python3 src/seed_git.py --seed
 """
@@ -11,8 +11,8 @@ import sys
 from seed_lib import run_seed as _run_seed
 from seed_lib import seed_cli
 
-# tag -> (tag comment, [(command, command comment), ...])
-# Inspect commands use --no-pager so less does not block the TUI.
+# tag -> (комментарий тега, [(команда, комментарий команды), ...])
+# Команды осмотра используют --no-pager, чтобы less не блокировал TUI.
 SEED_TAGS = {
     "gvars": (
         "переменные git",

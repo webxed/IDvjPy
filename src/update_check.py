@@ -1,4 +1,4 @@
-"""Compare the local app version with GitHub main (webxed/IDvjPy).
+"""Сравнение локальной версии приложения с GitHub main (webxed/IDvjPy).
 
 HTTP и прокси-логин живут в общем сетевом слое `src/net.py` (там же их берёт
 `:import <url>`); здесь — только логика сравнения версий и разбор `src/app.py`.
@@ -38,14 +38,14 @@ KIND_AHEAD = "ahead"
 
 
 def format_update_fetch_error(exc: BaseException, environ: Mapping[str, str]) -> str:
-    """Journal text for a failed GitHub fetch; hint if the proxy wants a login."""
+    """Текст журнала при неудачном запросе к GitHub; подсказка, если прокси требует логин."""
     return format_fetch_error(exc, environ, subject="Could not check updates")
 
 
 
 
 def parse_version_tuple(text: str) -> tuple[int, ...] | None:
-    """Turn ``v1.24`` / ``1.24.0`` into a comparable tuple, or None."""
+    """Преобразовать ``v1.24`` / ``1.24.0`` в сравнимый кортеж или None."""
     match = RE_VERSION_TOKEN.search((text or "").strip())
     if not match:
         return None
@@ -54,7 +54,7 @@ def parse_version_tuple(text: str) -> tuple[int, ...] | None:
 
 
 def parse_version_from_source(source: str) -> str | None:
-    """Read ``CommandRunner.VERSION`` from ``src/app.py`` text."""
+    """Прочитать ``CommandRunner.VERSION`` из текста ``src/app.py``."""
     match = RE_VERSION_ASSIGN.search(source or "")
     if not match:
         return None
@@ -62,9 +62,9 @@ def parse_version_from_source(source: str) -> str | None:
 
 
 def compare_versions(local: str, remote: str) -> int:
-    """-1 if local < remote, 0 if equal, 1 if local > remote.
+    """-1, если local < remote; 0, если равны; 1, если local > remote.
 
-    Raises ValueError if either side is not a version.
+    Вызывает ValueError, если любая из сторон не является версией.
     """
     left = parse_version_tuple(local)
     right = parse_version_tuple(remote)
@@ -82,7 +82,7 @@ def compare_versions(local: str, remote: str) -> int:
 
 
 def format_update_status(local: str, remote: str) -> tuple[str, str]:
-    """Human status and kind: available / current / ahead."""
+    """Человекочитаемый статус и вид: available / current / ahead."""
     cmp = compare_versions(local, remote)
     if cmp < 0:
         return (
@@ -104,11 +104,11 @@ def fetch_remote_version(
     user_agent: str = "IDvjPy-term",
     environ: Mapping[str, str] | None = None,
 ) -> str:
-    """Download ``src/app.py`` from GitHub main and return its VERSION.
+    """Скачать ``src/app.py`` с GitHub main и вернуть его VERSION.
 
-    If ``PROXY_USER`` (and optional ``PROXY_PASS``) are set and a proxy URL is
-    present (``HTTPS_PROXY`` / ``HTTP_PROXY``), credentials are inserted so a
-    407 authenticating proxy can complete the HTTPS CONNECT.
+    Если заданы ``PROXY_USER`` (и необязательный ``PROXY_PASS``) и есть URL
+    прокси (``HTTPS_PROXY`` / ``HTTP_PROXY``), учётные данные подставляются,
+    чтобы прокси с аутентификацией (407) завершил HTTPS CONNECT.
     """
     env = os.environ if environ is None else environ
     request = urllib.request.Request(

@@ -1,8 +1,8 @@
-"""Safe, local storage for named runtime context profiles.
+"""Безопасное локальное хранилище именованных профилей контекста выполнения.
 
-Profiles contain references to an environment, not credentials.  They are kept
-outside the tag database and are intentionally limited to a small schema so a
-future setting cannot accidentally persist secrets.
+Профили содержат ссылки на окружение, а не учётные данные.  Они хранятся вне
+базы тегов и намеренно ограничены небольшой схемой, чтобы будущая настройка
+не могла случайно сохранить секреты.
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ _SECRET_WORDS = {"password", "secret", "token", "key", "vault", "credential"}
 
 
 class ProfileError(ValueError):
-    """Invalid or unsafe profile data."""
+    """Некорректные или небезопасные данные профиля."""
 
 
 def validate_name(name: str) -> str:

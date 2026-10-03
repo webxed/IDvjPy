@@ -1,8 +1,8 @@
-"""Opt-in shell risk hints. Pure token inspection, not a shell or a sandbox.
+"""Необязательные подсказки о рисках shell. Чистый разбор токенов, не shell и не песочница.
 
-Only recognizable command positions and common wrappers are inspected. Shell
-functions, scripts, substitutions, eval, dynamic executable names and SQL from
-files/stdin cannot be reliably classified. A clean result is NOT a safety proof.
+Проверяются только узнаваемые позиции команд и частые обёртки. Shell-функции,
+скрипты, подстановки, eval, динамические имена исполняемых файлов и SQL из
+файлов/stdin достоверно классифицировать нельзя. Чистый результат — НЕ гарантия безопасности.
 """
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ def _command_risks(words: list[str], depth: int) -> set[str]:
         if rest and rest[0] in _MUTATIONS[program]:
             return {f"{program} {rest[0]}"}
     if program == "sqlite3":
-        # Inspect inline SQL only, stripping SQL string literals and comments.
+        # Проверяем только SQL внутри команды, убирая строковые литералы и комментарии SQL.
         sql = " ".join(args)
         sql = re.sub(r"'([^']|'')*'|--[^\n]*|/\*.*?\*/", " ", sql, flags=re.S)
         if re.search(r"\b(DELETE|DROP|UPDATE)\b", sql, re.I):
@@ -71,10 +71,11 @@ def _command_risks(words: list[str], depth: int) -> set[str]:
 
 
 def command_risks(command: str, *, _depth: int = 0) -> tuple[str, ...]:
-    """Recognized risks (stable names, never command arguments/secrets).
+    """Распознанные риски (стабильные имена, никогда не аргументы команд/секреты).
 
-    Quotes remain single tokens, so echo 'rm -rf /' is data, not execution.
-    Unsupported or malformed syntax is not claimed to be safe.
+    Кавычки остаются единым токеном, поэтому echo 'rm -rf /' — это данные, а не
+    выполнение. Про неподдерживаемый или некорректный синтаксис не утверждается,
+    что он безопасен.
     """
     lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()\n")
     lexer.whitespace = " \t\r"

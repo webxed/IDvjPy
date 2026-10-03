@@ -1,4 +1,4 @@
-"""Open a file manager or system terminal in a new window (detached)."""
+"""Открыть файловый менеджер или системный терминал в новом окне (отсоединённо)."""
 from __future__ import annotations
 
 import os
@@ -97,13 +97,13 @@ _TERMINAL_EXEC_PREFIX: dict[str, tuple[str, ...]] = {
 }
 DEFAULT_TERMINAL_EXEC_PREFIX: tuple[str, ...] = ("-e",)
 
-# subprocess flags exist on Windows; keep numeric fallbacks for tests on POSIX.
+# Флаги subprocess есть в Windows; числовые запасные значения оставлены для тестов на POSIX.
 _CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
 _CREATE_NEW_CONSOLE = getattr(subprocess, "CREATE_NEW_CONSOLE", 0x00000010)
 
 
 class GuiOpenError(Exception):
-    """User-facing error: missing binary, bad path, empty override."""
+    """Ошибка для пользователя: нет бинарника, плохой путь, пустое переопределение."""
 
 
 def _norm_platform(platform: str | None = None) -> str:
@@ -127,7 +127,7 @@ def _require_which(name: str, var: str) -> None:
 
 
 def resolve_target_dir(path_arg: str | None = None) -> str:
-    """Absolute directory for :fm / :term. ``~`` is expanded."""
+    """Абсолютный каталог для :fm / :term. ``~`` раскрывается."""
     if not path_arg:
         return os.getcwd()
     target = os.path.abspath(os.path.expanduser(path_arg))
@@ -142,7 +142,7 @@ def build_fileman_argv(
     *,
     platform: str | None = None,
 ) -> list[str]:
-    """Argv that opens a file manager at ``target``. Path is always appended."""
+    """Argv, открывающий файловый менеджер в ``target``. Путь всегда дописывается в конец."""
     plat = _norm_platform(platform)
     override = (environ.get("FILEMAN") or "").strip()
     if override:
@@ -168,7 +168,7 @@ def build_term_argv(
     platform: str | None = None,
     mode: str = TERM_MODE_WINDOW,
 ) -> list[str]:
-    """Argv for a system terminal. Working directory is ``Popen(cwd=target)``.
+    """Argv для системного терминала. Рабочий каталог задаётся через ``Popen(cwd=target)``.
 
     ``mode='tab'`` просит вкладку в уже открытом окне (gnome-terminal `--tab`,
     konsole `--new-tab`, …); терминал без вкладок — явная ошибка, а не окно молча.
@@ -220,7 +220,7 @@ def spawn_detached(
     new_console: bool = False,
     platform: str | None = None,
 ) -> subprocess.Popen:
-    """Start a GUI/terminal without waiting or stealing this TTY."""
+    """Запустить GUI/терминал, не дожидаясь его и не забирая себе этот TTY."""
     plat = _norm_platform(platform)
     kwargs = {
         "cwd": cwd,

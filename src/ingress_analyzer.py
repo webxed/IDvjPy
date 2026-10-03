@@ -1,8 +1,8 @@
 """
-Kubernetes Ingress Analyzer Module
+Модуль анализа Kubernetes Ingress.
 
-Provides tools for analyzing Kubernetes ingress configurations,
-parsing nginx configs via crossplane, and debugging routing issues.
+Инструменты для разбора конфигураций Kubernetes ingress,
+парсинга конфигов nginx через crossplane и отладки проблем маршрутизации.
 """
 
 import json
@@ -16,7 +16,7 @@ from typing import Any
 
 @dataclass
 class IngressInfo:
-    """Represents a Kubernetes Ingress resource."""
+    """Представляет ресурс Kubernetes Ingress."""
     name: str
     namespace: str
     hosts: list[str]
@@ -29,7 +29,7 @@ class IngressInfo:
 
 @dataclass
 class NginxLocation:
-    """Represents a parsed nginx location block."""
+    """Представляет разобранный блок location nginx."""
     path: str
     modifier: str | None = None  # =, ~, ~*, ^~
     proxy_pass: str | None = None
@@ -40,7 +40,7 @@ class NginxLocation:
 
 @dataclass
 class UpstreamInfo:
-    """Represents an nginx upstream block."""
+    """Представляет блок upstream nginx."""
     name: str
     servers: list[str] = field(default_factory=list)
     port: int | None = None
@@ -49,7 +49,7 @@ class UpstreamInfo:
 
 @dataclass
 class EndpointInfo:
-    """Represents a Kubernetes endpoint."""
+    """Представляет endpoint Kubernetes."""
     ip: str
     port: int
     ready: bool = True
@@ -58,7 +58,7 @@ class EndpointInfo:
 
 @dataclass
 class ServiceInfo:
-    """Represents a Kubernetes service with endpoints."""
+    """Представляет сервис Kubernetes с endpoint'ами."""
     name: str
     namespace: str
     type: str
@@ -70,31 +70,31 @@ class ServiceInfo:
 
 
 class IngressAnalyzerError(Exception):
-    """Base exception for IngressAnalyzer."""
+    """Базовое исключение для IngressAnalyzer."""
     pass
 
 
 class CrossplaneNotInstalledError(IngressAnalyzerError):
-    """Raised when crossplane is not installed."""
+    """Возбуждается, когда crossplane не установлен."""
     pass
 
 
 class KubectlError(IngressAnalyzerError):
-    """Raised when kubectl command fails."""
+    """Возбуждается, когда команда kubectl завершилась ошибкой."""
     pass
 
 
 class IngressAnalyzer:
     """
-    Main class for Kubernetes ingress analysis.
+    Основной класс для анализа Kubernetes ingress.
 
-    Usage:
+    Использование:
         analyzer = IngressAnalyzer()
         ingresses = analyzer.list_ingresses()
         result = analyzer.analyze_ingress("my-ingress", "default")
     """
 
-    # Common labels for nginx ingress controller
+    # Частые метки nginx ingress controller
     INGRESS_CONTROLLER_LABELS = [
         "app.kubernetes.io/component=controller",
         "app=nginx-ingress",
@@ -103,7 +103,7 @@ class IngressAnalyzer:
         "app.kubernetes.io/name=ingress-nginx",
     ]
 
-    # Common namespaces for ingress controller
+    # Частые namespace для ingress controller
     INGRESS_CONTROLLER_NAMESPACES = [
         "ingress-nginx",
         "kube-system",
@@ -119,15 +119,15 @@ class IngressAnalyzer:
     def _run_kubectl(self, args: list[str], namespace: str | None = None,
                      json_output: bool = True) -> tuple[int, str, str]:
         """
-        Run kubectl command and return (returncode, stdout, stderr).
+        Запускает kubectl и возвращает (returncode, stdout, stderr).
 
-        Args:
-            args: kubectl arguments (without 'kubectl')
-            namespace: namespace to use (optional, adds -n flag)
-            json_output: add -o json flag
+        Аргументы:
+            args: аргументы kubectl (без 'kubectl')
+            namespace: используемый namespace (необязательно, добавляет флаг -n)
+            json_output: добавить флаг -o json
 
-        Returns:
-            Tuple of (returncode, stdout, stderr)
+        Возвращает:
+            Кортеж (returncode, stdout, stderr)
         """
         cmd = ["kubectl"]
         if namespace:
@@ -154,10 +154,10 @@ class IngressAnalyzer:
 
     def check_crossplane(self) -> tuple[bool, str]:
         """
-        Check if crossplane is installed and available.
+        Проверяет, установлен ли crossplane и доступен ли он.
 
-        Returns:
-            Tuple of (is_available, version_or_error)
+        Возвращает:
+            Кортеж (is_available, version_or_error)
         """
         if self._crossplane_available is not None:
             return self._crossplane_available, ""
@@ -182,16 +182,16 @@ class IngressAnalyzer:
 
     def list_ingresses(self, namespace: str | None = None) -> list[IngressInfo]:
         """
-        Get ingresses.
+        Получает список ingress.
 
-        Args:
-            namespace: Specific namespace or None for all namespaces
+        Аргументы:
+            namespace: конкретный namespace или None для всех namespace
 
-        Returns:
-            List of IngressInfo objects
+        Возвращает:
+            Список объектов IngressInfo
 
-        Raises:
-            KubectlError: If kubectl command fails
+        Исключения:
+            KubectlError: если команда kubectl завершилась ошибкой
         """
         if namespace:
             returncode, stdout, stderr = self._run_kubectl(
@@ -222,7 +222,7 @@ class IngressAnalyzer:
         return ingresses
 
     def _parse_ingress_item(self, item: dict) -> IngressInfo | None:
-        """Parse a single ingress item from kubectl output."""
+        """Разбирает один элемент ingress из вывода kubectl."""
         try:
             metadata = item.get("metadata", {})
             spec = item.get("spec", {})
@@ -231,7 +231,7 @@ class IngressAnalyzer:
             namespace = metadata.get("namespace", self.default_namespace)
             annotations = metadata.get("annotations", {})
 
-            # Extract hosts
+            # Извлечь хосты
             hosts = []
             tls = spec.get("tls", [])
             for tls_entry in tls:
@@ -239,7 +239,7 @@ class IngressAnalyzer:
                     if host not in hosts:
                         hosts.append(host)
 
-            # Extract paths and services from rules
+            # Извлечь пути и сервисы из правил
             paths = []
             services = []
             rules = spec.get("rules", [])
@@ -266,7 +266,7 @@ class IngressAnalyzer:
                             "number", service.get("port", {}).get("name", "")
                         )
 
-                        # Track unique services
+                        # Отследить уникальные сервисы
                         svc_name = service.get("name", "")
                         if svc_name and not any(s.get("name") == svc_name for s in services):
                             services.append({
@@ -277,7 +277,7 @@ class IngressAnalyzer:
 
                     paths.append(path_info)
 
-            # Handle default backend
+            # Обработать default backend
             default_backend = spec.get("defaultBackend", {}).get("service", {})
             if default_backend:
                 svc_name = default_backend.get("name", "")
@@ -305,14 +305,14 @@ class IngressAnalyzer:
 
     def get_ingress(self, name: str, namespace: str | None = None) -> IngressInfo | None:
         """
-        Get specific ingress details.
+        Получает детали конкретного ingress.
 
-        Args:
-            name: Ingress name
-            namespace: Namespace (uses default if not specified)
+        Аргументы:
+            name: имя ingress
+            namespace: namespace (по умолчанию используется default)
 
-        Returns:
-            IngressInfo or None if not found
+        Возвращает:
+            IngressInfo или None, если не найдено
         """
         ns = namespace or self.default_namespace
         returncode, stdout, stderr = self._run_kubectl(
@@ -332,15 +332,15 @@ class IngressAnalyzer:
 
     def find_ingress_controller_pod(self) -> tuple[str | None, str | None]:
         """
-        Find nginx ingress controller pod name and namespace.
+        Находит имя пода nginx ingress controller и его namespace.
 
-        Returns:
-            Tuple of (pod_name, namespace) or (None, None) if not found
+        Возвращает:
+            Кортеж (pod_name, namespace) или (None, None), если не найдено
         """
         if self._cached_controller:
             return self._cached_controller
 
-        # Try different label combinations
+        # Перебрать разные комбинации меток
         for label in self.INGRESS_CONTROLLER_LABELS:
             for ns in self.INGRESS_CONTROLLER_NAMESPACES:
                 returncode, stdout, _ = self._run_kubectl(
@@ -361,7 +361,7 @@ class IngressAnalyzer:
                     except json.JSONDecodeError:
                         continue
 
-        # Try all namespaces with first label
+        # Перебрать все namespace с первой меткой
         for label in self.INGRESS_CONTROLLER_LABELS:
             returncode, stdout, _ = self._run_kubectl(
                 ["get", "pods", "-l", label, "--all-namespaces"],
@@ -385,19 +385,19 @@ class IngressAnalyzer:
 
     def get_nginx_config(self, pod_name: str, namespace: str) -> str:
         """
-        Extract nginx.conf from ingress controller pod.
+        Извлекает nginx.conf из пода ingress controller.
 
-        Args:
-            pod_name: Name of the ingress controller pod
-            namespace: Namespace of the pod
+        Аргументы:
+            pod_name: имя пода ingress controller
+            namespace: namespace пода
 
-        Returns:
-            nginx.conf content as string
+        Возвращает:
+            Содержимое nginx.conf в виде строки
         """
-        # Common nginx.conf locations in ingress controllers
+        # Частые расположения nginx.conf в ingress controller
         config_paths = [
             "/etc/nginx/nginx.conf",
-            "/etc/nginx/nginx.conf.tmp",  # Some controllers use this
+            "/etc/nginx/nginx.conf.tmp",  # Некоторые контроллеры используют его
         ]
 
         for config_path in config_paths:
@@ -422,16 +422,16 @@ class IngressAnalyzer:
 
     def parse_nginx_config(self, config: str) -> dict:
         """
-        Parse nginx config using crossplane.
+        Разбирает конфиг nginx с помощью crossplane.
 
-        Args:
-            config: nginx.conf content as string
+        Аргументы:
+            config: содержимое nginx.conf в виде строки
 
-        Returns:
-            Parsed config as dict
+        Возвращает:
+            Разобранный конфиг в виде dict
 
-        Raises:
-            CrossplaneNotInstalledError: If crossplane is not available
+        Исключения:
+            CrossplaneNotInstalledError: если crossplane недоступен
         """
         available, _ = self.check_crossplane()
         if not available:
@@ -439,7 +439,7 @@ class IngressAnalyzer:
                 "crossplane not installed. Run: pip install crossplane"
             )
 
-        # Write config to temp file
+        # Записать конфиг во временный файл
         with tempfile.NamedTemporaryFile(mode='w', suffix='.conf', delete=False) as f:
             f.write(config)
             temp_path = f.name
@@ -466,25 +466,25 @@ class IngressAnalyzer:
 
     def extract_locations(self, parsed_config: dict) -> list[NginxLocation]:
         """
-        Extract location blocks from parsed nginx config.
+        Извлекает блоки location из разобранного конфига nginx.
 
-        Args:
-            parsed_config: Output from parse_nginx_config()
+        Аргументы:
+            parsed_config: вывод parse_nginx_config()
 
-        Returns:
-            List of NginxLocation objects
+        Возвращает:
+            Список объектов NginxLocation
         """
         locations = []
 
         def find_locations(directives: list[dict]) -> None:
-            """Recursively find location blocks."""
+            """Рекурсивно ищет блоки location."""
             for directive in directives:
                 if directive.get("directive") == "location":
                     loc = self._parse_location_directive(directive)
                     if loc:
                         locations.append(loc)
 
-                # Recurse into nested blocks
+                # Рекурсия во вложенные блоки
                 block = directive.get("block", [])
                 if block:
                     find_locations(block)
@@ -495,14 +495,14 @@ class IngressAnalyzer:
         return locations
 
     def _parse_location_directive(self, directive: dict) -> NginxLocation | None:
-        """Parse a single location directive."""
+        """Разбирает одну директиву location."""
         args = directive.get("args", [])
         block = directive.get("block", [])
 
         if not args:
             return None
 
-        # Parse path and modifier
+        # Разобрать путь и модификатор
         modifier = None
         path = args[0]
 
@@ -510,7 +510,7 @@ class IngressAnalyzer:
             modifier = args[0]
             path = args[1]
 
-        # Extract proxy_pass and other directives
+        # Извлечь proxy_pass и другие директивы
         proxy_pass = None
         upstream = None
         rewrite_rules = []
@@ -524,7 +524,7 @@ class IngressAnalyzer:
 
             if dir_name == "proxy_pass":
                 proxy_pass = " ".join(dir_args)
-                # Extract upstream name from proxy_pass
+                # Извлечь имя upstream из proxy_pass
                 if dir_args:
                     match = re.match(r'https?://([^/:]+)', dir_args[0])
                     if match:
@@ -547,13 +547,13 @@ class IngressAnalyzer:
 
     def extract_upstreams(self, parsed_config: dict) -> list[UpstreamInfo]:
         """
-        Extract upstream blocks from parsed nginx config.
+        Извлекает блоки upstream из разобранного конфига nginx.
 
-        Args:
-            parsed_config: Output from parse_nginx_config()
+        Аргументы:
+            parsed_config: вывод parse_nginx_config()
 
-        Returns:
-            List of UpstreamInfo objects
+        Возвращает:
+            Список объектов UpstreamInfo
         """
         upstreams = []
 
@@ -567,7 +567,7 @@ class IngressAnalyzer:
         return upstreams
 
     def _parse_upstream_directive(self, directive: dict) -> UpstreamInfo | None:
-        """Parse a single upstream directive."""
+        """Разбирает одну директиву upstream."""
         args = directive.get("args", [])
         block = directive.get("block", [])
 
@@ -589,7 +589,7 @@ class IngressAnalyzer:
                 server_addr = " ".join(dir_args)
                 servers.append(server_addr)
 
-                # Extract port from server address
+                # Извлечь порт из адреса сервера
                 if dir_args:
                     match = re.search(r':(\d+)', dir_args[0])
                     if match and port is None:
@@ -604,18 +604,18 @@ class IngressAnalyzer:
 
     def check_service_endpoints(self, service: str, namespace: str | None = None) -> ServiceInfo:
         """
-        Check if service has healthy endpoints.
+        Проверяет, есть ли у сервиса здоровые endpoint'ы.
 
-        Args:
-            service: Service name
-            namespace: Namespace (uses default if not specified)
+        Аргументы:
+            service: имя сервиса
+            namespace: namespace (по умолчанию используется default)
 
-        Returns:
-            ServiceInfo with endpoint details
+        Возвращает:
+            ServiceInfo с деталями по endpoint'ам
         """
         ns = namespace or self.default_namespace
 
-        # Get service details
+        # Получить детали сервиса
         returncode, stdout, stderr = self._run_kubectl(
             ["get", "service", service],
             namespace=ns,
@@ -630,7 +630,7 @@ class IngressAnalyzer:
         except json.JSONDecodeError:
             raise KubectlError("Failed to parse service data") from None
 
-        # Extract service info
+        # Извлечь информацию о сервисе
         metadata = svc_data.get("metadata", {})
         spec = svc_data.get("spec", {})
 
@@ -642,7 +642,7 @@ class IngressAnalyzer:
             selector=spec.get("selector", {})
         )
 
-        # Get endpoints
+        # Получить endpoint'ы
         returncode, stdout, _ = self._run_kubectl(
             ["get", "endpoints", service],
             namespace=ns,
@@ -662,7 +662,7 @@ class IngressAnalyzer:
         return service_info
 
     def _parse_endpoints(self, ep_data: dict) -> list[EndpointInfo]:
-        """Parse endpoints from kubectl output."""
+        """Разбирает endpoint'ы из вывода kubectl."""
         endpoints = []
 
         subsets = ep_data.get("subsets", [])
@@ -679,7 +679,7 @@ class IngressAnalyzer:
                         pod_name=addr.get("targetRef", {}).get("name", "")
                     ))
 
-            # NotReady addresses
+            # Адреса NotReady
             not_ready = subset.get("notReadyAddresses", [])
             for addr in not_ready:
                 for port_info in ports:
@@ -694,20 +694,20 @@ class IngressAnalyzer:
 
     def analyze_ingress(self, name: str, namespace: str | None = None) -> dict[str, Any]:
         """
-        Full analysis of an ingress.
+        Полный анализ ingress.
 
-        Args:
-            name: Ingress name
-            namespace: Namespace (uses default if not specified)
+        Аргументы:
+            name: имя ingress
+            namespace: namespace (по умолчанию используется default)
 
-        Returns:
-            Dict with complete analysis including:
+        Возвращает:
+            Dict с полным анализом, включая:
             - ingress: IngressInfo
-            - nginx_config: parsed nginx config (if available)
-            - locations: list of nginx locations
-            - upstreams: list of nginx upstreams
-            - services: service endpoint status
-            - errors: list of any errors encountered
+            - nginx_config: разобранный конфиг nginx (если доступен)
+            - locations: список location nginx
+            - upstreams: список upstream nginx
+            - services: статус endpoint'ов сервисов
+            - errors: список возникших ошибок
         """
         ns = namespace or self.default_namespace
         result = {
@@ -720,7 +720,7 @@ class IngressAnalyzer:
             "warnings": [],
         }
 
-        # Get ingress
+        # Получить ingress
         ingress = self.get_ingress(name, ns)
         if not ingress:
             result["errors"].append(f"Ingress '{name}' not found in namespace '{ns}'")
@@ -728,7 +728,7 @@ class IngressAnalyzer:
 
         result["ingress"] = asdict(ingress)
 
-        # Find ingress controller
+        # Найти ingress controller
         pod_name, pod_ns = self.find_ingress_controller_pod()
         if not pod_name:
             result["warnings"].append(
@@ -736,7 +736,7 @@ class IngressAnalyzer:
                 "Nginx config analysis skipped."
             )
         else:
-            # Get and parse nginx config
+            # Получить и разобрать конфиг nginx
             try:
                 nginx_config = self.get_nginx_config(
                     pod_name, pod_ns or self.default_namespace
@@ -756,7 +756,7 @@ class IngressAnalyzer:
             except IngressAnalyzerError as e:
                 result["warnings"].append(f"Nginx config parsing failed: {e}")
 
-        # Check service endpoints
+        # Проверить endpoint'ы сервисов
         for service in ingress.services:
             svc_name = service.get("name")
             svc_ns = service.get("namespace", ns)
@@ -766,7 +766,7 @@ class IngressAnalyzer:
                     svc_info = self.check_service_endpoints(svc_name, svc_ns)
                     result["services"][svc_name] = asdict(svc_info)
 
-                    # Add warning for services with no endpoints
+                    # Предупреждение о сервисах без endpoint'ов
                     if svc_info.total_endpoints == 0:
                         result["warnings"].append(
                             f"Service '{svc_name}' has no endpoints"
@@ -783,13 +783,13 @@ class IngressAnalyzer:
 
 def format_analysis_summary(analysis: dict) -> str:
     """
-    Format analysis result for display.
+    Форматирует результат анализа для показа.
 
-    Args:
-        analysis: Result from analyze_ingress()
+    Аргументы:
+        analysis: результат analyze_ingress()
 
-    Returns:
-        Formatted string for display
+    Возвращает:
+        Отформатированную строку для показа
     """
     lines = []
 
@@ -803,7 +803,7 @@ def format_analysis_summary(analysis: dict) -> str:
         else:
             lines.append("TLS: No")
 
-        # Paths
+        # Пути
         lines.append("\n[bold]Paths:[/bold]")
         for path in ingress.get('paths', []):
             svc_name = path.get('serviceName', '?')
@@ -811,7 +811,7 @@ def format_analysis_summary(analysis: dict) -> str:
             host = path.get('host', '*')
             lines.append(f"  {path.get('path', '/')} → svc: {svc_name}:{svc_port} (host: {host})")
 
-    # Services status
+    # Статус сервисов
     services = analysis.get('services', {})
     if services:
         lines.append("\n[bold]Services:[/bold]")
@@ -821,19 +821,19 @@ def format_analysis_summary(analysis: dict) -> str:
             status = "✓" if healthy == total and total > 0 else "⚠" if total > 0 else "✗"
             lines.append(f"  {status} {svc_name}: {healthy}/{total} endpoints")
 
-    # Nginx locations
+    # Локации nginx
     locations = analysis.get('locations', [])
     if locations:
         lines.append(f"\n[bold]Nginx Locations: {len(locations)}[/bold]")
 
-    # Warnings
+    # Предупреждения
     warnings = analysis.get('warnings', [])
     if warnings:
         lines.append("\n[yellow]Warnings:[/yellow]")
         for w in warnings:
             lines.append(f"  ⚠ {w}")
 
-    # Errors
+    # Ошибки
     errors = analysis.get('errors', [])
     if errors:
         lines.append("\n[red]Errors:[/red]")

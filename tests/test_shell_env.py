@@ -1,4 +1,4 @@
-"""Unit tests for extracted shell_env helpers."""
+"""Юнит-тесты вынесенных хелперов shell_env."""
 from shell_env import (
     command_requests_placeholder,
     cwd_followup_note,

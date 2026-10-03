@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Seed disk / filesystem handbook (see SEED_DISK_COMMANDS.md):
+Справочник по дискам и файловым системам (см. SEED_DISK_COMMANDS.md):
 
   df, du, mount, fdisk, lsblk, smartctl, ncdu.
 
-Playbooks are inspect-only: no mkfs, fdisk wipe, wipefs -a, umount.
-Does not touch linux `file` or host tar/gz.
+Плейбуки только для чтения: без mkfs, fdisk wipe, wipefs -a, umount.
+Не трогает linux `file` и host tar/gz.
 
-Run: python3 src/seed_disk.py --seed
+Запуск: python3 src/seed_disk.py --seed
 """
 import sys
 

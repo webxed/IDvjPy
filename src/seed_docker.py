@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Seed docker / compose handbook tags (see SEED_DOCKER_COMMANDS.md).
+Справочник docker / compose (см. SEED_DOCKER_COMMANDS.md).
 
-Does not touch proc / file / net / kube / k8s / git tags.
+Не трогает теги proc / file / net / kube / k8s / git.
 
-Run: python3 src/seed_docker.py --seed
+Запуск: python3 src/seed_docker.py --seed
 """
 import sys
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Seed users / permissions handbook (see SEED_USER_COMMANDS.md).
+Справочник пользователей и прав (см. SEED_USER_COMMANDS.md).
 
-Playbooks are inspect-only: id, getent, last, sudo -l.
-chmod/chown templates are in perm, not in uidchk. No userdel.
+Плейбуки только для чтения: id, getent, last, sudo -l.
+Шаблоны chmod/chown — в perm, но не в uidchk. Без userdel.
 
-Run: python3 src/seed_user.py --seed
+Запуск: python3 src/seed_user.py --seed
 """
 import sys
 

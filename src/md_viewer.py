@@ -1,4 +1,4 @@
-"""Modal Markdown viewer for handbook .md files in the repo."""
+"""Модальный просмотрщик Markdown-файлов справочников (`.md`) в репозитории."""
 import os
 from collections.abc import Sequence
 from pathlib import Path
@@ -20,10 +20,11 @@ def _escape_markup(text: str) -> str:
 
 
 def handbook_md_path(name: str, lang: str | None = None) -> Path | None:
-    """Resolve a handbook markdown by basename.
+    """Найти Markdown справочника по базовому имени файла.
 
-    Seed handbooks moved to ``docs/``; the overview docs (K8S_CHAINS.md) stay
-    at the repo root. Search cwd and repo root, each also under ``docs/``.
+    Справочники сидов переехали в ``docs/``; обзорные документы (K8S_CHAINS.md)
+    остаются в корне репозитория. Поиск идёт в cwd и корне репозитория, каждый
+    ещё и внутри ``docs/``.
 
     ``lang`` (по умолчанию — язык интерфейса) даёт приоритет каталогу языка:
     ``docs/<lang>/NAME`` → ``docs/NAME`` → ``NAME``. Каталогов перевода может
@@ -40,7 +41,7 @@ def handbook_md_path(name: str, lang: str | None = None) -> Path | None:
             from i18n import current_language
 
             lang = current_language()
-        except ImportError:  # pragma: no cover - i18n always ships with src/
+        except ImportError:  # pragma: no cover — i18n всегда идёт вместе с src/
             lang = None
     code = (lang or "").strip()
     for folder in (Path.cwd(), REPO_ROOT):
@@ -59,10 +60,10 @@ def handbook_md_path(name: str, lang: str | None = None) -> Path | None:
 
 
 def resolve_md_path(name: str, extra_dirs: Sequence[str] = ()) -> Path | None:
-    """Resolve a markdown file by path (absolute, or relative to extra_dirs/cwd/repo).
+    """Найти Markdown-файл по пути (абсолютному или относительно extra_dirs/cwd/repo).
 
-    Used by `:rg` results and `:md <path>`: unlike ``handbook_md_path`` (basename
-    only) this accepts a path anywhere, e.g. inside an Obsidian vault.
+    Используется результатами `:rg` и `:md <path>`: в отличие от ``handbook_md_path``
+    (только базовое имя) принимает путь где угодно, напр. внутри хранилища Obsidian.
     """
     raw = (name or "").strip()
     if not raw:
@@ -83,11 +84,11 @@ def resolve_md_path(name: str, extra_dirs: Sequence[str] = ()) -> Path | None:
 
 
 class HandbookMarkdownScreen(ModalScreen[None]):
-    """Full-screen formatted Markdown; Esc / q closes.
+    """Полноэкранный форматированный Markdown; Esc / q закрывают.
 
-    Scroll stays inside this screen: the app journal also listens to the
-    mouse wheel, so we stop those events here. The file name in the header is
-    clickable and `y` copies the full path (`[@click=screen.copy_path]`).
+    Прокрутка остаётся внутри этого экрана: журнал приложения тоже слушает
+    колесо мыши, поэтому здесь эти события останавливаются. Имя файла в шапке
+    кликабельно, а `y` копирует полный путь (`[@click=screen.copy_path]`).
     """
 
     BINDINGS = [

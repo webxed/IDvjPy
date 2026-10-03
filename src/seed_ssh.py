@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Seed ssh / scp handbook tags (see SEED_SSH_COMMANDS.md).
+Справочник ssh / scp (см. SEED_SSH_COMMANDS.md).
 
-Playbooks are non-interactive (config dump, BatchMode, keyscan).
-Interactive login needs `> ssh …`. Does not touch linux `net`.
+Плейбуки неинтерактивные (дамп конфига, BatchMode, keyscan).
+Интерактивный вход — только через `> ssh …`. Не трогает linux `net`.
 
-Run: python3 src/seed_ssh.py --seed
+Запуск: python3 src/seed_ssh.py --seed
 """
 import sys
 

@@ -54,7 +54,7 @@ jobs:
           [ -n "$files" ] || { echo "shard ${{ matrix.shard }}: нет файлов"; exit 1; }
           echo "shard ${{ matrix.shard }}/${{ strategy.job-total }}: $(echo "$files" | wc -w) files"
           echo "$files" | tr ' ' '\n' | sed 's/^/  /'
-          # --timeout bounds a single hanging test; the plugin ships in requirements-dev.txt.
+          # --timeout ограничивает один зависший тест; плагин есть в requirements-dev.txt.
           python -m pytest $files -q --timeout=600 --durations=15
 
   docker-demo:

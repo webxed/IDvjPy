@@ -1,4 +1,4 @@
-"""Per-session pinned tags, stored independently from the shared library DB."""
+"""Закреплённые теги на сессию, хранятся отдельно от общей базы библиотеки."""
 from __future__ import annotations
 
 import json

@@ -1,10 +1,10 @@
-# Development / test dependencies, on top of the runtime requirements.
+# Зависимости для разработки и тестов, сверх runtime-зависимостей.
 #   pip install -r requirements-dev.txt
 -r requirements.txt
 
 pytest>=8.0
 pytest-asyncio>=0.24
 pytest-timeout>=2.3
-# `:vault` uses AES-GCM from `cryptography` (an extras of the app, not in
-# requirements.txt): the tests need it to exercise the real store.
+# `:vault` использует AES-GCM из `cryptography` (опция приложения, не в
+# requirements.txt): тестам нужен реальный store.
 cryptography>=41

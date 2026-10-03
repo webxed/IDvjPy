@@ -25,7 +25,7 @@ LAZY_PLACEHOLDERS = frozenset({"OUT"})
 # метасимволы (`'`/`"`/`\`/`$`/бэктик/`!`/`*`/`?`/скобки/`|`/`&`/`;`/`#`).
 RE_SHELL_NEEDS_QUOTE = re.compile(r"[\s'\"\\$`!*?\[\]{}()<>|&;#]")
 
-# Shell/TTY bookkeeping — do not copy back into the TUI process.
+# Служебные переменные shell/TTY — не переносить обратно в процесс TUI.
 TTY_ENV_SKIP = frozenset({
     "_",
     "SHLVL",
@@ -124,7 +124,7 @@ def substitute_variables(
 
 
 def command_requests_placeholder(command: str, name: str = "OUT") -> bool:
-    """True if the command mentions a lazy placeholder (no stored copy needed)."""
+    """True, если команда упоминает ленивый плейсхолдер (копию хранить не нужно)."""
     if name == "OUT":
         return bool(RE_OUT_PLACEHOLDER.search(command or ""))
     return f"${name}" in (command or "") or f"${{{name}}}" in (command or "")
@@ -165,7 +165,7 @@ def quote_shell_path(path: str) -> str:
 
 
 def last_nonempty_line(text: str) -> str:
-    """Last non-empty line without splitting the whole buffer into a list."""
+    """Последняя непустая строка без разбиения всего буфера на список."""
     raw = text or ""
     end = len(raw)
     while end > 0 and raw[end - 1] in "\r\n":
@@ -423,7 +423,7 @@ def parse_path_only_cd(command: str) -> str | None:
 
 
 def skip_tty_env_key(key: str) -> bool:
-    """True for keys that must not be imported from a TTY child dump."""
+    """True для ключей, которые нельзя импортировать из дампа дочернего TTY."""
     if not key or key in TTY_ENV_SKIP:
         return True
     if key.startswith("BASH_FUNC_"):
@@ -432,7 +432,7 @@ def skip_tty_env_key(key: str) -> bool:
 
 
 def load_env_dump(path: str) -> dict[str, str] | None:
-    """JSON object of KEY→value from a child shell. None if missing or invalid."""
+    """JSON-объект KEY→значение из дочерней оболочки. None, если файла нет или он неверен."""
     try:
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
@@ -453,7 +453,7 @@ def diff_exported_env(
     before: Mapping[str, str],
     after: Mapping[str, str],
 ) -> tuple[dict[str, str], list[str]]:
-    """Changed/new keys and keys unset in the child (skip list already applied)."""
+    """Изменённые/новые ключи и ключи, снятые в дочернем процессе (список пропуска уже применён)."""
     updates: dict[str, str] = {}
     for key, value in after.items():
         if skip_tty_env_key(key):
@@ -475,7 +475,7 @@ def wrap_tty_command(
     pwd_path: str,
     python_exe: str,
 ) -> str:
-    """Bash script: run ``command``, then dump env/PWD on EXIT (keeps $? )."""
+    """Bash-скрипт: выполнить ``command``, затем на EXIT снять env/PWD (сохраняя $? )."""
     dump_py = (
         "import json,os,sys;"
         "json.dump(dict(os.environ), open(sys.argv[1],'w'), ensure_ascii=False)"
@@ -496,7 +496,7 @@ def wrap_tty_command(
 
 
 def format_env_followup(names: list[str], cwd: str | None = None) -> list[str]:
-    """Short journal lines after TTY: env names and optional cwd."""
+    """Короткие строки журнала после TTY: имена env и, при наличии, cwd."""
     lines: list[str] = []
     if names:
         shown = names[:12]

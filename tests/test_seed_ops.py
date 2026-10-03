@@ -1,4 +1,4 @@
-"""Thematic seeds: docker, helm, ansible, http, netfw, ip, netdbg, data, host, disk, systemd, sysinfo, sysstat, vault, text, pipe, rsync, find, recon, ssh, pkg, user."""
+"""Тематические сиды: docker, helm, ansible, http, netfw, ip, netdbg, data, host, disk, systemd, sysinfo, sysstat, vault, text, pipe, rsync, find, recon, ssh, pkg, user."""
 from pathlib import Path
 
 import database_v2 as database

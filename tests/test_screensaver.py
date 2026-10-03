@@ -1,4 +1,4 @@
-"""DevOps starfield screensaver (Norton Commander-style idle overlay)."""
+"""Скринсейвер в стиле DevOps — звёздное поле (оверлей простоя в духе Norton Commander)."""
 import asyncio
 import time
 from contextlib import contextmanager

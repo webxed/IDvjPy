@@ -57,7 +57,7 @@ OPTIONAL_TOOLS: tuple[ToolCheck, ...] = (
     ToolCheck("markitdown", "doctor.purpose.markitdown"),
 )
 CLIPBOARD_TOOLS: tuple[str, ...] = ("wl-copy", "wl-paste", "xclip", "xsel")
-# Only top-level names: find_spec on a dotted name can import its parent.
+# Только имена верхнего уровня: find_spec для точечного имени может импортировать родителя.
 OPTIONAL_PACKAGES: tuple[tuple[str, str], ...] = (
     ("cryptography", "cryptography"),
     ("firecrawl-anydoc", "anydoc"),
@@ -89,7 +89,7 @@ def discover_packages() -> tuple[tuple[str, str, bool | None], ...]:
         try:
             found = importlib.util.find_spec(module) is not None
         except Exception:
-            # Broken __spec__ or import hooks must not break the whole report.
+            # Битый __spec__ или import hooks не должны ломать весь отчёт.
             found = None
         results.append((package, module, found))
     return tuple(results)

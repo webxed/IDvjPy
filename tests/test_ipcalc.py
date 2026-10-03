@@ -130,7 +130,7 @@ def test_class_b_default():
         ("300 host", "300 hosts → /23"),        # единственное число тоже
         ("1000 hosts", "1000 hosts → /22"),
         ("7 hosts", "7 hosts → /28"),
-        ("2 hosts", "2 hosts → /31"),           # RFC 3021 point-to-point
+        ("2 hosts", "2 hosts → /31"),           # RFC 3021 точка-точка
         ("1 host", "1 host → /32"),
         ("4,000 hosts", "4000 hosts → /20"),    # разделитель тысяч
     ],

@@ -1,4 +1,4 @@
-"""Append-only, content-free audit log for user-triggered library mutations."""
+"""Журнал аудита без содержимого, только на дозапись, для изменений библиотеки пользователем."""
 from __future__ import annotations
 
 import datetime
@@ -19,7 +19,7 @@ def record_event(
     tags: list[str] | tuple[str, ...] = (),
     count: int = 0,
 ) -> str | None:
-    """Write only operation metadata; never persist commands, comments, or source URLs."""
+    """Писать только метаданные операции; никогда не сохранять команды, комментарии и исходные URL."""
     if action not in ACTIONS or count < 0:
         return "invalid audit event"
     clean_tags = sorted({str(tag)[:128] for tag in tags if str(tag).strip()})[:100]
@@ -48,7 +48,7 @@ def record_event(
 
 
 def read_events(data_dir: str, limit: int = 20) -> tuple[list[dict[str, Any]], str]:
-    """Read the last validated events; malformed records are ignored."""
+    """Прочитать последние прошедшие проверку события; некорректные записи игнорируются."""
     if limit < 1:
         return [], "limit must be positive"
     path = Path(data_dir) / AUDIT_FILE

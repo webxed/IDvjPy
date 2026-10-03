@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Seed sockets + firewall handbook: ss, netstat, iptables, nftables, firewall-cmd
-(see SEED_NETFW_COMMANDS.md).
+Справочник сокетов и firewall: ss, netstat, iptables, nftables, firewall-cmd
+(см. SEED_NETFW_COMMANDS.md).
 
-Does not touch the linux `net` tag. Playbooks are inspect-only
-(no iptables -F / nft flush / panic-on).
+Не трогает linux-тег `net`. Плейбуки только для чтения
+(без iptables -F / nft flush / panic-on).
 
-Run: python3 src/seed_netfw.py --seed
+Запуск: python3 src/seed_netfw.py --seed
 """
 import sys
 

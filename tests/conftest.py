@@ -77,7 +77,7 @@ def clip_store(monkeypatch):
     """Доступ к подменённому буферу обмена (тот же объект, что в isolated_home)."""
     import pyperclip
 
-    # isolated_home already patched pyperclip; expose current paste/copy via module.
+    # isolated_home уже подменил pyperclip; отдаём текущие paste/copy через модуль.
     return pyperclip
 
 

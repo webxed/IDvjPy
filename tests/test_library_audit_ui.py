@@ -1,4 +1,4 @@
-"""TUI audit records cover explicit user mutations only."""
+"""Записи аудита в TUI покрывают только явные изменения от пользователя."""
 from __future__ import annotations
 
 import json

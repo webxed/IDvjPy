@@ -478,7 +478,7 @@ async def test_demo_escape_stops_playback(isolated_home):
 
 
 async def test_demo_wait_command_waits_for_pipe_block(isolated_home):
-    """wait_command must not return on the previous finished curl/echo block."""
+    """wait_command не должен возвращаться на прошлом завершённом блоке curl/echo."""
     scenario = {
         "title": "pipe-wait",
         "start_pause": 0,
@@ -503,7 +503,7 @@ async def test_demo_wait_command_waits_for_pipe_block(isolated_home):
 
 
 async def test_demo_tab_then_pipe_does_not_trigger_line_nav(isolated_home):
-    """Tab leaves focus on the journal; Enter there is line-cursor (F2), not submit."""
+    """Tab оставляет фокус на журнале; Enter там — построчный режим (F2), а не отправка."""
     scenario = {
         "title": "tab-pipe",
         "start_pause": 0,
@@ -530,7 +530,7 @@ async def test_demo_tab_then_pipe_does_not_trigger_line_nav(isolated_home):
 
 
 async def test_demo_slow_tab_pipe_f2_after_output(isolated_home):
-    """F2 must not fire while `| grep` is still being typed (live-TUI race)."""
+    """F2 не должен срабатывать, пока набирается `| grep` (гонка в живом TUI)."""
     nav_while_typing = []
 
     orig = CommandBlock.enter_line_nav

@@ -1,4 +1,4 @@
-"""Non-blocking confirmation for safe execution mode."""
+"""Неблокирующее подтверждение для безопасного режима выполнения."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -14,7 +14,7 @@ from i18n import t
 
 
 class SafeModeScreen(ModalScreen[bool]):
-    """Enter approves a frozen launch; Escape cancels it."""
+    """Enter одобряет зафиксированный запуск; Escape отменяет его."""
 
     _modal = True
     BINDINGS = [
@@ -48,7 +48,7 @@ class SafeModeScreen(ModalScreen[bool]):
 
 
 def confirm(app: App[Any], command: str, risks: tuple[str, ...], callback: Callable[[], None], cancelled: Callable[[], None] | None = None) -> None:
-    """Ask asynchronously; callbacks receive no mutable command input."""
+    """Спросить асинхронно; колбэки не получают изменяемый ввод команды."""
     def done(approved: bool | None) -> None:
         if approved:
             callback()

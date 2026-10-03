@@ -92,7 +92,7 @@ _UNITS: dict[str, Unit] = {
     "TiB": _u("memory", 2.0**40, label="TiB"),
     "PiB": _u("memory", 2.0**50, label="PiB"),
     "EiB": _u("memory", 2.0**60, label="EiB"),
-    # CPU
+    # Процессор
     "m": _u("number", 1e-3, cpu=True, label="m"),
     "core": _u("number", 1.0, cpu=True, label="cores"),
     "cores": _u("number", 1.0, cpu=True, label="cores"),
@@ -390,7 +390,7 @@ def _render(q: Q, target: Unit | None) -> str:
         if target is None:
             return _render_memory(q.value)
         return f"= {_fmt(q.value / target.factor)}{target.label}"
-    # number / cpu
+    # число / cpu
     if target is not None:
         value = q.value / target.factor
         if target.dim == "memory":

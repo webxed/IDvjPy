@@ -1,11 +1,11 @@
 # Vibe-Authors: markovskiy.pavel & Gemini, GLM, CLAUDE, DeepSeek, Grok
 """
-IDvjPy_term - Textual TUI terminal application.
+IDvjPy_term - клавиатурный TUI-терминал на Textual.
 
-A keyboard-driven terminal interface with persistent tagged command history.
-Supports command execution, variable management, and command tagging.
+Клавиатурный терминальный интерфейс с постоянной историей команд и тегами.
+Поддерживает выполнение команд, управление переменными и разметку команд тегами.
 
-Usage:
+Использование:
     python app.py
 """
 import argparse
@@ -18,9 +18,9 @@ import sys
 import tempfile
 
 
-# Parse command-line arguments BEFORE importing dependencies
+# Разбираем аргументы командной строки ДО импорта зависимостей
 def parse_arguments():
-    """Parse command line arguments."""
+    """Разбирает аргументы командной строки."""
     parser = argparse.ArgumentParser(
         description="IDvjPy_term - Textual TUI terminal application",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -71,14 +71,14 @@ Examples:
     )
     return parser.parse_args()
 
-# Default instance name. CLI --instance-name is applied only in __main__,
-# so the app module can be imported by tests without argparse fighting pytest.
+# Имя экземпляра по умолчанию. CLI --instance-name применяется только в __main__,
+# поэтому модуль приложения можно импортировать в тестах без спора argparse с pytest.
 INSTANCE_NAME = "default"
-# CLI --lang (see src/i18n.py); None — language comes from settings/env.
+# CLI --lang (см. src/i18n.py); None — язык берётся из settings/env.
 CLI_LANGUAGE: str | None = None
 RE_INSTANCE_NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$")
 
-# Check dependencies before importing
+# Проверяем зависимости перед импортом
 try:
     import datetime
     import glob
@@ -327,7 +327,7 @@ except ImportError as e:
 
 
 # ============================================================================
-# Pre-compiled Regex Patterns (Performance Optimization)
+# Предкомпилированные regex-шаблоны (оптимизация производительности)
 # ============================================================================
 
 RE_ANSI_TAGS = re.compile(r'\x1b\[[0-9;]*m')
@@ -393,7 +393,7 @@ TOKEN_SEPS = frozenset(" \t|&;")
 
 
 def escape_help_markup(text: str) -> str:
-    """Keep ``[bold]`` tags; escape other ``[brackets]`` so Rich does not swallow them."""
+    """Сохраняет теги ``[bold]``; остальные ``[скобки]`` экранирует, чтобы Rich их не съел."""
     parts = RE_HELP_KEEP_MARKUP.split(text)
     return "".join(part if i % 2 else escape(part) for i, part in enumerate(parts))
 
@@ -480,7 +480,7 @@ def _identity(text: str) -> str:
 
 
 # ============================================================================
-# History file store: append/read/compact live in src/history_store.py
+# Файловое хранилище истории: append/read/compact живут в src/history_store.py
 # ============================================================================
 
 
@@ -718,7 +718,7 @@ class LineNavigable(Static):
         text = self._current_plain_line()
         if not text:
             return
-        # Key ctrl+v and terminal Paste often arrive together; keep one append.
+        # Ctrl+V и вставка терминала часто приходят вместе; оставляем одно добавление.
         now = time.monotonic()
         if (
             now - getattr(self, "_last_append_at", 0) < 0.08
@@ -923,7 +923,7 @@ class CommandBlock(LineNavigable, Static):
         """
         Инициализация блока команды.
 
-        Args:
+        Аргументы:
             header: Заголовок (время, директория, команда).
             raw_stdout: Вывод команды.
             raw_stderr: Ошибки команды.
@@ -1577,7 +1577,7 @@ class InfoBlock(LineNavigable, Static):
         """
         Инициализация информационного блока.
 
-        Args:
+        Аргументы:
             text_content: Текст для отображения.
         """
         self.text_content = text_content.rstrip() + "\n\n"
@@ -1725,7 +1725,7 @@ class CompletionList(Static):
 
     MIN_VISIBLE_ITEMS = 6
     MAX_VISIBLE_ITEMS = 24
-    _CHROME_ROWS = 8  # header + input + footer + list border
+    _CHROME_ROWS = 8  # заголовок + ввод + футер + рамка списка
     _JOURNAL_MIN_ROWS = 6
 
     DEFAULT_CSS = """
@@ -2578,7 +2578,7 @@ class QueryResultsBlock(LineNavigable, Static):
         """
         Инициализация блока результатов запроса.
 
-        Args:
+        Аргументы:
             content: Текст для отображения (без кликабельных элементов).
         """
         self.text_content = content.rstrip() + "\n\n"
@@ -2709,7 +2709,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.211"
+    VERSION = "v1.212"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2818,8 +2818,8 @@ class CommandRunner(App):
     PREFIX_VAR = "$" # Новый префикс для переменных
     PREFIX_SECRET = "$$"  # Секретные переменные: ввод/вывод маскируются
     PREFIX_TTY = ">"
-    PREFIX_WINDOW = "&"  # run the rest of the line in a new terminal window
-    PREFIX_NO_TIMEOUT = "@"  # run the rest of the line without command_timeout
+    PREFIX_WINDOW = "&"  # остаток строки выполняется в новом окне терминала
+    PREFIX_NO_TIMEOUT = "@"  # остаток строки без command_timeout
     
     CMD_QUIT = "q"
     CMD_WRITE = "w"
@@ -2870,10 +2870,10 @@ class CommandRunner(App):
     CMD_SEND = "send"  # переслать команду в другую сессию (вставить во ввод)
     CMD_SEND_RUN = "send!"  # то же, но сразу выполнить в целевой сессии
     CMD_SCOPE = "scope"  # какие теги показывать в этой сессии (фильтр представления)
-    CMD_TAGS = "tags"  # searchable tag catalog
-    CMD_PIN = "pin"  # per-session favorite tags
-    CMD_PROFILE = "profile"  # named safe runtime context profiles
-    CMD_TAGMETA = "tagmeta"  # tag metadata
+    CMD_TAGS = "tags"  # каталог тегов с поиском
+    CMD_PIN = "pin"  # избранные теги в рамках сессии
+    CMD_PROFILE = "profile"  # именованные безопасные профили контекста
+    CMD_TAGMETA = "tagmeta"  # метаданные тега
     CMD_VAULT = "vault"  # хранилище секретов с шифрованием по паролю (`vault.json.enc`)
     CMD_DOCTOR = "doctor"  # локальная диагностика окружения, без запусков и сети
     CMD_EXPLAIN = "explain"  # локальный разбор команды без запуска (справочник + эвристика)
@@ -3096,7 +3096,7 @@ class CommandRunner(App):
         self.aliases: dict[str, str] = {}
         # v1.1.9+: Парсер команд с поддержкой ссылок
         self.command_parser = CommandParser()
-        # Kubernetes Ingress Analyzer
+        # Анализатор Kubernetes Ingress
         self.ingress_analyzer: IngressAnalyzer | None = None
         self._old_cwd: str | None = None
         self._data_dir: str = os.getcwd()
@@ -4240,7 +4240,7 @@ class CommandRunner(App):
         event.stop()
 
     def _data_path(self, name: str) -> str:
-        """Resolve an app data file against the launch directory, not the shell cwd."""
+        """Находит файл данных приложения относительно каталога запуска, а не shell cwd."""
         raw = os.path.expanduser((name or "").strip() or ".")
         if os.path.isabs(raw):
             return os.path.normpath(raw)
@@ -4248,7 +4248,7 @@ class CommandRunner(App):
         return os.path.abspath(os.path.join(home, raw))
 
     def _pin_instance_files(self) -> None:
-        """Keep settings / history / bashrc in the data dir after ``:cd``."""
+        """Удерживает settings / history / bashrc в каталоге данных после ``:cd``."""
         name = getattr(self, "instance_name", None) or INSTANCE_NAME
         self.FILE_SETTINGS = self._data_path("settings.yml")
         self.FILE_HISTORY_LEGACY = self._data_path("history.txt")
@@ -4436,7 +4436,7 @@ class CommandRunner(App):
         if env_term_open:
             self.term_open = normalize_term_mode(env_term_open)
 
-        # Tags DB is the library, not the shell cwd. Pin before init/connect.
+        # БД тегов — это библиотека, а не shell cwd. Фиксируем путь до init/connect.
         self.db_file = self._data_path(self.db_file or self.FILE_DATABASE)
 
         # 2. Инициализация базы данных (файл создаётся, если его нет в клоне)
@@ -4630,7 +4630,7 @@ class CommandRunner(App):
             pass
 
     def _maybe_compact_history(self, *, force: bool = False) -> tuple[int, int, bool] | None:
-        """Shrink old duplicate lines in history_<instance>.txt. None if the file is missing."""
+        """Сжимает старые дубли строк в history_<instance>.txt. None, если файла нет."""
         if not os.path.exists(self.FILE_HISTORY):
             return None
         before, after, changed = compact_history_file(
@@ -4645,7 +4645,7 @@ class CommandRunner(App):
         return before, after, changed
 
     def _handle_history_compact(self) -> None:
-        """`:h compact` — unique old history; keep the recent tail intact."""
+        """`:h compact` — уникализировать старую историю, не трогая свежий хвост."""
         if self.history_keep <= 0:
             self.add_block(InfoBlock(
                 "History compaction is off (history_keep: 0 in settings.yml)."
@@ -4882,7 +4882,7 @@ class CommandRunner(App):
             driver = getattr(self, "_driver", None)
             if driver is None:
                 return
-            # 1=disambiguate, 8=report all keys as escape codes → CSI 13;2u
+            # 1=различать клавиши, 8=все клавиши как escape-коды → CSI 13;2u
             driver.write("\x1b[>9u")
             driver.write("\x1b[>4;2m")  # xterm modifyOtherKeys=2
             driver.flush()
@@ -5033,7 +5033,7 @@ class CommandRunner(App):
             self._completion_list.hide()
 
     def insert_input_at_cursor(self, text: str) -> None:
-        """Insert text at the input cursor. Does not replace the line or steal focus."""
+        """Вставляет текст в позицию курсора ввода. Не заменяет строку и не забирает фокус."""
         chunk = text or ""
         if not chunk:
             return
@@ -5531,10 +5531,10 @@ class CommandRunner(App):
         [underline], [/underline], [strike], [/strike], [code], [/code] и т.д.
         НЕ трогает содержимое в квадратных скобках: <1>, [1], deploy[tid] и т.д.
 
-        Args:
+        Аргументы:
             text: Текст с тегами форматирования
 
-        Returns:
+        Возвращает:
             Текст без тегов форматирования
         """
         return RE_FORMATTING_TAGS.sub('', text)
@@ -5802,7 +5802,7 @@ class CommandRunner(App):
         """
         Открывает JSON viewer для указанного файла.
 
-        Args:
+        Аргументы:
             filename: Путь к JSON файлу
         """
         try:
@@ -6000,7 +6000,7 @@ class CommandRunner(App):
             self.handle_normal_command(user_input, no_timeout=no_timeout, record_history=not no_timeout)
 
     def _contains_live_secret(self, text: str) -> bool:
-        """True when text contains a value that must not enter command history."""
+        """True, если текст содержит значение, которое не должно попасть в историю команд."""
         return self._mask_secrets(text) != text
 
     def log_to_history(self, command: str) -> None:
@@ -6192,7 +6192,7 @@ class CommandRunner(App):
     }
 
     def _handle_explain_command(self, args: list[str]) -> None:
-        """`:explain <command>` — offline structural explanation; never runs it."""
+        """`:explain <command>` — офлайн-разбор структуры; саму команду не запускает."""
         command = " ".join(args).strip()
         if not command:
             self.add_block(InfoBlock(t("explain.usage")))
@@ -6200,10 +6200,10 @@ class CommandRunner(App):
         self.add_block(InfoBlock(self._mask_secrets(explain.format_explanation(command))))
 
     def _handle_learn_command(self, args: list[str]) -> None:
-        """`:learn [task|hint|check|stop]` — session-local guided exercises.
+        """`:learn [task|hint|check|stop]` — учебные упражнения в рамках сессии.
 
-        Nothing is executed on the learner's behalf: they run a real read-only
-        command in the prompt, and `check` only inspects that finished block.
+        За учащегося ничего не выполняется: он сам запускает настоящую read-only
+        команду в приглашении, а `check` лишь смотрит готовый блок.
         """
         if not args:
             self.add_block(InfoBlock(learn.format_list()))
@@ -6242,7 +6242,7 @@ class CommandRunner(App):
         self.add_block(InfoBlock(learn.format_start(lesson)))
 
     def _handle_safe_command(self, args: list[str]) -> None:
-        """`:safe [on|off]` — session-only opt-in safe execution mode."""
+        """`:safe [on|off]` — безопасный режим, включаемый на сессию по желанию."""
         if len(args) > 1:
             self.add_block(InfoBlock(t("safe.usage")))
             return
@@ -6624,11 +6624,11 @@ class CommandRunner(App):
         self._handle_gui_open(self.CMD_TERM, rest)
 
     def _show_welcome_catalog(self) -> None:
-        """Same seed catalog as a fresh empty database."""
+        """Тот же каталог сидов, что и у свежей пустой базы."""
         self.add_block(InfoBlock(format_empty_db_hint(self.db_file)))
 
     def _handle_gui_open(self, command: str, args: list[str]) -> None:
-        """Open a file manager or system terminal in a new window at cwd or path."""
+        """Открывает файловый менеджер или системный терминал в новом окне в cwd или по пути."""
         if len(args) > 1:
             self.add_block(InfoBlock(f"Usage: :{command} [path]"))
             return
@@ -6795,7 +6795,7 @@ class CommandRunner(App):
             pass
 
     def _handle_env_reload(self, args: list[str]) -> None:
-        """Re-read `.bashrc_term*` (and `~/.bashrc` aliases) into this process."""
+        """Перечитывает `.bashrc_term*` (и алиасы `~/.bashrc`) в текущий процесс."""
         if args:
             self.add_block(InfoBlock("Usage: :env"))
             return
@@ -6818,7 +6818,7 @@ class CommandRunner(App):
             os.environ.pop(key, None)
 
     def _adopt_tty_cwd(self, pwd: str) -> str | None:
-        """Match the TUI cwd to the TTY shell's $PWD. None if unchanged/invalid."""
+        """Синхронизирует cwd TUI с $PWD TTY-shell. None, если не изменился или путь неверен."""
         if not pwd or not os.path.isdir(pwd):
             return None
         target = os.path.abspath(pwd)
@@ -6837,7 +6837,7 @@ class CommandRunner(App):
         return os.getcwd()
 
     def _ingest_tty_session(self, env_path: str, pwd_path: str, before: Mapping[str, str]) -> list[str]:
-        """Reload `.bashrc_term*`, overlay TTY exports, adopt child cwd."""
+        """Перечитывает `.bashrc_term*`, накладывает экспорт TTY, перенимает cwd."""
         self.load_bashrc()
         dumped = load_env_dump(env_path)
         updates: dict[str, str] = {}
@@ -6855,7 +6855,7 @@ class CommandRunner(App):
         return format_env_followup(names, new_cwd)
 
     def _handle_audit_command(self, args: list[str]) -> None:
-        """:audit [N] — show recent content-free library mutation records."""
+        """:audit [N] — показывает недавние записи об изменениях библиотеки без содержимого."""
         if len(args) > 1:
             self.add_block(InfoBlock("Usage: :audit [N]"))
             return
@@ -6879,7 +6879,7 @@ class CommandRunner(App):
     def _audit_library_change(
         self, action: str, tags: list[str] | tuple[str, ...], count: int
     ) -> None:
-        """Best-effort metadata-only audit; audit failure never blocks a DB mutation."""
+        """Аудит только метаданных по возможности; сбой аудита не блокирует изменение БД."""
         library_audit.record_event(self._data_dir or ".", action, tags=tags, count=count)
 
     def _handle_backup_command(self, args: list[str]) -> None:
@@ -6946,9 +6946,9 @@ class CommandRunner(App):
             self.add_block(InfoBlock(text), follow_end=follow_end)
 
     def action_insert_colon_draft(self, name: str = "") -> None:
-        """Click a command in `:?` — insert `:command ` at the input cursor.
+        """Клик по команде в `:?` — вставить `:command ` в позицию курсора ввода.
 
-        Same contract as `!tag` links in `??`: кладём текст во ввод и ничего не
+        Тот же контракт, что и у ссылок `!tag` в `??`: кладём текст во ввод и ничего не
         запускаем (аргументы и Enter — за пользователем). Строку не затираем.
         """
         command = (name or "").strip().lstrip(":")
@@ -6958,7 +6958,7 @@ class CommandRunner(App):
         self.query_one(f"#{self.ID_INPUT}", CommandLineInput).focus()
 
     def action_insert_seed_command(self, script: str = "") -> None:
-        """Insert a handbook --seed command into the input (click from welcome)."""
+        """Вставляет команду `--seed` справочника во ввод (клик из приветствия)."""
         name = (script or "").strip()
         if name not in KNOWN_SEED_SCRIPTS:
             return
@@ -6966,9 +6966,9 @@ class CommandRunner(App):
         self.call_after_refresh(self.action_focus_input)
 
     def action_insert_bang_draft(self, tag: str = "", tid: str = "") -> None:
-        """Click a tag / tag[tid] in ?? — insert ``!tag `` or ``!tag[tid] `` at the cursor.
+        """Клик по тегу / tag[tid] в ?? — вставить ``!tag `` или ``!tag[tid] `` в позицию курсора.
 
-        Never replaces the input line (so assembling a command is not wiped).
+        Никогда не заменяет строку ввода (чтобы собираемая команда не затиралась).
         Ctrl+клик и двойной клик по `!tag[tid]` — вставить и сразу выполнить
         (просит `note_block_link_click`). Ссылка без tid не выполняется: `!tag `
         сама по себе не команда. На двойной клик брокер `@click` приходит
@@ -7033,12 +7033,12 @@ class CommandRunner(App):
         )
 
     def action_open_handbook_md(self, filename: str = "") -> None:
-        """Open markdown: repo handbook basename or an explicit path (vault).
+        """Открывает markdown: имя справочника из репозитория или явный путь (vault).
 
-        Basename lookups stay inside the repo (`handbook_md_path`); an explicit
-        path (absolute, or relative to `md_dir`/cwd) is resolved by
-        `resolve_md_path` — so `:rg` results and Obsidian-vault files open too.
-        `#L<line>` at the end (`note.md#L42`) jumps to that source line.
+        Поиск по basename остаётся внутри репозитория (`handbook_md_path`); явный
+        путь (абсолютный или относительно `md_dir`/cwd) разрешает
+        `resolve_md_path` — поэтому открываются и результаты `:rg`, и файлы
+        Obsidian-vault. `#L<line>` в конце (`note.md#L42`) переходит на эту строку.
         """
         name = (filename or "").strip()
         if not name:
@@ -7607,7 +7607,7 @@ class CommandRunner(App):
         self.set_timer(3, self.clear_subtitle)
 
     def _handle_playbook_command(self, args: list[str]) -> None:
-        """Write this session's typed commands as a --demo YAML playbook."""
+        """Записывает набранные в этой сессии команды как `--demo` YAML-плейбук."""
         if args and args[0] == "clear":
             n = len(self._playbook_log)
             self._playbook_log.clear()
@@ -7775,7 +7775,7 @@ class CommandRunner(App):
         return load_pins(self._data_dir or ".", self.instance_name)
 
     def _handle_pin_command(self, args: list[str]) -> None:
-        """Manage this session's favorite tags (no shared DB mutation)."""
+        """Управляет избранными тегами этой сессии (без изменений в общей БД)."""
         verb = args[0].strip().lower() if args else "list"
         tags, error = self._load_tag_pins()
         if error:
@@ -7813,7 +7813,7 @@ class CommandRunner(App):
         self.add_block(InfoBlock(t("pins.updated", tags=", ".join(tags) or t("pins.none"))))
 
     def _handle_tags_command(self, args: list[str]) -> None:
-        """Filterable catalog of live tags and their metadata."""
+        """Каталог живых тегов и их метаданных с фильтрацией."""
         needle = " ".join(args).strip().casefold()
         pins, pin_error = self._load_tag_pins()
         if pin_error:
@@ -7847,7 +7847,7 @@ class CommandRunner(App):
         self.add_block(InfoBlock("\n".join(lines)))
 
     def _profile_payload(self, name: str) -> dict[str, object]:
-        """Build a profile without copying environment or vault values."""
+        """Собирает профиль, не копируя значения окружения или vault."""
         namespace = self.local_env.get("NS") or os.environ.get("NS")
         payload: dict[str, object] = {
             "version": 1,
@@ -7881,7 +7881,7 @@ class CommandRunner(App):
         return ", ".join(parts)
 
     def _handle_profile_command(self, args: list[str]) -> None:
-        """`:profile` — save and apply non-secret runtime context references."""
+        """`:profile` — сохраняет и применяет ссылки на несекретный контекст выполнения."""
         usage = t("profile.usage")
         if not args:
             names, error = list_profiles(self._data_dir or ".")
@@ -7948,7 +7948,7 @@ class CommandRunner(App):
         self.add_block(InfoBlock(t("profile.applied", name=escape(name), details=escape(self._profile_summary(profile)))))
 
     def _handle_tagmeta_command(self, args: list[str]) -> None:
-        """Show or replace validated metadata for a tag."""
+        """Показывает или заменяет проверенные метаданные тега."""
         if not args:
             self.add_block(InfoBlock(t("tag_metadata.usage")))
             return
@@ -8054,7 +8054,7 @@ class CommandRunner(App):
         )
 
     def _unload_session_env(self) -> None:
-        """Drop instance env so the next load_bashrc does not leak old $VAR."""
+        """Сбрасывает окружение экземпляра, чтобы следующий load_bashrc не тянул старую $VAR."""
         for key, value in list(self.local_env.items()):
             if os.environ.get(key) == value:
                 os.environ.pop(key, None)
@@ -8482,7 +8482,7 @@ class CommandRunner(App):
         return idle if idle > 0 else 0.0
 
     def _bump_screensaver_idle(self) -> None:
-        """Restart the idle timer. 0 in settings.yml disables the screensaver."""
+        """Перезапускает таймер простоя. 0 в settings.yml отключает заставку."""
         self._ss_bumped_at = time.monotonic()  # последняя активность
         if self._ss_timer is not None:
             try:
@@ -8552,7 +8552,7 @@ class CommandRunner(App):
         self._bump_screensaver_idle()
 
     def _handle_screensaver_command(self, args: list[str]) -> None:
-        """`:screensaver` preview; `:screensaver 0` / `:screensaver 120` set idle seconds;
+        """`:screensaver` — предпросмотр; `:screensaver 0` / `:screensaver 120` — секунды простоя;
         `:screensaver matrix` / `:screensaver stars` — выбрать холст на эту сессию."""
         if args:
             raw = args[0].strip().lower()
@@ -8611,7 +8611,7 @@ class CommandRunner(App):
             return None
 
     def _start_update_check(self, *, always_report: bool) -> None:
-        """Background GitHub version check. Startup only notifies if main is newer."""
+        """Фоновая проверка версии на GitHub. При запуске уведомляет, только если main новее."""
         if not always_report:
             if not self.check_updates or self._demo_scenario:
                 return
@@ -8690,20 +8690,20 @@ class CommandRunner(App):
 
     def handle_ingress_command(self, args: str) -> None:
         """
-        Handle Kubernetes Ingress analysis commands.
+        Обрабатывает команды анализа Kubernetes Ingress.
 
-        Formats:
-            :i                  - Show help
-            :i list             - List all ingresses
-            :i analyze <name>   - Analyze specific ingress
-            :i analyze <name> -n <ns>  - Analyze in namespace
-            :i check <svc>      - Check service endpoints
+        Форматы:
+            :i                  - Показать справку
+            :i list             - Список всех ingress
+            :i analyze <name>   - Разобрать конкретный ingress
+            :i analyze <name> -n <ns>  - Разобрать в namespace
+            :i check <svc>      - Проверить endpoints сервиса
         """
         if not args:
             self._show_ingress_help()
             return
 
-        # Lazy initialize analyzer
+        # Ленивая инициализация анализатора
         if self.ingress_analyzer is None:
             self.ingress_analyzer = IngressAnalyzer(
                 timeout=self.COMMAND_TIMEOUT * 3 if self.COMMAND_TIMEOUT else 90
@@ -8752,17 +8752,17 @@ class CommandRunner(App):
 
     def _extract_namespace_from_args(self, parts: list[str], save_to_var: bool = True) -> str | None:
         """
-        Extract -n <namespace> from command arguments and substitute variables.
+        Извлекает -n <namespace> из аргументов команды и подставляет переменные.
 
-        Args:
-            parts: Command parts
-            save_to_var: If True, save namespace to $NS variable
+        Аргументы:
+            parts: части команды
+            save_to_var: если True, сохранить namespace в переменную $NS
 
-        Returns:
-            Namespace string or None
+        Возвращает:
+            Строку namespace или None
 
-        Raises:
-            ValueError: If -n flag is present without a namespace value
+        Исключения:
+            ValueError: если флаг -n указан без значения namespace
         """
         try:
             n_index = parts.index("-n")
@@ -8770,9 +8770,9 @@ class CommandRunner(App):
                 namespace = parts[n_index + 1]
                 if namespace.startswith("-"):
                     raise ValueError("Missing namespace after -n. Usage: -n <namespace>")
-                # Substitute variables like $NS
+                # Подставляем переменные вида $NS
                 namespace = self._substitute_variables(namespace)
-                # Save to $NS variable for subsequent commands
+                # Сохраняем в переменную $NS для последующих команд
                 if save_to_var and namespace:
                     self.local_env["NS"] = namespace
                     os.environ["NS"] = namespace
@@ -8781,11 +8781,11 @@ class CommandRunner(App):
         except ValueError:
             if "-n" in parts:
                 raise
-        # Fallback to $NS if set and -n not specified
+        # Откат на $NS, если она задана, а -n не указан
         return self.local_env.get("NS") or os.environ.get("NS")
 
     def _show_main_help(self) -> None:
-        """Show main help for all commands.
+        """Показывает основную справку по всем командам.
 
         Сначала экранируем разметку (`[bold]` — единственное, что остаётся),
         потом подставляем кликабельные `:команды` — иначе ссылки попали бы под
@@ -8830,12 +8830,12 @@ class CommandRunner(App):
         self._show_help_topic(topic)
 
     def _show_ingress_help(self) -> None:
-        """Show ingress command help."""
+        """Показывает справку по командам ingress."""
         self._add_help_block(ingress_help())
 
 
     def _list_ingresses(self, namespace: str | None = None) -> None:
-        """List ingresses in namespace or all namespaces."""
+        """Перечисляет ingress в namespace или во всех namespace."""
         analyzer = self.ingress_analyzer
         if analyzer is None:
             self.add_block(InfoBlock("[red]Error: Ingress analyzer is not initialized.[/red]"))
@@ -8856,7 +8856,7 @@ class CommandRunner(App):
         thread.start()
 
     def _display_ingress_list(self, ingresses, namespace: str | None = None) -> None:
-        """Display list of ingresses."""
+        """Показывает список ingress."""
         ns_display = namespace or "all namespaces"
         if not ingresses:
             self.add_block(InfoBlock(f"[yellow]No ingresses found in '{ns_display}'.[/yellow]"))
@@ -8866,7 +8866,7 @@ class CommandRunner(App):
         for ing in ingresses:
             hosts = ", ".join(ing.hosts) if ing.hosts else "*"
             paths_count = len(ing.paths)
-            # Show namespace only if listing all namespaces
+            # Показываем namespace, только если перечислены все namespace
             if namespace:
                 lines.append(f"  [cyan]{ing.name}[/cyan] → {hosts} ({paths_count} paths)")
             else:
@@ -8876,7 +8876,7 @@ class CommandRunner(App):
         self.add_block(InfoBlock("\n".join(lines)))
 
     def _analyze_ingress(self, name: str, namespace: str | None = None) -> None:
-        """Analyze specific ingress."""
+        """Разбирает конкретный ingress."""
         analyzer = self.ingress_analyzer
         if analyzer is None:
             self.add_block(InfoBlock("[red]Error: Ingress analyzer is not initialized.[/red]"))
@@ -8898,18 +8898,18 @@ class CommandRunner(App):
         thread.start()
 
     def _display_ingress_analysis(self, analysis: dict) -> None:
-        """Display ingress analysis results."""
+        """Показывает результаты анализа ingress."""
         from ingress_analyzer import format_analysis_summary
 
-        # Show summary as InfoBlock
+        # Показываем сводку как InfoBlock
         summary = format_analysis_summary(analysis)
         self.add_block(InfoBlock(summary))
 
-        # Open JSON viewer for detailed view
+        # Открываем JSON-просмотрщик для детального вида
         self.push_screen(JSONViewer(analysis))
 
     def _check_service_endpoints(self, service: str, namespace: str | None = None) -> None:
-        """Check service endpoints."""
+        """Проверяет endpoints сервиса."""
         analyzer = self.ingress_analyzer
         if analyzer is None:
             self.add_block(InfoBlock("[red]Error: Ingress analyzer is not initialized.[/red]"))
@@ -8931,7 +8931,7 @@ class CommandRunner(App):
         thread.start()
 
     def _display_service_info(self, svc_info) -> None:
-        """Display service endpoint information."""
+        """Показывает информацию об endpoints сервиса."""
         lines = [
             f"[bold]Service: {svc_info.name}[/bold] (namespace: {svc_info.namespace})",
             f"Type: {svc_info.type}",
@@ -8951,8 +8951,8 @@ class CommandRunner(App):
         self.add_block(InfoBlock("\n".join(lines)))
 
     def _describe_namespace(self, namespace: str) -> None:
-        """Describe namespace and open in JSON viewer."""
-        # Substitute variables in namespace
+        """Описывает namespace и открывает его в JSON-просмотрщике."""
+        # Подставляем переменные в namespace
         namespace = self._substitute_variables(namespace)
 
         def worker():
@@ -8983,7 +8983,7 @@ class CommandRunner(App):
         thread.start()
 
     def _show_namespace_json(self, data: dict) -> None:
-        """Show namespace data in JSON viewer."""
+        """Показывает данные namespace в JSON-просмотрщике."""
         name = data.get("metadata", {}).get("name", "unknown")
         status = data.get("status", {}).get("phase", "unknown")
         self.add_block(InfoBlock(f"[green]Namespace:[/green] {name} ({status})"))
@@ -10237,10 +10237,10 @@ class CommandRunner(App):
         - !ID на текст команды из БД
         - !! ... на результат сборки команд
 
-        Args:
+        Аргументы:
             command: Строка команды с возможными ссылками
 
-        Returns:
+        Возвращает:
             Строка команды с раскрытыми ссылками или None при ошибке
         """
         # Парсим команду с помощью CommandParser
@@ -10283,10 +10283,10 @@ class CommandRunner(App):
         - Шаг 2: после первого раскрытия ссылок
         - Шаг N: финальная полностью раскрытая команда
 
-        Args:
+        Аргументы:
             command: Исходная команда с возможными ссылками
 
-        Returns:
+        Возвращает:
             Список всех этапов раскрытия или пустой список при ошибке
         """
         steps = [command]
@@ -10562,16 +10562,16 @@ class CommandRunner(App):
     def _clickable_bang_ref(
         self, tag: str, tid: int | None = None, *, prefix: str = ""
     ) -> str:
-        """Rich ``@click`` that inserts ``!tag `` or ``!tag[tid] `` at the input cursor.
+        """``@click`` Rich, вставляющий ``!tag `` или ``!tag[tid] `` в позицию курсора ввода.
 
         Обычный клик — только вставка (строку не затирает). Ctrl+клик или двойной
         клик по `!tag[tid]` — ещё и выполнить: мета-действие модификаторов не
         знает, поэтому намерение доносит `LineNavigable.on_click` (см.
         `CommandRunner.note_block_link_click`).
 
-        Action name is written *without* the ``action_`` prefix: Textual looks up
-        ``action_<name>`` itself, so ``app.action_x`` would resolve to the
-        non-existent ``action_action_x`` and the click would silently do nothing.
+        Имя действия пишется *без* префикса ``action_``: Textual сам ищет
+        ``action_<name>``, поэтому ``app.action_x`` разрешился бы в
+        несуществующий ``action_action_x``, и клик молча ничего не делал.
         """
         if tid is None:
             action = f"app.insert_bang_draft('{tag}')"
@@ -10601,7 +10601,7 @@ class CommandRunner(App):
         return line
 
     def _hidden_tags_section(self) -> str:
-        """?? / ? footer: fully hidden tags and how to restore them."""
+        """Футер ?? / ?: полностью скрытые теги и как их вернуть."""
         hidden = database.get_hidden_tags(self.db_file)
         if not hidden:
             return ""
@@ -11486,7 +11486,7 @@ class CommandRunner(App):
         return True
 
     def _show_library_history_search(self, pattern: str) -> None:
-        """`:h tags /text` — search live library commands/comments, without executing them."""
+        """`:h tags /text` — поиск по живым командам/комментариям библиотеки без запуска."""
         needle = (pattern or "").strip()
         if not needle:
             self.add_block(InfoBlock("Usage: :h tags /text"))
@@ -11614,7 +11614,7 @@ class CommandRunner(App):
         return True
 
     def _last_output_line(self) -> str:
-        """Last non-empty line of the pipe-source / last CommandBlock. No extra store."""
+        """Последняя непустая строка источника пайпа / последнего CommandBlock. Без хранилища."""
         block = self._output_block_for_placeholder()
         if block is None:
             return ""
@@ -12469,7 +12469,7 @@ class CommandRunner(App):
         self._set_terminal_title(label)
 
     def _handle_snapshot_command(self, args: list[str]) -> None:
-        """Store and compare bounded, already-masked stdout snapshots."""
+        """Хранит и сравнивает ограниченные, уже замаскированные снимки stdout."""
         usage = t("snapshot.usage")
         if not self.output_snapshots_enabled:
             self.add_block(InfoBlock(t("snapshot.disabled")))
@@ -12943,7 +12943,7 @@ class CommandRunner(App):
     def _safe_launch(
         self, display_command: str, final_command: str, callback: Callable[[], None]
     ) -> None:
-        """Confirm a frozen expanded launch; the callback never re-expands it."""
+        """Подтверждает заморожённый развёрнутый запуск; callback больше его не раскрывает."""
         risks = safe_mode.command_risks(final_command)
         if not self.safe_mode or not risks:
             callback()
@@ -12961,7 +12961,7 @@ class CommandRunner(App):
         self, command: str, display_command: str, final_command: str,
         stdin_data: str | None, no_timeout: bool, extra_env: Mapping[str, str] | None,
     ) -> None:
-        """Launch an already expanded command after any safe-mode confirmation."""
+        """Запускает уже развёрнутую команду после подтверждения безопасного режима."""
         timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         cwd = os.getcwd()
         try:
@@ -12990,7 +12990,7 @@ class CommandRunner(App):
         thread.start()
 
     def run_command(self, command: str, stdin_data: str | None = None, *, no_timeout: bool = False, extra_env: Mapping[str, str] | None = None) -> None:
-        """Expand once, then run (or confirm) that exact command asynchronously."""
+        """Раскрывает один раз, затем асинхронно запускает (или подтверждает) именно эту команду."""
         display_command = self._expand_aliases(self._substitute_variables(command))
         final_command = self._expand_aliases(
             self._substitute_variables(command, keep_secrets=True)
@@ -13337,7 +13337,7 @@ def validate_instance_name(name: str) -> str | None:
 
 
 def list_session_names(directory: str = ".") -> list[str]:
-    """Names that already have history or bashrc files in the data dir, plus the current one."""
+    """Имена, у которых уже есть файлы history или bashrc в каталоге данных, плюс текущее."""
     names = {INSTANCE_NAME}
     try:
         for entry in os.listdir(directory):

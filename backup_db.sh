@@ -1,6 +1,7 @@
 #!/bin/bash
-# One-button backup/restore over the CLI: `python3 backup_db.py backup|restore`.
-# Usage: ./backup_db.sh [backup | restore <file.json|file.csv>]
+# Резервное копирование и восстановление одной кнопкой поверх CLI:
+# `python3 backup_db.py backup|restore`.
+# Использование: ./backup_db.sh [backup | restore <file.json|file.csv>]
 #
 # Вся логика — в `src/backup_db.py` (`backup` = снимок SQLite + JSON + CSV,
 # `restore` = вернуть файл в базу со снимком до операции). Здесь только ярлык.

@@ -449,7 +449,7 @@ TOOLS: tuple[dict[str, Any], ...] = (
 TOOL_BY_NAME = {str(tool["name"]): tool for tool in TOOLS}
 
 
-# --- JSON-RPC ----------------------------------------------------------------
+# --- JSON-RPC (протокол) -----------------------------------------------------
 
 
 def _result(ident: Any, result: dict[str, Any]) -> dict[str, Any]:

@@ -165,7 +165,7 @@ async def test_json_var_usable_in_command(isolated_home):
         await submit(pilot, "echo $JSON")
         block = await wait_command_done(app)
         assert jq_path in block.raw_stdout
-        # Input should be empty after submit, not leftover search text.
+        # После submit ввод пуст, а не содержит остатки текста поиска.
         assert input_widget(app).value == ""
-        # Search input from viewer must not leak; command input exists.
+        # Поле поиска из просмотрщика не должно протекать; поле ввода команды на месте.
         assert app.query_one("#command-input", Input)

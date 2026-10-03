@@ -1,4 +1,4 @@
-"""OS defaults and $FILEMAN / $TERMINAL overrides for :fm / :term."""
+"""Системные умолчания и переопределения $FILEMAN / $TERMINAL для :fm / :term."""
 import subprocess
 
 import pytest

@@ -1,4 +1,4 @@
-"""Handbook name → tags for #name-- / #name!! group hide/restore."""
+"""Имя справочника → теги для скрытия/восстановления группы #name-- / #name!!."""
 from __future__ import annotations
 
 _GROUPS: dict[str, tuple[str, ...]] | None = None
@@ -6,7 +6,7 @@ _TAG_TO_GROUP: dict[str, str] | None = None
 
 
 def handbook_groups() -> dict[str, tuple[str, ...]]:
-    """Seed module names (plus linux / k8s / git) mapped to their tags."""
+    """Имена модулей сидов (плюс linux / k8s / git) в сопоставлении с их тегами."""
     global _GROUPS, _TAG_TO_GROUP
     if _GROUPS is None:
         import seed_git
@@ -31,12 +31,12 @@ def handbook_groups() -> dict[str, tuple[str, ...]]:
 
 
 def group_tags(name: str) -> tuple[str, ...] | None:
-    """Tags for a handbook, or None if the name is unknown."""
+    """Теги справочника или None, если имя неизвестно."""
     return handbook_groups().get(name)
 
 
 def group_for_tag(tag: str) -> str | None:
-    """Handbook that owns this tag, if any."""
+    """Справочник, которому принадлежит этот тег, если есть."""
     handbook_groups()
     assert _TAG_TO_GROUP is not None
     return _TAG_TO_GROUP.get(tag)

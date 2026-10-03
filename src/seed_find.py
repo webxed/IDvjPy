@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Seed find handbook tags (see SEED_FIND_COMMANDS.md).
+Справочник find (см. SEED_FIND_COMMANDS.md).
 
-Playbooks list/count only. -delete is not in playbooks.
-Does not touch linux `file`.
+Плейбуки только перечисляют и считают. `-delete` в плейбуках нет.
+Не трогает linux `file`.
 
-Run: python3 src/seed_find.py --seed
+Запуск: python3 src/seed_find.py --seed
 """
 import sys
 

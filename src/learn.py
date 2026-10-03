@@ -1,9 +1,9 @@
-"""Small offline DevOps exercises for ``:learn``.
+"""Небольшие офлайн-упражнения по DevOps для ``:learn``.
 
-The module is deliberately declarative: it never runs a proposed command.  The
-learner executes a real read-only command in the normal prompt, and
-``:learn check`` only inspects that finished command block (its shape and exit
-code — not the meaning of arbitrary output, and not a safety proof).
+Модуль намеренно декларативный: он никогда не запускает предложенную команду.
+Обучающийся выполняет настоящую read-only команду в обычном приглашении, а
+``:learn check`` лишь проверяет уже готовый блок команды (его форму и код
+возврата — не смысл произвольного вывода и не доказательство безопасности).
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from i18n import t
 
 @dataclass(frozen=True)
 class Lesson:
-    """One exercise: a name, a short task key and progressive hints."""
+    """Одно упражнение: имя, краткий ключ задачи и постепенные подсказки."""
 
     name: str
     hints: tuple[str, ...] = field(default_factory=tuple)
@@ -38,7 +38,7 @@ _BY_NAME = {lesson.name: lesson for lesson in LESSONS}
 
 
 class CommandEvidence(Protocol):
-    """The read-only portion of a finished CommandBlock used by ``check``."""
+    """Read-only часть готового CommandBlock, используемая ``check``."""
 
     source_command: str
     return_code: int
@@ -77,7 +77,7 @@ def format_start(lesson: Lesson) -> str:
 
 
 def format_hint(lesson: Lesson, index: int) -> tuple[str, int]:
-    """Return a progressively more concrete hint and the next index (capped)."""
+    """Вернуть всё более конкретную подсказку и следующий индекс (с ограничением)."""
     hint_index = min(max(index, 0), len(lesson.hints) - 1)
     key = f"learn.hint.{lesson.name}.{hint_index + 1}"
     return _localized_or(key, lesson.hints[hint_index]), min(hint_index + 1, len(lesson.hints))
@@ -121,7 +121,7 @@ def _is_sqlite_select(args: list[str]) -> bool:
     sql = args[2].strip().removesuffix(";").rstrip()
     if not sql.lower().startswith("select "):
         return False
-    # A single SELECT statement only; reject shell chaining and trailing SQL.
+    # Только один оператор SELECT; отклоняем цепочки shell и SQL после него.
     if any(token in sql for token in (";", "&&", "||", "|", "`", "$")):
         return False
     return True
@@ -142,7 +142,7 @@ def _matches(lesson: Lesson, tokens: list[str]) -> bool:
 
 
 def check(lesson: Lesson, block: CommandEvidence | None) -> str:
-    """Assess one finished user command; never launch or repeat anything."""
+    """Оценить одну выполненную команду пользователя; ничего не запускать и не повторять."""
     if block is None:
         return t("learn.no_command")
     if block.pending:

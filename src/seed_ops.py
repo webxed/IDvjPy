@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-Seed all operational handbooks at once:
+Наполняет сразу все операционные справочники:
 
   docker, helm, ansible, http (curl/nginx/traefik), netfw (ss/iptables/nft/firewalld),
   ip/ethtool, netdbg (tcpdump/nc/mtr/tls), data (postgres/kafka), host (tar/gz/zip),
   disk (df/du/lsblk/smartctl), systemd (systemctl/journalctl/dmesg),
   sysinfo (lsof/strace), sysstat (vmstat/iostat), vault, text (grep/awk/sed),
   pipe (sort/jq), rsync, find, recon (dig/nmap), ssh/scp, pkg (apt/dnf/rpm),
-  user (id/chmod), sqlite (the library database itself).
+  user (id/chmod), sqlite (саму библиотечную базу).
 
-Does not run linux / k8s / git seeds.
+Не запускает сиды linux / k8s / git.
 
-Run: python3 src/seed_ops.py --seed
+Запуск: python3 src/seed_ops.py --seed
 """
 import argparse
 import sys

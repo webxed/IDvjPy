@@ -1,4 +1,4 @@
-"""Shared helpers for handbook seed scripts (git, docker, helm, …)."""
+"""Общие помощники для seed-скриптов справочников (git, docker, helm, …)."""
 from __future__ import annotations
 
 import argparse
@@ -26,12 +26,12 @@ DEFAULT_BACKUP_DIR = "backups"
 SEED_TEXT_DIR = Path(__file__).resolve().parent / "seed_text"
 DEFAULT_SEED_LANG = "en"
 
-# One SQLite snapshot per database path per process (seed_ops runs many modules).
+# Один снимок SQLite на путь к базе за процесс (seed_ops запускает много модулей).
 _BACKED_UP: dict[str, Path | None] = {}
 
 
 def reset_seed_backup_cache() -> None:
-    """Tests: allow a second snapshot of the same path in one process."""
+    """Тесты: разрешить второй снимок того же пути в одном процессе."""
     _BACKED_UP.clear()
 
 
@@ -95,7 +95,7 @@ def backup_dir_for(db_file: str) -> Path:
 
 
 def list_sqlite_backups(db_file: str) -> list[Path]:
-    """Existing SQLite snapshots for this database, newest first."""
+    """Существующие снимки SQLite для этой базы, новые первыми."""
     src = Path(db_file)
     directory = _backup_dir_for(str(src))
     prefix = f"{src.stem}-"
@@ -108,7 +108,7 @@ def list_sqlite_backups(db_file: str) -> list[Path]:
 
 
 def restore_sqlite_backup(db_file: str, backup_file: str) -> Path | None:
-    """Restore a selected snapshot after saving the current live DB first."""
+    """Восстановить выбранный снимок, сначала сохранив текущую рабочую БД."""
     allowed_dir = _backup_dir_for(db_file).resolve()
     source = Path(backup_file)
     if not source.is_absolute():
@@ -163,10 +163,10 @@ def backup_sqlite(
     quiet: bool = False,
     pre: bool = False,
 ) -> Path | None:
-    """Copy the live DB into ``backup_dir``.
+    """Скопировать рабочую БД в ``backup_dir``.
 
-    ``once`` (seed): the same file is snapshotted at most once per process.
-    ``pre``: filename ``<stem>-pre-<label>-<stamp>.db`` (seed); else ``<stem>-<label>-<stamp>.db``.
+    ``once`` (seed): один и тот же файл снимается не более одного раза за процесс.
+    ``pre``: имя файла ``<stem>-pre-<label>-<stamp>.db`` (seed); иначе ``<stem>-<label>-<stamp>.db``.
     """
     src = Path(db_file)
     if not src.is_file():
@@ -209,10 +209,10 @@ def backup_sqlite_before_seed(
     *,
     remember_empty: bool = False,
 ) -> Path | None:
-    """Copy the live DB into ``backup_dir`` before a replace.
+    """Скопировать рабочую БД в ``backup_dir`` перед заменой.
 
-    Skips an empty database. The same file is snapshotted at most once per process
-    so ``seed_ops.py`` does not write twenty copies.
+    Пропускает пустую базу. Один и тот же файл снимается не более одного раза
+    за процесс, чтобы ``seed_ops.py`` не наплодил двадцать копий.
     """
     return backup_sqlite(
         db_file,
@@ -345,12 +345,12 @@ def run_seed(
     label: str = "seed",
     metadata: dict[str, dict] | None = None,
 ) -> int:
-    """Replace tags in seed_tags; return number of commands inserted.
+    """Заменить теги из seed_tags; вернуть число вставленных команд.
 
-    ``metadata`` (tag → validated dict) is written through the single writer
-    ``database.set_tag_metadata`` after the tag is (re)seeded, so a repeated
-    ``--seed`` keeps the annotation instead of resetting it to ``'{}'``.
-    Machine tokens (utilities/os/topic/example) are not translated.
+    ``metadata`` (tag → проверенный dict) пишется через единственный писатель
+    ``database.set_tag_metadata`` после (пере)сева тега, поэтому повторный
+    ``--seed`` сохраняет аннотацию, а не сбрасывает её в ``'{}'``.
+    Машинные токены (utilities/os/topic/example) не переводятся.
     """
     backup_sqlite_before_seed(db_file, label)
     database.init_db(db_file)

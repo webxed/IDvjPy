@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Seed HTTP handbook: curl, nginx, traefik (see SEED_HTTP_COMMANDS.md).
+Справочник HTTP: curl, nginx, traefik (см. SEED_HTTP_COMMANDS.md).
 
-Does not touch the linux `net` tag (basic curl -sI stays there).
+Не трогает linux-тег `net` (базовый curl -sI остаётся там).
 
-Run: python3 src/seed_http.py --seed
+Запуск: python3 src/seed_http.py --seed
 """
 import sys
 

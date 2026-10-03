@@ -156,7 +156,7 @@ def library_overview(db_file: str) -> list[tuple[str, int, str]]:
     return [(row["tag"], int(row["n"]), row["comment"] or "") for row in rows]
 
 
-# --- JSON --------------------------------------------------------------------
+# --- JSON (перенос) ----------------------------------------------------------
 
 
 def export_json(
@@ -488,7 +488,7 @@ def import_payload(
     return result
 
 
-# --- CSV ---------------------------------------------------------------------
+# --- CSV (перенос) -----------------------------------------------------------
 
 
 def export_commands_csv(
@@ -609,7 +609,7 @@ def import_tags_csv(db_file: str, path: str) -> ImportResult:
     return ImportResult(0, updated, skipped, tuple(sorted(tags)))
 
 
-# --- Markdown ----------------------------------------------------------------
+# --- Markdown (экспорт) ------------------------------------------------------
 
 
 def _md_inline(text: str) -> str:

@@ -1,8 +1,8 @@
-"""Safe-mode heuristics: pure shlex inspection, no execution.
+"""Эвристики safe-mode: только разбор через shlex, без запуска.
 
-The detector is intentionally a heuristic: these tests pin what it *does*
-recognize and, just as importantly, that quoted text is data and that a clean
-result is not treated as a safety guarantee.
+Детектор намеренно эвристичен: эти тесты фиксируют, что он *умеет* распознавать,
+и, что не менее важно, что текст в кавычках — это данные, а чистый результат
+не считается гарантией безопасности.
 """
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def test_recognizes_common_destructive_operations(command, expected):
         "terraform plan",
         "helm list",
         "git status",
-        "git push --dry-run",  # still push; asserted separately below
+        "git push --dry-run",  # всё равно push; проверяется отдельно ниже
     ],
 )
 def test_safe_or_unknown_commands_are_not_flagged(command):
@@ -55,7 +55,7 @@ def test_safe_or_unknown_commands_are_not_flagged(command):
 
 def test_sqlite_select_and_string_literals_are_not_mutations():
     assert command_risks('sqlite3 db "SELECT * FROM commands"') == ()
-    # DELETE inside a quoted SQL literal is data, not a statement.
+    # DELETE внутри строкового литерала SQL — данные, а не инструкция.
     assert command_risks("sqlite3 db \"SELECT 'DELETE FROM t'\"") == ()
 
 

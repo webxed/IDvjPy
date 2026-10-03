@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Seed text-filter handbook: grep, awk, sed (see SEED_TEXT_COMMANDS.md).
+Справочник текстовых фильтров: grep, awk, sed (см. SEED_TEXT_COMMANDS.md).
 
-Playbooks print to stdout. sed -i is not in playbooks.
+Плейбуки печатают в stdout. sed -i в плейбуках нет.
 
 Run: python3 src/seed_text.py --seed
 """

@@ -418,8 +418,8 @@ async def _wait_step(app: Any, before: Any, *, human: bool) -> StepResult:
     """
     submits_before = _submits(app)
     while _running(app):
-        # A safe-mode modal may cancel an auto launch before it creates a block.
-        # Wake the player so it can end rather than wait forever for one.
+        # Модалка безопасного режима может отменить автозапуск до создания блока.
+        # Будим проигрыватель, чтобы он мог завершиться, а не ждать блок вечно.
         if getattr(app, "_safe_runbook_cancelled", False):
             return StepResult()
         block = _last_block(app)

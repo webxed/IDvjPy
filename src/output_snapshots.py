@@ -1,4 +1,4 @@
-"""Bounded, secret-safe output snapshots kept outside the tag database."""
+"""Ограниченные, безопасные для секретов снимки вывода вне базы тегов."""
 from __future__ import annotations
 
 import json
@@ -16,7 +16,7 @@ _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 
 
 class SnapshotError(ValueError):
-    """Invalid name or snapshot store."""
+    """Некорректное имя или хранилище снимков."""
 
 
 def validate_name(name: str) -> str:

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Seed host-info / lsof / strace handbook (see SEED_SYSINFO_COMMANDS.md).
+Справочник host-info / lsof / strace (см. SEED_SYSINFO_COMMANDS.md).
 
-Playbooks are inspect-only and time-bounded: no live strace -p without timeout.
-Does not touch linux `proc` (ps/top/kill) or netfw `ss`.
+Плейбуки только для чтения и с ограничением по времени: без живого strace -p без timeout.
+Не трогает linux `proc` (ps/top/kill) и netfw `ss`.
 
-Run: python3 src/seed_sysinfo.py --seed
+Запуск: python3 src/seed_sysinfo.py --seed
 """
 import sys
 

@@ -1,9 +1,10 @@
-"""Release metadata: docs and tests must name the current CommandRunner.VERSION.
+"""Метаданные release: документация и тесты должны называть текущую CommandRunner.VERSION.
 
-Keeps the manual "version = commit" bump honest: the app version lives in
-src/app.py and README / CLAUDE / AGENTS / COMPACT_SUMMARY / test_cmd.md must
-follow it in one commit. ``:update`` compares the same VERSION string with
-GitHub main, so a doc/app drift would mislead the update check.
+Держит ручное правило «версия = коммит» честным: версия приложения живёт в
+src/app.py, а README / CLAUDE / AGENTS / COMPACT_SUMMARY / test_cmd.md должны
+следовать за ней в одном коммите. ``:update`` сравнивает ту же строку VERSION
+с main на GitHub, поэтому расхождение документа и приложения вводило бы в
+заблуждение проверку обновлений.
 """
 import re
 from pathlib import Path
@@ -39,7 +40,7 @@ def test_compact_summary_names_version():
     text = (ROOT / "COMPACT_SUMMARY.md").read_text(encoding="utf-8")
     assert f"Версия: **{CURRENT}**." in text
     assert f"| `src/app.py` | TUI (`CommandRunner`), {CURRENT} |" in text
-    assert f"## {CURRENT}" in text  # changelog section for this release
+    assert f"## {CURRENT}" in text  # раздел changelog для этого релиза
 
 
 def test_claude_names_version_and_next_bump():

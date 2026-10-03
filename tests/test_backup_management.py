@@ -1,4 +1,4 @@
-"""Listing and restoring exact SQLite database snapshots."""
+"""Список и восстановление точных снимков базы SQLite."""
 from __future__ import annotations
 
 import pytest

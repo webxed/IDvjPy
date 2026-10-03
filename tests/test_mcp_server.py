@@ -154,7 +154,7 @@ def test_serve_reports_parse_error_and_keeps_reading(tmp_path):
             json.dumps([]),
         ],
     )
-    assert responses[0]["error"]["code"] == -32700  # Parse error
+    assert responses[0]["error"]["code"] == -32700  # ошибка разбора
     assert responses[1]["result"] == {}
     assert len(responses) == 2  # пустой batch не отвечает
 
@@ -230,8 +230,8 @@ def test_search_commands_filters_by_tag_and_limits(tmp_path):
 def test_list_tags_counts_comments_and_hidden(tmp_path):
     cfg = _seeded(tmp_path)
     text = _text(_call(cfg, "list_tags"))
-    assert "3 tag(s), 18 live command(s), 0 hidden" in text
-    assert "sqlite  (16)" in text and "sqlite3: schema" in text
+    assert "3 tag(s), 20 live command(s), 0 hidden" in text
+    assert "sqlite  (18)" in text and "sqlite3: schema" in text
     database.delete_commands_by_tag(cfg.db_file, "sqlstat")
     hidden = _text(_call(cfg, "list_tags"))
     assert "1 hidden" in hidden and "include_hidden=true" in hidden
@@ -285,8 +285,8 @@ def test_library_stats_reports_usage(tmp_path):
     cfg = _seeded(tmp_path)
     database.bump_command_usage(cfg.db_file, "sqlite3 $DBFILE \".tables\"")
     text = _text(_call(cfg, "library_stats"))
-    assert "18 live, 0 soft-deleted, 3 tag(s)" in text
-    assert "17 never run" in text
+    assert "20 live, 0 soft-deleted, 3 tag(s)" in text
+    assert "19 never run" in text
     assert "most used commands:" in text and "runs: 1" in text
 
 
@@ -365,7 +365,7 @@ def test_launcher_starts_the_server(tmp_path):
     )
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout.splitlines()[-1])
-    assert "3 tag(s), 18 live command(s)" in payload["result"]["content"][0]["text"]
+    assert "3 tag(s), 20 live command(s)" in payload["result"]["content"][0]["text"]
     assert re.search(r"mcp: idvjpy v[0-9.]+", proc.stderr)
     assert str(cfg.db_file) in proc.stderr  # сервер сказал, что читает
 

@@ -1,4 +1,4 @@
-"""Empty-database welcome lists every handbook seed."""
+"""Приветствие для пустой базы перечисляет все handbook-сиды."""
 import pytest
 
 from i18n import t

@@ -388,7 +388,7 @@ async def test_instance_name_uses_separate_history_file(isolated_home, monkeypat
 
 
 async def test_colon_session_creates_and_switches(isolated_home):
-    """`:session NAME` creates files on the fly; env and history stay per instance."""
+    """`:session NAME` создаёт файлы на ходу; окружение и история — у каждой сессии свои."""
     import os
     from pathlib import Path
 
@@ -464,7 +464,7 @@ async def test_hash_space_parks_in_history_without_running(isolated_home):
 
 
 async def test_at_prefix_runs_without_timeout(isolated_home):
-    """`@ cmd` strips the prefix and skips command_timeout; history keeps `@`."""
+    """`@ cmd` снимает префикс и обходит command_timeout; в истории `@` остаётся."""
     app = CommandRunner()
     async with app.run_test(size=(120, 40)) as pilot:
         await submit(pilot, "@echo at-no-timeout")
@@ -695,7 +695,7 @@ async def test_colon_clear_and_quit(isolated_home):
         assert list(app.query(CommandBlock)) == []
 
         await submit(pilot, ":q")
-    # Context manager exits cleanly after :q.
+    # Контекстный менеджер завершается без ошибок после :q.
 
 
 async def test_shift_insert_pastes_into_input(isolated_home, monkeypatch):
@@ -795,7 +795,7 @@ async def test_tty_prefix_no_space(isolated_home, monkeypatch):
 
 
 async def test_tty_imports_same_shell_export(isolated_home, monkeypatch):
-    """After `> export`, the TUI process sees the child's variable."""
+    """После `> export` процесс TUI видит переменную дочернего процесса."""
     import os
     from contextlib import nullcontext
 
@@ -854,7 +854,7 @@ async def test_colon_cd_and_missing_dir(isolated_home):
 
 
 async def test_cd_keeps_tags_db_in_launch_dir(isolated_home):
-    """Relative mytags.db / test_history.db must not be created after :cd."""
+    """Относительные mytags.db / test_history.db не должны создаваться после :cd."""
     import os
     from pathlib import Path
 
@@ -979,7 +979,7 @@ async def test_colon_term_no_default_binary(isolated_home, monkeypatch):
 
 
 async def test_colon_help_stays_responsive(isolated_home):
-    """:? must not freeze the TUI; input keeps focus and [path] stays visible."""
+    """:? не должен замораживать TUI; ввод сохраняет фокус, а [path] остаётся виден."""
     app = CommandRunner()
     async with app.run_test(size=(80, 24)) as pilot:
         await submit(pilot, ":?")
@@ -996,7 +996,7 @@ async def test_colon_help_stays_responsive(isolated_home):
 
 
 async def test_colon_help_scrolls_to_help_not_journal_top(isolated_home):
-    """:? shows the start of the new help block, not the welcome splash."""
+    """:? показывает начало нового блока справки, а не приветственный экран."""
     from textual.containers import VerticalScroll
 
     app = CommandRunner()

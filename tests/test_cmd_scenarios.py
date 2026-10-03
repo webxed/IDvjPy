@@ -1,4 +1,4 @@
-"""Автотесты по сценариям test_cmd.md (IDvjPy_term v1.211)."""
+"""Автотесты по сценариям test_cmd.md (IDvjPy_term v1.212)."""
 import pytest
 
 pytestmark = pytest.mark.slow
@@ -115,7 +115,7 @@ async def test_s04_comments(isolated_home):
         assert "Start in normal mode" in all_plain
         assert "start[1]" in all_plain
 
-        # #tag=ID= accepts global <id> (not only tid); missing id is an error
+        # #tag=ID= принимает глобальный <id> (не только tid); отсутствующий id — ошибка
         await submit(pilot, "#other echo filler")
         await submit(pilot, "#start echo via-gid")
         start_rows = [r for r in database.get_commands_by_tag(app.db_file, "start")

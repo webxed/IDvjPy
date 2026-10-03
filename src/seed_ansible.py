@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Seed ansible handbook tags (see SEED_ANSIBLE_COMMANDS.md).
+Справочник ansible (см. SEED_ANSIBLE_COMMANDS.md).
 
-Playbooks are inspect-only: inventory, syntax-check, check --diff.
-Real playbook runs and vault encrypt/decrypt of files are in the tags,
-but not in achk / aping.
-`ansible-vault view` and decrypt-to-stdout print plaintext into the journal.
-`ansible-lint` is an optional external tool, not an app dependency.
+Плейбуки только для чтения: inventory, syntax-check, check --diff.
+Настоящий запуск плейбуков и шифрование/расшифровка файлов vault — в тегах,
+но не в achk / aping.
+`ansible-vault view` и decrypt-to-stdout печатают открытый текст в журнал.
+`ansible-lint` — необязательный внешний инструмент, не зависимость приложения.
 
-Run: python3 src/seed_ansible.py --seed
+Запуск: python3 src/seed_ansible.py --seed
 """
 import sys
 

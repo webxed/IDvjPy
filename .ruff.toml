@@ -1,16 +1,16 @@
-# Ruff lint configuration for IDvjPy_term (run: ruff check src/ tests/ app.py backup_db.py)
-# Not part of CI (tests run via pytest); this keeps local/editor analysis stable.
+# Настройка линтера Ruff для IDvjPy_term (запуск: ruff check src/ tests/ app.py backup_db.py)
+# В CI не входит (там тесты через pytest); держит анализ локально и в редакторе стабильным.
 line-length = 100
 
 [lint]
 select = ["E", "F", "I", "UP", "B"]
 ignore = [
-    "E501",   # long lines are the existing style; not enforced
-    "E402",   # src/app.py imports inside a try-block to print a friendly dependency error
-    "BLE001", # blind `except Exception` is the deliberate "UI must not crash" pattern
-    "DTZ005", # naive local datetimes are fine for this terminal app
-    "EXE001", # shebangs kept for clarity; files are run via `python3`
+    "E501",   # длинные строки — существующий стиль; не enforced
+    "E402",   # в src/app.py импорты внутри try-блока ради понятного сообщения о зависимости
+    "BLE001", # «слепой» `except Exception` — намеренный паттерн «UI не должен падать»
+    "DTZ005", # наивные локальные даты нормальны для этого терминального приложения
+    "EXE001", # шебанги оставлены для наглядности; файлы запускают через `python3`
 ]
 
 [lint.per-file-ignores]
-"tests/**" = ["B011"] # plain asserts in tests; pytest rewrites them anyway
+"tests/**" = ["B011"] # обычные assert в тестах; pytest всё равно их переписывает

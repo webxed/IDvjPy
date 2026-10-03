@@ -112,7 +112,7 @@ class LineLog(ScrollView):
         return strip
 
 
-# --- 2. Baseline: один большой Static ---------------------------------------
+# --- 2. Базовый вариант: один большой Static --------------------------------
 
 
 class StaticLog(ScrollView):

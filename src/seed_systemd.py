@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Seed systemd handbook: systemctl, journalctl, dmesg (see SEED_SYSTEMD_COMMANDS.md).
+Справочник systemd: systemctl, journalctl, dmesg (см. SEED_SYSTEMD_COMMANDS.md).
 
-Playbooks are inspect-only: failed units, unit status+journal, kernel messages.
-start/stop/restart/reload are in sctl but not in sstat/sfail/kmsg.
-Follow (-f / -w) is marked for `> cmd`. Does not touch linux `logs` / `proc`.
+Плейбуки только для чтения: упавшие units, статус unit + журнал, сообщения ядра.
+start/stop/restart/reload — в sctl, но не в sstat/sfail/kmsg.
+Слежение (-f / -w) помечено для `> cmd`. Не трогает linux `logs` / `proc`.
 
-Run: python3 src/seed_systemd.py --seed
+Запуск: python3 src/seed_systemd.py --seed
 """
 import sys
 

@@ -1,4 +1,4 @@
-"""--seed copies a live SQLite DB into backups/ before replacing tags."""
+"""`--seed` копирует живую базу SQLite в backups/ перед заменой тегов."""
 import database_v2 as database
 import seed_git
 import seed_k8s_chains

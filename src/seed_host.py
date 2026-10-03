@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Seed host handbook: tar/gz/zip archives (see SEED_HOST_COMMANDS.md).
+Справочник host: архивы tar/gz/zip (см. SEED_HOST_COMMANDS.md).
 
-Playbooks are inspect-only (list archive, no extract to /).
-Disk tools (df/du/lsblk/smartctl/…) live in seed_disk.py.
+Плейбуки только для чтения (список архива, без распаковки в /).
+Инструменты дисков (df/du/lsblk/smartctl/…) — в seed_disk.py.
 
-Run: python3 src/seed_host.py --seed
+Запуск: python3 src/seed_host.py --seed
 """
 import sys
 

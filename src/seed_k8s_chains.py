@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """
-Seed investigation tags for Kubernetes (see K8S_CHAINS.md).
+Теги обследования для Kubernetes (см. K8S_CHAINS.md).
 
-Does not touch proc / file / net / kube from seed_linux_commands.py.
+Не трогает proc / file / net / kube из seed_linux_commands.py.
 
 Run: python3 src/seed_k8s_chains.py --seed
 
-Uses database_tags_file from settings.yml (same as app.py).
+Использует database_tags_file из settings.yml (как и app.py).
 """
 import sys
 
 from seed_lib import run_seed as _run_seed
 from seed_lib import seed_cli
 
-# tag -> (tag comment, [(command, command comment), ...])
-# tid = 1-based index in each list. Playbooks reference these tids.
+# tag -> (комментарий тега, [(команда, комментарий команды), ...])
+# tid = индекс с 1 в каждом списке. Плейбуки ссылаются на эти tid.
 SEED_TAGS = {
     "kvars": (
         "переменные инцидента",
@@ -383,7 +383,7 @@ SEED_METADATA = {
 
 
 def run_seed(db_file: str) -> int:
-    """Replace investigation tags; return number of commands inserted."""
+    """Заменить теги обследования; вернуть число вставленных команд."""
     return _run_seed(db_file, SEED_TAGS, label="k8s", metadata=SEED_METADATA)
 
 

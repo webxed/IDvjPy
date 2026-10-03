@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Seed rsync handbook tags (see SEED_RSYNC_COMMANDS.md).
+Справочник rsync (см. SEED_RSYNC_COMMANDS.md).
 
-Playbooks are dry-run / list-only. --delete is not in playbooks.
-Does not touch linux `net` (basic rsync -avz stays there).
+Плейбуки только dry-run / список. `--delete` в плейбуки не входит.
+Не трогает linux `net` (базовый rsync -avz остаётся там).
 
-Run: python3 src/seed_rsync.py --seed
+Запуск: python3 src/seed_rsync.py --seed
 """
 import sys
 

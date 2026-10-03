@@ -1,4 +1,4 @@
-"""Offline static explanations never execute input or echo its arguments."""
+"""Офлайн-объяснения статичны: не выполняют ввод и не возвращают его аргументы."""
 from __future__ import annotations
 
 import pytest

@@ -56,7 +56,7 @@ def safe_url(url: str) -> str:
     try:
         port = f":{parts.port}" if parts.port else ""
     except ValueError:
-        # Keep malformed URLs safe for diagnostics without exposing userinfo.
+        # Битую ссылку оставляем безопасной для диагностики, не раскрывая userinfo.
         port = ""
     return urlunsplit((parts.scheme, f"{host}{port}", parts.path, parts.query, parts.fragment))
 

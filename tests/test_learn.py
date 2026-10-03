@@ -1,4 +1,4 @@
-"""The :learn exercises inspect completed blocks but never execute commands."""
+"""Упражнения :learn смотрят на готовые блоки, но команд не выполняют."""
 from __future__ import annotations
 
 import pytest

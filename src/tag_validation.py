@@ -1,7 +1,8 @@
-"""Static, non-blocking diagnostics for command templates saved as tags.
+"""Статичная, неблокирующая диагностика шаблонов команд, сохранённых как теги.
 
-This module deliberately does not parse or execute shell syntax. Its findings are
-heuristics to help catch common mistakes, not a correctness or safety guarantee.
+Модуль намеренно не разбирает и не выполняет синтаксис shell. Его находки —
+эвристики, помогающие поймать частые ошибки, а не гарантия корректности
+или безопасности.
 """
 from __future__ import annotations
 
@@ -22,7 +23,7 @@ def diagnose_template(
     commands: Iterable[Mapping[str, object]],
     variables: Iterable[str],
 ) -> list[str]:
-    """Return heuristic warnings; comments are inspected only for runbook directives."""
+    """Вернуть эвристические предупреждения; комментарии проверяются только на runbook-директивы."""
     rows = list(commands)
     vars_known = set(variables)
     warnings: list[str] = []

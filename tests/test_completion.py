@@ -257,7 +257,7 @@ async def test_path_completion_keeps_existing_command(isolated_home):
 
     app = CommandRunner()
     async with app.run_test(size=(120, 40)) as pilot:
-        await submit(pilot, "")  # ensure mounted/focused
+        await submit(pilot, "")  # чтобы виджет смонтировался и получил фокус
         await pilot.press("escape")
         await type_keys(pilot, "cat ./al")
         await pilot.pause()
@@ -604,9 +604,9 @@ async def test_small_last_block_gets_focus_when_it_cannot_reach_top(isolated_hom
         container = app.query_one("#results-container", VerticalScroll)
         container.scroll_to(y=0, animate=False)
         await pilot.pause()
-        # The first block is taller than the window; clicking it needs a screen
-        # coordinate inside its visible rows. Block-focus-by-click is covered by
-        # other tests, so focus the first block directly here.
+        # Первый блок выше окна; для клика по нему нужна экранная координата
+        # внутри его видимых строк. Фокус блока по клику проверяют другие
+        # тесты, поэтому здесь фокусируем первый блок напрямую.
         first.focus()
         await pilot.pause()
         assert app.focused is first

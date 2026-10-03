@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Seed DNS + port-scan handbook: dig, nmap (see SEED_RECON_COMMANDS.md).
+Справочник DNS и сканирования портов: dig, nmap (см. SEED_RECON_COMMANDS.md).
 
-Playbooks: DNS lookup and a short connect-scan. No -p-, --script vuln, -A.
-Does not touch linux `net`.
+Плейбуки: DNS-запрос и короткий connect-scan. Без -p-, --script vuln, -A.
+Не трогает linux `net`.
 
-Run: python3 src/seed_recon.py --seed
+Запуск: python3 src/seed_recon.py --seed
 """
 import sys
 

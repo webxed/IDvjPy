@@ -1,7 +1,8 @@
-"""Play a YAML scenario as if a person is typing in the TUI.
+"""Проигрывает YAML-сценарий так, будто человек печатает в TUI.
 
-Used by ``python3 app.py --demo`` so a tour can be recorded (asciinema, OBS)
-or shown live. Esc cancels playback; the session stays open unless ``--demo-quit``.
+Используется ``python3 app.py --demo``, чтобы тур можно было записать
+(asciinema, OBS) или показать вживую. Esc отменяет проигрывание; сессия
+остаётся открытой, если не задан ``--demo-quit``.
 """
 from __future__ import annotations
 
@@ -51,7 +52,7 @@ def bundled_demo_names() -> list[str]:
 
 
 def resolve_demo_path(name: str) -> Path | None:
-    """Resolve a bundled name (``short``) or a filesystem path."""
+    """Определяет имя bundled-тура (``short``) или путь в файловой системе."""
     raw = (name or "").strip()
     if not raw:
         return None
@@ -138,7 +139,7 @@ def apply_text_overlay(
 
 
 def load_scenario(path: str | Path, lang: str | None = None) -> dict[str, Any]:
-    """Load and normalize a demo YAML file (text overlay for bundled tours)."""
+    """Загружает и нормализует YAML-файл демо (текстовый слой для bundled-туров)."""
     demo_path = Path(path)
     with demo_path.open("r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
@@ -154,7 +155,7 @@ def load_scenario(path: str | Path, lang: str | None = None) -> dict[str, Any]:
 
 
 def iter_typed_lines(steps: Iterable[Any]) -> Iterable[str]:
-    """Yield ``type`` / string lines, including nested ``loop`` steps."""
+    """Отдаёт строки ``type`` / строковых шагов, включая вложенные ``loop``-шаги."""
     for step in steps or []:
         if isinstance(step, str):
             text = step.strip()
@@ -172,7 +173,7 @@ def iter_typed_lines(steps: Iterable[Any]) -> Iterable[str]:
 
 
 def collect_reset_tags(scenario: dict[str, Any]) -> list[str]:
-    """Tags the scenario will `#tag cmd`-save. Cleared before playback so tids restart at 1."""
+    """Теги, которые сценарий сохранит через `#tag cmd`. Очищаются перед проигрыванием, чтобы tid начинались с 1."""
     tags: list[str] = []
     seen = set()
     for raw in scenario.get("reset_tags") or []:
@@ -201,7 +202,7 @@ PLAYBOOK_SKIP_COLON = frozenset(
 
 
 def is_playbook_skip_line(line: str) -> bool:
-    """Lines that should not become demo steps (empty, :playbook, :q)."""
+    """Строки, которые не должны становиться шагами демо (пустые, :playbook, :q)."""
     text = (line or "").strip()
     if not text:
         return True
@@ -213,7 +214,7 @@ def is_playbook_skip_line(line: str) -> bool:
 
 
 def session_line_needs_wait(text: str) -> bool:
-    """True if playback should wait for a new command block (shell / pipe)."""
+    """True, если проигрывание должно ждать новый блок команды (shell / pipe)."""
     s = (text or "").strip()
     if not s:
         return False
@@ -240,7 +241,7 @@ def session_line_needs_wait(text: str) -> bool:
 
 
 def playbook_steps_from_lines(lines: Iterable[str]) -> list[Any]:
-    """Turn submitted input lines into YAML steps (string or wait_command map)."""
+    """Превращает введённые строки в YAML-шаги (строка или map wait_command)."""
     steps: list[Any] = []
     for raw in lines:
         text = (raw or "").strip()
@@ -256,7 +257,7 @@ def playbook_steps_from_lines(lines: Iterable[str]) -> list[Any]:
 def session_to_playbook(
     lines: Iterable[str], *, title: str = "session playbook"
 ) -> dict[str, Any]:
-    """Build a loadable demo scenario from a normal-session command log."""
+    """Собирает загружаемый сценарий демо из лога команд обычной сессии."""
     steps = playbook_steps_from_lines(lines)
     if not steps:
         raise ValueError("No commands to record")
@@ -275,7 +276,7 @@ def session_to_playbook(
 
 
 def dump_playbook_yaml(scenario: dict[str, Any]) -> str:
-    """Serialize a session playbook with a short how-to header."""
+    """Сериализует playbook сессии с коротким заголовком-инструкцией."""
     body = yaml.safe_dump(
         scenario,
         allow_unicode=True,
@@ -306,7 +307,7 @@ def _reset_demo_tags(app: Any, tags: list[str]) -> None:
 
 
 def load_demo_for_cli(name: str) -> dict[str, Any]:
-    """Resolve ``--demo`` for the launcher; exit with a hint on failure."""
+    """Определяет ``--demo`` для лаунчера; при ошибке выходит с подсказкой."""
     path = resolve_demo_path(name)
     if path is None:
         available = ", ".join(bundled_demo_names()) or "(none)"
@@ -325,7 +326,7 @@ def load_demo_for_cli(name: str) -> dict[str, Any]:
 
 
 def parse_loop_count(value: Any) -> int | None:
-    """How many times to repeat. ``None`` means until Esc."""
+    """Сколько раз повторять. ``None`` — до Esc."""
     if isinstance(value, bool):
         return None if value else 1
     if isinstance(value, (int, float)):
@@ -373,7 +374,7 @@ def _make_loop_step(
 
 
 def normalize_step(raw: Any, *, _depth: int = 0) -> dict[str, Any]:
-    """Turn a YAML step (string or mapping) into a playback dict."""
+    """Превращает YAML-шаг (строку или mapping) в словарь для проигрывания."""
     if isinstance(raw, str):
         return {
             "caption": "",
@@ -469,7 +470,7 @@ def _driving(app: Any) -> bool:
 
 
 async def play_demo(app: Any, scenario: dict[str, Any], speed: float = 1.0, quit_when_done: bool = False) -> None:
-    """Drive ``CommandRunner`` with simulated keypresses."""
+    """Управляет ``CommandRunner`` имитацией нажатий клавиш."""
     title = str(scenario.get("title") or "demo")
     start_pause = float(scenario.get("start_pause", DEFAULTS["start_pause"]))
     type_delay = float(scenario.get("type_delay", DEFAULTS["type_delay"]))
@@ -515,7 +516,7 @@ async def play_demo(app: Any, scenario: dict[str, Any], speed: float = 1.0, quit
 
 
 def _ensure_step(raw: Any) -> dict[str, Any]:
-    """Normalize a step unless it is already a loop dict from ``normalize_step``."""
+    """Нормализует шаг, если это уже не loop-словарь из ``normalize_step``."""
     if isinstance(raw, dict) and raw.get("kind") == KIND_LOOP:
         inner = [_ensure_step(step) for step in (raw.get("steps") or [])]
         prepared = dict(raw)
@@ -628,11 +629,11 @@ async def _play_step(
         await _ensure_input_focus(app)
         await _type_text(app, typed, type_delay)
         if step.get("enter") and type_delay > 0:
-            # Give the viewer time to read the finished line before Enter.
+            # Даём зрителю время прочитать готовую строку до Enter.
             await asyncio.sleep(min(0.7, max(0.35, type_delay * 4)))
     if step.get("enter"):
-        # Enter on a journal block turns on line-cursor (looks like F2) and
-        # never submits `| jq`. Retry only when that happened.
+        # Enter на блоке журнала включает построчный курсор (похоже на F2) и
+        # не отправляет `| jq`. Повторяем только если так и вышло.
         _hide_completion(app)
         await _ensure_input_focus(app)
         await _press(app, ["enter"], gap=key_gap)
@@ -680,7 +681,7 @@ def _hide_completion(app: Any) -> None:
 
 
 def _prepare_input(app: Any, *, clear: bool) -> None:
-    """Focus the prompt without synthesizing Esc (that would abort the demo)."""
+    """Фокусирует prompt без синтеза Esc (он прервал бы демо)."""
     _hide_completion(app)
     inp = app.query_one("#command-input")
     inp.focus()
@@ -699,7 +700,7 @@ def _exit_line_nav(app: Any) -> None:
 
 
 async def _ensure_input_focus(app: Any, timeout: float = 2.0) -> bool:
-    """Focus the prompt so Enter submits a command instead of line-cursor."""
+    """Фокусирует prompt, чтобы Enter отправлял команду, а не построчный курсор."""
     _exit_line_nav(app)
     _hide_completion(app)
     inp = app.query_one("#command-input")
@@ -715,7 +716,7 @@ async def _ensure_input_focus(app: Any, timeout: float = 2.0) -> bool:
 
 
 async def _wait_input_cleared(app: Any, timeout: float = 0.6) -> bool:
-    """True when Enter actually submitted the prompt (input became empty)."""
+    """True, когда Enter действительно отправил prompt (ввод стал пустым)."""
     inp = app.query_one("#command-input")
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -727,7 +728,7 @@ async def _wait_input_cleared(app: Any, timeout: float = 0.6) -> bool:
 
 
 def _type_gap(type_delay: float, text: str) -> float:
-    """Per-character pause; long lines type faster so URLs don't crawl."""
+    """Пауза на символ; длинные строки печатаются быстрее, чтобы URL не тянулись."""
     if type_delay <= 0:
         return 0.005
     scale = min(1.0, 28.0 / max(len(text), 1))
@@ -735,10 +736,10 @@ def _type_gap(type_delay: float, text: str) -> float:
 
 
 async def _type_text(app: Any, text: str, type_delay: float) -> None:
-    """Insert characters into the prompt so completion still updates.
+    """Вставляет символы в prompt, чтобы автодополнение продолжало обновляться.
 
-    Key events are easy to drop while focus is settling; setting ``value``
-    is visible in the TUI and matches what a person would see being typed.
+    Клавиатурные события легко теряются, пока фокус устаканивается; установка ``value``
+    видна в TUI и совпадает с тем, что человек увидел бы при наборе.
     """
     inp = app.query_one("#command-input")
     gap = _type_gap(type_delay, text)
@@ -748,7 +749,7 @@ async def _type_text(app: Any, text: str, type_delay: float) -> None:
         if not inp.has_focus:
             _exit_line_nav(app)
             inp.focus()
-        # Suppress completion so a later Enter is not eaten by a candidate.
+        # Гасим автодополнение, чтобы следующий Enter не съел кандидат.
         inp._applying_completion = True
         pos = inp.cursor_position or 0
         current = inp.value or ""
@@ -759,14 +760,14 @@ async def _type_text(app: Any, text: str, type_delay: float) -> None:
 
 
 async def _press(app: Any, keys: Iterable[str], gap: float = 0.08) -> None:
-    """Send keys through the app queue without waiting on Textual's animator.
+    """Отправляет клавиши через очередь приложения, не дожидаясь аниматора Textual.
 
-    ``App._press_keys`` calls ``wait_until_complete``, which can deadlock when
-    the demo itself is running as a worker (completion list / screen animations).
+    ``App._press_keys`` вызывает ``wait_until_complete``, что может привести к
+    дедлоку, когда само демо работает в worker'е (список автодополнения / анимации экрана).
 
-    Do not use ``driver.send_message`` from this worker: it posts via
-    ``run_coroutine_threadsafe``, so Tab/F2/Enter arrive late — often while the
-    next step is typing ``| jq``. Enter on a journal block is line-cursor (F2).
+    Не используйте ``driver.send_message`` из этого worker'а: он шлёт через
+    ``run_coroutine_threadsafe``, поэтому Tab/F2/Enter приходят с опозданием — часто пока
+    следующий шаг печатает ``| jq``. Enter на блоке журнала — это построчный курсор (F2).
     """
     batch = [key for key in keys if key]
     if not batch:
@@ -791,10 +792,10 @@ async def _press(app: Any, keys: Iterable[str], gap: float = 0.08) -> None:
 
 
 async def _wait_command_done(app: Any, timeout: float, after: Any = None) -> None:
-    """Wait until a *new* CommandBlock appears and finishes.
+    """Ждёт, пока появится *новый* CommandBlock и завершится.
 
-    If we only look at the last block, a pipe/jq step can return immediately
-    because the previous curl/echo block is already done.
+    Если смотреть только на последний блок, шаг pipe/jq может вернуться сразу,
+    потому что предыдущий блок curl/echo уже завершён.
     """
     deadline = time.monotonic() + max(timeout, 0.5)
     block = None

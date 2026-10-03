@@ -24,7 +24,7 @@ from typing import Any
 
 try:
     import yaml
-except ImportError:  # pragma: no cover - dependency is in requirements.txt
+except ImportError:  # pragma: no cover — зависимость есть в requirements.txt
     yaml = None  # type: ignore[assignment]
 
 LOCALES_DIR = Path(__file__).resolve().parent / "locales"

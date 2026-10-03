@@ -13,26 +13,26 @@ import portalocker
 
 
 class FileLockTimeoutError(Exception):
-    """Raised when file lock cannot be acquired within timeout."""
+    """Возбуждается, когда блокировку файла не удаётся взять за отведённое время."""
     pass
 
 
 def acquire_file_lock(file_obj, timeout_sec: int = 5, *, shared: bool = False) -> None:
     """
-    Acquire lock on file with timeout (cross-platform).
+    Взять блокировку файла с таймаутом (кроссплатформенно).
 
-    Uses portalocker for cross-platform file locking support:
+    Использует portalocker для кроссплатформенной блокировки файлов:
     - Linux/Unix: fcntl.flock()
-    - Windows: msvcrt.locking() or Win32 file locking
+    - Windows: msvcrt.locking() или блокировка файлов Win32
 
-    Args:
-        file_obj: Open file object (must be opened in a mode that allows locking)
-        timeout_sec: Maximum time to wait for lock (default: 5 seconds). 0 = one try.
-        shared: True for a shared read lock (several readers, blocks writers).
+    Аргументы:
+        file_obj: открытый файловый объект (должен быть открыт в режиме, допускающем блокировку)
+        timeout_sec: максимум ожидания блокировки в секундах (по умолчанию 5). 0 = одна попытка.
+        shared: True для разделяемой блокировки чтения (несколько читателей, блокирует писателей).
 
-    Raises:
-        FileLockTimeoutError: If lock cannot be acquired within timeout
-        IOError: If locking operation fails
+    Исключения:
+        FileLockTimeoutError: блокировку не удалось взять за таймаут
+        IOError: сбой операции блокировки
     """
     flags = portalocker.LOCK_SH if shared else portalocker.LOCK_EX
     flags |= portalocker.LOCK_NB
@@ -55,15 +55,15 @@ def acquire_file_lock(file_obj, timeout_sec: int = 5, *, shared: bool = False) -
 
 def release_file_lock(file_obj) -> None:
     """
-    Release exclusive lock on file (cross-platform).
+    Снять эксклюзивную блокировку файла (кроссплатформенно).
 
-    Args:
-        file_obj: Open file object
+    Аргументы:
+        file_obj: открытый файловый объект
     """
     try:
         portalocker.unlock(file_obj)
     except Exception:
-        pass  # Lock was already released or file was closed
+        pass  # Блокировка уже снята или файл закрыт
 
 
 def _stat_key_from_stat(st) -> tuple[int, int]:
@@ -264,11 +264,11 @@ HISTORY_COMPACT_HYSTERESIS = 2
 
 
 def compact_history_lines(lines: list[str], keep: int) -> list[str]:
-    """Unique the old prefix; keep the last ``keep`` lines verbatim.
+    """Уникализировать старый префикс; последние ``keep`` строк сохранить как есть.
 
-    In the prefix, last occurrence wins. A line that already appears in the
-    recent tail is dropped from the prefix so Up/Down does not repeat it.
-    ``keep <= 0`` leaves the list unchanged (compaction disabled).
+    В префиксе побеждает последнее вхождение. Строка, которая уже есть в
+    недавнем хвосте, убирается из префикса, чтобы ↑/↓ её не повторял.
+    ``keep <= 0`` оставляет список без изменений (компакт выключен).
     """
     cleaned = [str(line).strip() for line in lines if str(line).strip()]
     if keep <= 0 or len(cleaned) <= keep:
@@ -295,10 +295,10 @@ def compact_history_file(
     force: bool = False,
     hysteresis: int = HISTORY_COMPACT_HYSTERESIS,
 ) -> tuple[int, int, bool]:
-    """Rewrite history.txt under an exclusive lock.
+    """Перезаписать history.txt под эксклюзивной блокировкой.
 
-    Auto mode (``force=False``) runs only when ``len(lines) > keep * hysteresis``.
-    Returns ``(before, after, changed)``. On lock/IO failure: ``(0, 0, False)``.
+    Авторежим (``force=False``) срабатывает только при ``len(lines) > keep * hysteresis``.
+    Возвращает ``(before, after, changed)``. При сбое блокировки/IO: ``(0, 0, False)``.
     """
     try:
         f = open(path, "r+", encoding=encoding)

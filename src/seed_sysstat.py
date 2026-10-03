@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Seed sysstat handbook: vmstat, iostat, mpstat (see SEED_SYSSTAT_COMMANDS.md).
+Справочник sysstat: vmstat, iostat, mpstat (см. SEED_SYSSTAT_COMMANDS.md).
 
-Samples are finite (`$DELAY` × `$SAMPLES`). htop/iotop/iftop need a TTY (`>`).
-Does not touch linux `proc` or systemd `sstat`.
+Замеры конечны (`$DELAY` × `$SAMPLES`). htop/iotop/iftop требуют TTY (`>`).
+Не трогает linux `proc` и systemd `sstat`.
 
-Run: python3 src/seed_sysstat.py --seed
+Запуск: python3 src/seed_sysstat.py --seed
 """
 import sys
 

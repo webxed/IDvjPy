@@ -1,17 +1,17 @@
 # Authors: markovskiy.pavel, Gemini (Google), Claude, DeepSeek, Grok
 """
-Database module v2 for IDvjPy_term.
+Модуль работы с базой данных v2 для IDvjPy_term.
 
-Provides SQLite operations for managing tagged command history
-with tag-local IDs (tid).
+Предоставляет операции SQLite для управления историей команд с тегами
+и локальными для тега идентификаторами (tid).
 
-Schema:
-- id: global unique ID (auto-increment)
-- tag: tag name
-- tid: tag-local ID (auto-increment per tag)
-- command: command text
-- timestamp: creation time
-- deleted: soft-delete flag
+Схема:
+- id: глобальный уникальный ID (автоинкремент)
+- tag: имя тега
+- tid: локальный для тега ID (автоинкремент внутри тега)
+- command: текст команды
+- timestamp: время создания
+- deleted: флаг мягкого удаления
 """
 import datetime
 import json
@@ -20,21 +20,21 @@ import sqlite3
 
 
 def get_db_connection(db_file: str):
-    """Establishes a connection to the database."""
-    conn = sqlite3.connect(db_file, timeout=10)  # Wait up to 10 seconds if locked
+    """Устанавливает соединение с базой данных."""
+    conn = sqlite3.connect(db_file, timeout=10)  # Ждём до 10 секунд, если база заблокирована
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db(db_file: str):
     """
-    Initializes the database and creates all required tables.
+    Инициализирует базу данных и создаёт все необходимые таблицы.
 
-    Creates ``db_file`` (and parent directories) if they do not exist,
-    so a clone without a committed SQLite file still starts.
+    Создаёт ``db_file`` (и родительские каталоги), если их нет,
+    чтобы клон без закоммиченного файла SQLite всё равно запускался.
 
-    Tables:
-    - commands: stores tagged commands with tag-local IDs
-    - tags: stores tag comments/descriptions
+    Таблицы:
+    - commands: хранит команды с тегами и локальными для тега ID
+    - tags: хранит комментарии/описания тегов
     """
     if not db_file:
         raise ValueError("database path is empty")
@@ -43,7 +43,7 @@ def init_db(db_file: str):
         os.makedirs(parent, exist_ok=True)
     conn = get_db_connection(db_file)
 
-    # Commands table
+    # Таблица commands
     conn.execute("""
         CREATE TABLE IF NOT EXISTS commands (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,13 +57,13 @@ def init_db(db_file: str):
         );
     """)
 
-    # Add comment column to existing commands table if not exists (for migrations)
+    # Добавляем колонку comment в существующую таблицу commands, если её нет (для миграций)
     try:
         conn.execute("ALTER TABLE commands ADD COLUMN comment TEXT DEFAULT ''")
     except Exception:
-        pass  # Column already exists
+        pass  # Колонка уже существует
 
-    # Use counters (v1.39): use_count / last_used добавляются на лету в live-БД.
+    # Счётчики использования (v1.39): use_count / last_used добавляются на лету в live-БД.
     _cols = [row[1] for row in conn.execute("PRAGMA table_info(commands)").fetchall()]
     if "use_count" not in _cols:
         conn.execute(
@@ -72,7 +72,7 @@ def init_db(db_file: str):
     if "last_used" not in _cols:
         conn.execute("ALTER TABLE commands ADD COLUMN last_used DATETIME")
 
-    # Tags table for comments
+    # Таблица tags для комментариев
     conn.execute("""
         CREATE TABLE IF NOT EXISTS tags (
             tag TEXT PRIMARY KEY,
@@ -84,7 +84,7 @@ def init_db(db_file: str):
     if "metadata" not in tag_cols:
         conn.execute("ALTER TABLE tags ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'")
 
-    # Create index for faster tag queries
+    # Индекс для ускорения запросов по тегу
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_tag_tid
         ON commands (tag, tid) WHERE deleted = 0
@@ -94,7 +94,7 @@ def init_db(db_file: str):
     conn.close()
 
 def _get_next_tid(conn, tag: str) -> int:
-    """Get the next available tid for a given tag."""
+    """Возвращает следующий свободный tid для заданного тега."""
     cursor = conn.execute(
         "SELECT COALESCE(MAX(tid), 0) + 1 FROM commands WHERE tag = ?",
         (tag,)
@@ -104,10 +104,10 @@ def _get_next_tid(conn, tag: str) -> int:
 
 def add_command(db_file: str, command: str, tag: str) -> int:
     """
-    Adds a new command to the history database with auto-incremented tid.
+    Добавляет новую команду в базу истории с автоинкрементным tid.
 
-    Returns:
-        The tid (tag-local ID) assigned to the command.
+    Возвращает:
+        tid (локальный для тега ID), назначенный команде.
     """
     conn = get_db_connection(db_file)
     try:
@@ -126,7 +126,7 @@ def add_command(db_file: str, command: str, tag: str) -> int:
         conn.close()
 
 def delete_commands_by_tag(db_file: str, tag: str) -> int:
-    """Marks live commands with a given tag as deleted. Returns row count."""
+    """Помечает live-команды с заданным тегом как удалённые. Возвращает число строк."""
     conn = get_db_connection(db_file)
     cursor = conn.execute(
         "UPDATE commands SET deleted = 1 WHERE tag = ? AND deleted = 0",
@@ -138,7 +138,7 @@ def delete_commands_by_tag(db_file: str, tag: str) -> int:
     return n
 
 def hard_delete_commands_by_tag(db_file: str, tag: str) -> None:
-    """Remove a tag completely so the next add_command starts at tid 1."""
+    """Полностью удаляет тег, чтобы следующая add_command начиналась с tid 1."""
     conn = get_db_connection(db_file)
     conn.execute("DELETE FROM commands WHERE tag = ?", (tag,))
     conn.execute("DELETE FROM tags WHERE tag = ?", (tag,))
@@ -146,7 +146,7 @@ def hard_delete_commands_by_tag(db_file: str, tag: str) -> None:
     conn.close()
 
 def delete_command_by_tid(db_file: str, tag: str, tid: int):
-    """Marks a single command as deleted by tag and tid."""
+    """Помечает одну команду как удалённую по тегу и tid."""
     conn = get_db_connection(db_file)
     conn.execute(
         "UPDATE commands SET deleted = 1 WHERE tag = ? AND tid = ?",
@@ -157,7 +157,7 @@ def delete_command_by_tid(db_file: str, tag: str, tid: int):
 
 
 def get_all_tags(db_file: str):
-    """Fetches a unique list of all tags from the database."""
+    """Возвращает уникальный список всех тегов из базы данных."""
     conn = get_db_connection(db_file)
     cursor = conn.execute(
         "SELECT DISTINCT tag FROM commands WHERE deleted = 0 ORDER BY tag ASC"
@@ -168,7 +168,7 @@ def get_all_tags(db_file: str):
 
 
 def get_hidden_tags(db_file: str) -> list[str]:
-    """Tags that have only soft-deleted commands (nothing live)."""
+    """Теги, у которых есть только мягко-удалённые команды (ничего live)."""
     conn = get_db_connection(db_file)
     cursor = conn.execute(
         """
@@ -183,7 +183,7 @@ def get_hidden_tags(db_file: str) -> list[str]:
     return tags
 
 def has_live_commands(db_file: str) -> bool:
-    """True if the database has at least one non-deleted command."""
+    """True, если в базе есть хотя бы одна неудалённая команда."""
     if not db_file or not os.path.exists(db_file):
         return False
     conn = get_db_connection(db_file)
@@ -194,7 +194,7 @@ def has_live_commands(db_file: str) -> bool:
     return row is not None
 
 def get_commands_by_tag(db_file: str, tag: str):
-    """Fetches all commands for a given tag with their tids and comments."""
+    """Возвращает все команды для заданного тега вместе с их tid и комментариями."""
     conn = get_db_connection(db_file)
     cursor = conn.execute(
         "SELECT id, tid, command, comment FROM commands WHERE tag = ? AND deleted = 0 ORDER BY tid ASC",
@@ -205,7 +205,7 @@ def get_commands_by_tag(db_file: str, tag: str):
     return commands
 
 def get_command_by_tid(db_file: str, tag: str, tid: int):
-    """Fetches a single command by tag and tid."""
+    """Возвращает одну команду по тегу и tid."""
     conn = get_db_connection(db_file)
     cursor = conn.execute(
         "SELECT id, command FROM commands WHERE tag = ? AND tid = ? AND deleted = 0",
@@ -216,7 +216,7 @@ def get_command_by_tid(db_file: str, tag: str, tid: int):
     return result
 
 def get_command_by_global_id(db_file: str, global_id: int):
-    """Fetches a single command by global ID."""
+    """Возвращает одну команду по глобальному ID."""
     conn = get_db_connection(db_file)
     cursor = conn.execute(
         "SELECT id, command FROM commands WHERE id = ? AND deleted = 0",
@@ -228,8 +228,8 @@ def get_command_by_global_id(db_file: str, global_id: int):
 
 def get_all_commands_with_ids(db_file: str):
     """
-    Fetches all commands with their IDs, sorted by tag then tid.
-    Returns both global ID and tag-local ID.
+    Возвращает все команды с их ID, отсортированные по тегу, затем по tid.
+    Возвращает и глобальный ID, и локальный для тега ID.
     """
     conn = get_db_connection(db_file)
     cursor = conn.execute(
@@ -248,7 +248,7 @@ def bump_command_usage(db_file: str, command: str) -> int:
     Атрибуция: текст исполняемой строки совпал с сохранённой командой
     (в т.ч. через !tag[tid] / !ID / повтор из истории).
 
-    Returns:
+    Возвращает:
         Число обновлённых строк (0 — совпадений не было).
     """
     conn = get_db_connection(db_file)
@@ -272,8 +272,8 @@ def usage_stats(db_file: str) -> dict:
     """
     Сводка по библиотеке для `:stats`.
 
-    Returns:
-        dict: tags/live/deleted/never_run counts, top-10 по запускам,
+    Возвращает:
+        dict: счётчики tags/live/deleted/never_run, top-10 по запускам,
         per_tag — агрегаты по каждому тегу.
     """
     conn = get_db_connection(db_file)
@@ -332,7 +332,7 @@ def search_commands_by_content(db_file: str, needle: str, limit: int = 200):
 
     Case-insensitive как LIKE (ASCII). Символы % и _ ищутся буквально.
 
-    Returns:
+    Возвращает:
         (rows, total): rows — до limit записей (id, tag, tid, command, comment)
         в порядке tag/tid; total — полное число совпадений.
     """
@@ -359,12 +359,12 @@ def search_commands_by_content(db_file: str, needle: str, limit: int = 200):
 
 def set_tag_comment(db_file: str, tag: str, comment: str):
     """
-    Sets or updates the comment for a tag.
+    Устанавливает или обновляет комментарий для тега.
 
-    Args:
-        db_file: Path to database file
-        tag: Tag name
-        comment: Comment text (use empty string to clear)
+    Аргументы:
+        db_file: путь к файлу базы данных
+        tag: имя тега
+        comment: текст комментария (пустая строка — очистить)
     """
     conn = get_db_connection(db_file)
     conn.execute(
@@ -380,7 +380,7 @@ TAG_RISK_LEVELS = frozenset({"low", "medium", "high", "critical"})
 
 
 def validate_tag_metadata(metadata: object) -> dict[str, object]:
-    """Validate the portable, intentionally small tag metadata schema."""
+    """Проверяет переносимую, намеренно компактную схему метаданных тега."""
     if not isinstance(metadata, dict):
         raise ValueError("tag metadata must be an object")
     unknown = set(metadata) - TAG_METADATA_FIELDS
@@ -406,7 +406,7 @@ def validate_tag_metadata(metadata: object) -> dict[str, object]:
 
 
 def set_tag_metadata(db_file: str, tag: str, metadata: object) -> None:
-    """Replace one tag's validated metadata; an empty object clears it."""
+    """Заменяет проверенные метаданные одного тега; пустой объект очищает их."""
     value = validate_tag_metadata(metadata)
     conn = get_db_connection(db_file)
     try:
@@ -453,8 +453,8 @@ def get_tag_comment(db_file: str, tag: str) -> str:
     """
     Fetches the comment for a tag.
 
-    Returns:
-        Comment text, or empty string if not found.
+    Возвращает:
+        Текст комментария или пустую строку, если не найдено.
     """
     conn = get_db_connection(db_file)
     cursor = conn.execute(
@@ -467,10 +467,10 @@ def get_tag_comment(db_file: str, tag: str) -> str:
 
 def get_all_tags_with_comments(db_file: str):
     """
-    Fetches all tags with their comments.
+    Возвращает все теги с их комментариями.
 
-    Returns:
-        List of tuples: [(tag, comment), ...]
+    Возвращает:
+        Список кортежей: [(tag, comment), ...]
     """
     conn = get_db_connection(db_file)
     cursor = conn.execute(
@@ -481,7 +481,7 @@ def get_all_tags_with_comments(db_file: str):
     return [(row['tag'], row['comment']) for row in results]
 
 def _find_live_command(conn, tag: str, cmd_id: int):
-    """Live command by tag-local tid, else by global id (same tag)."""
+    """Live-команда по локальному для тега tid, иначе по глобальному id (в том же теге)."""
     cursor = conn.execute(
         "SELECT id, tag, tid, command, comment FROM commands "
         "WHERE tag = ? AND tid = ? AND deleted = 0",
@@ -500,13 +500,13 @@ def _find_live_command(conn, tag: str, cmd_id: int):
 
 def set_command_comment(db_file: str, tag: str, cmd_id: int, comment: str):
     """
-    Sets or updates the comment for a specific command.
+    Устанавливает или обновляет комментарий для конкретной команды.
 
-    ``cmd_id`` is the tag-local tid first; if that row does not exist,
-    it is treated as the global ``id`` (must belong to ``tag``).
+    ``cmd_id`` — сначала локальный для тега tid; если такой строки нет,
+    он трактуется как глобальный ``id`` (должен принадлежать ``tag``).
 
-    Returns:
-        The updated row (id, tag, tid, ...), or None if not found.
+    Возвращает:
+        Обновлённую строку (id, tag, tid, ...) или None, если не найдено.
     """
     conn = get_db_connection(db_file)
     row = _find_live_command(conn, tag, cmd_id)
@@ -525,8 +525,8 @@ def get_command_comment(db_file: str, tag: str, tid: int) -> str:
     """
     Fetches the comment for a specific command.
 
-    Returns:
-        Comment text, or empty string if not found.
+    Возвращает:
+        Текст комментария или пустую строку, если не найдено.
     """
     conn = get_db_connection(db_file)
     cursor = conn.execute(
@@ -539,16 +539,16 @@ def get_command_comment(db_file: str, tag: str, tid: int) -> str:
 
 def update_command_by_tid(db_file: str, tag: str, tid: int, new_command: str):
     """
-    Updates the command text for a specific command by tag and tid.
+    Обновляет текст команды для конкретной команды по тегу и tid.
 
-    Args:
-        db_file: Path to database file
-        tag: Tag name
-        tid: Tag-local ID
-        new_command: New command text
+    Аргументы:
+        db_file: путь к файлу базы данных
+        tag: имя тега
+        tid: локальный для тега ID
+        new_command: новый текст команды
 
-    Returns:
-        True if command was updated, False if not found
+    Возвращает:
+        True, если команда обновлена, False, если не найдена
     """
     conn = get_db_connection(db_file)
     cursor = conn.execute(
@@ -567,7 +567,7 @@ def move_command_by_tid(db_file: str, tag: str, tid: int, new_tag: str):
 
     Комментарий команды переносится вместе с ней; комментарий тега не трогаем.
 
-    Returns:
+    Возвращает:
         (new_tid, global_id) новой строки или None, если команда не найдена.
     """
     conn = get_db_connection(db_file)
@@ -628,7 +628,7 @@ def rename_tag(db_file: str, old_tag: str, new_tag: str) -> int:
 
 
 def restore_commands_by_tag(db_file: str, tag: str) -> int:
-    """Clears the soft-delete flag for all commands with this tag. Returns row count."""
+    """Снимает флаг мягкого удаления со всех команд с этим тегом. Возвращает число строк."""
     conn = get_db_connection(db_file)
     cursor = conn.execute(
         "UPDATE commands SET deleted = 0 WHERE tag = ? AND deleted = 1",
@@ -641,7 +641,7 @@ def restore_commands_by_tag(db_file: str, tag: str) -> int:
 
 
 def restore_command_by_tid(db_file: str, tag: str, tid: int) -> bool:
-    """Restores one soft-deleted command by tag and tid."""
+    """Восстанавливает одну мягко-удалённую команду по тегу и tid."""
     conn = get_db_connection(db_file)
     cursor = conn.execute(
         "UPDATE commands SET deleted = 0 WHERE tag = ? AND tid = ? AND deleted = 1",

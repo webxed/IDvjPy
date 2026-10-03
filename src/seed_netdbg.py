@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Seed L4/L7 debug handbook: tcpdump, nc, traceroute/mtr, openssl
-(see SEED_NETDBG_COMMANDS.md).
+Справочник отладки L4/L7: tcpdump, nc, traceroute/mtr, openssl
+(см. SEED_NETDBG_COMMANDS.md).
 
-Captures are bounded (`timeout` + `tcpdump -c`). mtr uses report mode (`-r`).
-Does not touch linux `net`, recon nmap/dig, or netfw ss.
+Захваты ограничены (`timeout` + `tcpdump -c`). mtr идёт в режиме отчёта (`-r`).
+Не трогает linux `net`, recon nmap/dig и netfw ss.
 
-Run: python3 src/seed_netdbg.py --seed
+Запуск: python3 src/seed_netdbg.py --seed
 """
 import sys
 

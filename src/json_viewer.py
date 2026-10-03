@@ -1,8 +1,8 @@
 """
-JSON Viewer Module
+Модуль просмотра JSON
 
-Provides modal screen for viewing JSON data as interactive tree structure.
-Supports jq path copying, filtering, and match navigation.
+Даёт модальный экран для просмотра JSON в виде интерактивного дерева.
+Поддерживает копирование jq-путей, фильтрацию и переход по совпадениям.
 """
 
 import json
@@ -19,7 +19,7 @@ from textual.widgets import Input, Tree
 
 class JSONViewer(ModalScreen):
     """
-    Modal screen для просмотра JSON в виде дерева.
+    Модальный экран для просмотра JSON в виде дерева.
 
     Позволяет:
     - Просматривать JSON структуру в виде дерева
