@@ -7,7 +7,9 @@ loop.
 """
 from __future__ import annotations
 
+import asyncio
 import os
+import threading
 from pathlib import Path
 
 import pytest
@@ -55,7 +57,7 @@ async def test_md_refuses_oversized_text(isolated_home):
         text = last_info(app).text_content
         assert "md_max_bytes" in text
         assert "500 B" in text  # размер файла в сообщении
-        assert app._md_read_thread is None  # полного чтения не было
+        assert app._md_worker is not None  # проверка размера работает в worker-е
         assert not isinstance(app.screen, HandbookMarkdownScreen)
 
 
@@ -75,12 +77,40 @@ async def test_md_read_error_is_reported(isolated_home, monkeypatch):
 
 
 async def test_md_text_read_is_offloaded(isolated_home):
-    """Текст открывается после фонового чтения: поток `md-read` запускается."""
+    """Текст открывается после фонового чтения в управляемом Worker."""
     note = isolated_home / "note.md"
     note.write_text("# note\n\ntext\n", encoding="utf-8")
     app = CommandRunner()
     async with app.run_test(size=(100, 20)) as _pilot:
         app._open_md_file(note)
-        assert app._md_read_thread is not None
+        assert app._md_worker is not None
         await wait_md(app)
         assert isinstance(app.screen, HandbookMarkdownScreen)
+
+
+async def test_late_md_result_does_not_replace_newer_request(isolated_home, monkeypatch):
+    """Медленный первый `:md` не открывается поверх второго запроса."""
+    slow = isolated_home / "slow.md"
+    fast = isolated_home / "fast.md"
+    slow.write_text("# slow\n", encoding="utf-8")
+    fast.write_text("# fast\n", encoding="utf-8")
+    entered = threading.Event()
+    release = threading.Event()
+    real_read = Path.read_bytes
+
+    def delayed_read(self: Path) -> bytes:
+        if self == slow:
+            entered.set()
+            release.wait(timeout=2)
+        return real_read(self)
+
+    monkeypatch.setattr(Path, "read_bytes", delayed_read)
+    app = CommandRunner()
+    async with app.run_test(size=(100, 20)) as _pilot:
+        app._open_md_file(slow)
+        assert await asyncio.to_thread(entered.wait, 1)
+        app._open_md_file(fast)
+        release.set()
+        await wait_md(app)
+        assert isinstance(app.screen, HandbookMarkdownScreen)
+        assert app.screen._path == fast

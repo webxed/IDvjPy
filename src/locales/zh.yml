@@ -479,6 +479,7 @@ md:
 write:
   usage: "用法：:w <文件> [--overwrite]"
   writing: "[dim]正在将日志写入 {name}…[/dim]"
+  busy: "日志写入已在进行中。"
   done: "日志内容已追加到 '{name}'（{blocks} 个块）。"
   done_overwrite: "日志已覆盖写入 '{name}'（{blocks} 个块）。"
   failed: "写入文件出错：{error}"

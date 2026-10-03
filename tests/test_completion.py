@@ -1,4 +1,7 @@
 """Файловые подсказки: видимость списка, Tab не затирает команду, каталоги с /."""
+import asyncio
+import threading
+
 import pyperclip
 
 import database_v2 as database
@@ -83,6 +86,32 @@ async def test_path_completion_still_works_with_caret_in_last_token(isolated_hom
         await pilot.press("enter")
         await pilot.pause()
         assert inp.value == f"cat {target}"
+
+
+async def test_stale_path_completion_does_not_replace_newer_input(isolated_home, monkeypatch):
+    """Запоздалый список для старого пути не открывается после новой строки."""
+    app = CommandRunner()
+    started = threading.Event()
+    release = threading.Event()
+    original = app._get_file_completion_candidates
+
+    def delayed_candidates(value: str):
+        started.set()
+        release.wait(timeout=2)
+        return original(value)
+
+    monkeypatch.setattr(app, "_get_file_completion_candidates", delayed_candidates)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.press("escape")
+        inp = input_widget(app)
+        inp.value = "ls ./"
+        inp.cursor_position = len(inp.value)
+        assert await asyncio.to_thread(started.wait, 1)
+        inp.value = "echo changed"
+        inp.cursor_position = len(inp.value)
+        release.set()
+        await pilot.pause(delay=0.1)
+        assert not app._completion_list.is_visible()
 
 
 async def test_db_command_hint_not_applied_while_editing_mid_line(isolated_home):

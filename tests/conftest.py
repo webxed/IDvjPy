@@ -113,35 +113,32 @@ async def wait_clipboard(app: CommandRunner) -> None:
         await asyncio.sleep(0)
 
 
-async def wait_md(app: CommandRunner, timeout: float = 5.0) -> None:
-    """Дождаться фонового чтения `:md` и его callback в UI-потоке.
-
-    Текстовые файлы читаются в потоке (`_md_read_thread`) и открывают
-    просмотрщик через `call_from_thread`, поэтому сразу после `:md` экран ещё
-    может быть прежним. `pilot.pause()` поток не покрывает — нужен явный wait.
-    """
+async def _wait_worker(app: CommandRunner, attr: str, timeout: float = 5.0) -> None:
+    """Дождаться Textual Worker и дать event loop применить его callback."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        thread = getattr(app, "_md_read_thread", None)
-        if thread is None or not thread.is_alive():
-            await asyncio.sleep(0.02)  # дать event loop выполнить callback
-            thread = getattr(app, "_md_read_thread", None)
-            if thread is None or not thread.is_alive():
+        worker = getattr(app, attr, None)
+        if worker is None or worker.is_finished:
+            await asyncio.sleep(0.02)
+            worker = getattr(app, attr, None)
+            if worker is None or worker.is_finished:
                 return
+        else:
+            try:
+                await worker.wait()
+            except Exception:
+                pass
         await asyncio.sleep(0.02)
+
+
+async def wait_md(app: CommandRunner, timeout: float = 5.0) -> None:
+    """Дождаться управляемого worker-а `:md` и его UI callback-а."""
+    await _wait_worker(app, "_md_worker", timeout)
 
 
 async def wait_write(app: CommandRunner, timeout: float = 5.0) -> None:
-    """Дождаться фоновой записи `:w` и её callback в UI-потоке."""
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        thread = getattr(app, "_write_thread", None)
-        if thread is None or not thread.is_alive():
-            await asyncio.sleep(0.02)
-            thread = getattr(app, "_write_thread", None)
-            if thread is None or not thread.is_alive():
-                return
-        await asyncio.sleep(0.02)
+    """Дождаться управляемого worker-а записи `:w`."""
+    await _wait_worker(app, "_write_worker_job", timeout)
 
 
 async def right_click(pilot, *, widget=None, offset: tuple[int, int] = (0, 0), button: int = 3) -> bool:

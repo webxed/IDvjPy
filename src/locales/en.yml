@@ -477,6 +477,7 @@ md:
 write:
   usage: "Usage: :w <file> [--overwrite]"
   writing: "[dim]Writing journal to {name}…[/dim]"
+  busy: "Journal write already in progress."
   done: "Log content written to '{name}' ({blocks} block(s), appended)."
   done_overwrite: "Log written to '{name}' ({blocks} block(s), overwritten)."
   failed: "Error writing to file: {error}"

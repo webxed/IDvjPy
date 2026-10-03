@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+import asyncio
+import threading
 from pathlib import Path
 
 from app import CommandRunner
@@ -21,7 +23,7 @@ async def test_w_runs_in_background(isolated_home):
         await submit(pilot, "echo hi")
         await wait_command_done(app)
         await submit(pilot, f":w {target}")
-        assert app._write_thread is not None
+        assert app._write_worker_job is not None
         await wait_write(app)
         assert target.is_file()
         assert "written to" in last_info(app).text_content
@@ -66,6 +68,33 @@ async def test_w_without_args_shows_usage(isolated_home):
     async with app.run_test(size=(100, 30)) as pilot:
         await submit(pilot, ":w")
         assert "Usage: :w" in last_info(app).text_content
+
+
+async def test_second_w_is_rejected_while_first_is_running(isolated_home, monkeypatch):
+    """Два `:w` не могут конкурентно писать один и тот же журнал."""
+    target = isolated_home / "dump.txt"
+    app = CommandRunner()
+    original = app._strip_formatting_tags
+    entered = threading.Event()
+    release = threading.Event()
+
+    def slow_strip(value: str) -> str:
+        entered.set()
+        release.wait()
+        return original(value)
+
+    monkeypatch.setattr(app, "_strip_formatting_tags", slow_strip)
+    async with app.run_test(size=(100, 30)) as pilot:
+        await submit(pilot, "echo first")
+        await wait_command_done(app)
+        await submit(pilot, f":w {target}")
+        assert await asyncio.to_thread(entered.wait, 1)
+        try:
+            await submit(pilot, f":w {target}")
+            assert "already in progress" in last_info(app).text_content
+        finally:
+            release.set()
+        await wait_write(app)
 
 
 async def test_w_does_not_write_secret_value(isolated_home):

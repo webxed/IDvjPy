@@ -2032,6 +2032,11 @@ class CommandLineInput(Input):
         super().__init__(**kwargs)
         self._completion_list: CompletionList | None = None
         self._applying_completion: bool = False  # Флаг: применяем completion
+        # Файловая подсказка читает каталог в worker-е: поколение + снимок ввода
+        # не дают позднему результату подменить список уже для другого пути.
+        self._path_completion_generation = 0
+        self._path_completion_timer: Timer | None = None
+        self._path_completion_worker: Any | None = None
         # Undo (Ctrl+Z): стек предыдущих состояний value+курсор. Заполняется в
         # _watch_value при каждом изменении (печать, удаление, word-delete,
         # вставка) — сбрасывается после отправки команды и по Ctrl+D.
@@ -2426,6 +2431,12 @@ class CommandLineInput(Input):
             self._completion_list.hide()
             return
 
+        if is_path_context:
+            # `stat` / `scandir` (включая сетевые mount-ы) не должны выполняться
+            # в reactive watcher Input. Путь дочитывается в debounced worker-е.
+            self._request_path_completions(raw_value, self.cursor_position)
+            return
+
         candidates = app.get_input_completion_items(raw_value)
         history_items: list[CompletionItem] = []
         if hasattr(app, "get_history_completions"):
@@ -2449,6 +2460,77 @@ class CommandLineInput(Input):
                 self._completion_list.hide()
                 return
             candidates.extend(history_items)
+            self._completion_list.update_candidates(candidates)
+        else:
+            self._completion_list.hide()
+
+    def _request_path_completions(self, value: str, cursor_position: int) -> None:
+        """Запланировать файловые подсказки без блокировки event loop."""
+        self._path_completion_generation += 1
+        generation = self._path_completion_generation
+        if self._path_completion_timer is not None:
+            self._path_completion_timer.stop()
+
+        def start_worker() -> None:
+            if generation != self._path_completion_generation:
+                return
+            app = self.app
+
+            def scan() -> list[CompletionItem]:
+                return app._get_file_completion_candidates(value)
+
+            def done(items: list[CompletionItem]) -> None:
+                app._background_callback(
+                    self._finish_path_completions, generation, value, cursor_position, items
+                )
+
+            def work() -> None:
+                try:
+                    done(scan())
+                except OSError:
+                    done([])
+
+            self._path_completion_worker = app.run_worker(
+                work,
+                thread=True,
+                group="path-completion",
+                name="path-completion",
+                exclusive=True,
+            )
+
+        # Один короткий UI-такт объединяет быстрый набор, но не делает подсказку
+        # заметно запаздывающей.
+        self._path_completion_timer = self.set_timer(0.01, start_worker)
+        if self._completion_list is not None:
+            self._completion_list.hide()
+
+    def _finish_path_completions(
+        self,
+        generation: int,
+        value: str,
+        cursor_position: int,
+        candidates: list[CompletionItem],
+    ) -> None:
+        """Принять результат только для всё ещё актуального снимка Input."""
+        if (
+            generation != self._path_completion_generation
+            or value != self.value
+            or cursor_position != self.cursor_position
+            or self._completion_list is None
+        ):
+            return
+        if not self._items_match_caret(candidates):
+            self._completion_list.hide()
+            return
+        prefix = value.strip()
+        if (
+            candidates
+            and candidates[0].insert == prefix
+            and not prefix.endswith(("/", "\\"))
+        ):
+            self._completion_list.hide()
+            return
+        if candidates:
             self._completion_list.update_candidates(candidates)
         else:
             self._completion_list.hide()
@@ -2627,7 +2709,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.210"
+    VERSION = "v1.211"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2953,10 +3035,12 @@ class CommandRunner(App):
         self.md_max_bytes: int = DEFAULT_MD_MAX_BYTES
         # Конвертер документов для `:md` (docx/pdf/…): пусто — автопоиск.
         self.md_converter: str = ""
-        # Фоновое чтение текстового файла `:md` (большой файл/медленный носитель).
-        self._md_read_thread: threading.Thread | None = None
-        # Фоновая запись журнала `:w` (сериализация/запись в потоке).
-        self._write_thread: threading.Thread | None = None
+        # Управляемые фоновые задачи Textual. Поколения отбрасывают поздний
+        # результат отменённого/старого запроса, который поток уже не может прервать.
+        self._md_worker: Any | None = None
+        self._md_request_generation = 0
+        self._write_worker_job: Any | None = None
+        self._background_active = False
         # Локальный OCR скан-PDF (ocrmypdf): пусто — автопоиск, off — выключено.
         self.md_ocr: str = ""
         self._md_results: list[MdMatch] = []
@@ -2995,6 +3079,11 @@ class CommandRunner(App):
         # таймеру (`_vault_clip_pending`), чтобы значение не лежало там долго.
         self._vault_clip_pending: bool = False
         self._vault_clip_value: str | None = None
+        self._vault_clip_generation = 0
+        self._vault_clip_timer: Timer | None = None
+        # Один системный clipboard нельзя писать конкурентно: иначе поздний worker
+        # может вернуть в него старое значение vault после новой операции.
+        self._system_clipboard_lock = threading.Lock()
         # Фоновые clipboard-воркеры (системный буфер — блокирующий I/O). Держим,
         # чтобы тесты и завершение приложения могли их дождаться.
         self._clipboard_workers: list[Any] = []
@@ -3907,25 +3996,37 @@ class CommandRunner(App):
         self._paste_clipboard_into_input()
 
     def _paste_clipboard_into_input(self) -> None:
-        """Прочитать буфер в фоне и вставить результат в строку ввода.
+        """Прочитать буфер в фоне и вставить в позицию курсора на момент запроса.
 
-        Системные backend-ы блокирующие, поэтому чтение уходит в поток; когда
-        оно завершится, `_finish_clipboard_paste` вставит текст в строку.
-        Фокус не важен: строка ввода получает его сама (правый клик по журналу
-        или по списку подсказок работает так же, как при курсоре в строке).
-        Выделение в строке не затирается — вставка идёт в конец. Переносы строк
-        схлопываются в пробел: поле однострочное (см. `paste_line`).
+        Системные backend-ы блокирующие, поэтому чтение уходит в поток. Снимок
+        строки и курсора защищает от поздней вставки в другое место, если человек
+        уже продолжил редактирование до ответа clipboard backend-а.
         """
-        self._clipboard_offload(read_system, on_done=self._finish_clipboard_paste)
+        input_widget = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
+        value = input_widget.value or ""
+        cursor_position = input_widget.cursor_position
+        self._clipboard_offload(
+            read_system,
+            on_done=lambda text: self._finish_clipboard_paste(text, value, cursor_position),
+        )
 
-    def _finish_clipboard_paste(self, system_text: str | None) -> None:
-        """Результат фонового чтения буфера: вставить или сообщить о пустоте."""
+    def _finish_clipboard_paste(
+        self, system_text: str | None, expected_value: str, cursor_position: int
+    ) -> None:
+        """Вставить результат только если строка не изменилась с момента запроса."""
         clip = paste_line(system_text or self.clipboard or "")
         if not clip:
             self.sub_title = t("clipboard.empty")
             self.set_timer(3, self.clear_subtitle)
             return
-        self._insert_into_input(clip)
+        input_widget = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
+        if input_widget.value != expected_value:
+            return
+        pos = max(0, min(cursor_position, len(expected_value)))
+        input_widget.focus()
+        input_widget.value = expected_value[:pos] + clip + expected_value[pos:]
+        input_widget.cursor_position = pos + len(clip)
+        self._maybe_clear_clipboard_after_secret()
 
     def _insert_into_input(self, text: str) -> None:
         """Вставить текст в строку ввода в позицию курсора; фокус — в строку.
@@ -3951,46 +4052,70 @@ class CommandRunner(App):
 
     def copy_text(self, text: str) -> None:
         """Копирует текст: внутренний буфер сразу, системные — в фоне."""
+        # Любая обычная копия инвалидирует все отложенные vault write/clear jobs,
+        # даже если TTL уже снял `pending`: поздний worker не вернёт секрет назад.
+        self._invalidate_vault_clip()
         self._copy_to_clipboards(text)
-        # Скопировали что-то другое, пока в буфере лежал секрет хранилища, —
-        # секрета там больше нет, и таймерная чистка была бы лишней.
-        if (
-            getattr(self, "_vault_clip_pending", False)
-            and (text or "") != getattr(self, "_vault_clip_value", None)
-        ):
-            self._vault_clip_pending = False
 
-    def _copy_to_clipboards(self, text: str) -> None:
-        """Внутренний буфер — сразу (дёшево), системные backend-ы — в потоке."""
+    def _invalidate_vault_clip(self) -> None:
+        """Отменить ожидающую очистку vault clipboard после новой пользовательской копии."""
+        self._vault_clip_pending = False
+        self._vault_clip_value = None
+        self._vault_clip_generation += 1
+        if self._vault_clip_timer is not None:
+            self._vault_clip_timer.stop()
+            self._vault_clip_timer = None
+
+    def _copy_to_clipboards(self, text: str, *, vault_generation: int | None = None) -> None:
+        """Внутренний буфер — сразу, системный — последовательно в worker-е.
+
+        У vault есть поколение: отложенная запись старого секрета не имеет права
+        попасть в системный clipboard после следующего `:vault cp`/обычной копии.
+        """
         payload = text or ""
         copy_internal(payload, self)
-        self._clipboard_offload(copy_system, payload)
+
+        def copy_job() -> bool:
+            with self._system_clipboard_lock:
+                if (
+                    vault_generation is not None
+                    and vault_generation != self._vault_clip_generation
+                ):
+                    return False
+                copy_system(payload)
+                return True
+
+        self._clipboard_offload(copy_job)
+
+    def _background_callback(self, callback: Callable[..., None], *args: Any) -> None:
+        """Вернуть результат worker-а только в живой Textual event loop."""
+        if not self._background_active:
+            return
+        try:
+            self.call_from_thread(callback, *args)
+        except RuntimeError:
+            # App уже закрыл event loop между проверкой и публикацией callback-а.
+            return
 
     def _clipboard_offload(
         self, fn: Callable[..., Any], *args: Any, on_done: Callable[[Any], None] | None = None
     ) -> None:
-        """Блокирующий clipboard-вызов в фоновом потоке (UI не морозим).
-
-        `on_done(result)` вызывается обратно в UI-потоке. Вне запущенного
-        приложения (юнит-вызов без event loop) выполняет синхронно.
-        """
+        """Блокирующий clipboard-вызов в фоновом потоке (UI не морозим)."""
         def work() -> Any:
             try:
                 result = fn(*args)
             except Exception:
                 result = None
             if on_done is not None:
-                try:
-                    self.call_from_thread(on_done, result)
-                except Exception:
-                    pass
+                self._background_callback(on_done, result)
             return result
 
         try:
             worker = self.run_worker(
                 work, thread=True, group="clipboard", name="clipboard"
             )
-        except Exception:
+        except RuntimeError:
+            # Вне запущенного приложения нужен прежний синхронный best-effort путь.
             work()
             return
         self._clipboard_workers = [
@@ -4000,6 +4125,7 @@ class CommandRunner(App):
 
     def _clear_clipboards(self) -> None:
         """Очистить CLIPBOARD, PRIMARY и внутренний буфер (best effort)."""
+        self._invalidate_vault_clip()
         self._copy_to_clipboards("")
 
     def _maybe_clear_clipboard_after_secret(self) -> None:
@@ -4170,6 +4296,7 @@ class CommandRunner(App):
         Вызывается при старте приложения.
         Загружает настройки, базу данных и переменные окружения.
         """
+        self._background_active = True
         self._data_dir = ensure_data_dir(resolve_data_dir(self._requested_data_dir))
         self._pin_instance_files()
         self._provision_fresh_data_dir()
@@ -4763,6 +4890,16 @@ class CommandRunner(App):
             pass
 
     def on_unmount(self) -> None:
+        # Callbacks потоков после размонтирования не должны трогать закрытый UI.
+        self._background_active = False
+        for worker in (self._md_worker, self._write_worker_job):
+            if worker is not None and not worker.is_finished:
+                worker.cancel()
+        try:
+            self.workers.cancel_group(self, "path-completion")
+            self.workers.cancel_group(self, "clipboard")
+        except RuntimeError:
+            pass
         # Выход: секреты не остаются на диске после закрытия приложения.
         self._purge_secrets_file()
         # Хранилище `:vault`: пароль и записи живут только в памяти сессии,
@@ -6160,6 +6297,9 @@ class CommandRunner(App):
         if not args:
             self.add_block(InfoBlock(t("write.usage")))
             return
+        if self._write_worker_job is not None and not self._write_worker_job.is_finished:
+            self.add_block(InfoBlock(t("write.busy")))
+            return
         filename = args[0]
         overwrite = any(arg.lower() in {"--overwrite", "-o"} for arg in args[1:])
         blocks = [
@@ -6170,38 +6310,36 @@ class CommandRunner(App):
         # `text_content` — плоский masked/frozen текст; теги разметки снимаются в воркере.
         snapshot = [block.text_content for block in blocks]
         self.sub_title = t("write.writing", name=filename)
-        self._write_thread = threading.Thread(
-            target=self._write_worker,
-            args=(filename, snapshot, overwrite),
-            daemon=True,
-            name="write-journal",
-        )
-        self._write_thread.start()
 
-    def _write_worker(
-        self, filename: str, snapshot: list[str], overwrite: bool
-    ) -> None:
-        """Фоновый поток: сериализация и запись журнала порциями (чанками)."""
-        mode = "w" if overwrite else "a"
-        try:
-            with open(filename, mode, encoding=self.ENCODING) as handle:
-                for index, raw in enumerate(snapshot):
-                    if index:
-                        handle.write("\n\n---\n\n")
-                    handle.write(self._strip_formatting_tags(raw))
-        except OSError as error:
-            self.call_from_thread(self._write_failed, str(error))
-            return
-        self.call_from_thread(self._write_done, filename, overwrite, len(snapshot))
+        def write_job() -> None:
+            mode = "w" if overwrite else "a"
+            try:
+                with open(filename, mode, encoding=self.ENCODING) as handle:
+                    for index, raw in enumerate(snapshot):
+                        if index:
+                            handle.write("\n\n---\n\n")
+                        handle.write(self._strip_formatting_tags(raw))
+            except OSError as error:
+                self._background_callback(self._write_failed, str(error))
+                return
+            self._background_callback(self._write_done, filename, overwrite, len(snapshot))
+
+        self._write_worker_job = self.run_worker(
+            write_job, thread=True, group="journal-write", name="write-journal", exclusive=True
+        )
 
     def _write_done(self, filename: str, overwrite: bool, blocks: int) -> None:
         """В UI-потоке: итог записи журнала."""
+        if not self._background_active:
+            return
         self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
         key = "write.done_overwrite" if overwrite else "write.done"
         self.add_block(InfoBlock(t(key, name=filename, blocks=blocks)))
 
     def _write_failed(self, error: str) -> None:
         """В UI-потоке: ошибка записи журнала."""
+        if not self._background_active:
+            return
         self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
         self.add_block(InfoBlock(t("write.failed", error=error)))
 
@@ -6920,68 +7058,86 @@ class CommandRunner(App):
         self._open_md_file(path, line=line)
 
     def _open_md_file(self, path: Path, line: int | None = None) -> None:
-        """Открыть файл просмотрщиком: markdown как есть, документ — через конвертер.
+        """Открыть файл через отменяемый worker, не касаясь filesystem в UI-потоке."""
+        self._start_md_job(path, line)
 
-        Формат решаем по содержимому (префикс, `is_plain_text(..., complete=False)`),
-        а не по имени: `.pdf` часто декодируется без ошибки, а markdown бывает с
-        другим именем. Каталоги, FIFO и устройства отклоняем до чтения (FIFO
-        заблокировал бы обработчик), а полное чтение и декодирование уходит в
-        фоновый поток — большой файл на медленном носителе не морозит UI.
+    def _start_md_job(self, path: Path, line: int | None, *, force_convert: bool = False) -> None:
+        """Запустить единственный актуальный `:md` запрос.
+
+        Даже отменённый поток может закончить I/O, поэтому callback дополнительно
+        привязан к поколению запроса и поздний результат просто отбрасывается.
         """
-        try:
-            info = path.stat()
-        except OSError as e:
-            self.add_block(InfoBlock(t("md.error_read", path=path, error=e)))
-            return
-        if not stat.S_ISREG(info.st_mode):
-            self.add_block(InfoBlock(t("md.not_regular", name=path.name)))
-            return
-        try:
-            with open(path, "rb") as handle:
-                prefix = handle.read(md_convert.SNIFF_BYTES)
-        except OSError as e:
-            self.add_block(InfoBlock(t("md.error_read", path=path, error=e)))
-            return
-        if not md_convert.is_plain_text(prefix, self.ENCODING, complete=False):
-            self._convert_document_to_md(path, line=line)
-            return
-        if info.st_size > self.md_max_bytes:
-            self.add_block(InfoBlock(t(
-                "md.too_large",
-                name=path.name,
-                size=md_convert.human_size(info.st_size),
-                limit=md_convert.human_size(self.md_max_bytes),
-            )))
-            return
-        self.sub_title = t("md.reading", name=path.name)
-        self._md_read_thread = threading.Thread(
-            target=self._md_read_worker, args=(path, line), daemon=True, name="md-read"
+        self._md_request_generation += 1
+        generation = self._md_request_generation
+        self.sub_title = t("md.converting" if force_convert else "md.reading", name=path.name)
+        max_bytes = self.md_max_bytes
+        encoding = self.ENCODING
+        converter = self.md_converter
+        ocr = self.md_ocr
+        cache_dir = self._md_cache_dir()
+
+        def md_job() -> None:
+            try:
+                info = path.stat()
+                if not stat.S_ISREG(info.st_mode):
+                    outcome: tuple[str, Any] = ("not_regular", None)
+                elif force_convert:
+                    outcome = ("convert", md_convert.convert(
+                        path, cache_dir=cache_dir, preferred=converter, ocr=ocr
+                    ))
+                else:
+                    with open(path, "rb") as handle:
+                        prefix = handle.read(md_convert.SNIFF_BYTES)
+                    if not md_convert.is_plain_text(prefix, encoding, complete=False):
+                        outcome = ("convert", md_convert.convert(
+                            path, cache_dir=cache_dir, preferred=converter, ocr=ocr
+                        ))
+                    elif info.st_size > max_bytes:
+                        outcome = ("too_large", (info.st_size, max_bytes))
+                    else:
+                        data = path.read_bytes()
+                        if md_convert.is_plain_text(data, encoding):
+                            outcome = ("text", md_convert.decode_text(data, encoding))
+                        else:
+                            outcome = ("convert", md_convert.convert(
+                                path, cache_dir=cache_dir, preferred=converter, ocr=ocr
+                            ))
+            except OSError as error:
+                outcome = ("error", str(error))
+            except Exception as error:  # внешний конвертер не должен уронить TUI
+                outcome = ("convert", md_convert.ConvertResult(error="failed", detail=str(error)))
+            self._background_callback(self._md_job_done, generation, path, line, outcome)
+
+        self._md_worker = self.run_worker(
+            md_job, thread=True, group="md-open", name="md-open", exclusive=True
         )
-        self._md_read_thread.start()
 
-    def _md_read_worker(self, path: Path, line: int | None) -> None:
-        """Фоновое чтение/декодирование текстового файла (не морозим event loop)."""
-        try:
-            data = path.read_bytes()
-        except OSError as e:
-            self.call_from_thread(self._md_read_failed, path, str(e))
+    def _md_job_done(
+        self, generation: int, path: Path, line: int | None, outcome: tuple[str, Any]
+    ) -> None:
+        """Показать только результат последнего ещё живого `:md` запроса."""
+        if not self._background_active or generation != self._md_request_generation:
             return
-        if not md_convert.is_plain_text(data, self.ENCODING):
-            # Файл мог измениться между префиксом и чтением — уводим конвертеру.
-            self.call_from_thread(self._convert_document_to_md, path, line)
-            return
-        text = md_convert.decode_text(data, self.ENCODING)
-        self.call_from_thread(self._md_read_done, path, text, line)
-
-    def _md_read_failed(self, path: Path, error: str) -> None:
-        """В UI-потоке: ошибка фонового чтения `:md`."""
+        kind, result = outcome
         self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
-        self.add_block(InfoBlock(t("md.error_read", path=path, error=error)))
+        if kind == "error":
+            self.add_block(InfoBlock(t("md.error_read", path=path, error=result)))
+        elif kind == "not_regular":
+            self.add_block(InfoBlock(t("md.not_regular", name=path.name)))
+        elif kind == "too_large":
+            size, limit = result
+            self.add_block(InfoBlock(t(
+                "md.too_large", name=path.name, size=md_convert.human_size(size),
+                limit=md_convert.human_size(limit),
+            )))
+        elif kind == "text":
+            self._show_md_text(path, result, line=line)
+        else:
+            self._md_convert_done(path, result, line)
 
-    def _md_read_done(self, path: Path, text: str, line: int | None) -> None:
-        """В UI-потоке: текст прочитан — открываем просмотрщик."""
-        self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
-        self._show_md_text(path, text, line=line)
+    def _convert_document_to_md(self, path: Path, line: int | None = None) -> None:
+        """Совместимый вход для document-only пути `:md`; тоже управляется worker-ом."""
+        self._start_md_job(path, line, force_convert=True)
 
     def _show_md_text(self, path: Path, text: str, line: int | None = None) -> None:
         """Показать markdown-текст (опц. на строке `line`): форматированно или исходником.
@@ -7029,29 +7185,6 @@ class CommandRunner(App):
         """Кэш конвертаций рядом с данными приложения (`<data>/mdcache`)."""
         return os.path.join(self._data_dir or os.getcwd(), md_convert.CACHE_DIR_NAME)
 
-    def _convert_document_to_md(self, path: Path, line: int | None = None) -> None:
-        """Документ → markdown: конвертация в фоне (UI не блокируем), результат — из кэша."""
-        self.sub_title = t("md.converting", name=path.name)
-        thread = threading.Thread(
-            target=self._md_convert_worker,
-            args=(path, line),
-            daemon=True,
-            name="md-convert",
-        )
-        thread.start()
-
-    def _md_convert_worker(self, path: Path, line: int | None) -> None:
-        """Рабочий поток: конвертация файла (чужой инструмент может быть медленным)."""
-        try:
-            result = md_convert.convert(
-                path,
-                cache_dir=self._md_cache_dir(),
-                preferred=self.md_converter,
-                ocr=self.md_ocr,
-            )
-        except Exception as e:  # конвертер чужой — падать из-за него нельзя
-            result = md_convert.ConvertResult(error="failed", detail=str(e))
-        self.call_from_thread(self._md_convert_done, path, result, line)
 
     def _md_convert_done(
         self, path: Path, result: md_convert.ConvertResult, line: int | None
@@ -9749,10 +9882,15 @@ class CommandRunner(App):
         value = self._vault_value(name)
         if value is None:
             return
-        self.copy_text(value)
+        self._invalidate_vault_clip()
+        generation = self._vault_clip_generation
         self._vault_clip_value = value
         self._vault_clip_pending = True
-        self.set_timer(self.VAULT_CLIPBOARD_TTL, self._vault_clear_clipboard)
+        self._copy_to_clipboards(value, vault_generation=generation)
+        self._vault_clip_timer = self.set_timer(
+            self.VAULT_CLIPBOARD_TTL,
+            lambda: self._vault_clear_clipboard(generation),
+        )
         self.add_block(InfoBlock(t(
             "vault.copied",
             name=name,
@@ -9772,34 +9910,36 @@ class CommandRunner(App):
             return None
         return value
 
-    def _vault_clear_clipboard(self) -> None:
-        """Убрать секрет хранилища из буфера (выход из TTY или таймер).
-
-        Внутренний буфер чистим сразу, системный читаем в фоне: стираем его,
-        только если там всё ещё значение vault. Если человек успел скопировать
-        что-то другое, чужой текст не трогаем.
-        """
-        if not self._vault_clip_pending:
+    def _vault_clear_clipboard(self, generation: int | None = None) -> None:
+        """Убрать только актуальное значение vault из clipboard по TTL/TTY exit."""
+        if generation is None:
+            generation = self._vault_clip_generation
+        if generation != self._vault_clip_generation or not self._vault_clip_pending:
             return
         value = self._vault_clip_value
         self._vault_clip_pending = False
         self._vault_clip_value = None
+        self._vault_clip_timer = None
         copy_internal("", self)
         self._clipboard_offload(
-            self._vault_clear_system, value, on_done=self._vault_clip_cleared
+            self._vault_clear_system, value, generation,
+            on_done=lambda cleared: self._vault_clip_cleared(generation, cleared),
         )
 
-    def _vault_clear_system(self, value: str | None) -> bool:
-        """Стереть системный буфер, если он всё ещё содержит значение vault."""
-        current = read_system()
-        if current and value and current != value:
-            return False  # пользователь скопировал что-то новое — не затираем
-        copy_system("")
-        return True
+    def _vault_clear_system(self, value: str | None, generation: int) -> bool:
+        """Стереть системный буфер, если это всё ещё тот же vault generation."""
+        with self._system_clipboard_lock:
+            if generation != self._vault_clip_generation:
+                return False
+            current = read_system()
+            if current and value and current != value:
+                return False  # пользователь скопировал что-то новое — не затираем
+            copy_system("")
+            return True
 
-    def _vault_clip_cleared(self, cleared: bool | None) -> None:
-        """Подтверждение очистки буфера — только если она действительно была."""
-        if not cleared:
+    def _vault_clip_cleared(self, generation: int, cleared: bool | None) -> None:
+        """Подтверждение очистки только актуального vault clipboard."""
+        if generation != self._vault_clip_generation or not cleared:
             return
         self.sub_title = t("vault.clip_cleared")
         self.set_timer(3, self.clear_subtitle)
