@@ -61,8 +61,9 @@
   :new [NAME|-] [DIR] - Another app instance in a NEW terminal window (Ctrl+N; :? session)
   :send <session|*> <cmd> - Forward a command to another session (`:send!` — at once;
                 secrets by name, the value goes to the target's store; :? send)
-  :tags [filter] - Searchable tag catalog; filter name, description, or structured metadata (:? tag-metadata)
-  :tagmeta TAG [JSON] - Show/replace structured tag metadata; `{}` clears it (:? tag-metadata)
+  :tags [filter] - Searchable tag catalog; filter name, description, or structured metadata (:? tags)
+  :tagmeta TAG [JSON] - Show/replace structured tag metadata; `{}` clears it (:? tags)
+  :pin [list|add|rm|clear] - Session-local pinned tags; `:tags pinned` lists them (:? tags)
   :scope [add|rm|clear] … - Tag scope of THIS window: `:scope add git` lists only the
                 git handbook, `:scope rm k8s` hides it, `:scope clear` (or `:scope all`)
                 shows everything again. Filters lists and hints (`?`, `??`, `?text`,

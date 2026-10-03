@@ -279,6 +279,7 @@ try:
         unexpanded_variables,
         wrap_tty_command,
     )
+    from tag_pins import load_pins, pins_file_for, save_pins
     from tag_scope import (
         ScopeModeError,
         TagScope,
@@ -2594,7 +2595,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.193"
+    VERSION = "v1.194"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2745,6 +2746,7 @@ class CommandRunner(App):
     CMD_SEND_RUN = "send!"  # то же, но сразу выполнить в целевой сессии
     CMD_SCOPE = "scope"  # какие теги показывать в этой сессии (фильтр представления)
     CMD_TAGS = "tags"  # searchable tag catalog
+    CMD_PIN = "pin"  # per-session favorite tags
     CMD_TAGMETA = "tagmeta"  # tag metadata
     CMD_VAULT = "vault"  # хранилище секретов с шифрованием по паролю (`vault.json.enc`)
     CMD_DOCTOR = "doctor"  # локальная диагностика окружения, без запусков и сети
@@ -5893,6 +5895,7 @@ class CommandRunner(App):
         CMD_SEND_RUN: "_handle_send_run_args",
         CMD_SCOPE: "_handle_scope_command",
         CMD_TAGS: "_handle_tags_command",
+        CMD_PIN: "_handle_pin_command",
         CMD_TAGMETA: "_handle_tagmeta_command",
         CMD_SCREENSAVER: "_handle_screensaver_command",
         CMD_BACKUP: "_handle_backup_command",
@@ -7332,28 +7335,83 @@ class CommandRunner(App):
             hidden=hidden,
         )
 
+    def _pins_file(self) -> str:
+        return os.path.join(self._data_dir or ".", pins_file_for(self.instance_name))
+
+    def _load_tag_pins(self) -> tuple[list[str], str]:
+        return load_pins(self._data_dir or ".", self.instance_name)
+
+    def _handle_pin_command(self, args: list[str]) -> None:
+        """Manage this session's favorite tags (no shared DB mutation)."""
+        verb = args[0].strip().lower() if args else "list"
+        tags, error = self._load_tag_pins()
+        if error:
+            self.add_block(InfoBlock(t("pins.broken", error=error)))
+            return
+        if verb in ("list", "show"):
+            self.add_block(InfoBlock(t("pins.list", tags=", ".join(tags) or t("pins.none"))))
+            return
+        if verb == "clear":
+            if len(args) != 1:
+                self.add_block(InfoBlock(t("pins.usage")))
+                return
+            tags = []
+        elif verb in ("add", "rm"):
+            names = [name.strip() for arg in args[1:] for name in arg.split(",") if name.strip()]
+            if not names:
+                self.add_block(InfoBlock(t("pins.usage")))
+                return
+            if verb == "add":
+                known = set(database.get_all_tags(self.db_file))
+                unknown = sorted(set(names) - known)
+                if unknown:
+                    self.add_block(InfoBlock(t("pins.unknown", tags=", ".join(unknown))))
+                    return
+                tags = list(dict.fromkeys([*tags, *names]))
+            else:
+                removing = set(names)
+                tags = [tag for tag in tags if tag not in removing]
+        else:
+            self.add_block(InfoBlock(t("pins.usage")))
+            return
+        if not save_pins(self._data_dir or ".", self.instance_name, tags):
+            self.add_block(InfoBlock(t("pins.save_failed", file=self._pins_file())))
+            return
+        self.add_block(InfoBlock(t("pins.updated", tags=", ".join(tags) or t("pins.none"))))
+
     def _handle_tags_command(self, args: list[str]) -> None:
         """Filterable catalog of live tags and their metadata."""
         needle = " ".join(args).strip().casefold()
+        pins, pin_error = self._load_tag_pins()
+        if pin_error:
+            self.add_block(InfoBlock(t("pins.broken", error=pin_error)))
+            return
+        pinned_only = needle == "pinned"
+        if pinned_only:
+            needle = ""
         comments = dict(database.get_all_tags_with_comments(self.db_file))
         metadata = database.get_all_tag_metadata(self.db_file)
         tags = sorted(
             tag for tag in database.get_all_tags(self.db_file)
-            if self._scope_allows(tag)
-            and (not needle or needle in tag.casefold()
+            if (not pinned_only or tag in pins)
+            and self._scope_allows(tag)
+            and (pinned_only or not needle or needle in tag.casefold()
                  or needle in comments.get(tag, "").casefold()
                  or needle in json.dumps(metadata.get(tag, {}), ensure_ascii=False).casefold())
         )
         lines = [t("tag_catalog.header", count=len(tags), filter=needle or "—")]
+        tags.sort(key=lambda tag: (tag not in pins, tag))
         for tag in tags:
             detail = comments.get(tag, "")
+            if tag in pins:
+                detail = "★" + (" " + detail if detail else "")
             meta = metadata.get(tag, {})
             if meta:
                 detail = " · ".join(part for part in (detail, json.dumps(meta, ensure_ascii=False, sort_keys=True)) if part)
             lines.append(f"{tag}: {detail}" if detail else tag)
         if not tags:
             lines.append(t("tag_catalog.empty"))
-        self.add_block(InfoBlock("\\n".join(lines)))
+        self.add_block(InfoBlock("\n".join(lines)))
 
     def _handle_tagmeta_command(self, args: list[str]) -> None:
         """Show or replace validated metadata for a tag."""

@@ -16,6 +16,12 @@
                组合管道/保存：`#file !file[1] | !file[2]`（预览会展开引用）
   !N         - 按上次查询中的 ID 执行命令
 
+  Pins       - `:pin add TAG…`、`:pin rm TAG…`、`:pin clear`、`:pin list`；
+               保存在数据目录的 `pins_<session>.json`，不会导出。
+               `:tags pinned` 筛选收藏项，收藏标签优先显示；scope 仍会隐藏不可见标签。
+  Metadata  - `:tagmeta TAG` 查看元数据；传入 JSON 替换，`{}` 清空。
+               字段：risk、utilities、os、interactive、topic、example。仅作描述，随 JSON 导出。
+
   Catalog    - `:tags [filter]` 搜索活动标签、描述和元数据，并遵循当前会话 scope。
                `:tagmeta TAG` 查看元数据；传入 JSON 对象可替换，`{}` 清空。
                字段：risk、utilities（字符串数组）、os（字符串数组）、interactive（布尔值）、topic、example。

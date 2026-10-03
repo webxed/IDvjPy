@@ -23,6 +23,15 @@ session:
 tag_catalog:
   header: "Tag catalog ({count}) — filter: {filter}"
   empty: "No matching live tags."
+pins:
+  usage: "Usage: :pin [list] | :pin add TAG… | :pin rm TAG… | :pin clear"
+  list: "Pinned in this session: {tags}"
+  none: "none"
+  updated: "Pinned tags updated: {tags}"
+  unknown: "Unknown live tag(s): {tags}. Pins are session-local and require an existing tag."
+  broken: "Pinned tags file ignored: {error}"
+  save_failed: "Could not save pinned tags to {file}."
+
 tag_metadata:
   usage: "Usage: :tagmeta TAG [JSON-object] — show or replace metadata. Fields: risk (low|medium|high|critical), utilities (string array), os (string array), interactive (boolean), topic (string), example (string)."
   empty: "No metadata for {tag}."
@@ -208,6 +217,7 @@ cmd:
   scope: "session tag scope: keep or hide groups/tags in this window"
   tags: "searchable catalog of live tags and metadata (:tags [filter])"
   tagmeta: "show or replace a tag's structured metadata (:tagmeta TAG [JSON])"
+  pin: "session-local pinned tags (:pin add|rm|clear|list; :tags pinned)"
   new: "app window in a new terminal (session)"
   send: "forward a command to another session"
   "send!": "forward and run it immediately"
