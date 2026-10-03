@@ -31,6 +31,7 @@ EXPECTED_KEYS = {
     "screensaver_idle",
     "screensaver_stars",
     "k8s_completion",
+    "system_command_completion",
     "kctx_vars",
     "editor",
     "md_converter",

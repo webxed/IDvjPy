@@ -106,6 +106,7 @@ try:
     from textual.binding import Binding, BindingType
     from textual.containers import Horizontal, Vertical, VerticalScroll
     from textual.content import Content
+    from textual.css.query import NoMatches
     from textual.screen import Screen
     from textual.selection import Selection
     from textual.strip import Strip
@@ -301,6 +302,10 @@ try:
         substitute_variables,
         unexpanded_variables,
         wrap_tty_command,
+    )
+    from system_complete import (
+        cached_system_command_candidates,
+        warm_system_command_cache,
     )
     from tag_pins import load_pins, pins_file_for, save_pins
     from tag_scope import (
@@ -2709,7 +2714,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.212"
+    VERSION = "v1.213"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2900,6 +2905,7 @@ class CommandRunner(App):
     KEY_SCREENSAVER_STARS = "screensaver_stars"
     KEY_K8S_COMPLETION = "k8s_completion"
     KEY_FILE_COMPLETION = "file_completion"
+    KEY_SYSTEM_COMMAND_COMPLETION = "system_command_completion"
     KEY_LINE_API_BLOCKS = "line_api_blocks"
     KEY_LLM_RENDER_MARKDOWN = "llm_render_markdown"
     KEY_CHEAT_SH_URL = "cheat_sh_url"
@@ -3121,6 +3127,10 @@ class CommandRunner(App):
         self._ss_bumped_at: float = 0.0
         self._tty_active: bool = False
         self.k8s_completion: bool = False
+        # Системные команды из $PATH в позиции имени команды (settings.yml:
+        # system_command_completion).
+        self.system_command_completion: bool = True
+        self._system_command_cache_loading: bool = False
         # Файловые подсказки: auto / paths / off (settings.yml: file_completion).
         self.file_completion: str = "auto"
         # Переменные кластерного журнала (:kctx) — settings.yml: kctx_vars.
@@ -3242,6 +3252,65 @@ class CommandRunner(App):
             args = [word for word in segment_words[1:] if not word.startswith("-")]
             return len(args) >= 2
         return False
+
+    def _is_command_name_context(self, text: str) -> bool:
+        """Позиция имени команды: сегмент — ровно один токен без пути.
+
+        Системные команды из $PATH подсказываются только там, где shell ждёт имя
+        программы (`git`, `kubectl`), но не аргумент (`cat fi`) и не путь
+        (`./x`, `kubectl get po`). Строка с хвостовым пробелом — уже аргументы.
+        """
+        segment = self.RE_CMD_SEPARATORS.split(text or "")[-1]
+        if not segment or segment != segment.rstrip():
+            return False
+        token = segment.strip()
+        if not token or any(ch in token for ch in " \t"):
+            return False
+        if token.startswith((":", "?", "!", "#", "$", ">")):
+            return False
+        if "/" in token or "\\" in token:
+            return False
+        return True
+
+    def _warm_system_command_cache(self) -> None:
+        """Прогреть кэш имён из $PATH в фоне, не читая каталоги в UI-потоке."""
+        if self._system_command_cache_loading:
+            return
+        self._system_command_cache_loading = True
+
+        def done() -> None:
+            self._background_callback(self._system_command_cache_ready)
+
+        def work() -> None:
+            try:
+                warm_system_command_cache()
+            finally:
+                done()
+
+        try:
+            self.run_worker(
+                work,
+                thread=True,
+                group="system-completion",
+                name="system-completion",
+                exclusive=True,
+            )
+        except RuntimeError:
+            self._system_command_cache_loading = False
+
+    def _system_command_cache_ready(self) -> None:
+        """Отметить готовность кэша и обновить актуальные подсказки."""
+        self._system_command_cache_loading = False
+        self._refresh_system_command_completions()
+
+    def _refresh_system_command_completions(self) -> None:
+        """Перерисовать подсказки после готовности кэша $PATH."""
+        try:
+            input_widget = self.query_one(f"#{self.ID_INPUT}", CommandLineInput)
+            input_widget.call_after_refresh(input_widget._show_completions)
+        except NoMatches:
+            # Экран уже мог закрыться до доставки callback фонового worker-а.
+            pass
 
     def _dir_listing(self, parent: str) -> tuple[list[tuple[str, bool]], bool]:
         """Записи каталога для подсказок: ``((имя, это_каталог?), обрезано?)``.
@@ -3916,6 +3985,25 @@ class CommandRunner(App):
             # в счётчике — полное число (`1–N / M ↓more`).
             return file_items
 
+        # Системные команды из $PATH — только в позиции имени команды (флаг
+        # system_command_completion). Точное совпадение не подсказываем: имя уже
+        # набрано, а список не должен прятать подсказки библиотеки/истории.
+        command_items: list[CompletionItem] = []
+        if self.system_command_completion and self._is_command_name_context(raw_prefix):
+            # Только готовый кэш: холодное сканирование $PATH разрешено worker-у
+            # из _warm_system_command_cache, но никогда reactive watcher Input.
+            command_names = cached_system_command_candidates(prefix)
+            if command_names is None:
+                # PATH мог поменяться уже после стартового прогрева; запускаем
+                # один новый worker и пока показываем остальные быстрые подсказки.
+                self._warm_system_command_cache()
+            else:
+                command_items = [
+                    CompletionItem(insert=name, replace_token=True, add_space=True)
+                    for name in command_names
+                    if name != prefix
+                ]
+
         candidates: list[str] = []
         try:
             from_db = {
@@ -3935,7 +4023,10 @@ class CommandRunner(App):
                 continue
             if not self._is_history_only_query(line):
                 candidates.append(line)
-        return [CompletionItem(insert=cmd) for cmd in sorted(set(candidates))[:20]]
+        library_items = [
+            CompletionItem(insert=cmd) for cmd in sorted(set(candidates))[:20]
+        ]
+        return [*command_items, *library_items]
 
     def on_key(self, event: events.Key) -> None:
         """Перехват клавиш для автофокуса на поле ввода."""
@@ -4380,6 +4471,9 @@ class CommandRunner(App):
                     self.k8s_completion = bool(
                         settings.get(self.KEY_K8S_COMPLETION, False)
                     )
+                    self.system_command_completion = bool(
+                        settings.get(self.KEY_SYSTEM_COMMAND_COMPLETION, True)
+                    )
                     mode = str(
                         settings.get(self.KEY_FILE_COMPLETION, "auto")
                     ).strip().lower()
@@ -4419,6 +4513,10 @@ class CommandRunner(App):
                     self.editor = str(settings.get(self.KEY_EDITOR) or "").strip()
         except (FileNotFoundError, KeyError, yaml.YAMLError):
             pass
+
+        # Прогрев кэша имён из $PATH в фоне: подсказки команд не блокируют UI.
+        if self.system_command_completion:
+            self._warm_system_command_cache()
 
         # Приглашение обновляется ещё раз: `git_prompt` из настроек мог его изменить
         # (первый показ — до чтения settings.yml).

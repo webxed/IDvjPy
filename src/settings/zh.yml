@@ -131,6 +131,10 @@ git_prompt: true
 # 来自活动集群的 k8s 资源名称提示（`kubectl get pod <Tab>`）。
 k8s_completion: false
 
+# 命令名位置处来自 $PATH 的系统命令提示（`gi<Tab>` → git）。
+# 只考虑真正的可执行文件（子进程看不到 shell 别名/函数）。false —— 关闭。
+system_command_completion: true
+
 # 自动补全中的文件提示：
 #   auto  —— 显式路径（`./`、`/`、`~/`）加上处理文件的命令的裸文件名
 #           （cat/vim/…）；对于 grep/sed/awk/jq —— 只从

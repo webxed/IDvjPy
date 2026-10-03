@@ -132,6 +132,11 @@ git_prompt: true
 # Suggestions of k8s resource names from the live cluster (`kubectl get pod <Tab>`).
 k8s_completion: false
 
+# System command hints from $PATH at the command-name position (`gi<Tab>` → git).
+# Only real executables are considered (shell aliases/functions are invisible to
+# a child process). false — disable.
+system_command_completion: true
+
 # File suggestions in autocompletion:
 #   auto  — explicit paths (`./`, `/`, `~/`) plus a bare file name for commands
 #           that work with files (cat/vim/…); for grep/sed/awk/jq — only from

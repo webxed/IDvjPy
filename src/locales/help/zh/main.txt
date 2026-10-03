@@ -272,6 +272,8 @@
                已复制，右键粘贴的正是它
   Ctrl+D     - 清空整行输入
   (k8s) kubectl get <res> <Tab> - 集群资源的实时名称（k8s_completion: true）
+  (命令) <名称> <Tab> - 命令名位置处来自 $PATH 的系统命令
+               （system_command_completion: true；看不到 shell 别名/函数）
   (路径) ./ | / | ~/ <Tab> - 文件/目录提示；在接收文件的命令
                （cat/vim/…）之后的裸名称，以及 grep/sed/awk/jq 的从第 2 个参数起。
                按命令的每个段单独计算：`cat f | grep ot` 不显示任何内容。

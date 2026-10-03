@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.212 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.213 — умный терминал для создания командных строк из тегов.
 
 Переводы: [English](docs/en/README.md) · [中文](docs/zh/README.md).
 
@@ -50,6 +50,7 @@ IDvjPy — терминальное приложение (TUI) на Python (Text
 - Сравнение выводов: `:diff` — unified diff сфокусированного блока с предыдущим
 - История вывода сессии: `:o [N]`, `:o /текст`, `:o clear` — grep по прошлым выводам после `:c`
 - k8s автодополнение: `kubectl get pod <Tab>` — имена из кластера (`k8s_completion: true`)
+- Автодополнение системных команд из `$PATH` в позиции имени команды (`gi<Tab>` → `git`; `system_command_completion: true`, по умолчанию включено). Alias и функции shell дочернему процессу не видны — подсказываются только настоящие исполняемые файлы
 - Файловые подсказки — `file_completion: auto|paths|off`: по умолчанию явные пути (`./`, `/`, `~/`) и имена файлов после `cat`/`vim`/…, у `grep`/`sed`/`awk`/`jq` — со второго аргумента (первый — шаблон), без мусора из cwd при наборе `kubectl`/`docker`/`git`; контекст считается по текущему сегменту (`cat f | grep ot` cwd не листит) (`paths` — только явные пути, `off` — выкл.). В списке **каталог подчёркнут, как ссылка, а файл — обычный текст** (видно на `cd`, где каталоги и файлы иначе путались); кликом вставляется и то, и другое. Путь с пробелом у shell-команды вставляется **в кавычках** (`cat './мой отчёт.md'`), у `:`-команд — как есть (`:md ./мой отчёт.md`: они разбирают аргументы сами, кавычки стали бы частью пути)
 - Поиск по markdown (`:rg <паттерн> [каталог]`) — ripgrep по Obsidian-vault или любому каталогу с `.md` (иначе встроенный сканер): фрагменты с кликабельными `путь:строка`, открываются встроенным md-просмотрщиком; `:rg <N>` — открыть N-й результат
 - UX: `:r N` — команда блока N назад; `:cmd [N] [show]` — команда блока с подставленными значениями (секреты включены) в буфер; `:send <сессия|*> <команда>` — переслать команду в другое окно (вставить во ввод; `:send!` — выполнить сразу); счётчик `N running` в заголовке; `:alias <tag>` — команды в bash-функции
@@ -118,6 +119,21 @@ python3 bump_version.py --set v2.0   # явная версия
 ```
 
 Скрипт добавляет в `COMPACT_SUMMARY.md` секцию `## <новая версия>` заглушкой — текст изменений впишите сами. Синхронность тех же маркеров проверяет `tests/test_release_meta.py`.
+
+### Быстрые проверки для контрибьюторов
+
+Read-only помощники экономят повторные обходы проекта и **ничего не коммитят/не меняют**. По умолчанию планируют проверки; pytest запускается только с явным `--run`:
+
+```bash
+python3 check_release.py                 # версии, changelog, diff whitespace, защита личных данных
+python3 check_docs.py                    # локальные Markdown-ссылки и каноническая :? справка
+python3 test_changed.py                  # подобрать focused pytest по git diff (только план)
+python3 test_changed.py --run --lint     # выполнить план и lint затронутых Python-файлов
+python3 check_tui_contracts.py --list    # группы инвариантов Textual TUI
+python3 check_tui_contracts.py --contracts secrets,tty --run
+```
+
+`test_changed.py` и `check_tui_contracts.py` принципиально не запускают полный `pytest tests/`: для полного прогона нужна отдельная осознанная команда. Опции `--base <rev>` и `--staged` у первых трёх команд позволяют проверять PR-дифф или индекс.
 
 ### Установка в систему (pipx / uv / `--user`)
 
@@ -503,6 +519,7 @@ screensaver_idle: 120        # простой (клавиши/клик/скро�
 screensaver_stars: true      # летающие звёзды в заставке; false — холст без звёзд (часы/лента/load остаются); :screensaver matrix — разовый матричный экран
 git_prompt: true            # ветка git в приглашении строки ввода (`~/proj (main) ❯`), если cwd внутри репозитория; false — только путь
 k8s_completion: false        # имена k8s-ресурсов из кластера в подсказках (`kubectl get pod <Tab>`)
+system_command_completion: true  # системные команды из $PATH в позиции имени команды (`gi<Tab>` → git)
 file_completion: auto        # файловые подсказки: auto | paths | off (см. ниже)
 kctx_vars: [NS, POD, DEPLOY, SVC, ING, APP, CTR, QUOTA, RELEASE, CHART, VALUES]  # переменные кластерного журнала (:kctx); [] — выкл.
 line_api_blocks: true        # блоки журнала (команды и инфоблоки) на Textual Line API (render_line); false — прежний Static

@@ -284,6 +284,8 @@
                right click pastes exactly that
   Ctrl+D     - Clear the entire input line
   (k8s) kubectl get <res> <Tab> - live cluster resource names (k8s_completion: true)
+  (cmd) <name> <Tab> - system commands from $PATH at the command-name position
+               (system_command_completion: true; shell aliases/functions are not visible)
   (paths) ./ | / | ~/ <Tab> - file/dir hints; bare names after file-taking
                commands (cat/vim/…) and from the 2nd arg of grep/sed/awk/jq.
                Computed per command segment: `cat f | grep ot` lists nothing.

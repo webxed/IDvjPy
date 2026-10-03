@@ -24,6 +24,7 @@ command_timeout: 5
 terminal_mouse: false
 check_updates: false
 screensaver_idle: 0
+system_command_completion: false
 """
 
 
