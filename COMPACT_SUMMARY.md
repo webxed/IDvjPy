@@ -1,6 +1,10 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.209**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.210**.
+
+## v1.210
+
+- Автодополнение пути перестало быть дорогим на каждое нажатие: листинг каталога читается через `os.scandir` (тип записи из самого чтения, без `stat` на каждую запись), кэшируется по `(каталог, mtime_ns)` и ограничен (`FILE_COMPLETION_SCAN_LIMIT`), а обход вверх при «быстром вводе» ограничен глубиной (`FILE_COMPLETION_PROBE_DEPTH`) и больше не повторяется на ошибках доступа. Огромный каталог или сетевой mount не морозит UI. Добавлены `tests/test_completion_cache.py`; замечание о статусе C4 — в `docs/TUI_AUDIT_PLAN.md`.
 
 ## v1.209
 
@@ -233,7 +237,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.155 (app v1.209) |
+| `test_cmd.md` | Manual plan v1.156 (app v1.210) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -244,6 +248,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 | `tests/test_md_convert.py` | Документы → markdown для `:md` (42): детект «текст/документ» по содержимому (PDF/OLE2/RTF/ZIP-пакет/NUL/cp1251), классификация по префиксу (`complete=False`) и `human_size`, поиск конвертера (settings → env → автопоиск; явный не подменяется), кэш и его инвалидация по mtime/размеру/конвертеру, ошибки (`converter_missing`/`no_converter`/`failed`/`timeout`/`empty`), разбор stderr (причина, а не хвост подсказок), флаги `pandoc`, локальный OCR скан-PDF: поиск `md_ocr` (env/`off`/`on`/YAML-булев), безопасные флаги и `--sidecar`, распознавание → повторная конвертация → кэш, `NeedsOcrError` от anydoc, текст из sidecar при отказе конвертера, `ocr_missing`, `ocr_language` (нет языкового пакета), в TUI — конвертация, OCR скана, сообщение про отсутствующий движок, кэш при пропавшем конвертере, подсказки, текстовый файл не уходит в конвертер; живые тесты с настоящими `anydoc`, `ocrmypdf`+`tesseract` и русским языковым пакетом (skip, если их нет) |
 | `tests/test_md_open.py` | Безопасное открытие `:md` (5): каталог/FIFO отклоняются до чтения, файл больше `md_max_bytes` отклоняется с подсказкой (без полного чтения), текст читается в фоновом потоке `md-read`, ошибка чтения возвращается в журнал |
 | `tests/test_write_journal.py` | `:w` (5): запись в фоне, дописывание по умолчанию и `--overwrite`, ошибка записи, usage без аргумента, значение `$$`-секрета не попадает в файл |
+| `tests/test_completion_cache.py` | Автодополнение пути (5): кэш листинга по mtime без повторного `scandir`, предел сканирования и кандидатов, детерминированный fallback без родителя, пометка каталог/файл |
 | `tests/test_tags.py` | save with `-`/`=`, bang, delete, `#name--` / `#name!!`, `:export` одного тега и `:export * file.json` (JSON всей библиотеки) |
 | `tests/test_cwd_prompt.py` | Приглашение строки ввода: `shorten_path` (`~`, хвост длинного пути, узкое окно), путь виден и обновляется после `cd`/`:cd`, ветка git рядом с путём (и пропадает вне репозитория), плейсхолдера нет, клик по пути фокусирует ввод |
 | `tests/test_completion.py` | Tab path, `ls ~/`, no `cat cat`, Tab→last journal block (`:h`/`:?`), line-cursor, trailing-space Enter, Shift+Enter/Ctrl+V/Paste append, `!tag` ref completion, click/PgUp visible-block focus |
@@ -301,7 +306,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.209 |
+| `src/app.py` | TUI (`CommandRunner`), v1.210 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: звёздное поле по умолчанию (`screensaver_stars` управляет частицами), разовый матричный дождь (`:screensaver matrix`), flying clock/date + ticker + bottom help/load/mem |

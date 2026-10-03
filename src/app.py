@@ -2627,7 +2627,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.209"
+    VERSION = "v1.210"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2701,6 +2701,13 @@ class CommandRunner(App):
     # Сколько строк истории показывать в выпадающих подсказках при наборе.
     HISTORY_COMPLETION_LIMIT = 20
     ENCODING = "utf-8"
+    # Файловое дополнение: сколько записей читать из одного каталога и сколько
+    # каталогов держать в кэше листингов. Огромный каталог или сетевой mount
+    # не должны перечитываться и обходиться на каждое нажатие.
+    FILE_COMPLETION_SCAN_LIMIT = 2000
+    FILE_COMPLETION_CACHE_DIRS = 8
+    # Предел подъёма вверх при «быстром вводе» (родителя ещё нет) — детерминированно.
+    FILE_COMPLETION_PROBE_DEPTH = 20
     TIMER_DELAY = 2
     # Сколько секунд секрет хранилища может лежать в буфере обмена после
     # `:vault cp` (по выходу из TTY-сессии буфер чистится сразу).
@@ -2904,6 +2911,11 @@ class CommandRunner(App):
         self._history_file_lines: list[str] = []
         self._history_file_folded: list[str] = []
         self._history_file_stat: tuple[int, int] | None = None
+        # Кэш листингов каталогов для подсказок: (каталог, mtime_ns) → (записи, обрезано?).
+        # Записи — (имя, каталог?), тип берётся из `os.scandir` без отдельного stat.
+        self._dir_listing_cache: dict[
+            tuple[str, int], tuple[list[tuple[str, bool]], bool]
+        ] = {}
         # Словарь для хранения результатов поиска {ID: Command}
         self.last_query_results: dict[int, str] = {}
         # Кэш live-команд библиотеки для автодополнения (список dict).
@@ -3142,11 +3154,49 @@ class CommandRunner(App):
             return len(args) >= 2
         return False
 
+    def _dir_listing(self, parent: str) -> tuple[list[tuple[str, bool]], bool]:
+        """Записи каталога для подсказок: ``((имя, это_каталог?), обрезано?)``.
+
+        `os.scandir` берёт тип записи из самого чтения каталога — без отдельного
+        `stat()` на каждую запись (у `os.path.isdir(full_path)` он был на каждой
+        строке и на каждом нажатии). Результат кэшируется по ``(каталог, mtime_ns)``
+        и ограничен `FILE_COMPLETION_SCAN_LIMIT`; при обновлении каталога mtime
+        меняется — старый ключ перестаёт использоваться.
+        """
+        try:
+            info = os.stat(parent)
+        except OSError:
+            return [], False
+        key = (parent, info.st_mtime_ns)
+        cached = self._dir_listing_cache.get(key)
+        if cached is not None:
+            return cached
+        entries: list[tuple[str, bool]] = []
+        truncated = False
+        try:
+            with os.scandir(parent) as scan:
+                for entry in scan:
+                    try:
+                        is_dir = entry.is_dir()
+                    except OSError:
+                        is_dir = False
+                    entries.append((entry.name, is_dir))
+                    if len(entries) >= self.FILE_COMPLETION_SCAN_LIMIT:
+                        truncated = True
+                        break
+        except OSError:
+            return [], False
+        if len(self._dir_listing_cache) >= self.FILE_COMPLETION_CACHE_DIRS:
+            self._dir_listing_cache.clear()
+        self._dir_listing_cache[key] = (entries, truncated)
+        return entries, truncated
+
     def _get_file_completion_candidates(self, text: str) -> list[CompletionItem]:
         """Подсказки файлов/директорий для текущей директории (включая скрытые).
 
         Возвращает пункты: каталог отмечен `is_dir` (в списке он рисуется
-        ссылкой с подчёркиванием, файл — обычным текстом).
+        ссылкой с подчёркиванием, файл — обычным текстом). Чтение каталога — с
+        кэшем и ограничением (`_dir_listing`).
         """
         if not self._is_path_context(text):
             return []
@@ -3165,33 +3215,35 @@ class CommandRunner(App):
 
         list_parent = parent
         list_base_prefix = base_prefix
-        try:
-            entries = os.listdir(list_parent)
-        except Exception:
+        entries, _scan_truncated = self._dir_listing(list_parent)
+        if not os.path.isdir(list_parent):
             # Fallback на ближайшую существующую директорию при быстром вводе.
+            # Обход ограничен глубиной (`FILE_COMPLETION_PROBE_DEPTH`) и не
+            # повторяется на ошибках доступа: детерминированно завершается.
             if "/" not in token and "\\" not in token:
                 return []
             probe = expanded.rstrip("/")
             resolved = False
-            while probe:
+            for _ in range(self.FILE_COMPLETION_PROBE_DEPTH):
+                if not probe:
+                    break
                 candidate_parent = os.path.dirname(probe) or "."
                 candidate_base = os.path.basename(probe)
-                try:
-                    entries = os.listdir(candidate_parent)
+                if os.path.isdir(candidate_parent):
+                    entries, _scan_truncated = self._dir_listing(candidate_parent)
                     list_parent = candidate_parent
                     list_base_prefix = candidate_base
                     resolved = True
                     break
-                except Exception:
-                    next_probe = candidate_parent.rstrip("/")
-                    if next_probe == probe:
-                        break
-                    probe = next_probe
+                next_probe = candidate_parent.rstrip("/")
+                if next_probe == probe:
+                    break
+                probe = next_probe
             if not resolved:
                 return []
 
         suggestions: list[tuple[str, bool]] = []
-        for name in entries:
+        for name, is_dir in entries:
             if list_base_prefix and not name.startswith(list_base_prefix):
                 continue
             full_path = os.path.join(list_parent, name)
@@ -3207,7 +3259,6 @@ class CommandRunner(App):
                 candidate_path = f"../{candidate_path}"
             elif token.startswith("/"):
                 candidate_path = full_path
-            is_dir = os.path.isdir(full_path)
             if is_dir:
                 candidate_path += "/"
             suggestions.append((candidate_path, is_dir))
