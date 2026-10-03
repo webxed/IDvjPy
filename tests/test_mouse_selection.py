@@ -10,7 +10,7 @@ from textual import events
 pytestmark = pytest.mark.slow
 
 from app import CommandBlock, CommandRunner
-from tests.conftest import submit, wait_command_done
+from tests.conftest import submit, wait_clipboard, wait_command_done
 
 
 async def _drag_select(pilot, widget, start: tuple[int, int] = (0, 0), end: tuple[int, int] = (15, 0)) -> None:
@@ -18,6 +18,8 @@ async def _drag_select(pilot, widget, start: tuple[int, int] = (0, 0), end: tupl
     await pilot._post_mouse_events([events.MouseMove], widget, offset=end)
     await pilot._post_mouse_events([events.MouseUp], widget, offset=end)
     await pilot.pause()
+    # Автокопирование выделения пишет системный буфер в фоне.
+    await wait_clipboard(pilot.app)
 
 
 async def _output_block(pilot) -> CommandBlock:
@@ -53,6 +55,7 @@ async def test_ctrl_c_copies_selection_not_block(isolated_home):
         pyperclip.copy("sentinel")
         await pilot.press("ctrl+c")
         await pilot.pause()
+        await wait_clipboard(app)
         assert pyperclip.paste() == selected  # выделение, а не весь блок
 
 

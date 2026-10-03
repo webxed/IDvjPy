@@ -85,13 +85,43 @@ def input_widget(app: CommandRunner) -> CommandLineInput:
     return app.query_one(f"#{app.ID_INPUT}", CommandLineInput)
 
 
+async def wait_clipboard(app: CommandRunner) -> None:
+    """Дождаться фоновых clipboard-воркеров и их callbacks в UI-потоке.
+
+    Системный буфер пишется/читается в потоке (`_clipboard_offload`), поэтому
+    сразу после действия `pyperclip.paste()` ещё пуст. `pilot.pause()` ждёт
+    только сообщения event loop и поток не покрывает — нужен явный wait.
+    Вставка может запустить ещё один воркер (очистка буфера после секрета),
+    поэтому ждём, пока очередь не опустеет.
+    """
+    for _ in range(20):
+        pending = [
+            w for w in getattr(app, "_clipboard_workers", []) if not w.is_finished
+        ]
+        if not pending:
+            await asyncio.sleep(0)
+            if not [
+                w for w in getattr(app, "_clipboard_workers", []) if not w.is_finished
+            ]:
+                return
+            continue
+        for worker in pending:
+            try:
+                await worker.wait()
+            except Exception:
+                pass
+        await asyncio.sleep(0)
+
+
 async def right_click(pilot, *, widget=None, offset: tuple[int, int] = (0, 0), button: int = 3) -> bool:
     """Правый клик мышью (у `pilot.click` кнопки нет — она всегда левая)."""
     from textual.events import Click, MouseDown, MouseUp
 
-    return await pilot._post_mouse_events(
+    posted = await pilot._post_mouse_events(
         [MouseDown, MouseUp, Click], widget, offset, button=button
     )
+    await wait_clipboard(pilot.app)
+    return posted
 
 
 async def type_keys(pilot, text: str) -> None:

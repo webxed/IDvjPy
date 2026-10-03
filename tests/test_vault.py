@@ -20,7 +20,7 @@ from textual.widgets import Input, Static
 import totp
 import vault
 from app import CommandBlock, CommandRunner, InfoBlock
-from tests.conftest import last_info, submit
+from tests.conftest import last_info, submit, wait_clipboard
 
 PW = "vault-pass-123"
 
@@ -254,6 +254,7 @@ async def test_cp_puts_value_in_clipboard_only(isolated_home, clip_store):
 
         # Чистка буфера таймером/выходом из TTY.
         app._vault_clear_clipboard()
+        await wait_clipboard(app)
         assert clip_store.paste() == ""
         assert app._vault_clip_pending is False
 
@@ -337,6 +338,7 @@ async def test_autolock_locks_after_idle_and_asks_password_again(isolated_home, 
         await submit(pilot, ":vault cp MY_SECRET")
         assert type(pilot.app.screen).__name__ == "VaultSecretScreen"
         await _answer_modal(pilot, PW)
+        await wait_clipboard(app)
         assert clip_store.paste() == "idle-value"
 
 
@@ -683,6 +685,7 @@ async def test_totp_screen_copies_code_not_secret(isolated_home, clip_store):
         entry = (app._vault_entries or {})["OTP"]
         await pilot.press("enter")
         await pilot.pause()
+        await wait_clipboard(app)
         assert clip_store.paste() == _stored_code(entry)
         assert clip_store.paste() != SECRET
         assert app._vault_clip_pending is True
@@ -690,6 +693,7 @@ async def test_totp_screen_copies_code_not_secret(isolated_home, clip_store):
 
         # Esc — закрыть, ничего не копируя; `c` — тоже копирует.
         app._vault_clear_clipboard()
+        await wait_clipboard(app)
         await submit(pilot, ":vault totp OTP")
         await pilot.press("escape")
         await pilot.pause()
@@ -698,6 +702,7 @@ async def test_totp_screen_copies_code_not_secret(isolated_home, clip_store):
         await submit(pilot, ":vault totp OTP")
         await pilot.press("c")
         await pilot.pause()
+        await wait_clipboard(app)
         assert clip_store.paste() == _stored_code(entry)
 
 

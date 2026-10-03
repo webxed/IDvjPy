@@ -21,6 +21,7 @@ from tests.conftest import (
     input_widget,
     right_click,
     submit,
+    wait_clipboard,
     wait_command_done,
     wait_json_viewer,
 )
@@ -33,6 +34,8 @@ async def _drag(pilot, widget, start, end) -> None:
     await pilot._post_mouse_events([events.MouseUp], widget, offset=end)
     await pilot.pause()
     await pilot.pause()
+    # Выделение копируется в системный буфер в фоне.
+    await wait_clipboard(pilot.app)
 
 
 async def _right_drag(pilot, widget, start, end) -> None:

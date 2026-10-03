@@ -14,7 +14,7 @@ import pytest
 pytestmark = pytest.mark.slow
 
 from app import CommandRunner
-from tests.conftest import input_widget, last_info, submit, wait_command_done
+from tests.conftest import input_widget, last_info, submit, wait_clipboard, wait_command_done
 
 SECRET = "supersecret-value"
 
@@ -185,6 +185,7 @@ async def test_secret_paste_clears_clipboard_when_enabled(isolated_home):
         await pilot.press("shift+insert")
         await pilot.pause()
         assert inp.value == f"$$TOKEN={SECRET}"
+        await wait_clipboard(app)
         assert pyperclip.paste() == ""
 
 

@@ -138,8 +138,10 @@ try:
         fetch_cheat_sheet,
     )
     from clipboard import (
+        copy_internal,
+        copy_system,
         copy_text_to_clipboards,
-        paste_text_from_clipboards,
+        read_system,
     )
     from colon_commands import (
         COLON_COMMAND_NAMES,
@@ -684,7 +686,11 @@ class LineNavigable(Static):
         text = self._current_plain_line()
         app = getattr(self, "app", None)
         try:
-            copy_text_to_clipboards(text, app)
+            copier = getattr(app, "_copy_to_clipboards", None)
+            if callable(copier):
+                copier(text)
+            else:
+                copy_text_to_clipboards(text, app)
             if app is not None:
                 app.sub_title = getattr(app, "MSG_COPIED", "Copied to clipboard!")
                 try:
@@ -2615,7 +2621,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.206"
+    VERSION = "v1.207"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2964,6 +2970,9 @@ class CommandRunner(App):
         # таймеру (`_vault_clip_pending`), чтобы значение не лежало там долго.
         self._vault_clip_pending: bool = False
         self._vault_clip_value: str | None = None
+        # Фоновые clipboard-воркеры (системный буфер — блокирующий I/O). Держим,
+        # чтобы тесты и завершение приложения могли их дождаться.
+        self._clipboard_workers: list[Any] = []
         # Автоблокировка (`vault_idle_lock`, минуты): тишина дольше срока запирает
         # хранилище и снимает отданные переменные; чтение секрета снова спросит пароль.
         self.vault_idle_lock: float = float(DEFAULT_VAULT_IDLE_LOCK)
@@ -3833,21 +3842,26 @@ class CommandRunner(App):
             return
         self._paste_clipboard_into_input()
 
-    def _paste_clipboard_into_input(self) -> bool:
-        """Вставить буфер в строку ввода в позицию курсора; True — если вставили.
+    def _paste_clipboard_into_input(self) -> None:
+        """Прочитать буфер в фоне и вставить результат в строку ввода.
 
+        Системные backend-ы блокирующие, поэтому чтение уходит в поток; когда
+        оно завершится, `_finish_clipboard_paste` вставит текст в строку.
         Фокус не важен: строка ввода получает его сама (правый клик по журналу
         или по списку подсказок работает так же, как при курсоре в строке).
         Выделение в строке не затирается — вставка идёт в конец. Переносы строк
         схлопываются в пробел: поле однострочное (см. `paste_line`).
         """
-        clip = paste_line(paste_text_from_clipboards(self))
+        self._clipboard_offload(read_system, on_done=self._finish_clipboard_paste)
+
+    def _finish_clipboard_paste(self, system_text: str | None) -> None:
+        """Результат фонового чтения буфера: вставить или сообщить о пустоте."""
+        clip = paste_line(system_text or self.clipboard or "")
         if not clip:
             self.sub_title = t("clipboard.empty")
             self.set_timer(3, self.clear_subtitle)
-            return False
+            return
         self._insert_into_input(clip)
-        return True
 
     def _insert_into_input(self, text: str) -> None:
         """Вставить текст в строку ввода в позицию курсора; фокус — в строку.
@@ -3872,8 +3886,8 @@ class CommandRunner(App):
         self._maybe_clear_clipboard_after_secret()
 
     def copy_text(self, text: str) -> None:
-        """Копирует текст в CLIPBOARD, PRIMARY и внутренний буфер Textual."""
-        copy_text_to_clipboards(text or "", self)
+        """Копирует текст: внутренний буфер сразу, системные — в фоне."""
+        self._copy_to_clipboards(text)
         # Скопировали что-то другое, пока в буфере лежал секрет хранилища, —
         # секрета там больше нет, и таймерная чистка была бы лишней.
         if (
@@ -3882,12 +3896,47 @@ class CommandRunner(App):
         ):
             self._vault_clip_pending = False
 
+    def _copy_to_clipboards(self, text: str) -> None:
+        """Внутренний буфер — сразу (дёшево), системные backend-ы — в потоке."""
+        payload = text or ""
+        copy_internal(payload, self)
+        self._clipboard_offload(copy_system, payload)
+
+    def _clipboard_offload(
+        self, fn: Callable[..., Any], *args: Any, on_done: Callable[[Any], None] | None = None
+    ) -> None:
+        """Блокирующий clipboard-вызов в фоновом потоке (UI не морозим).
+
+        `on_done(result)` вызывается обратно в UI-потоке. Вне запущенного
+        приложения (юнит-вызов без event loop) выполняет синхронно.
+        """
+        def work() -> Any:
+            try:
+                result = fn(*args)
+            except Exception:
+                result = None
+            if on_done is not None:
+                try:
+                    self.call_from_thread(on_done, result)
+                except Exception:
+                    pass
+            return result
+
+        try:
+            worker = self.run_worker(
+                work, thread=True, group="clipboard", name="clipboard"
+            )
+        except Exception:
+            work()
+            return
+        self._clipboard_workers = [
+            w for w in self._clipboard_workers if not w.is_finished
+        ]
+        self._clipboard_workers.append(worker)
+
     def _clear_clipboards(self) -> None:
         """Очистить CLIPBOARD, PRIMARY и внутренний буфер (best effort)."""
-        try:
-            copy_text_to_clipboards("", self)
-        except Exception:
-            pass
+        self._copy_to_clipboards("")
 
     def _maybe_clear_clipboard_after_secret(self) -> None:
         """После вставки в строку `$$NAME=…` очистить буфер, если включено.
@@ -5386,7 +5435,7 @@ class CommandRunner(App):
             self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
             return
         try:
-            copy_text_to_clipboards(text, self)
+            self._copy_to_clipboards(text)
             self.sub_title = self.MSG_COPIED
         except Exception:
             self.sub_title = "Error copying to clipboard."
@@ -5431,7 +5480,7 @@ class CommandRunner(App):
                 # Удаляем лишние переводы строк
                 text_to_copy = text_to_copy.strip()
 
-                copy_text_to_clipboards(text_to_copy, self)
+                self._copy_to_clipboards(text_to_copy)
                 self.sub_title = self.MSG_COPIED
                 self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
             except Exception:
@@ -5441,7 +5490,7 @@ class CommandRunner(App):
             try:
                 # Для InfoBlock копируем весь текст
                 clean_text = self._strip_formatting_tags(focused.text_content)
-                copy_text_to_clipboards(clean_text, self)
+                self._copy_to_clipboards(clean_text)
                 self.sub_title = self.MSG_COPIED
                 self.set_timer(self.TIMER_DELAY, self.clear_subtitle)
             except Exception:
@@ -9572,12 +9621,34 @@ class CommandRunner(App):
         return value
 
     def _vault_clear_clipboard(self) -> None:
-        """Убрать секрет хранилища из буфера (выход из TTY или таймер)."""
+        """Убрать секрет хранилища из буфера (выход из TTY или таймер).
+
+        Внутренний буфер чистим сразу, системный читаем в фоне: стираем его,
+        только если там всё ещё значение vault. Если человек успел скопировать
+        что-то другое, чужой текст не трогаем.
+        """
         if not self._vault_clip_pending:
             return
+        value = self._vault_clip_value
         self._vault_clip_pending = False
         self._vault_clip_value = None
-        self._clear_clipboards()
+        copy_internal("", self)
+        self._clipboard_offload(
+            self._vault_clear_system, value, on_done=self._vault_clip_cleared
+        )
+
+    def _vault_clear_system(self, value: str | None) -> bool:
+        """Стереть системный буфер, если он всё ещё содержит значение vault."""
+        current = read_system()
+        if current and value and current != value:
+            return False  # пользователь скопировал что-то новое — не затираем
+        copy_system("")
+        return True
+
+    def _vault_clip_cleared(self, cleared: bool | None) -> None:
+        """Подтверждение очистки буфера — только если она действительно была."""
+        if not cleared:
+            return
         self.sub_title = t("vault.clip_cleared")
         self.set_timer(3, self.clear_subtitle)
 

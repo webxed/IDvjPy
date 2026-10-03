@@ -9,6 +9,7 @@ from tests.conftest import (
     input_widget,
     submit,
     type_keys,
+    wait_clipboard,
     wait_command_done,
 )
 
@@ -686,6 +687,7 @@ async def test_line_copy_strips_trailing_spaces(isolated_home):
         assert found
         await pilot.press("enter")
         await pilot.pause()
+        await wait_clipboard(app)
         assert pyperclip.paste() == "hello"
         assert app.clipboard == "hello"
         assert input_widget(app).has_focus
