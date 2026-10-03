@@ -38,6 +38,18 @@ tag_metadata:
   saved: "Metadata saved for {tag}."
   invalid: "Invalid metadata: {error}"
 
+snapshot:
+  usage: "Usage: :snapshot [list] | :snapshot save NAME | :snapshot show NAME | :snapshot diff NAME | :snapshot rm NAME"
+  disabled: "Output snapshots are disabled (settings.yml: output_snapshots)."
+  none: "none"
+  list: "Saved output snapshots: {snapshots}"
+  no_output: "No finished command output to snapshot."
+  saved: "Output snapshot saved: {name}{note}"
+  truncated: " (truncated to 256 KiB)"
+  removed: "Output snapshot removed: {name}"
+  error: "Snapshot error: {error}"
+  identical: "Snapshot {name} and current stdout are identical."
+
 profile:
   usage: "Usage: :profile [list] | :profile show [NAME] | :profile save NAME | :profile use NAME | :profile rm NAME"
   list: "Profiles: {profiles}"
@@ -192,7 +204,7 @@ doctor:
     markitdown: ":md document conversion fallback"
 
 cmd:
-  "?": "command help (:? — all; :? calc / run / i / md / llm / tags / vars / kctx / send / session / doctor — topics)"
+  "?": "command help (:? — all; :? calc / run / i / md / llm / tags / vars / kctx / send / session / doctor / snapshot — topics)"
   q: "quit the application"
   w: "write the last block output to a file"
   h: "history: :h [N], :h /text, :h compact"
@@ -230,6 +242,7 @@ cmd:
   tags: "searchable catalog of live tags and metadata (:tags [filter])"
   tagmeta: "show or replace a tag's structured metadata (:tagmeta TAG [JSON])"
   pin: "session-local pinned tags (:pin add|rm|clear|list; :tags pinned)"
+  snapshot: "save bounded masked command output and compare later (:? snapshot)"
   profile: "save/apply safe context references: cwd, scope, namespace, kube context"
   new: "app window in a new terminal (session)"
   send: "forward a command to another session"

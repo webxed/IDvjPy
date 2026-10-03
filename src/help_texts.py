@@ -33,6 +33,7 @@ HELP_TEXTS = (
     "safe",
     "explain",
     "learn",
+    "snapshot",
 )
 
 # Темы `:? <тема>` в порядке оглавления: каноническое имя → имя текста.
@@ -54,6 +55,7 @@ HELP_TOPICS: tuple[tuple[str, str], ...] = (
     ("safe", "safe"),
     ("explain", "explain"),
     ("learn", "learn"),
+    ("snapshot", "snapshot"),
 )
 
 # Алиасы тем (лишние имена и русские слова). Ключ — то, что набрал человек,

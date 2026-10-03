@@ -237,6 +237,12 @@ try:
     )
     from md_search import search as search_markdown
     from md_viewer import HandbookMarkdownScreen, handbook_md_path, resolve_md_path
+    from output_snapshots import (
+        MAX_SNAPSHOT_BYTES,
+        delete_snapshot,
+        save_snapshot,
+    )
+    from output_snapshots import load_snapshots as load_output_snapshots
     from output_viewer import OutputViewerScreen
     from profile_store import (
         ProfileError,
@@ -2603,7 +2609,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.195"
+    VERSION = "v1.196"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2657,6 +2663,7 @@ class CommandRunner(App):
     ID_RESULTS_CONTAINER = "results-container"
     KEY_HISTORY_LINES = "history_lines"
     KEY_HISTORY_KEEP = "history_keep"
+    KEY_OUTPUT_SNAPSHOTS = "output_snapshots"
     KEY_HISTORY_COMPLETION = "history_completion"
     # Опечатки (`command not found`, 127) убираются из истории (файл + лента сессии):
     # ошибка видна в журнале, но ↑ / `:h` не подсовывают несуществующую команду.
@@ -2721,6 +2728,7 @@ class CommandRunner(App):
     CMD_MOVE = "mv"
     CMD_STATS = "stats"
     CMD_DIFF = "diff"
+    CMD_SNAPSHOT = "snapshot"
     CMD_OUT = "o"
     CMD_KCTX = "kctx"
     CMD_ALIAS = "alias"
@@ -2889,6 +2897,7 @@ class CommandRunner(App):
         self._db_stat: tuple[int, int] | None = None
         self.history_lines: int = 20
         self.history_keep: int = DEFAULT_HISTORY_KEEP
+        self.output_snapshots_enabled: bool = True
         # `:`-команды, чьи вызовы остаются в истории (и не подсказываются).
         self.history_queries: frozenset[str] = frozenset(DEFAULT_HISTORY_QUERIES)
         # Подсказки из history_*.txt при наборе (в т.ч. `@`/`>`): см. get_history_completions.
@@ -4073,6 +4082,9 @@ class CommandRunner(App):
                 settings = yaml.safe_load(f)
                 if settings:
                     self.history_lines = settings.get(self.KEY_HISTORY_LINES, 20)
+                    self.output_snapshots_enabled = bool(
+                        settings.get(self.KEY_OUTPUT_SNAPSHOTS, True)
+                    )
                     self.history_completion = bool(
                         settings.get(self.KEY_HISTORY_COMPLETION, True)
                     )
@@ -5906,6 +5918,7 @@ class CommandRunner(App):
         CMD_TAGS: "_handle_tags_command",
         CMD_PIN: "_handle_pin_command",
         CMD_PROFILE: "_handle_profile_command",
+        CMD_SNAPSHOT: "_handle_snapshot_command",
         CMD_TAGMETA: "_handle_tagmeta_command",
         CMD_SCREENSAVER: "_handle_screensaver_command",
         CMD_BACKUP: "_handle_backup_command",
@@ -11943,6 +11956,89 @@ class CommandRunner(App):
             label = f"{label} — {n} running"
         self.title = label
         self._set_terminal_title(label)
+
+    def _handle_snapshot_command(self, args: list[str]) -> None:
+        """Store and compare bounded, already-masked stdout snapshots."""
+        usage = t("snapshot.usage")
+        if not self.output_snapshots_enabled:
+            self.add_block(InfoBlock(t("snapshot.disabled")))
+            return
+        action = args[0].casefold() if args else "list"
+        if action == "list" and len(args) == 1:
+            items, error = load_output_snapshots(self._data_dir or ".")
+            names = ", ".join(item["name"] for item in items) or t("snapshot.none")
+            message = t("snapshot.list", snapshots=escape(names))
+            if error:
+                message += f"\n[dim]{escape(error)}[/dim]"
+            self.add_block(InfoBlock(message))
+            return
+        if len(args) != 2 or action not in {"save", "show", "diff", "rm", "delete"}:
+            self.add_block(InfoBlock(usage))
+            return
+        name = args[1]
+        if action == "save":
+            blocks = list(self.query(CommandBlock))
+            focused = self.focused
+            block = focused if isinstance(focused, CommandBlock) and focused in blocks else (blocks[-1] if blocks else None)
+            if block is None or block.pending:
+                self.add_block(InfoBlock(t("snapshot.no_output")))
+                return
+            text = block.masked_stdout
+            error = save_snapshot(
+                self._data_dir or ".", name, text,
+                created=datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+            )
+            if error:
+                self.add_block(InfoBlock(t("snapshot.error", error=escape(error))))
+            else:
+                suffix = t("snapshot.truncated") if len(text.encode("utf-8")) > MAX_SNAPSHOT_BYTES else ""
+                self.add_block(InfoBlock(t("snapshot.saved", name=escape(name), note=suffix)))
+            return
+        if action in {"rm", "delete"}:
+            error = delete_snapshot(self._data_dir or ".", name)
+            self.add_block(InfoBlock(t("snapshot.error", error=escape(error))) if error else InfoBlock(t("snapshot.removed", name=escape(name))))
+            return
+        items, error = load_output_snapshots(self._data_dir or ".")
+        if error:
+            self.add_block(InfoBlock(t("snapshot.error", error=escape(error))))
+            return
+        item = next((row for row in items if row["name"] == name), None)
+        if item is None:
+            self.add_block(InfoBlock(t("snapshot.error", error=escape(f"snapshot not found: {name}"))))
+            return
+        if action == "show":
+            self.add_block(InfoBlock(f"[bold]{escape(name)}[/bold] · {escape(item['created'])}\n{escape(item['text'])}"))
+            return
+        import difflib
+
+        blocks = list(self.query(CommandBlock))
+        focused = self.focused
+        current = focused if isinstance(focused, CommandBlock) and focused in blocks else (blocks[-1] if blocks else None)
+        if current is None or current.pending:
+            self.add_block(InfoBlock(t("snapshot.no_output")))
+            return
+        previous = item["text"].rstrip("\n").splitlines()
+        current_lines = current.masked_stdout.rstrip("\n").splitlines()
+        lines = list(difflib.unified_diff(previous, current_lines, fromfile=name, tofile="current", lineterm="", n=2))
+        if not lines:
+            self.add_block(InfoBlock(t("snapshot.identical", name=escape(name))))
+            return
+        rendered = [f"[bold]Snapshot diff:[/bold] {escape(name)} vs current"]
+        for index, line in enumerate(lines):
+            if index >= 300:
+                rendered.append("[dim]… diff truncated at 300 lines[/dim]")
+                break
+            if line.startswith(("---", "+++")):
+                rendered.append(f"[dim]{escape(line)}[/dim]")
+            elif line.startswith("@@"):
+                rendered.append(f"[cyan]{escape(line)}[/cyan]")
+            elif line.startswith("+"):
+                rendered.append(f"[green]+ {escape(line[1:])}[/green]")
+            elif line.startswith("-"):
+                rendered.append(f"[red]- {escape(line[1:])}[/red]")
+            else:
+                rendered.append(f"[dim] {escape(line)}[/dim]")
+        self.add_block(InfoBlock("\\n".join(rendered) + "\\n"))
 
     def _handle_diff_command(self) -> None:
         """`:diff` — сравнить stdout сфокусированного блока с предыдущим CommandBlock.

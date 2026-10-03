@@ -71,6 +71,7 @@ COLON_COMMAND_NAMES: tuple[str, ...] = (
     "tagmeta",
     "pin",
     "profile",
+    "snapshot",
 )
 
 # `:имя` — только имена из таблицы; `-`/`_`/буква сразу после имени означают, что

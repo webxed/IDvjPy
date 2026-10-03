@@ -19,6 +19,9 @@ history_lines: 20
 # The history tail stays a sequence; old duplicates go away. 0 = off. :h compact
 history_keep: 500
 
+# Bounded saved stdout snapshots (:snapshot); files live in the data directory.
+output_snapshots: true
+
 # Suggestions from history_*.txt while typing a regular command (including lines
 # starting with `@` and `>`): you can pick any, insertion — Tab/Enter.
 # false — only ↑ and :h /text.

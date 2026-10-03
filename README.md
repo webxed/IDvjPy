@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.195 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.196 — умный терминал для создания командных строк из тегов.
 
 Переводы: [English](docs/en/README.md) · [中文](docs/zh/README.md).
 
@@ -318,6 +318,10 @@ curl -H "Bearer $TOKEN" https://api.example   # обычная подстано�
 ```
 
 Профили лежат в `profile_<name>.json` в каталоге данных приложения и имеют права `0600`. `:profile use` меняет только текущее runtime-состояние; команды автоматически не запускаются и `.bashrc_term` не переписывается.
+
+### Снимки вывода команд
+
+`:snapshot save NAME` сохраняет stdout завершённой команды для последующего сравнения; `:snapshot list`, `show NAME`, `diff NAME` и `rm NAME` управляют снимками. `diff` сравнивает сохранённый stdout с выводом сфокусированного (или последнего) блока. В данные попадает только замаскированный stdout — stderr, команда и окружение не сохраняются. Каждый снимок ограничен 256 КиБ, хранилище — 20 снимками и 5 МиБ, файл `output_snapshots.json` имеет права `0600`. Функция включается настройкой `output_snapshots`.
 
 ### Команды приложения (`:`)
 

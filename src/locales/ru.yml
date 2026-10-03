@@ -213,7 +213,20 @@ cmd:
   tags: "поиск по каталогу живых тегов и метаданным (:tags [фильтр])"
   tagmeta: "показать или заменить структурированные метаданные тега"
   pin: "избранные теги текущей сессии (:pin add|rm|clear|list; :tags pinned)"
+  snapshot: "сохранить ограниченный маскированный вывод команды и сравнить позже (:? snapshot)"
   profile: "сохранить/применить безопасный контекст: cwd, scope, namespace, kube context"
+
+snapshot:
+  usage: "Использование: :snapshot [list] | :snapshot save NAME | :snapshot show NAME | :snapshot diff NAME | :snapshot rm NAME"
+  disabled: "Снимки вывода выключены (settings.yml: output_snapshots)."
+  none: "нет"
+  list: "Снимки вывода: {snapshots}"
+  no_output: "Нет завершённого вывода команды для снимка."
+  saved: "Снимок вывода сохранён: {name}{note}"
+  truncated: " (обрезан до 256 КиБ)"
+  removed: "Снимок вывода удалён: {name}"
+  error: "Ошибка снимка: {error}"
+  identical: "Снимок {name} и текущий stdout совпадают."
 
 profile:
   usage: "Использование: :profile [list] | :profile show [NAME] | :profile save NAME | :profile use NAME | :profile rm NAME"

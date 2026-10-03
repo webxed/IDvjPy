@@ -19,6 +19,9 @@ history_lines: 20
 # 历史尾部保持为序列；旧的重复项会被移除。0 = 关闭。:h compact
 history_keep: 500
 
+# 有大小限制的 stdout 快照（:snapshot）；文件保存在数据目录。
+output_snapshots: true
+
 # 输入普通命令时来自 history_*.txt 的提示（包括以
 # `@` 和 `>` 开头的行）：可以选择任意一条，插入用 Tab/Enter。
 # false —— 只有 ↑ 和 :h /text。
