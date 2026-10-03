@@ -261,7 +261,11 @@ try:
         format_library_overview,
         seed_invoke,
     )
-    from seed_lib import backup_sqlite
+    from seed_lib import (
+        backup_sqlite,
+        list_sqlite_backups,
+        restore_sqlite_backup,
+    )
     from session_mailbox import (
         MODE_INSERT,
         MODE_RUN,
@@ -2609,7 +2613,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.199"
+    VERSION = "v1.200"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -6556,20 +6560,58 @@ class CommandRunner(App):
         return format_env_followup(names, new_cwd)
 
     def _handle_backup_command(self, args: list[str]) -> None:
-        if args:
-            self.add_block(InfoBlock("Usage: :backup"))
+        if not args:
+            if not os.path.isfile(self.db_file):
+                self.add_block(InfoBlock(f"Database not found: {self.db_file}"))
+                return
+            if not database.has_live_commands(self.db_file):
+                self.add_block(InfoBlock("Empty database, nothing to backup"))
+                return
+            dest = backup_sqlite(self.db_file, "manual", quiet=True)
+            if dest is None:
+                self.add_block(InfoBlock("Backup failed"))
+                return
+            self.add_block(InfoBlock(f"Backup: {dest}"))
             return
-        if not os.path.isfile(self.db_file):
-            self.add_block(InfoBlock(f"Database not found: {self.db_file}"))
+
+        action = args[0].casefold()
+        if action == "list" and len(args) == 1:
+            backups = list_sqlite_backups(self.db_file)
+            if not backups:
+                self.add_block(InfoBlock("No SQLite backups found"))
+                return
+            self.add_block(InfoBlock("SQLite backups (newest first):\n" + "\n".join(
+                f"{index}. {path.name}" for index, path in enumerate(backups, 1)
+            )))
             return
-        if not database.has_live_commands(self.db_file):
-            self.add_block(InfoBlock("Empty database, nothing to backup"))
+        if action == "restore" and len(args) == 2:
+            try:
+                index = int(args[1])
+                backups = list_sqlite_backups(self.db_file)
+                selected = backups[index - 1] if 1 <= index <= len(backups) else None
+            except ValueError:
+                selected = None
+            if selected is None:
+                self.add_block(InfoBlock("Usage: :backup restore <number from :backup list>"))
+                return
+            self.set_input_draft(f":backup restore-yes {selected.name}")
+            self.add_block(InfoBlock(
+                f"Restore {selected.name}? Current database will first be saved as a pre-restore backup. "
+                "Enter the prepared :backup restore-yes command to continue."
+            ))
             return
-        dest = backup_sqlite(self.db_file, "manual", quiet=True)
-        if dest is None:
-            self.add_block(InfoBlock("Backup failed"))
+        if action == "restore-yes" and len(args) == 2:
+            try:
+                pre_restore = restore_sqlite_backup(self.db_file, args[1])
+            except (OSError, ValueError) as exc:
+                self.add_block(InfoBlock(f"Restore failed: {exc}"))
+                return
+            self._invalidate_library()
+            self.add_block(InfoBlock(f"Database restored from {args[1]}; previous database saved as {pre_restore}"))
             return
-        self.add_block(InfoBlock(f"Backup: {dest}"))
+        self.add_block(InfoBlock(
+            "Usage: :backup [list | restore <number from :backup list>]"
+        ))
 
     def _show_library_overview(self, *, follow_end: bool = True) -> None:
         try:

@@ -89,6 +89,58 @@ def _unique_backup_dest(directory: Path, stem: str, suffix: str) -> Path:
     return dest
 
 
+def backup_dir_for(db_file: str) -> Path:
+    """Каталог точных снимков БД из settings.yml рядом с файлом базы."""
+    return _backup_dir_for(db_file)
+
+
+def list_sqlite_backups(db_file: str) -> list[Path]:
+    """Existing SQLite snapshots for this database, newest first."""
+    src = Path(db_file)
+    directory = _backup_dir_for(str(src))
+    prefix = f"{src.stem}-"
+    suffix = src.suffix or ".db"
+    return sorted(
+        (path for path in directory.glob(f"{prefix}*{suffix}") if path.is_file()),
+        key=lambda path: (path.stat().st_mtime_ns, path.name),
+        reverse=True,
+    )
+
+
+def restore_sqlite_backup(db_file: str, backup_file: str) -> Path | None:
+    """Restore a selected snapshot after saving the current live DB first."""
+    allowed_dir = _backup_dir_for(db_file).resolve()
+    source = Path(backup_file)
+    if not source.is_absolute():
+        source = allowed_dir / source
+    try:
+        candidate = source.resolve(strict=True)
+        candidate.relative_to(allowed_dir)
+    except (OSError, ValueError):
+        raise ValueError("backup must be a file inside the configured backup directory") from None
+    if not candidate.is_file() or candidate.suffix.lower() not in {".db", ".sqlite", ".sqlite3"}:
+        raise ValueError("backup must be an existing SQLite database file")
+
+    try:
+        source_conn = sqlite3.connect(f"file:{candidate}?mode=ro", uri=True, timeout=10)
+        try:
+            valid = source_conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='commands'"
+            ).fetchone()
+        finally:
+            source_conn.close()
+    except sqlite3.Error as exc:
+        raise ValueError(f"invalid SQLite backup: {exc}") from None
+    if not valid:
+        raise ValueError("invalid SQLite backup: commands table not found")
+
+    pre_restore = backup_sqlite(db_file, "pre-restore", quiet=True)
+    if pre_restore is None:
+        raise ValueError("could not snapshot the current database before restore")
+    _copy_sqlite(candidate, Path(db_file))
+    return pre_restore
+
+
 def _copy_sqlite(src: Path, dest: Path) -> None:
     src_conn = sqlite3.connect(str(src), timeout=10)
     try:
