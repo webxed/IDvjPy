@@ -1,4 +1,4 @@
-"""Автотесты по сценариям test_cmd.md (IDvjPy_term v1.214)."""
+"""Автотесты по сценариям test_cmd.md (IDvjPy_term v1.215)."""
 import pytest
 
 pytestmark = pytest.mark.slow
