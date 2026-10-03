@@ -18,7 +18,7 @@ SEED_TAGS = {
         "переменные git",
         [
             (
-                "echo branch=$BRANCH commit=$COMMIT file=$FILE msg=$MSG remote=$REMOTE",
+                "echo branch=$BRANCH commit=$COMMIT file=$FILE msg=$MSG remote=$REMOTE url=$URL",
                 "проверка $BRANCH/$COMMIT/…",
             ),
         ],
@@ -71,6 +71,11 @@ SEED_TAGS = {
             ("git add -p", "интерактивный add (лучше: > git add -p)"),
             ("git restore --staged :/", "убрать всё из индекса"),
             ("git rebase -i HEAD~5", "interactive rebase (лучше: > git rebase -i HEAD~5)"),
+            ("git clone --depth 1 $URL", "клон без истории (--depth 1)"),
+            (
+                "git clone --depth 1 --branch $BRANCH $URL",
+                "клон одной ветки без истории",
+            ),
         ],
     ),
     "gstat": (

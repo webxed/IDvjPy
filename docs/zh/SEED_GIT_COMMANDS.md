@@ -1,6 +1,6 @@
 # IDvjPy git 手册
 
-**`git`** 标签 — 带有 `$BRANCH`、`$COMMIT`、`$FILE`、`$MSG`、`$REMOTE` 的模板。
+**`git`** 标签 — 带有 `$BRANCH`、`$COMMIT`、`$FILE`、`$MSG`、`$REMOTE`、`$URL` 的模板。
 playbook：`gstat`、`gdiff`、`gsync`、`gundo`。
 
 log/diff/show 使用 `--no-pager`，以免 `less` 阻塞 TUI。
@@ -20,6 +20,7 @@ $COMMIT=HEAD
 $FILE=
 $MSG=
 $REMOTE=origin
+$URL=https://github.com/user/repo.git
 !! gvars[1]
 ```
 
@@ -71,8 +72,12 @@ $REMOTE=origin
 | 40 | `git add -p` | 交互式 add（更好: `> git add -p`） |
 | 41 | `git restore --staged :/` | 取消暂存全部 |
 | 42 | `git rebase -i HEAD~5` | 交互式 rebase（更好: `> git rebase -i HEAD~5`） |
+| 43 | `git clone --depth 1 $URL` | 浅克隆（无历史） |
+| 44 | `git clone --depth 1 --branch $BRANCH $URL` | 浅克隆分支 `$BRANCH` |
 
-在应用中：`!git[1]` … `!git[42]`。组装：`!! git[2] ; git[6]`。
+`--depth 1` 是浅克隆：只拉取最新一次提交，不含完整历史 —— 更快更省。需要完整历史就去掉 `--depth 1`。
+
+在应用中：`!git[1]` … `!git[44]`。组装：`!! git[2] ; git[6]`。
 
 ---
 

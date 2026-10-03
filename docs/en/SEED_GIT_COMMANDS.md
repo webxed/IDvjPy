@@ -1,6 +1,6 @@
 # git handbook for IDvjPy
 
-The **`git`** tag — templates with `$BRANCH`, `$COMMIT`, `$FILE`, `$MSG`, `$REMOTE`.
+The **`git`** tag — templates with `$BRANCH`, `$COMMIT`, `$FILE`, `$MSG`, `$REMOTE`, `$URL`.
 Playbooks: `gstat`, `gdiff`, `gsync`, `gundo`.
 
 `--no-pager` on log/diff/show so `less` does not block the TUI.
@@ -20,6 +20,7 @@ $COMMIT=HEAD
 $FILE=
 $MSG=
 $REMOTE=origin
+$URL=https://github.com/user/repo.git
 !! gvars[1]
 ```
 
@@ -71,8 +72,12 @@ $REMOTE=origin
 | 40 | `git add -p` | interactive add (`> git add -p`) |
 | 41 | `git restore --staged :/` | unstage everything |
 | 42 | `git rebase -i HEAD~5` | interactive rebase (`> git rebase -i HEAD~5`) |
+| 43 | `git clone --depth 1 $URL` | shallow clone (no history) |
+| 44 | `git clone --depth 1 --branch $BRANCH $URL` | shallow clone of branch `$BRANCH` |
 
-In the app: `!git[1]` … `!git[42]`. Assembly: `!! git[2] ; git[6]`.
+`--depth 1` is a shallow clone: only the latest commit, no full history — faster and lighter. Need the whole history — drop `--depth 1`.
+
+In the app: `!git[1]` … `!git[44]`. Assembly: `!! git[2] ; git[6]`.
 
 ---
 

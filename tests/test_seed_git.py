@@ -17,6 +17,9 @@ def test_seed_git_tids_and_playbooks(tmp_path):
     assert "--no-pager" in rows[2]["command"]
     assert "fetch --all --prune" in rows[17]["command"]  # tid 18
     assert "reflog" in rows[35]["command"]  # tid 36
+    assert rows[42]["command"] == "git clone --depth 1 $URL"  # tid 43
+    assert "--depth 1 --branch $BRANCH" in rows[43]["command"]  # tid 44
+    assert "$URL" in database.get_command_by_tid(db, "gvars", 1)["command"]
 
     gstat = database.get_command_by_tid(db, "gstat", 1)
     assert "!git[2]" in gstat["command"]

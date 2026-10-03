@@ -48,6 +48,8 @@ tags:
       39: 'interactive add (better: > git add -p)'
       40: unstage everything
       41: 'interactive rebase (better: > git rebase -i HEAD~5)'
+      42: shallow clone (no full history)
+      43: shallow clone of a single branch
   gstat:
     comment: repository overview
     commands:

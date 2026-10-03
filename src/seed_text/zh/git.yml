@@ -48,6 +48,8 @@ tags:
       39: '交互式 add（更好: > git add -p）'
       40: 取消暂存全部
       41: '交互式 rebase（更好: > git rebase -i HEAD~5）'
+      42: 浅克隆（无完整历史）
+      43: 单分支浅克隆
   gstat:
     comment: 仓库概览
     commands:

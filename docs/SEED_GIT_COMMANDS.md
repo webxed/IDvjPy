@@ -1,6 +1,6 @@
 # Справочник git для IDvjPy
 
-Тег **`git`** — шаблоны с `$BRANCH`, `$COMMIT`, `$FILE`, `$MSG`, `$REMOTE`.
+Тег **`git`** — шаблоны с `$BRANCH`, `$COMMIT`, `$FILE`, `$MSG`, `$REMOTE`, `$URL`.
 Плейбуки: `gstat`, `gdiff`, `gsync`, `gundo`.
 
 `--no-pager` у log/diff/show, чтобы `less` не блокировал TUI.
@@ -20,6 +20,7 @@ $COMMIT=HEAD
 $FILE=
 $MSG=
 $REMOTE=origin
+$URL=https://github.com/user/repo.git
 !! gvars[1]
 ```
 
@@ -71,8 +72,12 @@ $REMOTE=origin
 | 40 | `git add -p` | Interactive add (`> git add -p`) |
 | 41 | `git restore --staged :/` | Убрать всё из индекса |
 | 42 | `git rebase -i HEAD~5` | Interactive rebase (`> git rebase -i HEAD~5`) |
+| 43 | `git clone --depth 1 $URL` | Клон без истории |
+| 44 | `git clone --depth 1 --branch $BRANCH $URL` | Клон ветки `$BRANCH` |
 
-В приложении: `!git[1]` … `!git[42]`. Сборка: `!! git[2] ; git[6]`.
+`--depth 1` — поверхностный клон (shallow): качается только последний коммит, без полной истории — быстрее и легче. Нужна вся история — уберите `--depth 1`.
+
+В приложении: `!git[1]` … `!git[44]`. Сборка: `!! git[2] ; git[6]`.
 
 ---
 
