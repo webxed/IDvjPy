@@ -14,7 +14,8 @@
                 list is `history_queries` in settings.yml (empty — do not record).
                 A typo (`command not found`, 127) is dropped from the file and from
                 Up — `history_forget_not_found: false` keeps it
-  :h /text    - Search that file in completions (unique lines, newest first); Enter dumps a block
+  :h /text    - Search history (unique commands, newest first)
+  :h tags /text - Search live library commands and comments (case-insensitive); click/insert a result, nothing executes
   :h compact  - Unique old history; keep the last history_keep lines as a sequence
   :h import [shell] - Append your shell history (bash/zsh/fish/ksh/nu/pwsh or the
                 atuin database; `$HISTFILE` first; paths for Linux/macOS/Windows) to

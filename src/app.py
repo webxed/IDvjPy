@@ -2609,7 +2609,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.197"
+    VERSION = "v1.198"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -6053,6 +6053,13 @@ class CommandRunner(App):
             return
         if sub == "import":
             self._handle_history_import(args[1:])
+            return
+        if sub in {"tags", "library"}:
+            query = " ".join(args[1:]).strip()
+            if not query.startswith("/") or not query[1:].strip():
+                self.add_block(InfoBlock("Usage: :h tags /text"))
+                return
+            self._show_library_history_search(query[1:])
             return
         if rest.startswith("/") and rest[1:].strip():
             # `exclude` — чтобы только что набранная строка не искалась сама в себе.
@@ -10996,6 +11003,34 @@ class CommandRunner(App):
         self._history_matches = matches
         self._history_walk_index = len(matches)
         return True
+
+    def _show_library_history_search(self, pattern: str) -> None:
+        """`:h tags /text` — search live library commands/comments, without executing them."""
+        needle = (pattern or "").strip()
+        if not needle:
+            self.add_block(InfoBlock("Usage: :h tags /text"))
+            return
+        try:
+            rows, total = database.search_commands_by_content(
+                self.db_file, needle, limit=self.HISTORY_SEARCH_LIMIT
+            )
+        except Exception as exc:
+            self.add_block(InfoBlock(f"Library search failed: {exc}"))
+            return
+        if not rows:
+            self.add_block(InfoBlock(f"Library: no matches for /{needle}"))
+            return
+        lines = [f"Library /{needle}  {len(rows)}/{total}"]
+        for row in rows:
+            lines.append(
+                self._format_tagged_command_line(
+                    int(row["id"]), str(row["tag"]), int(row["tid"]),
+                    str(row["command"] or ""), str(row["comment"] or ""),
+                )
+            )
+        if total > len(rows):
+            lines.append(f"… {total - len(rows)} more; narrow the search")
+        self.add_block(InfoBlock("\n".join(lines)))
 
     def _show_history_search(self, pattern: str, *, exclude: str = "") -> None:
         """`:h /text` — совпадения по всему history.txt, свежие сверху.

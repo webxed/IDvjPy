@@ -15,7 +15,8 @@
                 列表为 settings.yml 中的 `history_queries`（留空 — 不记录）。
                 拼写错误（`command not found`，127）会从文件和 ↑ 中移除 —
                 `history_forget_not_found: false` 会保留它
-  :h /text    - 在该文件的提示中搜索（唯一行，新的在上）；Enter 输出块
+  :h /text    - 搜索历史记录（唯一命令，最新的在前）
+  :h tags /text - 搜索活动库中的命令和注释（不区分大小写）；可点击/插入结果，但不会执行
   :h compact  - 去重的旧历史；最后 history_keep 行保持为序列
   :h import [shell] - 追加你的 shell 历史（bash/zsh/fish/ksh/nu/pwsh 或 atuin
                 数据库；`$HISTFILE` 优先；Linux/macOS/Windows 的路径）到
