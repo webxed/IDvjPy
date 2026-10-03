@@ -1,0 +1,31 @@
+[bold]:settings — merge new template keys into your YAML[/bold]
+
+`:settings` keeps your personal `settings.yml` and `llm_providers.yml` in step with
+the templates of a new app version. When a release adds a key, the app falls back
+to a built-in default silently; this command copies the missing blocks from the
+template into your file so you can see and tune them.
+
+[bold]Commands[/bold]
+  :settings           - Show both file paths, the app version, and how many keys
+                each file is missing (unknown leftover keys are listed too).
+  :settings sync      - Show the plan: which keys would be added, to which file.
+                The ready `:settings sync --yes` line is put into the input —
+                Enter applies it.
+  :settings sync --yes - Apply the plan to both files.
+
+[bold]Rules (safe by design)[/bold]
+  • Only [bold]missing[/bold] keys are appended. Existing keys are never rewritten,
+    even if their value differs from the template — that value is your setting.
+  • Comments above an added block come from the template (in your UI language).
+  • An unknown key of yours is only [bold]reported[/bold], never deleted.
+  • Before writing, the current file is copied to `backups/<name>-pre-sync-<ts>`.
+    The write is atomic and re-validated: a broken YAML result is rolled back.
+  • Re-running `:settings sync` on an up-to-date file changes nothing.
+
+[bold]Notes[/bold]
+  The template is picked by the current UI language (`:lang`), falling back to `en`.
+  In portable mode (the data directory is the launch directory) nothing runs
+  automatically — the command is always explicit. A fully byte-exact copy of the
+  database is a different feature: `:backup`.
+
+  Other topics and the full command list — :?

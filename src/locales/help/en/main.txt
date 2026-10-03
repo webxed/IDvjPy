@@ -156,6 +156,10 @@
                 — stop, `:run` — usage + tags with run: directives (see :? run)
   :update     - Compare this VERSION with GitHub main (webxed/IDvjPy)
                 Proxy 407: set $PROXY_USER / $PROXY_PASS (and HTTPS_PROXY)
+  :settings [sync [--yes]] - Merge keys added by a new version into your
+                settings.yml / llm_providers.yml (existing values untouched,
+                backup in backups/). `sync` shows the plan and puts the confirm
+                line in the input (see :? settings)
 
 [bold]Kubernetes Commands (prefix :i)[/bold]
   :i list             - List all ingresses
@@ -239,6 +243,7 @@
   :? explain - Offline static command explanation: no launch, expansion or file reads
   :? learn   - Guided read-only lessons: run a command yourself, then check the latest block
   :? snapshot - Save bounded, masked command stdout and compare it with later output
+  :? settings - Merge new template keys into settings.yml / llm_providers.yml
 
 [bold]Navigation[/bold]
   ↑/↓        - Input history walk: everything typed in this session (`:`-commands,

@@ -152,6 +152,10 @@
                 停止，`:run` — 用法 + 带 run: 指令的标签（见 :? run）
   :update     - 将此 VERSION 与 GitHub main (webxed/IDvjPy) 比较
                 代理 407：设置 $PROXY_USER / $PROXY_PASS（以及 HTTPS_PROXY）
+  :settings [sync [--yes]] - 将新版本新增的键合并到你的
+                settings.yml / llm_providers.yml（不触碰已有值，
+                备份至 backups/）。`sync` 显示计划并将确认行放入输入框
+                （见 :? settings）
 
 [bold]Kubernetes 命令（前缀 :i）[/bold]
   :i list             - 列出所有 ingress
@@ -228,6 +232,7 @@
   :? explain - 离线静态说明：不执行、不展开变量、不读取文件
   :? learn   - 只读练习课程：自行运行命令，然后检查最新块
   :? snapshot - 保存有界、已脱敏的命令 stdout，并与后续输出比较
+  :? settings - 将模板中新增的键合并到 settings.yml / llm_providers.yml
 
 [bold]导航[/bold]
   ↑/↓        - 翻看输入历史：本会话中输入的一切

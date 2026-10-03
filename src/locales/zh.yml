@@ -267,6 +267,21 @@ cmd:
   safe: "安全执行模式: 确认已识别的风险命令（:safe on|off）"
   explain: "命令的离线静态说明（绝不执行）"
   learn: "只读练习课程：自行运行命令，再检查已完成的块"
+  settings: "将模板中新增的键合并到 settings.yml / llm_providers.yml（:settings [sync]）"
+
+settings:
+  usage: "用法: :settings — 状态；:settings sync — 显示新版本新增的键并将确认行放入输入框；:settings sync --yes — 应用。详情: :? settings"
+  status: "{file} — 新增键 {missing} 个: {keys}"
+  obsolete: "  未知键（保持原样）: {keys}"
+  version: "版本: {version}"
+  hint: "模板中的新键会合并到你的文件；值和注释绝不会被覆盖 — :settings sync"
+  no_file: "{file} — 未找到（无需同步）"
+  no_files: "没有可同步的设置文件"
+  up_to_date: "{file} — 已是最新"
+  plan: "可向 {file} 添加 {count} 个键:"
+  applied: "{file} — 已添加 {count} 个键（备份: {backup}）"
+  error: "{file} — 未更改: {error}"
+  confirm_hint: "按 Enter 应用，清空该行则取消。"
 
 learn:
   header: "只读练习课程"

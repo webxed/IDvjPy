@@ -128,6 +128,7 @@ try:
     import remote_source
     import runbook
     import safe_mode
+    import settings_sync
     import tag_validation
     import totp
     import vault
@@ -2714,7 +2715,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.216"
+    VERSION = "v1.217"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -2884,6 +2885,7 @@ class CommandRunner(App):
     CMD_EXPLAIN = "explain"  # локальный разбор команды без запуска (справочник + эвристика)
     CMD_LEARN = "learn"  # учебный режим: задача, подсказки, проверка выполненной команды
     CMD_SAFE = "safe"
+    CMD_SETTINGS = "settings"  # доливка новых ключей шаблона в личные settings/llm_providers
     KEY_SAFE_MODE = "safe_mode"
     # Colon-команды, у которых аргументы — не пути: числа и поисковые шаблоны.
     # Для них `/` — начало `:o /text` (grep по выводам) / `:h /text`, а не листинг корня.
@@ -6287,6 +6289,7 @@ class CommandRunner(App):
         CMD_SAFE: "_handle_safe_command",
         CMD_EXPLAIN: "_handle_explain_command",
         CMD_LEARN: "_handle_learn_command",
+        CMD_SETTINGS: "_handle_settings_command",
     }
 
     def _handle_explain_command(self, args: list[str]) -> None:
@@ -6370,6 +6373,114 @@ class CommandRunner(App):
             terminal_mode=getattr(self, "term_open", "window"),
         )
         self.add_block(InfoBlock(doctor.format_report(report)))
+
+    def _handle_settings_command(self, args: list[str]) -> None:
+        """`:settings [sync [--yes]]` — доливка новых ключей шаблона.
+
+        `:settings` — статус и пути; `:settings sync` — показать план и подставить
+        `:settings sync --yes` во ввод; только второй Enter пишет файл (принцип
+        «собрал — потом запустил»). Существующие значения и комментарии не трогаются,
+        перед записью — копия в backups/. См. `src/settings_sync.py`.
+        """
+        if not args:
+            self._show_settings_status()
+            return
+        if args[0].casefold() != "sync" or any(
+            arg not in ("sync", "--yes") for arg in args
+        ):
+            self.add_block(InfoBlock(t("settings.usage")))
+            return
+        self._sync_settings(apply="--yes" in args)
+
+    def _settings_targets(self) -> list[tuple[str, str, str]]:
+        """Пары «имя, личный файл, текст шаблона» для settings.yml и llm_providers.yml."""
+        lang = getattr(self, "language", None) or current_language()
+        targets: list[tuple[str, str, str]] = []
+        for _label, user_path, tpl_path in (
+            ("settings", self.FILE_SETTINGS, settings_example_path(lang)),
+            ("llm", self.FILE_LLM_PROVIDERS, llm_providers_example_path(lang)),
+        ):
+            if not tpl_path:
+                continue
+            try:
+                with open(tpl_path, encoding=self.ENCODING) as handle:
+                    template = handle.read()
+            except OSError:
+                continue
+            targets.append((_label, user_path, template))
+        return targets
+
+    def _read_settings_file(self, path: str) -> str | None:
+        try:
+            with open(path, encoding=self.ENCODING) as handle:
+                return handle.read()
+        except OSError:
+            return None
+
+    def _show_settings_status(self) -> None:
+        """`:settings` — пути, версия и сколько ключей не хватает в каждом файле."""
+        lines: list[str] = []
+        for _label, user_path, template in self._settings_targets():
+            user = self._read_settings_file(user_path)
+            if user is None:
+                lines.append(t("settings.no_file", file=user_path))
+                continue
+            plan = settings_sync.plan_sync(user, template)
+            key_text = ", ".join(".".join(path) for path in plan.missing_paths()) or "—"
+            lines.append(t(
+                "settings.status",
+                file=user_path,
+                missing=plan.count,
+                keys=key_text,
+            ))
+            if plan.obsolete:
+                lines.append(t("settings.obsolete", keys=", ".join(plan.obsolete)))
+        lines.append(t("settings.version", version=self.VERSION))
+        lines.append(t("settings.hint"))
+        self.add_block(InfoBlock("\n".join(lines)))
+
+    def _sync_settings(self, *, apply: bool) -> None:
+        """`:settings sync [--yes]` — план или применение для обоих YAML."""
+        parts: list[str] = []
+        any_missing = False
+        for _label, user_path, template in self._settings_targets():
+            user = self._read_settings_file(user_path)
+            if user is None:
+                continue
+            plan = settings_sync.plan_sync(user, template)
+            name = os.path.basename(user_path)
+            if plan.is_empty:
+                parts.append(t("settings.up_to_date", file=name))
+                continue
+            any_missing = True
+            if apply:
+                result = settings_sync.apply_sync(
+                    user_path,
+                    template,
+                    self.VERSION,
+                    backup_dir=os.path.join(self._data_dir or ".", "backups"),
+                    encoding=self.ENCODING,
+                )
+                if result.applied:
+                    parts.append(t(
+                        "settings.applied",
+                        file=name,
+                        count=result.added,
+                        backup=result.backup,
+                    ))
+                else:
+                    parts.append(t("settings.error", file=name, error=result.error or "?"))
+                continue
+            keys = "\n".join(f"  {'.'.join(path)}" for path in plan.missing_paths())
+            parts.append(t("settings.plan", file=name, count=plan.count) + "\n" + keys)
+            if plan.obsolete:
+                parts.append(t("settings.obsolete", keys=", ".join(plan.obsolete)))
+        if not parts:
+            parts.append(t("settings.no_files"))
+        if any_missing and not apply:
+            self.set_input_draft(f":{self.CMD_SETTINGS} sync --yes")
+            parts.append(t("settings.confirm_hint"))
+        self.add_block(InfoBlock("\n".join(parts)))
 
     COLON_NOARG_HANDLERS: dict[str, str] = {
         CMD_QUIT: "_handle_quit_command",

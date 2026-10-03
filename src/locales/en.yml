@@ -264,6 +264,22 @@ cmd:
   safe: "safe execution mode: confirm recognized risky commands (:safe on|off)"
   explain: "offline static explanation of a command (never executes it)"
   learn: "guided read-only practice lessons; you run the command and check the finished block"
+  settings: "merge new template keys into settings.yml / llm_providers.yml (:settings [sync])"
+
+
+settings:
+  usage: "Usage: :settings — status; :settings sync — show keys added by the new version and put the confirm line in the input; :settings sync --yes — apply. Details: :? settings"
+  status: "{file} — {missing} new key(s): {keys}"
+  obsolete: "  unknown keys (kept as-is): {keys}"
+  version: "Version: {version}"
+  hint: "New keys from the template are merged into your file; values and comments are never overwritten — :settings sync"
+  no_file: "{file} — not found (nothing to sync)"
+  no_files: "No settings files to sync"
+  up_to_date: "{file} — already up to date"
+  plan: "Can add {count} key(s) to {file}:"
+  applied: "{file} — added {count} key(s) (backup: {backup})"
+  error: "{file} — not changed: {error}"
+  confirm_hint: "Enter to apply, or clear the line to cancel."
 
 
 explain:

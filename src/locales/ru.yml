@@ -239,6 +239,21 @@ cmd:
   snapshot: "сохранить ограниченный маскированный вывод команды и сравнить позже (:? snapshot)"
   audit: "показать журнал изменений библиотеки без содержимого команд (:? audit)"
   profile: "сохранить/применить безопасный контекст: cwd, scope, namespace, kube context"
+  settings: "долить новые ключи шаблона в settings.yml / llm_providers.yml (:settings [sync])"
+
+settings:
+  usage: "Использование: :settings — статус; :settings sync — показать добавленные новой версией ключи и подставить строку подтверждения; :settings sync --yes — применить. Подробнее: :? settings"
+  status: "{file} — новых ключей: {missing}: {keys}"
+  obsolete: "  незнакомые ключи (оставлены как есть): {keys}"
+  version: "Версия: {version}"
+  hint: "Новые ключи шаблона доливаются в ваш файл; значения и комментарии не перезаписываются — :settings sync"
+  no_file: "{file} — не найден (нечего синхронизировать)"
+  no_files: "Нет файлов настроек для синхронизации"
+  up_to_date: "{file} — уже актуален"
+  plan: "Можно добавить {count} ключ(ей) в {file}:"
+  applied: "{file} — добавлено {count} ключ(ей) (копия: {backup})"
+  error: "{file} — не изменён: {error}"
+  confirm_hint: "Enter — применить, очистите строку — отмена."
 
 snapshot:
   usage: "Использование: :snapshot [list] | :snapshot save NAME | :snapshot show NAME | :snapshot diff NAME | :snapshot rm NAME"
