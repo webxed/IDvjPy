@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-IDvjPy_term (v1.218) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
+IDvjPy_term (v1.219) is a Python terminal application (TUI) built with the Textual framework. It provides a keyboard-driven interface for running shell commands with persistent, tagged command history stored in SQLite.
 
 Philosophy: tags are variables holding command templates; the app assembles them into command lines (`!tag[tid]`, `!!`).
 
-Bump `CommandRunner.VERSION` minor on every commit (`v1.218` → `v1.219`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
+Bump `CommandRunner.VERSION` minor on every commit (`v1.219` → `v1.220`). `:update` compares that string with GitHub `main` (`https://github.com/webxed/IDvjPy`).
 
 ## Running the Application
 
@@ -46,7 +46,7 @@ The setup script handles dependencies and configuration. On Linux, clipboard nee
 - **`src/`** — TUI, CSS, seed scripts, `.bashrc_term.example`
 - Launch cwd — `settings.yml`, SQLite command DB, `.bashrc_term*`, `history_<instance>.txt`. `:cd` / `cd` change the process cwd for shell commands; they do not move or recreate the tags DB.
   The root `settings.yml` is **not tracked** (`.gitignore`): it is a copy of the language template `src/settings/<lang>.yml` (`en` / `ru` / `zh`, same keys and values, comments translated), picked by **auto** detection (`--lang` → `$IDVJPY_LANG` → system locale → `en`) and created on first run in a new data dir. Personal settings must not leak to GitHub; edit the templates for defaults.
-- Data dir resolution: `--data-dir` → `$IDVJPY_DATA_DIR` → launch cwd if it holds `settings.yml` (portable) → OS default (`~/.config/idvjpy` / macOS App Support / Windows `%APPDATA%`). See `src/data_dirs.py`.
+- Data dir resolution: `--data-dir` → `$IDVJPY_DATA_DIR` → launch cwd if it holds `settings.yml` (portable) → OS default (`~/.config/idvjpy` / macOS App Support / Windows `%APPDATA%`). See `src/data_dirs.py`. Seed scripts (`seed_lib.get_db_file`) and the `backup_db.py` CLI (`backup_db.data_dir`) use the same function, so they can be run from any cwd and write to the app's DB; `--db` overrides.
 - Root **`app.py`** / **`backup_db.py`** are launchers
 - **`docker/`** — демостенд: `Dockerfile` (python:3.12-alpine + bash / terminfo / nano / git / curl / jq / procps + `firecrawl-anydoc` — конвертер документов для `:md`; в зависимости пакета не входит, `requirements.txt` не трогается), `compose.yaml` (сервис с `tty`/`stdin_open` и томом `idvjpy-demo-data`), `entrypoint.sh` (создаёт `/data/settings.yml` и `/data/llm_providers.yml` из шаблонов языка, собирает образец `/data/report.docx` — docx это ZIP с XML, чтобы `:md report.docx` было что показать, один раз сеет linux/k8s/git/ops и запускает `app.py`), `tui-smoke.py` (запускает TUI под настоящим pty заданного размера — для локального смоука и CI), `README.md`. Контекст сборки — корень репозитория, `.dockerignore` режет `.git`/`.venv`/`tests/`/`packaging/`. Образ ~100 МБ, `docker`/`kubectl` в него намеренно не входят. CI job `docker-demo` собирает образ и прогоняет смоук (`.github/workflows/tests.yml`).
 - **`packaging/`** — pip-упаковка (`idvjpy-term`). `build_wheel.sh` копирует текущий `src/` во вложенный ресурс `idvjpy_boot/src`, туда же — справочники `docs/` и `K8S_CHAINS.md`, и собирает wheel (без сети); boot-модуль при запуске (`idvjpy`, `python -m idvjpy_boot`) добавляет вложенную `src/` в `sys.path` — топ-левел импорты и ресурсы (`app.tcss`, `demos/`, примеры, `.bashrc_term.example`, справочники `:md`) читаются из пакета, а не из репозитория (справочники находит `handbook_md_path`: `REPO_ROOT` у установленного пакета = каталог `idvjpy_boot/`). Установка прямо из git (`pip install .`, `uv tool install git+…`) идёт через корневые `pyproject.toml`/`setup.py` (build_py вкладывает `src/`, `docs/` и `K8S_CHAINS.md`). Данные пользователя — всегда вне пакета (см. data dir выше).

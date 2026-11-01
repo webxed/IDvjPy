@@ -8,7 +8,7 @@
 
 Keyboard-driven TUI that treats **tags as command templates** and assembles them into shell lines (`!tag[tid]`, `!!`). Python **3.12+**, [Textual](https://textual.textualize.io/).
 
-**IDvjPy_term** v1.218 — умный терминал для создания командных строк из тегов.
+**IDvjPy_term** v1.219 — умный терминал для создания командных строк из тегов.
 
 Переводы: [English](docs/en/README.md) · [中文](docs/zh/README.md).
 
@@ -86,6 +86,8 @@ source .venv/bin/activate
 На Linux для буфера обмена нужны `xclip` или `xsel` (на Wayland — `wl-clipboard`).
 
 Переменные: при первом старте копируется [`src/.bashrc_term.example`](src/.bashrc_term.example) в `.bashrc_term_<instance>`. Демо: [`DEMO.md`](DEMO.md) (живой сценарий) и `python3 app.py --demo` (автонабор для записи видео).
+
+**Windows:** исполнение команд рассчитано на `bash`, поэтому рабочий путь — WSL2 (Ubuntu): пошагово в [`docs/WINDOWS_WSL.md`](docs/WINDOWS_WSL.md).
 
 ### Установка как pip-пакета (wheel)
 
@@ -189,7 +191,7 @@ python3 app.py --demo all              # всё подряд: calc, ipcalc, JSON
 python3 app.py --demo full --demo-quit
 ```
 
-Код приложения лежит в `src/`. В корне рабочей копии — данные: `settings.yml`, база тегов, `.bashrc_term*`, `history_<instance>.txt`, реестр сессий `session_<instance>.pid`. Seed-справочники: `python3 src/seed_git.py --seed` и т.п. При пустой БД каталог в журнале: клик по `--seed` вставляет команду во ввод, клик по `.md` или `:md файл.md` открывает справочник (`terminal_mouse: true`).
+Код приложения лежит в `src/`. Данные (`settings.yml`, база тегов, `.bashrc_term*`, `history_<instance>.txt`, реестр сессий `session_<instance>.pid`) — в **каталоге данных** (см. «Запуск»); если в каталоге запуска уже лежит `settings.yml`, он и есть каталог данных. Seed-справочники (`python3 src/seed_git.py --seed` и т.п.) и `backup_db.py` берут ту же базу, что и приложение, — запускать их можно из любого каталога, `--db` главнее. При пустой БД каталог в журнале: клик по `--seed` вставляет команду во ввод, клик по `.md` или `:md файл.md` открывает справочник (`terminal_mouse: true`).
 
 | Путь | Назначение |
 |------|------------|

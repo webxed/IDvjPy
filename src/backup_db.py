@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """CLI переноса библиотеки тегов (`python3 backup_db.py <команда>`).
 
-Тонкая оболочка: разбор аргументов, пути (`settings.yml` и `backups/` — из
-рабочей директории) и печать. Всё, что связано с форматами, живёт в
-`src/db_transfer.py` — одна реализация с TUI (`:export`, `:import`, `:backup`),
-поэтому JSON-схема и семантика импорта больше не расходятся.
+Тонкая оболочка: разбор аргументов, пути (`settings.yml`, база и `backups/` —
+из каталога данных приложения, как у TUI) и печать. Всё, что связано с
+форматами, живёт в `src/db_transfer.py` — одна реализация с TUI (`:export`,
+`:import`, `:backup`), поэтому JSON-схема и семантика импорта больше не
+расходятся.
 
 Команды:
   export / import                    JSON (вся база или `--tag`)
@@ -25,14 +26,15 @@ import yaml
 
 import db_transfer
 import seed_lib
+from data_dirs import resolve_data_dir
 
 DEFAULT_DB = "mytags.db"
 DEFAULT_BACKUP_DIR = "backups"
 
 
 def data_dir() -> Path:
-    """settings.yml, БД и backups/ читаются из рабочей директории, не из src/."""
-    return Path.cwd()
+    """settings.yml, БД и backups/ — в каталоге данных приложения (как у TUI)."""
+    return Path(resolve_data_dir())
 
 
 def load_settings() -> str:
@@ -63,7 +65,7 @@ def load_backup_dir() -> str:
 
 
 def _db_file(explicit: str | None) -> str:
-    """Путь к базе: `--db`, иначе имя из settings.yml (в рабочей директории)."""
+    """Путь к базе: `--db`, иначе имя из settings.yml (в каталоге данных)."""
     if explicit:
         return explicit
     name = load_settings()

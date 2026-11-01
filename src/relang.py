@@ -180,6 +180,7 @@ def main(argv: list[str] | None = None) -> None:
 
     from i18n import normalize_language, resolve_language
 
+    db_file = args.db or get_db_file()
     if args.lang:
         code = normalize_language(args.lang)
         if code == "auto":
@@ -189,9 +190,8 @@ def main(argv: list[str] | None = None) -> None:
             sys.exit(2)
         lang = code
     else:
-        lang = resolve_seed_language()
+        lang = resolve_seed_language(db_file)
 
-    db_file = args.db or get_db_file()
     commands_changed, tags_changed = relang_db(db_file, lang)
     print(
         f"Library comments → {lang}: {commands_changed} command(s), "

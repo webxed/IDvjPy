@@ -7,24 +7,17 @@
   python3 src/seed_linux_commands.py --seed       # заменить proc/file/net/kube
   python3 src/seed_linux_commands.py --comments   # заполнить пустые комментарии команд на месте
 
-Использует database_tags_file из settings.yml (как app.py).
+Использует базу приложения (каталог данных, как `app.py`); `--db` главнее.
 """
 import argparse
-import os
 import sys
 
 try:
-    import yaml
-
     import database_v2 as database
 except ImportError as e:
     print(f"Error: {e}", file=sys.stderr)
     print("Install dependencies: pip install -r requirements.txt", file=sys.stderr)
     sys.exit(1)
-
-FILE_SETTINGS = "settings.yml"
-ENCODING = "utf-8"
-DEFAULT_DB = "mytags.db"
 
 # Порядок тегов: процессы → файлы → сеть → kubectl
 TAG_COMMENTS = {
@@ -158,17 +151,10 @@ SEED_METADATA = {
 
 
 def get_db_file():
-    """Читает путь к базе из settings.yml, та же логика, что и в app.py."""
-    if not os.path.exists(FILE_SETTINGS):
-        return DEFAULT_DB
-    try:
-        with open(FILE_SETTINGS, encoding=ENCODING) as f:
-            settings = yaml.safe_load(f)
-        if settings:
-            return settings.get("database_tags_file", DEFAULT_DB)
-    except Exception:
-        pass
-    return DEFAULT_DB
+    """Путь к базе: общая логика сидов (`seed_lib`) — каталог данных приложения."""
+    from seed_lib import get_db_file as _seed_db_file
+
+    return _seed_db_file()
 
 
 def hard_delete_commands_by_tag(db_file: str, tag: str) -> None:
@@ -195,7 +181,7 @@ def run_seed(db_file: str) -> int:
     database.init_db(db_file)
     n = 0
     raw = {tag: (TAG_COMMENTS.get(tag, ""), list(_seed_items(tag))) for tag in SEED_COMMANDS}
-    for tag, (tag_comment, commands) in localized_tags(raw).items():
+    for tag, (tag_comment, commands) in localized_tags(raw, db_file=db_file).items():
         hard_delete_commands_by_tag(db_file, tag)
         for cmd, cmd_comment in commands:
             tid = database.add_command(db_file, cmd, tag)
@@ -212,21 +198,26 @@ def run_seed(db_file: str) -> int:
 
 def apply_comments(db_file: str, only_empty: bool = True) -> int:
     """Проставляет комментарии существующим строкам; не удаляет и не вставляет команды."""
-    from seed_lib import localized_comment, localized_tag_comment
+    from seed_lib import (
+        localized_comment,
+        localized_tag_comment,
+        resolve_seed_language,
+    )
 
     database.init_db(db_file)
+    lang = resolve_seed_language(db_file)
     updated = 0
     by_text = {}
     for tag in SEED_COMMANDS:
         for position, (cmd, cmd_comment) in enumerate(_seed_items(tag)):
             if cmd_comment:
-                by_text[(tag, cmd)] = localized_comment(tag, position, cmd_comment)
-        tag_comment = localized_tag_comment(tag, TAG_COMMENTS.get(tag, ""))
+                by_text[(tag, cmd)] = localized_comment(tag, position, cmd_comment, lang)
+        tag_comment = localized_tag_comment(tag, TAG_COMMENTS.get(tag, ""), lang)
         if tag_comment and (
             not only_empty or not database.get_tag_comment(db_file, tag)
         ):
             database.set_tag_comment(db_file, tag, tag_comment)
-    logs_comment = localized_tag_comment("logs", TAG_COMMENTS.get("logs", ""))
+    logs_comment = localized_tag_comment("logs", TAG_COMMENTS.get("logs", ""), lang)
     if logs_comment and (
         not only_empty or not database.get_tag_comment(db_file, "logs")
     ):
@@ -247,7 +238,7 @@ def apply_comments(db_file: str, only_empty: bool = True) -> int:
             fallback = EXTRA_COMMENTS.get((row["tag"], int(row["tid"])))
             if fallback:
                 # Пользовательский tid: позиция выводится из самого tid.
-                wanted = localized_comment(row["tag"], int(row["tid"]) - 1, fallback)
+                wanted = localized_comment(row["tag"], int(row["tid"]) - 1, fallback, lang)
         if not wanted or wanted == current:
             continue
         database.set_command_comment(db_file, row["tag"], int(row["tid"]), wanted)

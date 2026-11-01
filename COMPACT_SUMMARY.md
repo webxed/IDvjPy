@@ -1,6 +1,12 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.218**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.219**.
+
+## v1.219
+
+- **Исправлено место базы для сидов и CLI.** `src/seed_*.py` и `backup_db.py` искали `mytags.db` в **текущем каталоге**, поэтому посев из корня репозитория (или из каталога запуска, отличного от каталога данных) уходил в посторонний файл, а TUI писала в свою библиотеку — отсюда «не вижу загруженных команд» (`(None found)`). Теперь путь даёт `data_dirs.resolve_data_dir()` — тот же каталог данных, что у TUI (`--data-dir` → `$IDVJPY_DATA_DIR` → каталог запуска с `settings.yml` → системный); явный `--db` по-прежнему главнее. `database_tags_file`, `backup_dir` и язык комментариев сида читаются из `settings.yml` **рядом с базой**, а не из cwd (`src/seed_lib.py`, `src/seed_linux_commands.py`, `src/relang.py`, `src/backup_db.py`).
+- Добавлен `tests/test_seed_db_location.py` (8 тестов): каталог по умолчанию, `$IDVJPY_DATA_DIR`, портативный cwd с `settings.yml`, относительное/абсолютное имя базы, паритет `seed_linux_commands`, CLI `backup_db.py`, `language`/`backup_dir` из `settings.yml` рядом с базой, `--db` против каталога данных.
+- Новый `docs/WINDOWS_WSL.md` — как запускать на Windows через WSL: venv вне `/mnt/c`, запуск без ручной активации, где лежат данные, куда садятся сиды, тесты и известные ограничения. Отмечено в `README.md`, `AGENTS.md` (`--db` главнее, `resolve_data_dir()` — общий вход), `CLAUDE.md` и `backup_db.md`.
 
 ## v1.218
 
@@ -284,7 +290,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.164 (app v1.218) |
+| `test_cmd.md` | Manual plan v1.165 (app v1.219) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -353,7 +359,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.218 |
+| `src/app.py` | TUI (`CommandRunner`), v1.219 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: звёздное поле по умолчанию (`screensaver_stars` управляет частицами), разовый матричный дождь (`:screensaver matrix`), flying clock/date + ticker + bottom help/load/mem |

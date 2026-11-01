@@ -18,6 +18,8 @@ except ImportError as e:
     print("Install dependencies: pip install -r requirements.txt", file=sys.stderr)
     sys.exit(1)
 
+from data_dirs import ensure_data_dir, resolve_data_dir
+
 FILE_SETTINGS = "settings.yml"
 ENCODING = "utf-8"
 DEFAULT_DB = "mytags.db"
@@ -44,33 +46,39 @@ def _db_key(db_file: str) -> str:
 
 
 def get_db_file() -> str:
-    if not os.path.exists(FILE_SETTINGS):
-        return DEFAULT_DB
+    """Путь к базе, которую читает приложение (`--db` разбирают CLI-обёртки).
+
+    Каталог данных тот же, что у TUI (`data_dirs.resolve_data_dir`):
+    `$IDVJPY_DATA_DIR` → portable cwd с `settings.yml` → системный каталог ОС.
+    Имя из `database_tags_file` считается относительно этого каталога. Поэтому
+    сид, запущенный из репозитория, не оставляет `mytags.db` рядом с исходниками,
+    а пишет в пользовательскую базу.
+    """
+    directory = Path(ensure_data_dir(resolve_data_dir()))
+    value = _read_settings(directory).get("database_tags_file", DEFAULT_DB)
+    name = value.strip() if isinstance(value, str) and value.strip() else DEFAULT_DB
+    db_path = Path(os.path.expanduser(name))
+    return str(db_path if db_path.is_absolute() else directory / db_path)
+
+
+def _read_settings(directory: Path) -> dict:
+    """`settings.yml` из каталога; пустой dict, если файла нет или он битый."""
     try:
-        with open(FILE_SETTINGS, encoding=ENCODING) as f:
-            settings = yaml.safe_load(f)
-        if settings:
-            return settings.get("database_tags_file", DEFAULT_DB)
+        with open(directory / FILE_SETTINGS, encoding=ENCODING) as fh:
+            data = yaml.safe_load(fh) or {}
     except Exception:
-        pass
-    return DEFAULT_DB
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _backup_dir_for(db_file: str) -> Path:
-    name = DEFAULT_BACKUP_DIR
-    settings = Path(FILE_SETTINGS)
-    if settings.is_file():
-        try:
-            with open(settings, encoding=ENCODING) as fh:
-                data = yaml.safe_load(fh) or {}
-            raw = data.get("backup_dir", DEFAULT_BACKUP_DIR)
-            if raw:
-                name = str(raw)
-        except Exception:
-            pass
+    """Каталог снимков: `backup_dir` из settings.yml рядом с базой, иначе `backups/`."""
+    db_dir = Path(db_file).expanduser().resolve().parent
+    raw = _read_settings(db_dir).get("backup_dir", DEFAULT_BACKUP_DIR)
+    name = str(raw) if raw else DEFAULT_BACKUP_DIR
     dest = Path(name)
     if not dest.is_absolute():
-        dest = Path(db_file).resolve().parent / dest
+        dest = db_dir / dest
     dest.mkdir(parents=True, exist_ok=True)
     return dest
 
@@ -232,21 +240,20 @@ def hard_delete_commands_by_tag(db_file: str, tag: str) -> None:
     conn.close()
 
 
-def resolve_seed_language() -> str:
+def resolve_seed_language(db_file: str | None = None) -> str:
     """Язык комментариев сидов: settings.yml → $IDVJPY_LANG → $LANG(auto) → en.
 
     Отдельного `--lang` у seed-скриптов нет: язык — это настройка приложения
     (`language`), поэтому засеянная библиотека говорит на том же языке, что и UI.
+    Настройки берутся рядом с базой (`db_file`), а без неё — из каталога данных:
+    сид, запущенный из репозитория, берёт язык того TUI, в чьей базе пишет.
     """
-    settings_lang: object = None
-    if os.path.exists(FILE_SETTINGS):
-        try:
-            with open(FILE_SETTINGS, encoding=ENCODING) as fh:
-                data = yaml.safe_load(fh) or {}
-            if isinstance(data, dict):
-                settings_lang = data.get("language")
-        except Exception:
-            settings_lang = None
+    directory = (
+        Path(db_file).expanduser().resolve().parent
+        if db_file
+        else Path(resolve_data_dir())
+    )
+    settings_lang: object = _read_settings(directory).get("language")
     try:
         from i18n import resolve_language
     except ImportError:  # запуск без src/ в sys.path — остаёмся на en
@@ -319,12 +326,12 @@ def localized_comment(
     return _translated(value, fallback)
 
 
-def localized_tags(seed_tags: dict, lang: str | None = None) -> dict:
+def localized_tags(seed_tags: dict, lang: str | None = None, db_file: str | None = None) -> dict:
     """Тот же набор тегов, но комментарии — из `seed_text/<lang>/*.yml`.
 
     Ключа нет — остаётся встроенный комментарий (это базовый текст хэндбука).
     """
-    index = load_seed_text(lang)
+    index = load_seed_text(lang or resolve_seed_language(db_file))
     if not index:
         return seed_tags
     out: dict = {}
@@ -355,7 +362,7 @@ def run_seed(
     backup_sqlite_before_seed(db_file, label)
     database.init_db(db_file)
     n = 0
-    for tag, (tag_comment, commands) in localized_tags(seed_tags).items():
+    for tag, (tag_comment, commands) in localized_tags(seed_tags, db_file=db_file).items():
         hard_delete_commands_by_tag(db_file, tag)
         for cmd, cmd_comment in commands:
             tid = database.add_command(db_file, cmd, tag)
