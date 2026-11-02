@@ -10,12 +10,16 @@
 """
 import os
 import threading
+import time
 
-# Кэш полного списка имён: строка `$PATH` → отсортированные уникальные имена.
-_cache: dict[str, list[str]] = {}
+# Кэш полного списка имён: строка `$PATH` → (имена, отпечаток каталогов, время проверки).
+_cache: dict[str, tuple[list[str], tuple, float]] = {}
 _cache_lock = threading.Lock()
 # Не даём кэшу расти без предела: строк `$PATH` за сессию — единицы.
 _CACHE_LIMIT = 4
+# Как часто перепроверять отпечаток каталогов: чаще — лишние `stat` на каждое
+# нажатие, реже — установленная команда дольше не видна в подсказках.
+_REVALIDATE_SEC = 10.0
 
 # Windows: базовый набор суффиксов, если `PATHEXT` не задан.
 _WINDOWS_EXTENSIONS = (".exe", ".bat", ".cmd", ".com")
@@ -73,17 +77,48 @@ def _scan(path_env: str) -> list[str]:
     return sorted(names)
 
 
-def _all_names(path_env: str) -> list[str]:
-    """Имена из ``$PATH`` с кэшем по строке окружения."""
+def _path_signature(path_env: str) -> tuple:
+    """Отпечаток каталогов `$PATH`: mtime каждого компонента (без чтения файлов).
+
+    `stat` дешёвый, но всё равно I/O: его вызывает только фоновой прогрев
+    (`_all_names`), а не `cached_system_command_candidates` из UI.
+    """
+    signature: list[tuple[str, int]] = []
+    for directory in path_env.split(os.pathsep):
+        # Пустой компонент PATH означает текущий каталог (POSIX и cmd.exe).
+        target = directory or os.curdir
+        try:
+            stamp = os.stat(target).st_mtime_ns
+        except OSError:
+            stamp = -1
+        signature.append((target, stamp))
+    return tuple(signature)
+
+
+def _all_names(path_env: str, *, force: bool = False) -> list[str]:
+    """Имена из ``$PATH`` с кэшем по строке окружения.
+
+    Кэш переживает установку программы: после `_REVALIDATE_SEC` отпечаток
+    каталогов проверяется заново, и изменённый `$PATH`-каталог сканируется ещё
+    раз (новый исполняемый файл не требует перезапуска приложения).
+    """
+    now = time.monotonic()
     with _cache_lock:
-        cached = _cache.get(path_env)
-        if cached is not None:
-            return cached
+        entry = _cache.get(path_env)
+    if entry is not None and not force:
+        names, signature, checked_at = entry
+        if now - checked_at < _REVALIDATE_SEC:
+            return names
+        if _path_signature(path_env) == signature:
+            with _cache_lock:
+                _cache[path_env] = (names, signature, now)
+            return names
     names = _scan(path_env)
+    signature = _path_signature(path_env)
     with _cache_lock:
         if len(_cache) >= _CACHE_LIMIT:
             _cache.clear()
-        _cache[path_env] = names
+        _cache[path_env] = (names, signature, now)
     return names
 
 
@@ -118,13 +153,20 @@ def system_command_candidates(
 def cached_system_command_candidates(
     prefix: str, *, path_env: str | None = None, limit: int = 20
 ) -> list[str] | None:
-    """Вернуть кандидаты из готового кэша либо ``None`` без файлового I/O."""
+    """Вернуть кандидаты из готового кэша либо ``None`` без файлового I/O.
+
+    ``None`` возвращается и для устаревшего кэша: вызывающий запускает фоновой
+    прогрев, который дешёво сверит отпечаток каталогов или пересканирует их.
+    """
     path_env = _path_env(path_env)
     if limit <= 0:
         return []
     with _cache_lock:
-        names = _cache.get(path_env)
-    if names is None:
+        entry = _cache.get(path_env)
+    if entry is None:
+        return None
+    names, _signature, checked_at = entry
+    if time.monotonic() - checked_at >= _REVALIDATE_SEC:
         return None
     return [name for name in names if _matches_prefix(name, prefix)][:limit]
 
@@ -135,6 +177,6 @@ def warm_system_command_cache(path_env: str | None = None) -> None:
 
 
 def clear_cache() -> None:
-    """Сбросить кэш имён (тесты; за сессию ``$PATH`` практически не меняется)."""
+    """Сбросить кэш имён (тесты и смена `$PATH` в пределах сессии)."""
     with _cache_lock:
         _cache.clear()

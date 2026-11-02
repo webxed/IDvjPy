@@ -119,6 +119,34 @@ def test_backup_refuses_empty_database(data_dir, capsys, monkeypatch):
     assert "Nothing to backup" in capsys.readouterr().err
 
 
+def test_explicit_db_takes_settings_and_backups_next_to_it(tmp_path, monkeypatch, capsys):
+    """`--db` главнее каталога данных: снимок и файлы переноса — рядом с базой.
+
+    Иначе SQLite-снимок (`seed_lib.backup_sqlite`) и JSON/CSV ложились бы в разные
+    каталоги, и `restore` искал бы файл не там, где его оставил `backup`.
+    """
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "settings.yml").write_text(
+        "database_tags_file: mytags.db\nbackup_dir: data_snaps\n", encoding="utf-8"
+    )
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / "settings.yml").write_text("backup_dir: db_snaps\n", encoding="utf-8")
+    db = other / "library.db"
+    database.init_db(str(db))
+    database.add_command(str(db), "echo hi", "mine")
+    monkeypatch.setenv("IDVJPY_DATA_DIR", str(data))
+
+    assert backup_db.main(["backup", "--db", str(db)]) == 0
+    assert backup_db.main(["export", "library.json", "--db", str(db)]) == 0
+    snaps = other / "db_snaps"
+    assert any(path.suffix == ".db" for path in snaps.iterdir())
+    assert (snaps / "library.json").is_file()
+    # Каталог данных не получил ни снимка, ни файла переноса.
+    assert not (data / "data_snaps").exists() or not any((data / "data_snaps").iterdir())
+
+
 def test_restore_snapshots_before_and_imports(data_dir, capsys):
     assert backup_db.main(["export", "kube.json", "--tag", "kube"]) == 0
     capsys.readouterr()

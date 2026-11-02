@@ -1,6 +1,15 @@
 # IDvjPy_term — Compact Summary
 
-TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.219**.
+TUI на Textual для запуска shell-команд с тегированной историей в SQLite. Версия: **v1.220**.
+
+## v1.220
+
+- Импорт по ссылке больше не может спуститься на HTTP: `src/net.py` устанавливает обработчик redirect-схем, который проверяет схему **до** каждого перехода, а не только начальный и конечный URL. Без `--insecure` промежуточный `https → http` запрещён; `src/remote_source.py` передаёт набор разрешённых схем.
+- `backup_db.py --db` теперь берёт `settings.yml` и `backups/` рядом с указанной базой (общий `seed_lib.backup_dir_for`), поэтому SQLite-снимок и JSON/CSV больше не расходятся по разным каталогам.
+- Заставка маскирует живые значения секретов в ленте: и загруженные из библиотеки команды, и строки демо проходят через `_mask_secrets` приложения (`DevopsScreensaver(mask=…)`); литералы в базе не меняются.
+- Файловые подсказки понимают незакрытые кавычки и экранированные пробелы (`shell_token_spans`/`unquote_shell_token` в `src/app.py`): `cat "my re` и `cat my\ re` находят `my report.md` и заменяют токен целиком. Хвостовой разделитель (`cat `, `cat f |`) по-прежнему значит «аргумент не начат».
+- Кэш системных команд замечает новые исполняемые файлы: значение кэша хранит отпечаток каталогов `$PATH` и время проверки (`_REVALIDATE_SEC`), устаревший кэш отдаёт `None` как сигнал фоновому прогреву — файловый I/O остаётся вне event loop.
+- Тесты: `test_net.py`, `test_backup_cli.py`, `test_screensaver.py`, `test_file_completion.py`, `test_system_command_completion.py`.
 
 ## v1.219
 
@@ -290,7 +299,7 @@ Details: `DATABASE.md`. Module: **`src/database_v2.py`**. File: `settings.yml` �
 
 | File | Coverage |
 |------|----------|
-| `test_cmd.md` | Manual plan v1.165 (app v1.219) |
+| `test_cmd.md` | Manual plan v1.166 (app v1.220) |
 | `tests/test_session_mailbox.py` | Ящик `:send`: запись/вычерпывание/lock/0o600, `:send`/`:send!`/`*`, offline-очередь, маскировка секретов |
 | `tests/test_session_registry.py` | Реестр сессий: `session_<имя>.pid` 0600 и свой pid, мёртвый pid (устаревший файл подчищается), битые/пустые файлы, `active_sessions`, `free_session_name` (наименьшее свободное среди активных, `taken`, файлы закрытых сессий имя не занимают), `unregister` не трогает чужую запись |
 | `tests/test_db_transfer.py` | Перенос (`db_transfer`): канонический JSON и терпимое чтение старого вида, отказ от переноса глобальных `id`, merge/replace/`skip_existing`/`preserve_tid`, мягко удалённые строки, адресный CSV по tid, CSV комментариев, Markdown, пути `export_path`/`import_path` |
@@ -359,7 +368,7 @@ Isolated tmp cwd + test DB. `submit()` clears input, dismisses completion, then 
 | `packaging/` | pip-упаковка: `pyproject.toml`, boot-модуль `idvjpy_boot` (вложенные `src/`, `docs/`, `K8S_CHAINS.md` в sys.path) и `build_wheel.sh` |
 | `docker/` | Демостенд для Docker: `Dockerfile` (alpine + `firecrawl-anydoc` для документов в `:md`), `compose.yaml`, `entrypoint.sh` (шаблоны + образец `report.docx` + однократный посев), `tui-smoke.py` (pty-смоук TUI), `README.md` |
 | `.dockerignore` | Контекст сборки стенда: без `.git`, venv, `tests/`, `packaging/`, данных и сборок |
-| `src/app.py` | TUI (`CommandRunner`), v1.219 |
+| `src/app.py` | TUI (`CommandRunner`), v1.220 |
 | `bump_version.py` / `src/version_bump.py` | Синхронизация `VERSION` по всем файлам релиза (минор/`--set`, `--dry-run`, `--check`) |
 | `src/calc.py` | Встроенный калькулятор без префикса: арифметика, `%`, `of`, единицы памяти/CPU (`src/ipcalc.py` — IPv4-сети и `300 hosts`) |
 | `src/screensaver.py` | Idle overlay: звёздное поле по умолчанию (`screensaver_stars` управляет частицами), разовый матричный дождь (`:screensaver matrix`), flying clock/date + ticker + bottom help/load/mem |

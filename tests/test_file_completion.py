@@ -173,6 +173,68 @@ async def test_shell_command_gets_the_path_quoted_and_runs(isolated_home):
         assert block.raw_stdout.strip() == "hi"
 
 
+async def test_unterminated_quote_completes_whole_path(isolated_home):
+    """Незакрытая кавычка — нормальное состояние набора: `cat "my re` — один токен.
+
+    Баг: токен искался через `split()`, поэтому в подсказку шёл хвост `re`,
+    а весь путь с пробелом не находился вообще.
+    """
+    (isolated_home / "my report.md").write_text("hi\n", encoding="utf-8")
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        assert "'./my report.md'" in app.get_completion_candidates('cat "./my')
+        inp = input_widget(app)
+        inp.value = 'cat "./my'
+        inp.cursor_position = len(inp.value)
+        inp._show_completions()
+        await pilot.pause()
+        assert app._completion_list.is_visible()
+        await pilot.press("enter")
+        await pilot.pause()
+        # Открывающая кавычка входит в заменяемый токен — висячей не остаётся.
+        assert inp.value == "cat './my report.md'"
+        await pilot.press("enter")
+        block = await wait_command_done(app)
+        assert block.raw_stdout.strip() == "hi"
+
+
+async def test_escaped_space_completes_whole_path(isolated_home):
+    """`cat my\\ re` — тоже один токен (экранированный пробел)."""
+    (isolated_home / "my report.md").write_text("hi\n", encoding="utf-8")
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        text = "cat ./my\\ re"
+        assert "'./my report.md'" in app.get_completion_candidates(text)
+        inp = input_widget(app)
+        inp.value = text
+        inp.cursor_position = len(text)
+        inp._show_completions()
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert inp.value == "cat './my report.md'"
+
+
+async def test_trailing_separator_starts_new_argument(isolated_home):
+    """Хвостовой разделитель — аргумент ещё не начат, подсказки нет.
+
+    Иначе последнее слово принималось за текущий токен, а вставка шла в конец
+    строки: `cat f |` + Enter → `cat f |/home/...`.
+    """
+    (isolated_home / "other.txt").write_text("x", encoding="utf-8")
+    app = CommandRunner()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        assert app._extract_path_token("cat ") == ""
+        assert app._extract_path_token("cat ./other.txt |") == ""
+        assert app._extract_path_token("cat ./other.txt ;") == ""
+        assert app.get_completion_candidates("cat ./other.txt |") == []
+        # Внутри токена подсказка по-прежнему работает.
+        assert app._extract_path_token("cat ./other") == "./other"
+
+
 async def test_settings_file_completion_mode(isolated_home):
     settings = isolated_home / "settings.yml"
     settings.write_text(

@@ -1,12 +1,69 @@
 """Сетевой слой (`src/net.py`): прокси с логином и подсказка при 407."""
+import urllib.error
+from urllib.request import Request
+
+import pytest
+
+import net
 from net import (
     PROXY_AUTH_HINT,
+    SchemeCheckingRedirectHandler,
+    allowed_redirect_schemes,
     format_fetch_error,
     inject_proxy_userinfo,
     looks_like_proxy_auth_error,
+    open_url,
     proxy_handler_map,
     redact_proxy_secrets,
 )
+
+
+def test_allowed_redirect_schemes_never_downgrade_to_http():
+    """`https → http` — не переход: содержимое ехало бы открытым текстом."""
+    assert allowed_redirect_schemes("https") == frozenset({"https"})
+    assert allowed_redirect_schemes("http") == frozenset({"http", "https"})
+    # `:import --insecure` — явный выбор пользователя, http-переход разрешён.
+    assert allowed_redirect_schemes("https", ("http",)) == frozenset({"http", "https"})
+
+
+class _FakeFp:
+    """Заглушка файлового объекта для `redirect_request`."""
+
+    def close(self) -> None:
+        pass
+
+
+def _redirect(handler: SchemeCheckingRedirectHandler, url: str):
+    request = Request("https://host/tags.json")
+    return handler.redirect_request(request, _FakeFp(), 302, "Found", {}, url)
+
+
+def test_redirect_handler_refuses_http_hop():
+    handler = SchemeCheckingRedirectHandler(allowed_redirect_schemes("https"))
+    with pytest.raises(urllib.error.HTTPError):
+        _redirect(handler, "http://mirror/tags.json")
+    assert _redirect(handler, "https://host/other.json") is not None
+
+
+def test_open_url_installs_scheme_guard(monkeypatch):
+    captured = {}
+
+    class _Opener:
+        def open(self, request, timeout=None):
+            return "ok"
+
+    def fake_build_opener(*handlers):
+        captured["handlers"] = handlers
+        return _Opener()
+
+    monkeypatch.setattr(net.urllib.request, "build_opener", fake_build_opener)
+    assert open_url(Request("https://host/x"), 1.0, {}) == "ok"
+    guards = [
+        handler
+        for handler in captured["handlers"]
+        if isinstance(handler, SchemeCheckingRedirectHandler)
+    ]
+    assert guards and guards[0].allowed == frozenset({"https"})
 
 
 def test_inject_proxy_userinfo():

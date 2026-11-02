@@ -985,6 +985,7 @@ class DevopsScreensaver(ModalScreen[None]):
         stars: bool | None = None,
         matrix: bool | None = None,
         allowed_tags: Collection[str] | None = None,
+        mask: Callable[[str], str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -995,6 +996,9 @@ class DevopsScreensaver(ModalScreen[None]):
         self._stars = stars
         self._matrix = matrix
         self._allowed_tags = allowed_tags
+        # Маскировка значений секретов для ленты: `$$`-секреты и записи `:key`
+        # не должны попасть на экран через сохранённый текст команды.
+        self._mask = mask
         self._field: StarField | MatrixRain = StarField(
             80, 24, seed=seed, tokens=tokens, stars=stars is not False
         )
@@ -1012,11 +1016,11 @@ class DevopsScreensaver(ModalScreen[None]):
 
     def on_mount(self) -> None:
         if self._ticker_items is None:
-            items = load_library_reminders(
+            items = self._mask_items(load_library_reminders(
                 getattr(self.app, "db_file", None), self._allowed_tags
-            )
+            ))
         else:
-            items = tuple(self._ticker_items)
+            items = self._mask_items(self._ticker_items)
         self._ticker = LibraryTicker(items, seed=self._seed)
         self._help = HelpTypewriter(self._help_lines, seed=self._seed)
         if self._stars is None:
@@ -1045,6 +1049,12 @@ class DevopsScreensaver(ModalScreen[None]):
     def on_resize(self) -> None:
         self._sync_size()
         self._paint(force=True)  # новый размер — рисуем сразу, не ждём троттлинг
+
+    def _mask_items(self, items: Sequence[str]) -> tuple[str, ...]:
+        """Убрать живые значения секретов из строк ленты (маска — из приложения)."""
+        if self._mask is None:
+            return tuple(items)
+        return tuple(self._mask(item) for item in items)
 
     def _make_field(self, width: int, height: int) -> StarField | MatrixRain:
         """Холст заставки: матричный дождь или звёздное поле.

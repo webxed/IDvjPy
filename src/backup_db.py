@@ -49,8 +49,14 @@ def load_settings() -> str:
     return DEFAULT_DB
 
 
-def load_backup_dir() -> str:
-    """Каталог бэкапов из settings.yml (`backup_dir`), по умолчанию `backups`."""
+def load_backup_dir(db_file: str | None = None) -> str:
+    """Каталог бэкапов из settings.yml (`backup_dir`), по умолчанию `backups`.
+
+    При явном `--db` настройки читаются рядом с этой базой — иначе SQLite-снимок
+    (`seed_lib.backup_sqlite`) и JSON/CSV легли бы в разные каталоги.
+    """
+    if db_file:
+        return str(seed_lib.backup_dir_for(db_file))
     path = data_dir() / "settings.yml"
     backup_dir = DEFAULT_BACKUP_DIR
     if path.exists():
@@ -203,7 +209,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     db_file = _db_file(args.db)
-    backup_dir = load_backup_dir()
+    backup_dir = load_backup_dir(db_file if args.db else None)
 
     if args.command == "export":
         path = db_transfer.export_path(args.output, backup_dir)

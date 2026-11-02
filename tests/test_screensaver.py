@@ -9,6 +9,7 @@ from rich.text import Text
 from textual.app import App as TextualApp
 from textual.widgets import Static
 
+import database_v2 as database
 from app import CommandRunner
 from screensaver import (
     MATRIX_GLYPHS,
@@ -396,6 +397,26 @@ async def test_colon_screensaver_opens_and_key_does_not_type(isolated_home):
         await pilot.pause()
         assert not isinstance(app.screen, DevopsScreensaver)
         assert input_widget(app).value == ""
+
+
+async def test_ticker_hides_live_secret_values(isolated_home):
+    """Лента берёт текст из SQLite — значение живого секрета в ней не появится."""
+    app = CommandRunner()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        database.add_command(
+            app.db_file, "curl -H 'token: s3cr3t-value' https://example.test", "ship"
+        )
+        app.local_env["TOKEN"] = "s3cr3t-value"
+        app._secret_names.add("TOKEN")
+        await submit(pilot, ":screensaver")
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, DevopsScreensaver)
+        items = screen._ticker.items
+        assert items
+        assert all("s3cr3t-value" not in item for item in items)
+        assert any("****" in item for item in items)
 
 
 async def test_tty_command_return_does_not_show_screensaver(isolated_home, monkeypatch):

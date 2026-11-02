@@ -5,6 +5,7 @@
 кэш и гейтинг флагом ``system_command_completion`` в TUI.
 """
 import os
+import time
 
 import pytest
 
@@ -94,10 +95,45 @@ def test_cache_can_be_cleared(tmp_path):
     path_env = str(bin1)
     assert system_command_candidates("gi", path_env=path_env) == ["git"]
     _make_exec(bin1, "gitui")
-    # До очистки остаётся снимок, после — новый каталог сканируется заново.
+    # До истечения срока кэш отдаёт снимок, после — новый каталог сканируется заново.
     assert system_command_candidates("gi", path_env=path_env) == ["git"]
     clear_cache()
     assert system_command_candidates("gi", path_env=path_env) == ["git", "gitui"]
+
+
+def test_cache_notices_new_executable_after_ttl(tmp_path, monkeypatch):
+    """Установленная программа видна без перезапуска и без `clear_cache`.
+
+    Ключ кэша — строка `$PATH`, поэтому раньше новый исполняемый файл в уже
+    просканированном каталоге не появлялся в подсказках до конца сессии.
+    """
+    clear_cache()
+    monkeypatch.setattr(system_complete, "_REVALIDATE_SEC", 0.0)
+    bin1 = tmp_path / "bin"
+    bin1.mkdir()
+    _make_exec(bin1, "git")
+    path_env = str(bin1)
+    assert system_command_candidates("gi", path_env=path_env) == ["git"]
+    _make_exec(bin1, "gitui")
+    # Гарантируем отличный mtime каталога: на грубой ФС два создания подряд
+    # могут попасть в одну отметку времени.
+    future = time.time() + 10
+    os.utime(bin1, (future, future))
+    assert system_command_candidates("gi", path_env=path_env) == ["git", "gitui"]
+
+
+def test_stale_cache_is_a_signal_for_background_warm(tmp_path, monkeypatch):
+    """UI не читает каталоги: устаревший кэш возвращает None (повод перепрогреть)."""
+    clear_cache()
+    bin1 = tmp_path / "bin"
+    bin1.mkdir()
+    _make_exec(bin1, "git")
+    path_env = str(bin1)
+    assert cached_system_command_candidates("gi", path_env=path_env) is None
+    system_complete.warm_system_command_cache(path_env)
+    assert cached_system_command_candidates("gi", path_env=path_env) == ["git"]
+    monkeypatch.setattr(system_complete, "_REVALIDATE_SEC", 0.0)
+    assert cached_system_command_candidates("gi", path_env=path_env) is None
 
 
 def test_cached_candidates_never_scan_on_cache_miss(tmp_path, monkeypatch):

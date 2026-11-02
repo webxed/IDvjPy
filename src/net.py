@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import urllib.error
 import urllib.request
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from urllib.parse import quote, urlsplit, urlunsplit
 
 PROXY_USER_KEYS = ("PROXY_USER",)
@@ -99,15 +99,61 @@ def looks_like_proxy_auth_error(text: str) -> bool:
     return "407" in raw or "proxy authentication required" in raw.lower()
 
 
+def allowed_redirect_schemes(
+    initial_scheme: str, extra: Collection[str] | None = None
+) -> frozenset[str]:
+    """Схемы, разрешённые для redirect: своя схема запроса плюс https.
+
+    Понижение `https → http` запрещено: urllib иначе сам проходит такой переход
+    и содержимое (`:import`, `:update`) едет открытым текстом, хотя адрес был
+    https. Повышение `http → https` разрешено. `extra` — явный выбор вызывающего
+    (`:import --insecure`).
+    """
+    schemes = {"https"}
+    if initial_scheme:
+        schemes.add(initial_scheme.lower())
+    if extra:
+        schemes.update(str(scheme).lower() for scheme in extra if scheme)
+    return frozenset(schemes)
+
+
+class SchemeCheckingRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Redirect-обработчик, проверяющий схему **до** запроса на новый адрес."""
+
+    def __init__(self, allowed: Collection[str]) -> None:
+        super().__init__()
+        self.allowed = frozenset(allowed)
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        scheme = urlsplit(newurl or "").scheme.lower()
+        if scheme not in self.allowed:
+            raise urllib.error.HTTPError(
+                newurl,
+                code,
+                f"refusing redirect to {scheme or '(none)'} scheme",
+                headers,
+                fp,
+            )
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def open_url(
-    request: urllib.request.Request, timeout: float, environ: Mapping[str, str]
+    request: urllib.request.Request,
+    timeout: float,
+    environ: Mapping[str, str],
+    *,
+    extra_schemes: Collection[str] | None = None,
 ):
-    """Открыть запрос с учётом прокси с логином (иначе — обычный urlopen)."""
+    """Открыть запрос: прокси с логином и проверка схемы на каждом redirect."""
+    initial = urlsplit(request.full_url).scheme.lower()
+    handlers: list[urllib.request.BaseHandler] = [
+        SchemeCheckingRedirectHandler(allowed_redirect_schemes(initial, extra_schemes))
+    ]
     proxies = proxy_handler_map(environ)
     if proxies:
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxies))
-        return opener.open(request, timeout=timeout)
-    return urllib.request.urlopen(request, timeout=timeout)
+        handlers.append(urllib.request.ProxyHandler(proxies))
+    opener = urllib.request.build_opener(*handlers)
+    return opener.open(request, timeout=timeout)
 
 
 def format_fetch_error(

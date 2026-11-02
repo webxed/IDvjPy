@@ -398,6 +398,79 @@ RE_BLOCK_LABEL = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")
 TOKEN_SEPS = frozenset(" \t|&;")
 
 
+def shell_token_spans(text: str) -> list[tuple[int, int]]:
+    """Границы токенов с учётом кавычек и экранирования.
+
+    Разделитель внутри `'…'`, `"…'` или после `\\` — часть токена: `cat "my re`
+    и `cat my\\ re` — один незакрытый токен. Незакрытая кавычка — нормальное
+    состояние набора, а не ошибка ввода.
+    """
+    spans: list[tuple[int, int]] = []
+    quote = ""
+    escaped = False
+    start: int | None = None
+    for index, char in enumerate(text):
+        if escaped:
+            escaped = False
+            continue
+        if quote:
+            if char == quote:
+                quote = ""
+            elif char == "\\" and quote == '"':
+                escaped = True
+            continue
+        if char in "'\"":
+            if start is None:
+                start = index
+            quote = char
+            continue
+        if char == "\\":
+            if start is None:
+                start = index
+            escaped = True
+            continue
+        if char in TOKEN_SEPS:
+            if start is not None:
+                spans.append((start, index))
+                start = None
+            continue
+        if start is None:
+            start = index
+    if start is not None:
+        spans.append((start, len(text)))
+    return spans
+
+
+def unquote_shell_token(raw: str) -> str:
+    """Значение токена так, как его увидит shell: `"my re` → `my re`."""
+    out: list[str] = []
+    quote = ""
+    escaped = False
+    for char in raw:
+        if escaped:
+            out.append(char)
+            escaped = False
+            continue
+        if quote:
+            if char == quote:
+                quote = ""
+            elif char == "\\" and quote == '"':
+                escaped = True
+            else:
+                out.append(char)
+            continue
+        if char in "'\"":
+            quote = char
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        out.append(char)
+    if escaped:
+        out.append("\\")
+    return "".join(out)
+
+
 def escape_help_markup(text: str) -> str:
     """Сохраняет теги ``[bold]``; остальные ``[скобки]`` экранирует, чтобы Rich их не съел."""
     parts = RE_HELP_KEEP_MARKUP.split(text)
@@ -2079,15 +2152,16 @@ class CommandLineInput(Input):
         self._completion_list = completion_list
 
     def _token_span(self, text: str, pos: int) -> tuple[int, int]:
-        """Границы текущего токена (разделители: пробел, |, &, ;)."""
+        """Границы токена под курсором (разделители: пробел, |, &, ;).
+
+        Кавычки и `\\` учитываются: токен `"my re` заменяется целиком, поэтому
+        вставка пути не оставляет висящую открывающую кавычку.
+        """
         pos = max(0, min(pos, len(text)))
-        start = pos
-        while start > 0 and text[start - 1] not in TOKEN_SEPS:
-            start -= 1
-        end = pos
-        while end < len(text) and text[end] not in TOKEN_SEPS:
-            end += 1
-        return start, end
+        for start, end in shell_token_spans(text):
+            if start <= pos <= end:
+                return start, end
+        return pos, pos
 
     def _caret_in_last_token(self) -> bool:
         """Курсор внутри последнего токена строки.
@@ -2715,7 +2789,7 @@ class CommandRunner(App):
     ]
 
     TITLE: str = "IDvjPy_term"
-    VERSION = "v1.219"
+    VERSION = "v1.220"
     # Клик по ссылке блока с намерением выполнить: значение пишет
     # `note_block_link_click` (до брокера `@click`), читает и сбрасывает
     # `action_insert_bang_draft` — в том же сообщении. `None` — обычный клик,
@@ -3167,13 +3241,22 @@ class CommandRunner(App):
         self._llm_threads: dict[str, list[dict[str, str]]] = {}
 
     def _extract_path_token(self, text: str) -> str:
-        """Возвращает последний токен для path completion."""
+        """Последний токен строки как значение пути (без кавычек и экранирования).
+
+        Кавычки и `\\` учитываются (`shell_token_spans`): в `cat "my re` токен —
+        `my re`, а не `re`. Хвостовой разделитель (`cat `, `cat f |`) значит, что
+        аргумент ещё не начат: иначе подсказка от прошлого слова вставлялась бы
+        после разделителя (`cat f |/home/...`).
+        """
         if not text:
             return ""
-        if text.endswith(" "):
+        spans = shell_token_spans(text)
+        if not spans:
             return ""
-        parts = text.split()
-        return parts[-1] if parts else text
+        start, end = spans[-1]
+        if end != len(text):
+            return ""
+        return unquote_shell_token(text[start:end])
 
     def _last_token_is_path_like(self, token: str) -> bool:
         if not token:
@@ -8735,6 +8818,7 @@ class CommandRunner(App):
         self.push_screen(DevopsScreensaver(
             stars=self.screensaver_stars,
             allowed_tags=self._scope_screensaver_tags(),
+            mask=self._mask_secrets,
         ))
 
     def _dismiss_screensaver(self) -> bool:
@@ -8804,6 +8888,7 @@ class CommandRunner(App):
             stars=self.screensaver_stars,
             matrix=matrix,
             allowed_tags=self._scope_screensaver_tags(),
+            mask=self._mask_secrets,
         ))
 
     def _scope_screensaver_tags(self) -> set[str] | None:

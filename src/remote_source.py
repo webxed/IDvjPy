@@ -5,8 +5,9 @@
 и та же подсказка при «407», что у `:update` и `:llm`.
 
 По умолчанию разрешён только `https://`: содержимое едет прямо в библиотеку
-тегов, и подменять его по пути не должен никто. `http://` — только с явным
-флагом (`--insecure`), и этот выбор виден в сообщении. Размер ограничен
+тегов, и подменять его по пути не должен никто. Проверяется схема **каждого**
+перехода, а не только финального адреса: `https → http` не проходит. `http://` —
+только с явным флагом (`--insecure`), и этот выбор виден в сообщении. Размер ограничен
 (``DEFAULT_MAX_BYTES``): это текстовая библиотека, а не файловый хостинг.
 """
 from __future__ import annotations
@@ -87,8 +88,14 @@ def fetch_text(
         )
     env = dict(environ or {})
     request = urllib.request.Request(raw, headers={"User-Agent": USER_AGENT})
+    # Схему проверяем на **каждом** переходе (`net.SchemeCheckingRedirectHandler`):
+    # без `--insecure` промежуточный `https → http` запрещён до запроса, иначе
+    # библиотека ехала бы открытым текстом, а проверка финального URL молчала.
+    redirect_schemes = SUPPORTED_SCHEMES if allow_insecure else SECURE_SCHEMES
     try:
-        with net.open_url(request, timeout, env) as response:
+        with net.open_url(
+            request, timeout, env, extra_schemes=redirect_schemes
+        ) as response:
             final_url = response.geturl()
             final_scheme = urlsplit(final_url).scheme.lower()
             if final_scheme not in SECURE_SCHEMES and not (
