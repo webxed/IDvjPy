@@ -1,6 +1,7 @@
 """Проверка версии на GitHub для :update."""
 import urllib.request
 
+import update_check
 from net import PROXY_AUTH_HINT
 from update_check import (
     KIND_AHEAD,
@@ -58,7 +59,9 @@ def test_fetch_remote_version(monkeypatch):
         def __exit__(self, *args):
             return False
 
-    monkeypatch.setattr("update_check.urllib.request.urlopen", lambda *a, **k: _Resp())
+    # Подменяем seam модуля: транспорт — `net.open_url` (он ставит redirect-guard), а
+    # не `urllib.request.urlopen`, который при запросе уже не вызывается.
+    monkeypatch.setattr(update_check, "_open_url", lambda *a, **k: _Resp())
     assert fetch_remote_version() == "v9.9"
 
 

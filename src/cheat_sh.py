@@ -25,10 +25,10 @@ import urllib.parse
 import urllib.request
 from collections.abc import Mapping
 
+import net
 from ansi_output import strip_escapes
 from net import (
     looks_like_proxy_auth_error,
-    proxy_handler_map,
     redact_proxy_secrets,
 )
 
@@ -91,12 +91,8 @@ def build_url(
 
 
 def _open(request: urllib.request.Request, timeout: float, env: Mapping[str, str]):
-    """urlopen с учётом прокси, требующего логин (как в :llm / :update)."""
-    proxies = proxy_handler_map(env)
-    if proxies:
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxies))
-        return opener.open(request, timeout=timeout)
-    return urllib.request.urlopen(request, timeout=timeout)
+    """Открыть запрос через общий слой `net` — с прокси и redirect-guard."""
+    return net.open_url(request, timeout, env)
 
 
 def _error_text(detail: str, env: Mapping[str, str]) -> str:

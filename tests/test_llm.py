@@ -258,12 +258,13 @@ def test_answer_language_rule_appended_to_system():
 def test_perform_request_success(monkeypatch):
     body = {"choices": [{"message": {"content": "answer-42"}}]}
 
-    def fake_urlopen(request, timeout):
+    def fake_open(request, timeout, env):
         assert request.headers["Authorization"] == "Bearer secret"
         assert timeout == 5
+        assert env == {"DEEPSEEK_API_KEY": "secret"}
         return io.BytesIO(json.dumps(body).encode("utf-8"))
 
-    monkeypatch.setattr(llm_client.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(llm_client, "_open_request", fake_open)
     env = {"DEEPSEEK_API_KEY": "secret"}
     assert perform_request(DS_CFG, "привет", env, timeout=5) == "answer-42"
 
@@ -271,12 +272,12 @@ def test_perform_request_success(monkeypatch):
 def test_perform_request_http_error(monkeypatch):
     from typing import Any, cast
 
-    def boom(request, timeout):
+    def boom(request, timeout, env):
         raise urllib.error.HTTPError(
             "u", 401, "Unauthorized", cast(Any, {}), io.BytesIO(b"bad key")
         )
 
-    monkeypatch.setattr(llm_client.urllib.request, "urlopen", boom)
+    monkeypatch.setattr(llm_client, "_open_request", boom)
     with pytest.raises(LlmError, match="HTTP 401"):
         perform_request(DS_CFG, "hi", {"DEEPSEEK_API_KEY": "x"}, timeout=2)
 
@@ -360,12 +361,12 @@ async def test_llm_enter_applies_provider_not_submits(isolated_home):
 
 
 def test_perform_request_407_hint_when_no_proxy_creds(monkeypatch):
-    def tunnel_407(request, timeout):
+    def tunnel_407(request, timeout, env):
         raise urllib.error.URLError(
             OSError("Tunnel connection failed: 407 Proxy Authentication Required")
         )
 
-    monkeypatch.setattr(llm_client.urllib.request, "urlopen", tunnel_407)
+    monkeypatch.setattr(llm_client, "_open_request", tunnel_407)
     with pytest.raises(LlmError) as exc:
         perform_request(DS_CFG, "hi", {"DEEPSEEK_API_KEY": "x"}, timeout=2)
     text = str(exc.value)

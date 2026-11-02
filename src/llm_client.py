@@ -30,10 +30,10 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+import net
 from i18n import t
 from net import (
     looks_like_proxy_auth_error,
-    proxy_handler_map,
     redact_proxy_secrets,
 )
 
@@ -400,16 +400,12 @@ def build_headers(provider: dict[str, Any], env: dict[str, str]) -> dict[str, st
 def _open_request(
     request: urllib.request.Request, timeout: float, env: dict[str, str]
 ):
-    """urlopen с учётом аутентифицирующего прокси (как в :update).
+    """Открыть запрос через общий слой `net`.
 
-    Если заданы $PROXY_USER/$PROXY_PASS и прокси в окружении — креды
-    вставляются в прокси-URL, иначе — стандартный opener (env-прокси как есть).
+    Не urlopen напрямую: только `net.open_url` ставит guard схем редиректов,
+    иначе ключ API мог бы уехать по `https → http`.
     """
-    proxies = proxy_handler_map(env)
-    if proxies:
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxies))
-        return opener.open(request, timeout=timeout)
-    return urllib.request.urlopen(request, timeout=timeout)
+    return net.open_url(request, timeout, env)
 
 
 def _proxy_aware_error(prefix: str, text: str, env: dict[str, str]) -> str:

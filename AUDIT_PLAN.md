@@ -23,7 +23,9 @@
 
 **Подтверждено по коду.** `net.open_url` собирал opener без обработчика redirect-схем: `urlopen` следовал переходам сам, а проверка в `remote_source` смотрела только начальный и конечный URL. Проход через HTTP без `--insecure` был возможен.
 
-**Сделано:** в `src/net.py` добавлены `allowed_redirect_schemes()`, `SchemeCheckingRedirectHandler` (проверяет схему **до** каждого перехода, включая промежуточные) и параметр `open_url(..., extra_schemes=)`; opener теперь всегда собирается через `build_opener` с этим обработчиком. `src/remote_source.py` передаёт `SUPPORTED_SCHEMES if allow_insecure else SECURE_SCHEMES`. Тесты: `tests/test_net.py` — `test_allowed_redirect_schemes_never_downgrade_to_http`, `test_redirect_handler_refuses_http_hop`, `test_open_url_installs_scheme_guard` (без внешней сети).
+**Сделано:** в `src/net.py` добавлены `allowed_redirect_schemes()`, `SchemeCheckingRedirectHandler` (проверяет схему **до** каждого перехода, включая промежуточные) и параметр `open_url(..., extra_schemes=)`; opener теперь всегда собирается через `build_opener` с этим обработчиком. `src/remote_source.py` передаёт `SUPPORTED_SCHEMES if allow_insecure else SECURE_SCHEMES`. **Продолжение (нашёл CI):** `src/llm_client.py` и `src/cheat_sh.py` держали **свои** копии `urlopen`/`build_opener` и обходили guard — ключ LLM-провайдера мог уехать по `https → http`. Оба `_open_request`/`_open` теперь делегируют в `net.open_url` (одна реализация сетевого слоя). Тесты: `tests/test_net.py` — `test_allowed_redirect_schemes_never_downgrade_to_http`, `test_redirect_handler_refuses_http_hop`, `test_open_url_installs_scheme_guard`, `test_all_outbound_calls_share_the_guarded_transport`; `tests/test_llm.py` и `tests/test_update_check.py` подменяют seam транспорта, а не `urllib.request.urlopen` (без внешней сети).
+
+**Осталось:** тест цепочки HTTPS → HTTP → HTTPS на подменённом транспорте и проверка, что ошибки не печатают прокси-секреты.
 
 **Осталось:** тест цепочки HTTPS → HTTP → HTTPS на подменённом транспорте и проверка, что ошибки не печатают прокси-секреты.
 

@@ -4,6 +4,8 @@ from urllib.request import Request
 
 import pytest
 
+import cheat_sh
+import llm_client
 import net
 from net import (
     PROXY_AUTH_HINT,
@@ -64,6 +66,25 @@ def test_open_url_installs_scheme_guard(monkeypatch):
         if isinstance(handler, SchemeCheckingRedirectHandler)
     ]
     assert guards and guards[0].allowed == frozenset({"https"})
+
+
+def test_all_outbound_calls_share_the_guarded_transport(monkeypatch):
+    """`:llm` и `:cht` ходят через `net.open_url`, а не своим urlopen.
+
+    Своя копия транспорта обошла бы redirect-guard: ключ API мог бы уехать
+    по `https → http`.
+    """
+    seen = []
+
+    def fake_open(request, timeout, environ, **kwargs):
+        seen.append((request.full_url, timeout))
+        return "ok"
+
+    monkeypatch.setattr(net, "open_url", fake_open)
+    request = Request("https://api.example/x")
+    assert llm_client._open_request(request, 5.0, {"K": "v"}) == "ok"
+    assert cheat_sh._open(request, 5.0, {"K": "v"}) == "ok"
+    assert seen == [("https://api.example/x", 5.0)] * 2
 
 
 def test_inject_proxy_userinfo():
