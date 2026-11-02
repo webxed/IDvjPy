@@ -1,6 +1,6 @@
 # backup_db.py - перенос библиотеки тегов
 
-CLI для импорта/экспорта базы тегов IDvjPy_term (**v1.220**, `mytags.db`).
+CLI для импорта/экспорта базы тегов IDvjPy_term (**v1.221**, `mytags.db`).
 Форматы: JSON (перенос и слияние) и CSV (правка в таблицах).
 
 Корневой `python3 backup_db.py` — лаунчер; код в `src/backup_db.py`. Запускать его можно из любого каталога: база, `settings.yml` и `backups/` берутся из того же **каталога данных**, что и у TUI — `--data-dir` → `$IDVJPY_DATA_DIR` → каталог запуска, если в нём есть `settings.yml` → системный (`~/.config/idvjpy` на Linux, `%APPDATA%\IDvjPy` на Windows). Каталог репозитория и каталог данных — не одно и то же.
