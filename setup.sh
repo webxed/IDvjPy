@@ -6,7 +6,11 @@
 # Запуск приложения: python3 app.py   (данные — settings.yml / БД — создаются сами)
 set -euo pipefail
 
-cd "$(dirname "${BASH_SOURCE[0]}")"
+# Каталог скрипта — без внешнего `dirname`: установку гоняют и с урезанным
+# `$PATH` (tests/test_setup_shell.py), где утилит coreutils нет, а `cd ""`
+# на новом bash уже ошибка, и `set -e` роняет установку.
+_self="${BASH_SOURCE[0]}"
+[ "${_self#*/}" = "$_self" ] || cd -- "${_self%/*}"
 REPO_DIR="$(pwd)"
 
 # Функция-обёртка: каталог оболочки следует за приложением. Сменить cwd

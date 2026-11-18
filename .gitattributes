@@ -1,0 +1,3 @@
+# Скрипты запускаются bash'ем (WSL, Git Bash, CI): CRLF даёт
+# `set: pipefail: invalid option name` и ломает установку из Windows-чекаута.
+*.sh text eol=lf
