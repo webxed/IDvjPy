@@ -40,12 +40,47 @@ def test_format_update_status_kinds():
     text, kind = format_update_status("v1.24", "v1.25")
     assert kind == KIND_AVAILABLE
     assert "v1.25" in text
-    assert "git pull" in text
-    assert "webxed/IDvjPy" in text
+    assert "pull" in text
     _, kind = format_update_status("v1.25", "v1.25")
     assert kind == KIND_CURRENT
     _, kind = format_update_status("v1.26", "v1.25")
     assert kind == KIND_AHEAD
+
+
+def test_update_hint_points_at_the_running_copy():
+    """В подсказке — готовая команда с каталогом: не надо искать, где копия."""
+    text, kind = format_update_status(
+        "v1.218", "v1.223", repo_dir="/home/exed/WibeCoding/Idivjopy"
+    )
+    assert kind == KIND_AVAILABLE
+    assert 'git -C /home/exed/WibeCoding/Idivjopy pull' in text
+
+
+def test_update_hint_quotes_paths_with_spaces():
+    text, _ = format_update_status("v1.218", "v1.223", repo_dir="/mnt/c/My Code/IDvjPy")
+    assert 'git -C "/mnt/c/My Code/IDvjPy" pull' in text
+
+
+def test_update_hint_falls_back_to_url_outside_git(monkeypatch, tmp_path):
+    """Без `.git` рядом (архив, пакет) `git pull` не сработает — остаётся ссылка."""
+    module = tmp_path / "src" / "update_check.py"
+    module.parent.mkdir()
+    module.write_text("", encoding="utf-8")
+    (tmp_path / "src" / "app.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr(update_check, "__file__", str(module))
+    assert update_check.repo_root() is None
+    text, _ = format_update_status("v1.218", "v1.223")
+    assert "webxed/IDvjPy" in text
+
+
+def test_repo_root_is_detected_from_module_path(monkeypatch, tmp_path):
+    module = tmp_path / "src" / "update_check.py"
+    module.parent.mkdir()
+    module.write_text("", encoding="utf-8")
+    (tmp_path / "src" / "app.py").write_text("", encoding="utf-8")
+    (tmp_path / ".git").mkdir()
+    monkeypatch.setattr(update_check, "__file__", str(module))
+    assert update_check.repo_root() == tmp_path
 
 
 def test_fetch_remote_version(monkeypatch):
@@ -130,7 +165,9 @@ async def test_colon_update_reports_newer_remote(isolated_home, monkeypatch):
                 break
         assert "v9.9" in text
         assert "Update available" in text
-        assert "git pull" in text
+        # Команда целиком: каталог запущенной копии, а не голый `git pull`.
+        assert "git -C " in text and " pull" in text
+        assert str(update_check.repo_root()) in text
 
 
 async def test_colon_update_hints_proxy_login(isolated_home, monkeypatch):

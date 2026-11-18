@@ -9,6 +9,7 @@ import os
 import re
 import urllib.request
 from collections.abc import Mapping
+from pathlib import Path
 
 from net import format_fetch_error
 from net import open_url as _open_url
@@ -81,13 +82,54 @@ def compare_versions(local: str, remote: str) -> int:
     return 0
 
 
-def format_update_status(local: str, remote: str) -> tuple[str, str]:
-    """Человекочитаемый статус и вид: available / current / ahead."""
+def repo_root(start: str | os.PathLike[str] | None = None) -> Path | None:
+    """Каталог git-копии приложения (там лежит `app.py` и `.git`).
+
+    `update_check.py` живёт в `<repo>/src/`, поэтому корень — на уровень выше.
+    `None` — если исходники не в git (распакованный архив, установка пакетом):
+    `git pull` там не сработает, и подсказка остаётся со ссылкой на GitHub.
+    Путь считается от самого модуля, а не от cwd: приложение часто запускают
+    по алиасу из другого каталога.
+    """
+    module = Path(start) if start is not None else Path(__file__).resolve()
+    root = module.parent.parent
+    if not (root / "src" / "app.py").exists():
+        return None
+    if not (root / ".git").exists():
+        return None
+    return root
+
+
+def _shell_path(path: str) -> str:
+    """Путь для вставки в команду: кавычим только если без них не разобрать.
+
+    Двойные кавычки, а не одинарные: их понимают и bash, и cmd.exe.
+    """
+    if re.fullmatch(r"[A-Za-z0-9_@%+=:,./\\-]+", path):
+        return path
+    return '"' + path.replace('"', '\\"') + '"'
+
+
+def update_hint(repo_dir: Path | str | None = None) -> str:
+    """Готовая команда обновления — с каталогом, чтобы не искать его руками."""
+    if repo_dir is None:
+        return f"git pull {GITHUB_REPO}"
+    return f"git -C {_shell_path(str(repo_dir))} pull"
+
+
+def format_update_status(
+    local: str, remote: str, repo_dir: Path | str | None = None
+) -> tuple[str, str]:
+    """Человекочитаемый статус и вид: available / current / ahead.
+
+    `repo_dir` — каталог обновляемой копии (по умолчанию `repo_root()`), чтобы в
+    подсказке стояла команда целиком: её можно вставить в shell как есть.
+    """
     cmp = compare_versions(local, remote)
     if cmp < 0:
+        target = repo_dir if repo_dir is not None else repo_root()
         return (
-            f"Update available: {remote} (this is {local}). "
-            f"git pull  {GITHUB_REPO}",
+            f"Update available: {remote} (this is {local}). {update_hint(target)}",
             KIND_AVAILABLE,
         )
     if cmp > 0:
